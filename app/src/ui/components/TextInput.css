@@ -1,0 +1,100 @@
+.field {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.field__label {
+  justify-self: start;
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+.field__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Inputs sit below the surface: darker than the page. The edge is
+   --pick-edge, the one cream edge that clears 3:1 against a card (WCAG
+   1.4.11), clipped to the padding box so it reads against what's around. */
+.field__input,
+.searchbox__input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 var(--space-7);
+  border: var(--border-width) solid var(--pick-edge);
+  border-radius: var(--radius-input);
+  background: var(--input-bg);
+  background-clip: padding-box;
+  color: var(--text);
+  font-family: var(--body-font);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  appearance: none;
+}
+
+.field__input::placeholder,
+.searchbox__input::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+/* Unavailable: no recessed well to type into, just its outline. */
+.field__input:disabled,
+.searchbox__input:disabled {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.field__control--with-end .field__input {
+  padding-inline-end: 88px;
+}
+
+.field__end {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: var(--space-3);
+  display: flex;
+  align-items: center;
+}
+
+/* A 32px button leaves room inside the 44px field for the 3px-offset focus
+   ring, so the ring sits within the field instead of over its edge. */
+.field__end .button {
+  min-height: 32px;
+  padding-inline: var(--space-5);
+}
+
+.field--invalid .field__input {
+  border-color: var(--danger-edge);
+}
+
+.field__error,
+.field__hint {
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.field__error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  color: var(--danger-text);
+}
+
+.field__error-icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.field__hint {
+  color: var(--text-muted);
+}

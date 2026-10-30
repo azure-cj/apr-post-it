@@ -1,0 +1,80 @@
+.chip {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: 0 var(--space-6);
+  border: var(--border-width) solid var(--button-edge);
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.chip::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--border-width) * -1);
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.chip:hover::before {
+  opacity: 1;
+}
+
+.chip:active {
+  transform: scale(var(--press-scale));
+}
+
+.chip__leading {
+  display: inline-flex;
+}
+
+.chip__count {
+  color: var(--text-muted);
+  font-family: var(--body-font);
+  font-weight: 400;
+}
+
+/* Selected: gold's third job. The tick says it without colour. */
+.chip--selected {
+  border-color: var(--gold-edge);
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+
+.chip--selected::before {
+  background: var(--gold-soft);
+}
+
+.chip__check {
+  margin-inline-start: calc(var(--space-1) * -1);
+  animation: rise-in var(--dur-enter) var(--ease-out) both;
+}
+
+.chip--selected .chip__count {
+  color: var(--text-label);
+}
+
+.chip:disabled {
+  border-color: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.chip:disabled::before {
+  opacity: 0;
+}

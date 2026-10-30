@@ -1,0 +1,70 @@
+[package]
+name = "apg-post-it"
+version = "1.0.0"
+description = "APG Post-It: copy a listing's public text, save its photos, log the post"
+authors = ["Alpha Premier Group"]
+edition = "2024"
+rust-version = "1.90"
+publish = false
+
+# Rust does only what the WebView can't (docs/plans/TAURI-PLAN.md §2): the
+# clipboard, saving photos to disk, opening Explorer and the browser, and the
+# per-PC key. Every rule stays in TypeScript.
+#
+# Every version is pinned exactly, here and in Cargo.lock, and was published
+# at least two weeks before it was chosen (by 2026-10-17). The Tauri crates and
+# plugins match the npm packages in ../package.json minor for minor, which
+# `tauri build` checks. The lock was made with
+#   cargo generate-lockfile -Zunstable-options --publish-time <date>
+# (nightly, or RUSTC_BOOTSTRAP=1) and then checked crate by crate.
+#
+# One exception, in Cargo.lock only: clipboard-win 5.4.3 (2026-10-23), under the
+# clipboard plugin's arboard. Every older 5.x that arboard accepts was yanked
+# for an out-of-bounds read in get_html, which 5.4.2 and 5.4.3 fix. The diff
+# from 5.4.1 is that bounds check and a retry delay, and was read before use.
+
+[lib]
+# The `_lib` suffix keeps the library's name apart from the binary's; on
+# Windows the two would otherwise collide (rust-lang/cargo#8519).
+name = "apg_post_it_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.4", features = [] }
+tauri-plugin-clipboard-manager = "=2.5.0"
+tauri-plugin-dialog = "=2.8.3"
+tauri-plugin-fs = "=2.7.1"
+# The defaults minus `cookies`: the web app needs none, and the jar would be
+# written to disk. Plus the OS certificate store beside the bundled roots, so
+# HTTPS still works where antivirus or an office proxy inspects it (the
+# WebView trusts the same store). Its reqwest is also what `save_photos` uses.
+tauri-plugin-http = { version = "=2.8.3", default-features = false, features = [
+    "rustls-tls",
+    "rustls-tls-native-roots",
+    "http2",
+    "charset",
+    "system-proxy",
+] }
+tauri-plugin-opener = "=2.7.2"
+tauri-plugin-store = "=2.5.0"
+serde = { version = "=1.0.229", features = ["derive"] }
+# Named by the code `tauri::generate_context!()` writes for the `plugins` config.
+serde_json = "=1.0.154"
+# Windows Credential Manager on Windows, the Keychain on macOS, the Secret
+# Service on Linux. The default `v1` feature picks the store per platform.
+keyring = "=4.2.0"
+
+[target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "=2.5.4"
+tauri-plugin-window-state = "=2.5.0"
+
+# A smaller installer. Panics still unwind, so a bug in one command fails that
+# command instead of closing the app.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

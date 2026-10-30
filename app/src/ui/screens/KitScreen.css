@@ -1,0 +1,73 @@
+.kit__sections {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.kit__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: var(--space-12);
+  align-items: start;
+}
+
+.kit__stack {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.kit__stack--loose {
+  gap: var(--space-10);
+}
+
+.kit__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.kit__row--tight {
+  gap: var(--space-4);
+}
+
+.kit__row--center {
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+.kit__caption {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.kit__muted {
+  color: var(--text-muted);
+}
+
+.kit__categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kit code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.94em;
+}
+
+/* A top bar demo: its own container, so its breakpoints and its measured
+   layout answer to the frame, not the window. */
+.kit-frame {
+  overflow: hidden;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-row);
+  container-type: inline-size;
+}
+
+.kit-frame--narrow {
+  max-width: 620px;
+}

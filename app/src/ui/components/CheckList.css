@@ -1,0 +1,59 @@
+.checklist {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist__line {
+  --check-accent: var(--ok-strong);
+
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-row);
+}
+
+.checklist__line--warn {
+  --check-accent: var(--warn-text);
+}
+
+/* A fail blocks Copy: tinted, so it's the first thing the eye lands on. */
+.checklist__line--fail {
+  --check-accent: var(--danger-strong);
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+}
+
+.checklist__icon {
+  margin-top: 2px;
+  color: var(--check-accent);
+}
+
+.checklist__text {
+  display: grid;
+  min-width: 0;
+}
+
+.checklist__name {
+  color: var(--text);
+}
+
+.checklist__detail {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  overflow-wrap: anywhere;
+}
+
+.checklist__line--fail .checklist__detail {
+  color: var(--danger-text);
+}
+
+.checklist-empty {
+  color: var(--text-muted);
+}

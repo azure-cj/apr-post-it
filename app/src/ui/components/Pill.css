@@ -1,0 +1,133 @@
+/* ---- pill: a status word ------------------------------------------------ */
+
+.pill {
+  --pill-bg: var(--neutral-bg);
+  --pill-text: var(--neutral-text);
+  --pill-line: var(--border);
+  --pill-dot: var(--neutral-strong);
+
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 26px;
+  padding: 0 var(--space-5);
+  border: var(--border-width) solid var(--pill-line);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  color: var(--pill-text);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-weight: var(--weight-label);
+  white-space: nowrap;
+}
+
+.pill--ok {
+  --pill-bg: var(--ok-bg);
+  --pill-text: var(--ok-text);
+  --pill-line: var(--ok-line);
+  --pill-dot: var(--ok-strong);
+}
+
+.pill--warn {
+  --pill-bg: var(--warn-bg);
+  --pill-text: var(--warn-text);
+  --pill-line: var(--warn-edge);
+  --pill-dot: var(--warn-text);
+}
+
+.pill--danger {
+  --pill-bg: var(--danger-bg);
+  --pill-text: var(--danger-text);
+  --pill-line: var(--danger-line);
+  --pill-dot: var(--danger-strong);
+}
+
+.pill--info {
+  --pill-bg: var(--info-bg);
+  --pill-text: var(--info-text);
+  --pill-line: var(--info-line);
+  --pill-dot: var(--info-strong);
+}
+
+.pill__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--pill-dot);
+}
+
+/* ---- badge: a count ----------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-weight: var(--weight-heading);
+}
+
+.badge--ok {
+  background: var(--ok-soft);
+  color: var(--ok-text);
+}
+
+.badge--warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.badge--danger {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.badge--info {
+  background: var(--info-soft);
+  color: var(--info-text);
+}
+
+/* ---- category: the hue is only ever a dot ------------------------------- */
+
+.category-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  white-space: nowrap;
+}
+
+.category-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--type-unsorted);
+}
+
+.category-dot--commercial {
+  background: var(--type-commercial);
+}
+
+.category-dot--condo {
+  background: var(--type-condo);
+}
+
+.category-dot--office {
+  background: var(--type-office);
+}
+
+.category-dot--warehouse {
+  background: var(--type-warehouse);
+}

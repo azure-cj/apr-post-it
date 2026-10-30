@@ -1,0 +1,98 @@
+/* The window. The document scrolls (so Page Down works wherever focus is) and
+   the top bar sticks, translucent, over what scrolls under it. Bar and screen
+   share one scroll container, so they always have the same width and line up,
+   and the bar runs to the window's edge. The shell is the container every
+   breakpoint is measured against. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  container-type: inline-size;
+  container-name: shell;
+}
+
+.shell > .topbar {
+  position: sticky;
+  top: 0;
+}
+
+.shell__main {
+  flex: 1 0 auto;
+}
+
+.shell__loading {
+  display: flex;
+  margin: var(--space-24) auto;
+  color: var(--text-muted);
+}
+
+/* Hidden until it has keyboard focus, then the first thing on the page. */
+.skip-link {
+  position: fixed;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: 100;
+  padding: var(--space-4) var(--space-8);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-input);
+  background: var(--tip-bg);
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-label);
+  text-decoration: none;
+  opacity: 0;
+  transform: translateY(-150%);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.skip-link:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- a screen ----------------------------------------------------------- */
+
+.page {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding: var(--page-pad-regular);
+}
+
+/* Mirrors --bp-compact and --bp-stack: container queries can't read tokens.
+   "Below 1100" and "below 900", so a 900px window is compact, not narrow. */
+@container shell (width < 1100px) {
+  .page {
+    padding: var(--page-pad-compact);
+  }
+}
+
+@container shell (width < 900px) {
+  .page {
+    padding: var(--page-pad-narrow);
+  }
+}
+
+.page-header {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-12);
+}
+
+.page-header__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+}
+
+.page-header__title {
+  font-size: var(--text-heading);
+  line-height: var(--lh-heading);
+}
+
+.page-header__description {
+  max-width: 70ch;
+  color: var(--text-muted);
+}

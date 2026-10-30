@@ -1,0 +1,47 @@
+/* One card, near the top third of the window. Anchored at the top rather than
+   centred, so when an error line appears the card grows downwards instead of
+   jumping up under the pointer. */
+.sign-in {
+  display: grid;
+  justify-items: center;
+  padding: clamp(var(--space-12), 8vh, var(--space-24) * 2) var(--page-pad-regular) var(--space-24);
+}
+
+@container (width < 900px) {
+  .sign-in {
+    padding-inline: var(--page-pad-narrow);
+  }
+}
+
+.sign-in__card {
+  width: min(100%, 460px);
+}
+
+.sign-in__title {
+  font-size: var(--text-heading);
+  line-height: var(--lh-heading);
+}
+
+.sign-in__intro {
+  margin-top: var(--space-4);
+  color: var(--text-muted);
+}
+
+.sign-in__form {
+  display: grid;
+  gap: var(--space-10);
+  margin-top: var(--space-12);
+}
+
+.sign-in__form > .button {
+  margin-top: var(--space-2);
+}
+
+.sign-in__footer {
+  margin-top: var(--space-10);
+  padding-top: var(--space-8);
+  border-top: var(--border-width) solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}

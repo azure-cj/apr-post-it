@@ -1,0 +1,592 @@
+/**
+ * The tracker, against a scripted `post`. Ports the tracker half of
+ * ScriptBackendTests.cs: refusals reach the person as sentences, the sheet's
+ * loose dates and times are read, a logged post takes the server's date and
+ * name, and the one edit allowed from here is adding a pending post's link.
+ */
+
+import { createBackend, type BackendDeps } from './backend';
+import { createTracker, readSheetDate, readSheetTime, type LogPostInput } from './tracker';
+import { UserFacingError, type Assignment, type PostLogEntry } from './types';
+
+const EXEC = 'https://script.google.com/macros/s/AKfy/exec';
+
+type Wire = Record<string, unknown>;
+type Scripted = unknown | ((body: Wire) => unknown);
+
+/** A post that answers from a script — the last reply repeats — and keeps what was sent. */
+function scripted(...replies: Scripted[]) {
+  const sent: { url: string; body: Wire }[] = [];
+  const queue = [...replies];
+  const post = async (url: string, body: unknown): Promise<unknown> => {
+    const wire = JSON.parse(JSON.stringify(body)) as Wire;
+    sent.push({ url, body: wire });
+    const next = queue.length > 1 ? queue.shift() : queue[0];
+    const reply = typeof next === 'function' ? (next as (b: Wire) => unknown)(wire) : next;
+    if (reply instanceof Error) throw reply;
+    return reply;
+  };
+  return { post, sent };
+}
+
+function trackerOver(post: BackendDeps['post'], key = 'testkey', url = EXEC) {
+  return createTracker({ backend: createBackend({ post, getConfig: () => ({ url, key }) }) });
+}
+
+async function refusal(p: Promise<unknown>): Promise<UserFacingError> {
+  try {
+    await p;
+  } catch (err) {
+    expect(err).toBeInstanceOf(UserFacingError);
+    return err as UserFacingError;
+  }
+  throw new Error('expected a refusal');
+}
+
+function entry(over: Partial<PostLogEntry> = {}): PostLogEntry {
+  return {
+    date: '2026-01-01',
+    time: '09:00',
+    type: 'Lot',
+    title: 'Casa Amara',
+    status: 'Posted',
+    fbAccount: 'APG Homes',
+    postLink: 'https://www.facebook.com/groups/x/posts/1/',
+    postedBy: 'Jan Dela Cruz',
+    propertyId: '1AbC',
+    ...over,
+  };
+}
+
+function logInput(over: Partial<LogPostInput> = {}): LogPostInput {
+  return {
+    propertyId: '1AbC',
+    propertyName: 'Casa Amara',
+    fbAccount: 'APG Homes',
+    postLink: 'https://www.facebook.com/groups/x/posts/1/',
+    ...over,
+  };
+}
+
+function assignment(over: Partial<Assignment> = {}): Assignment {
+  return {
+    date: '2026-04-02',
+    assignedTo: 'Jan Dela Cruz',
+    propertyName: 'Casa Amara',
+    propertyId: '1AbC',
+    status: 'To post',
+    ...over,
+  };
+}
+
+// ------------------------------------------------------------------ refusals reach the person
+
+describe('a refusal', () => {
+  it('for a cooldown arrives as the server\'s own sentence', async () => {
+    const { post } = scripted({
+      ok: false,
+      error: 'cooldown',
+      lastPosted: '2026-01-01',
+      nextAllowed: '2026-01-08',
+      message: 'Posted 2 day(s) ago. Next allowed Jan 8.',
+    });
+    const error = await refusal(trackerOver(post).logPost(logInput()));
+
+    expect(error.message).toBe('Posted 2 day(s) ago. Next allowed Jan 8.');
+  });
+
+  it('for an unknown key says what to do about it', async () => {
+    const { post } = scripted({ ok: false, error: 'unauthorized' });
+    const error = await refusal(trackerOver(post).posts());
+
+    expect(error.message).toContain('key');
+  });
+
+  it('for a forbidden action keeps the server\'s wording', async () => {
+    const { post } = scripted({ ok: false, error: 'forbidden', message: 'You are not assigned to APG Rentals.' });
+    const error = await refusal(trackerOver(post).logPost(logInput({ fbAccount: 'APG Rentals' })));
+
+    expect(error.message).toBe('You are not assigned to APG Rentals.');
+  });
+
+  it('as a sign-in page instead of JSON names the real mistake', async () => {
+    // The commonest setup error: the web app was deployed without "Anyone" access.
+    const { post } = scripted('<!DOCTYPE html><html><body>Sign in</body></html>');
+    const error = await refusal(trackerOver(post).posts());
+
+    expect(error.message).toMatch(/redeploy/i);
+  });
+
+  it('from a dead connection does not leak the transport\'s exception', async () => {
+    const { post } = scripted(new TypeError('no such host'));
+    const error = await refusal(trackerOver(post).posts());
+
+    expect(error.message).toContain('connection');
+  });
+
+  it('without a url and key comes before calling anything', async () => {
+    const { post, sent } = scripted({ ok: true, posts: [] });
+    const error = await refusal(trackerOver(post, '', '').posts());
+
+    expect(error.message).toContain('Settings');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('for a busy lock says to try again', async () => {
+    const { post } = scripted({ ok: false, error: 'busy' });
+    const error = await refusal(trackerOver(post).setStatus(assignment(), 'Posted'));
+
+    expect(error.message).toBe('Someone else is saving right now. Try again in a moment.');
+  });
+
+  it('for an intern\'s queue item that is not theirs keeps the server\'s wording', async () => {
+    const { post } = scripted({ ok: false, error: 'forbidden', message: 'That is not your queue item.' });
+    const error = await refusal(trackerOver(post).setStatus(assignment({ assignedTo: 'Bea Lim' }), 'Posted'));
+
+    expect(error.message).toBe('That is not your queue item.');
+  });
+});
+
+describe('the key', () => {
+  it('goes in the body, never in a header or the address', async () => {
+    const { post, sent } = scripted({ ok: true, posts: [] });
+    await trackerOver(post, 's3cret').posts();
+
+    expect(sent[0]!.body['key']).toBe('s3cret');
+    expect(sent[0]!.body['action']).toBe('posts');
+    expect(sent[0]!.url).not.toContain('s3cret');
+  });
+});
+
+// ------------------------------------------------------------------ reading
+
+describe('the posts', () => {
+  it('map out of the sheet\'s loose date and time formats', async () => {
+    const { post } = scripted({
+      ok: true,
+      posts: [
+        {
+          date: '2026-01-05', type: 'Lot', title: 'Verdant Hills Lot 7', time: '14:30',
+          status: 'Posted', fbAccount: 'APG Homes', postLink: 'https://fb.com/1', postedBy: 'Jan Dela Cruz',
+        },
+        {
+          date: '2026-01-06T00:00:00.000Z', type: 'Condo', title: 'Casa Amara', time: '',
+          status: 'Pending', fbAccount: 'APG Rentals', postLink: '', postedBy: 'Bea Lim',
+        },
+      ],
+    });
+    const posts = await trackerOver(post).posts();
+
+    expect(posts).toHaveLength(2);
+    expect(posts[0]!.date).toBe('2026-01-05');
+    expect(posts[0]!.time).toBe('14:30');
+    expect(posts[0]!.status).toBe('Posted');
+    expect(posts[1]!.date).toBe('2026-01-06'); // a serialised date, not text
+    expect(posts[1]!.status).toBe('Pending');
+  });
+
+  it('come out whole, in sheet order, with every field as text', async () => {
+    const { post } = scripted({
+      ok: true,
+      posts: [
+        { date: '2026-01-05', title: 'Lot 9', status: 'pending ', postLink: 12345, propertyId: 'F1', fbAccount: null },
+        'not a row',
+        { date: '1/6/2026', title: 'Lot 10', time: '2:05 PM' },
+      ],
+    });
+    const posts = await trackerOver(post).posts();
+
+    expect(posts).toEqual([
+      { date: '2026-01-05', time: '', type: '', title: 'Lot 9', status: 'Pending', fbAccount: '', postLink: '12345', postedBy: '', propertyId: 'F1' },
+      { date: '2026-01-06', time: '14:05', type: '', title: 'Lot 10', status: 'Posted', fbAccount: '', postLink: '', postedBy: '', propertyId: '' },
+    ]);
+  });
+
+  it('keep names exactly as the sheet has them, because the server matches them exactly', async () => {
+    const { post } = scripted({ ok: true, posts: [{ title: ' Casa Amara ', postedBy: 'Jan Dela Cruz ' }] });
+    const [row] = await trackerOver(post).posts();
+
+    expect(row!.title).toBe(' Casa Amara ');
+    expect(row!.postedBy).toBe('Jan Dela Cruz ');
+  });
+
+  it('that do not arrive as a list are a sentence, not an empty tracker', async () => {
+    const { post } = scripted({ ok: true });
+    const error = await refusal(trackerOver(post).posts());
+
+    expect(error.message).toContain('could not read');
+  });
+});
+
+describe('the assignments', () => {
+  it('map their status, date and property, in sheet order', async () => {
+    const { post } = scripted({
+      ok: true,
+      assignments: [
+        { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', property: 'Casa Amara', status: 'To post', propertyId: '1AbC' },
+        { date: '2026-04-01T16:00:00.000Z', assignedTo: 'Jan Dela Cruz', property: 'Lot 9', status: 'pending' },
+        { date: '2026-04-02', assignedTo: 'Bea Lim', property: 'Silang 40', status: 'POSTED' },
+        { date: 'tomorrow', assignedTo: 'Bea Lim', property: 'Mabini', status: 'Draft' },
+      ],
+    });
+    const rows = await trackerOver(post).assignments();
+
+    expect(rows).toEqual([
+      { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: '1AbC', status: 'To post' },
+      // Manila's midnight on Apr 2 is 16:00 on Apr 1 in UTC.
+      { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 9', propertyId: '', status: 'Pending' },
+      { date: '2026-04-02', assignedTo: 'Bea Lim', propertyName: 'Silang 40', propertyId: '', status: 'Posted' },
+      { date: '', assignedTo: 'Bea Lim', propertyName: 'Mabini', propertyId: '', status: 'To post' },
+    ]);
+  });
+
+  it('that do not arrive as a list are a sentence', async () => {
+    const { post } = scripted({ ok: true, assignments: {} });
+    await refusal(trackerOver(post).assignments());
+  });
+});
+
+// ------------------------------------------------------------------ logging a post
+
+describe('logging a post', () => {
+  it('takes the server\'s date and name, not the client\'s', async () => {
+    const { post } = scripted({ ok: true, status: 'Pending', date: '2026-03-09', postedBy: 'Jan Dela Cruz' });
+    const saved = await trackerOver(post).logPost(logInput({ postLink: '', postedBy: 'Somebody Else' }));
+
+    expect(saved.date).toBe('2026-03-09');
+    expect(saved.status).toBe('Pending');
+    expect(saved.postedBy).toBe('Jan Dela Cruz');
+  });
+
+  it('sends what the person said, and no date, time or clock of its own', async () => {
+    const { post, sent } = scripted({ ok: true, status: 'Posted', date: '2026-03-09', postedBy: 'Jan Dela Cruz' });
+    await trackerOver(post).logPost(logInput({ fbAccount: '  APG Homes ', type: 'CONDO / HOUSE AND LOT' }));
+
+    expect(sent[0]!.body).toEqual({
+      property: 'Casa Amara',
+      propertyId: '1AbC',
+      fbAccount: 'APG Homes',
+      postLink: 'https://www.facebook.com/groups/x/posts/1/',
+      type: 'CONDO / HOUSE AND LOT',
+      action: 'logPost',
+      key: 'testkey',
+    });
+  });
+
+  it('sends Posted By only when a manager logs for someone, and exactly as given', async () => {
+    const { post, sent } = scripted({ ok: true, status: 'Posted', date: '2026-03-09', postedBy: 'Jan Dela Cruz ' });
+    const tracker = trackerOver(post);
+
+    await tracker.logPost(logInput({ postedBy: '   ' }));
+    const saved = await tracker.logPost(logInput({ postedBy: 'Jan Dela Cruz ' }));
+
+    expect(sent[0]!.body).not.toHaveProperty('postedBy');
+    expect(sent[1]!.body['postedBy']).toBe('Jan Dela Cruz ');
+    expect(saved.postedBy).toBe('Jan Dela Cruz ');
+  });
+
+  it('comes back as the row the server wrote', async () => {
+    const { post } = scripted({ ok: true, status: 'Posted', date: '2026-03-09', time: '16:45', postedBy: 'Jan Dela Cruz' });
+    const saved = await trackerOver(post).logPost(logInput());
+
+    expect(saved).toEqual({
+      date: '2026-03-09',
+      time: '16:45',
+      type: 'Group post', // what Code.gs writes when no type is sent
+      title: 'Casa Amara',
+      status: 'Posted',
+      fbAccount: 'APG Homes',
+      postLink: 'https://www.facebook.com/groups/x/posts/1/',
+      postedBy: 'Jan Dela Cruz',
+      propertyId: '1AbC',
+    });
+  });
+
+  it('never fills in a time or a name the server did not send', async () => {
+    // Code.gs's logPost reply carries no time today: blank, not this PC's clock.
+    const { post } = scripted({ ok: true, date: '2026-03-09' });
+    const saved = await trackerOver(post).logPost(logInput({ postLink: '', postedBy: 'Jan Dela Cruz' }));
+
+    expect(saved.time).toBe('');
+    expect(saved.postedBy).toBe('');
+    expect(saved.status).toBe('Pending'); // no link, and the server did not say otherwise
+  });
+
+  it('without a property is refused before asking', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const tracker = trackerOver(post);
+
+    const noId = await refusal(tracker.logPost(logInput({ propertyId: ' ' })));
+    const noName = await refusal(tracker.logPost(logInput({ propertyName: '' })));
+
+    expect(noId.message).toBe('Choose the property you posted before logging it.');
+    expect(noName.message).toBe(noId.message);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('without an FB account is refused before asking', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const error = await refusal(trackerOver(post).logPost(logInput({ fbAccount: '   ' })));
+
+    expect(error.message).toBe('Type the FB account name.');
+    expect(sent).toHaveLength(0);
+  });
+});
+
+// ------------------------------------------------------------------ the one edit
+
+describe('completing a pending post', () => {
+  it('sends the link for that property and comes back Posted', async () => {
+    const { post, sent } = scripted({ ok: true, row: 7 });
+    const pending = entry({ status: 'Pending', postLink: '' });
+
+    const done = await trackerOver(post).addLink(pending, '  https://www.facebook.com/groups/x/posts/2/ ');
+
+    expect(sent[0]!.body).toEqual({
+      property: 'Casa Amara',
+      propertyId: '1AbC',
+      postLink: 'https://www.facebook.com/groups/x/posts/2/',
+      action: 'addLink',
+      key: 'testkey',
+    });
+    expect(done).toEqual({ ...pending, status: 'Posted', postLink: 'https://www.facebook.com/groups/x/posts/2/' });
+  });
+
+  it('on a row with no property id, lets the server find it by name', async () => {
+    const { post, sent } = scripted({ ok: true, row: 7 });
+    await trackerOver(post).addLink(entry({ status: 'Pending', postLink: '', propertyId: '' }), 'https://fb.com/2');
+
+    expect(sent[0]!.body).not.toHaveProperty('propertyId');
+    expect(sent[0]!.body['property']).toBe('Casa Amara');
+  });
+
+  it('when the server has no such pending post, keeps its wording', async () => {
+    const { post } = scripted({ ok: false, error: 'notfound', message: 'No pending post for that property.' });
+    const error = await refusal(trackerOver(post).addLink(entry({ status: 'Pending', postLink: '' }), 'https://fb.com/2'));
+
+    expect(error.message).toBe('No pending post for that property.');
+  });
+
+  it('is refused here for a post that is already live, or without a link', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const tracker = trackerOver(post);
+
+    const live = await refusal(tracker.addLink(entry({ status: 'Posted' }), 'https://fb.com/2'));
+    const blank = await refusal(tracker.addLink(entry({ status: 'Pending', postLink: '' }), '   '));
+    const nowhere = await refusal(tracker.addLink(entry({ status: 'Pending', title: ' ', propertyId: '' }), 'https://fb.com/2'));
+
+    expect(live.message).toContain('already live');
+    expect(blank.message).toBe('Paste the post link.');
+    expect(nowhere.message).toContain('tracker sheet');
+    expect(sent).toHaveLength(0);
+  });
+});
+
+describe('editing a row', () => {
+  it('other than adding its link is refused here, without asking', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const pending = entry({ status: 'Pending', postLink: '' });
+
+    const error = await refusal(trackerOver(post).updatePost(pending, pending));
+
+    expect(error.message).toContain('sheet');
+    expect(sent).toHaveLength(0); // never reached the network
+  });
+
+  it.each([
+    ['the title', { title: 'Casa Amara 2' }],
+    ['the date', { date: '2026-01-02' }],
+    ['the time', { time: '10:00' }],
+    ['the account', { fbAccount: 'APG Rentals' }],
+    ['the name', { postedBy: 'Bea Lim' }],
+    ['the type', { type: 'Condo' }],
+    ['the property', { propertyId: 'other' }],
+  ])('that changes %s along with the link is refused', async (_, change) => {
+    const { post, sent } = scripted({ ok: true });
+    const pending = entry({ status: 'Pending', postLink: '' });
+
+    const error = await refusal(
+      trackerOver(post).updatePost(pending, { ...pending, status: 'Posted', postLink: 'https://fb.com/2', ...change }),
+    );
+
+    expect(error.message).toBe(
+      'Only adding the live link to a pending post can be saved from here. Edit the sheet for anything else.',
+    );
+    expect(sent).toHaveLength(0);
+  });
+
+  it('that is already live is refused', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const live = entry();
+
+    const error = await refusal(trackerOver(post).updatePost(live, { ...live, postLink: 'https://fb.com/other' }));
+
+    expect(error.message).toContain('sheet');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('that only adds the live link is saved', async () => {
+    const { post, sent } = scripted({ ok: true, row: 3 });
+    const pending = entry({ status: 'Pending', postLink: '' });
+
+    const done = await trackerOver(post).updatePost(pending, { ...pending, status: 'Posted', postLink: 'https://fb.com/2' });
+
+    expect(done.status).toBe('Posted');
+    expect(sent[0]!.body['action']).toBe('addLink');
+  });
+});
+
+// ------------------------------------------------------------------ queues
+
+describe('saving a queue', () => {
+  it('sends the items in order', async () => {
+    const { post, sent } = scripted({ ok: true, saved: 2 });
+
+    const saved = await trackerOver(post).saveQueue('2026-04-02', 'Jan Dela Cruz', [
+      assignment({ propertyName: 'Casa Amara', propertyId: '', status: 'To post' }),
+      assignment({ propertyName: 'Lot 9', propertyId: '', status: 'Pending' }),
+    ]);
+
+    const body = sent[0]!.body;
+    expect(body['date']).toBe('2026-04-02');
+    expect(body['assignedTo']).toBe('Jan Dela Cruz');
+    const items = body['items'] as Wire[];
+    expect(items[0]!['property']).toBe('Casa Amara');
+    expect(items[0]!['status']).toBe('To post');
+    expect(items[1]!['status']).toBe('Pending');
+    expect(saved).toBe(2);
+  });
+
+  it('sends each item\'s folder id when it has one, and To post when it has no status', async () => {
+    const { post, sent } = scripted({ ok: true, saved: 2 });
+
+    await trackerOver(post).saveQueue('2026-04-02', 'Jan Dela Cruz', [
+      { propertyName: 'Casa Amara', propertyId: '1AbC' },
+      { propertyName: 'Lot 9', propertyId: '  ', status: 'Posted' },
+    ]);
+
+    expect(sent[0]!.body['items']).toEqual([
+      { property: 'Casa Amara', status: 'To post', propertyId: '1AbC' },
+      { property: 'Lot 9', status: 'Posted' },
+    ]);
+  });
+
+  it('with no items empties that queue', async () => {
+    const { post, sent } = scripted({ ok: true, saved: 0 });
+
+    expect(await trackerOver(post).saveQueue('2026-04-02', 'Jan Dela Cruz', [])).toBe(0);
+    expect(sent[0]!.body['items']).toEqual([]);
+  });
+
+  it.each([
+    ['no date', '', 'Jan Dela Cruz', 'Pick a date for the queue.'],
+    ['a date the server would not match', '2026-4-2', 'Jan Dela Cruz', 'Pick a date for the queue.'],
+    ['a day that does not exist', '2026-02-30', 'Jan Dela Cruz', 'Pick a date for the queue.'],
+    ['nobody to give it to', '2026-04-02', '  ', 'Choose who the queue is for.'],
+  ])('with %s is refused before asking', async (_, date, who, message) => {
+    const { post, sent } = scripted({ ok: true, saved: 1 });
+    const error = await refusal(trackerOver(post).saveQueue(date, who, [{ propertyName: 'Casa Amara' }]));
+
+    expect(error.message).toBe(message);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('with an item that has no property is refused before asking', async () => {
+    const { post, sent } = scripted({ ok: true, saved: 1 });
+    const error = await refusal(
+      trackerOver(post).saveQueue('2026-04-02', 'Jan Dela Cruz', [{ propertyName: 'Casa Amara' }, { propertyName: ' ' }]),
+    );
+
+    expect(error.message).toContain('needs a property');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('for an intern is the server\'s to refuse', async () => {
+    const { post } = scripted({ ok: false, error: 'forbidden', message: 'Your account cannot do that.' });
+    const error = await refusal(trackerOver(post).saveQueue('2026-04-02', 'Jan Dela Cruz', []));
+
+    expect(error.message).toBe('Your account cannot do that.');
+  });
+});
+
+describe('setting a queue item\'s status', () => {
+  it('sends the item as the sheet has it, and comes back moved', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const item = assignment({ assignedTo: 'Jan Dela Cruz ' });
+
+    const moved = await trackerOver(post).setStatus(item, 'Pending');
+
+    expect(sent[0]!.body).toEqual({
+      property: 'Casa Amara',
+      propertyId: '1AbC',
+      assignedTo: 'Jan Dela Cruz ', // matched with === on the server: not tidied
+      status: 'Pending',
+      action: 'setStatus',
+      key: 'testkey',
+    });
+    expect(moved).toEqual({ ...item, status: 'Pending' });
+  });
+
+  it('without a property or an assignee is refused before asking', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const tracker = trackerOver(post);
+
+    const noProperty = await refusal(tracker.setStatus(assignment({ propertyName: '' }), 'Posted'));
+    const nobody = await refusal(tracker.setStatus(assignment({ assignedTo: '' }), 'Posted'));
+
+    expect(noProperty.message).toContain('no property');
+    expect(nobody.message).toContain('not assigned to anyone');
+    expect(sent).toHaveLength(0);
+  });
+});
+
+// ------------------------------------------------------------------ the sheet's dates and times
+
+describe('reading the sheet', () => {
+  it.each([
+    ['2026-01-05', '2026-01-05'],
+    [' 2026-01-05 ', '2026-01-05'],
+    ['2026-01-06T00:00:00.000Z', '2026-01-06'],
+    ['2026-01-05T16:00:00.000Z', '2026-01-06'], // Manila's midnight
+    ['2026-01-05T15:59:59Z', '2026-01-05'],
+    ['2026-01-06T00:00:00+08:00', '2026-01-06'],
+    ['2026-01-06T07:00:00-0500', '2026-01-06'],
+    ['2026-01-06T00:00:00', '2026-01-06'], // no zone: the clock as written
+    ['2026-01-06 09:30', '2026-01-06'],
+    ['1/6/2026', '2026-01-06'],
+    ['12/31/2026 14:00:00', '2026-12-31'],
+    ['2026-02-29', ''],
+    ['2028-02-29', '2028-02-29'],
+    ['13/1/2026', ''],
+    ['Jan 6', ''],
+    ['', ''],
+  ])('reads the date %j as %j', (raw, date) => {
+    expect(readSheetDate(raw)).toBe(date);
+  });
+
+  it('reads no date out of what is not text', () => {
+    expect(readSheetDate(46027)).toBe('');
+    expect(readSheetDate(null)).toBe('');
+    expect(readSheetDate(undefined)).toBe('');
+  });
+
+  it.each([
+    ['14:30', '14:30'],
+    ['9:05', '09:05'],
+    ['14:30:59', '14:30'],
+    ['2:30 PM', '14:30'],
+    ['2:30:00 pm', '14:30'],
+    ['12:15 AM', '00:15'],
+    ['12:15 p.m.', '12:15'],
+    ['1899-12-30T06:30:00.000Z', '14:30'], // a time cell, serialised: read on Manila's clock
+    ['2026-01-06T09:15:00', '09:15'],
+    ['1899-12-30', ''], // what Code.gs makes of a time-formatted cell: the time is gone
+    ['25:00', ''],
+    ['13:00 PM', ''],
+    ['9:60', ''],
+    ['noon', ''],
+    ['', ''],
+  ])('reads the time %j as %j', (raw, time) => {
+    expect(readSheetTime(raw)).toBe(time);
+  });
+});

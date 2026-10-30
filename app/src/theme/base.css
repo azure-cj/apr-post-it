@@ -1,0 +1,210 @@
+/*
+ * Global styles. Every value comes from tokens.css; this file only applies the
+ * system to the document: the fonts, the page, focus, scrollbars and motion.
+ * Import it after tokens.css.
+ */
+
+/* Montserrat for headings, labels and buttons: 500 label, 600 heading, 700
+   display. Latin only. Characters it lacks (₱) fall through to Segoe UI. */
+@import "@fontsource/montserrat/latin-500.css";
+@import "@fontsource/montserrat/latin-600.css";
+@import "@fontsource/montserrat/latin-700.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  /* Thin, dark scrollbars. scrollbar-color is inherited; scrollbar-width is
+     not, so it is set again on every element below. */
+  scrollbar-color: var(--border-strong) transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  /* The soft gold glow at the top of the window, then the page colour. */
+  background:
+    radial-gradient(120% 55% at 50% -12%, var(--bg-glow) 0%, transparent 70%) no-repeat,
+    var(--bg);
+  font-family: var(--body-font);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  font-weight: 400;
+  letter-spacing: var(--letter-spacing);
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  scrollbar-width: thin;
+}
+
+/* Chromium before 121 ignores the standard properties; this is its fallback. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  border-radius: var(--radius-pill);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--pick-edge);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+  color: var(--text);
+  text-wrap: balance;
+}
+
+p,
+ul,
+ol,
+dl,
+dd,
+figure,
+blockquote {
+  margin: 0;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+img,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: var(--info-text);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+::selection {
+  background: var(--gold-edge);
+  color: var(--text);
+}
+
+/* ---- focus: gold's fourth job ------------------------------------------- */
+
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* A screen's heading takes focus after navigation so a screen reader starts
+   there. It is a place, not a control, so it shows no ring. */
+h1[tabindex="-1"]:focus,
+main[tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* ---- utilities ---------------------------------------------------------- */
+
+/* Present for screen readers, absent on screen. */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- motion ------------------------------------------------------------- */
+
+/* Things arriving: a short rise and a fade. Durations come from tokens.css,
+   which sets them to 0 when Windows' "Animation effects" is off. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+    transform: translateY(var(--rise));
+  }
+}
+
+/* tokens.css already zeroes every duration. This is the safety net for
+   anything that forgot to use them. The spinner is the one exception: it
+   changes how it moves rather than stopping (see Spinner.css). */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *:not(.spinner__svg),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+}

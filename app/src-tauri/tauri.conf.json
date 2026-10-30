@@ -1,0 +1,70 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "APG Post-It",
+  "version": "1.0.0",
+  "identifier": "com.alphapremier.apgpostit",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "APG Post-It",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 600,
+        "minHeight": 520,
+        "center": true,
+        "resizable": true,
+        "visible": false,
+        "backgroundColor": "#0E0C08",
+        "theme": "Dark",
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob: https://drive.google.com https://drive.usercontent.google.com https://*.googleusercontent.com",
+        "font-src": "'self' data:",
+        "connect-src": "'self' ipc: http://ipc.localhost",
+        "object-src": "'none'",
+        "base-uri": "'self'",
+        "form-action": "'none'",
+        "frame-src": "'none'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "app", "dmg", "deb", "appimage"],
+    "publisher": "Alpha Premier Group",
+    "copyright": "© 2026 Alpha Premier Group",
+    "category": "Productivity",
+    "shortDescription": "Post property listings to Facebook",
+    "longDescription": "Find a listing, copy only its public text, save its photos, and log the post.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "http": {
+      "scopeRedirects": true
+    }
+  }
+}

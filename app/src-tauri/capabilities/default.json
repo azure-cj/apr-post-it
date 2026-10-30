@@ -1,0 +1,44 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Everything APG Post-It's window may ask of the OS. Anything not listed here is refused.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+
+    "allow-save-photos",
+    "allow-read-key",
+    "allow-write-key",
+
+    "clipboard-manager:allow-write-text",
+
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://script.google.com" },
+        { "url": "https://drive.google.com" },
+        { "url": "https://drive.usercontent.google.com" },
+        { "url": "https://*.googleusercontent.com" }
+      ]
+    },
+
+    "fs:default",
+    "fs:allow-app-write-recursive",
+    "fs:allow-app-meta-recursive",
+
+    "dialog:allow-message",
+
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://*" }]
+    },
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "$DOWNLOAD/APG Post-It" }, { "path": "$DOWNLOAD/APG Post-It/**" }]
+    },
+
+    "store:allow-load",
+    "store:allow-get",
+    "store:allow-set"
+  ]
+}

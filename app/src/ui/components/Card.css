@@ -1,0 +1,48 @@
+/* Raised by its gradient and a top-lit edge: the edge is a gradient laid
+   under a transparent border, brightest at the top. No shadow. */
+.card {
+  min-width: 0;
+  padding: var(--space-12);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--card-bg) padding-box,
+    var(--card-edge) border-box;
+  color: var(--text);
+}
+
+.card--tight {
+  padding: var(--space-8);
+}
+
+.card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-8);
+}
+
+.card__heading {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.card__title {
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+}
+
+.card__description {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.card__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-4);
+}

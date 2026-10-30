@@ -1,0 +1,62 @@
+.spinner {
+  display: inline-flex;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  color: inherit;
+}
+
+.spinner--small {
+  width: 16px;
+  height: 16px;
+}
+
+.spinner__svg {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 50%;
+  /* A loop, not a transition, so it turns at a constant speed: the one place
+     the system's ease-out curve doesn't apply. */
+  animation: spinner-turn 0.9s linear infinite;
+}
+
+.spinner__track,
+.spinner__arc {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+}
+
+.spinner__track {
+  opacity: 0.25;
+}
+
+.spinner__arc {
+  stroke-linecap: round;
+  /* 2πr = 56.5; show a quarter of the ring. */
+  stroke-dasharray: 56.5;
+  stroke-dashoffset: 42.4;
+}
+
+@keyframes spinner-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* With Windows' animation effects off it stops turning and breathes instead,
+   so it still says "working" without moving. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner__svg {
+    animation: spinner-breathe 1.6s var(--ease-out) infinite alternate;
+  }
+}
+
+@keyframes spinner-breathe {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}

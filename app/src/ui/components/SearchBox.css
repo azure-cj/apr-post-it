@@ -1,0 +1,60 @@
+/* The input's look is shared with TextInput (see TextInput.css). */
+.searchbox {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.searchbox__icon {
+  position: absolute;
+  inset-inline-start: var(--space-7);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.searchbox__input {
+  padding-inline-start: 44px;
+  padding-inline-end: 48px;
+}
+
+/* The browser's own clear cross is replaced by ours. */
+.searchbox__input::-webkit-search-cancel-button,
+.searchbox__input::-webkit-search-decoration {
+  appearance: none;
+}
+
+.searchbox__clear {
+  position: absolute;
+  inset-inline-end: var(--space-3);
+  isolation: isolate;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.searchbox__clear::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.searchbox__clear:hover {
+  color: var(--text);
+}
+
+.searchbox__clear:hover::before {
+  opacity: 1;
+}

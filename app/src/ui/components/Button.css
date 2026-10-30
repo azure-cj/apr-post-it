@@ -1,0 +1,142 @@
+.button {
+  /* What a hover lays over the button; each variant sets its own. */
+  --button-wash: var(--neutral-bg);
+
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: 44px;
+  padding: 0 var(--space-10);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-input);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  font-weight: var(--weight-heading);
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+/* Hover is an overlay that fades in, so only opacity animates. */
+.button::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--border-width) * -1);
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--button-wash);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.button:hover::before {
+  opacity: 1;
+}
+
+.button:active:not(:disabled, [aria-disabled="true"]) {
+  transform: scale(var(--press-scale));
+}
+
+.button__icon {
+  display: inline-flex;
+  flex: none;
+  margin-inline-start: calc(var(--space-2) * -1);
+}
+
+.button__label {
+  min-width: 0;
+}
+
+/* ---- variants ----------------------------------------------------------- */
+
+/* The one gold button on a screen. */
+.button--primary {
+  --button-wash: var(--inset-edge);
+  background: var(--gold-gradient);
+  color: var(--on-gold);
+}
+
+.button--ghost {
+  border-color: var(--button-edge);
+}
+
+.button--quiet {
+  color: var(--text-label);
+}
+
+.button--link {
+  --button-wash: transparent;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--info-text);
+  font-family: var(--body-font);
+  font-weight: 400;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--info-edge);
+  text-underline-offset: 3px;
+}
+
+.button--link:hover {
+  text-decoration-color: currentColor;
+}
+
+.button--link:active:not(:disabled, [aria-disabled="true"]) {
+  transform: none;
+}
+
+/* ---- sizes -------------------------------------------------------------- */
+
+.button--small {
+  min-height: 36px;
+  padding: 0 var(--space-7);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.button--block {
+  display: flex;
+  width: 100%;
+}
+
+/* ---- states ------------------------------------------------------------- */
+
+.button--busy {
+  cursor: progress;
+}
+
+/* Unavailable: dimmer text and a fainter edge, so it can't be mistaken for
+   a live button beside one. */
+.button:disabled {
+  cursor: not-allowed;
+  color: var(--placeholder);
+}
+
+.button:disabled::before {
+  opacity: 0;
+}
+
+/* Gold is never spent on something you can't do. */
+.button--primary:disabled {
+  background: var(--neutral-bg);
+  border-color: var(--border-soft);
+}
+
+.button--ghost:disabled {
+  border-color: var(--border-soft);
+}
+
+.button--link:disabled {
+  text-decoration-color: var(--border-strong);
+}
