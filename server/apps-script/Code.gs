@@ -24,8 +24,14 @@ const CONFIG = {
     'Warehouse',
   ],
 
-  // Tracker spreadsheet. Leave blank when this script is bound to that sheet.
+  // The company tracker. Leave blank only when this script is bound to it.
   TRACKER_SHEET_ID: '',
+
+  // A SEPARATE, PRIVATE spreadsheet for the script's own tabs: Index and Team.
+  // Team holds everyone's key, so it must not live in a sheet the team can open
+  // — anyone who can read a manager's key can act as that manager. Leave blank
+  // only if the tracker itself is private to you.
+  ADMIN_SHEET_ID: '',
 
   // Tab names in that spreadsheet. POSTS_TAB must match the real one.
   POSTS_TAB: 'Posts',
@@ -668,6 +674,11 @@ function book() {
     : SpreadsheetApp.getActiveSpreadsheet();
 }
 
+/** Where the script's own tabs live — private, because Team holds the keys. */
+function adminBook() {
+  return CONFIG.ADMIN_SHEET_ID ? SpreadsheetApp.openById(CONFIG.ADMIN_SHEET_ID) : book();
+}
+
 /** The tab, created with default headers only when it does not exist yet. */
 function sheetFor(name, fields) {
   var ss = book();
@@ -741,7 +752,7 @@ function appendRow(name, fields, values) {
 
 /** The Team tab, read plainly — this one is ours, so its columns are known. */
 function readSheet(name, headers) {
-  var ss = book();
+  var ss = adminBook();
   var sh = ss.getSheetByName(name);
   if (!sh) {
     sh = ss.insertSheet(name);
@@ -759,9 +770,9 @@ function readSheet(name, headers) {
   });
 }
 
-/** A tab this script owns outright, with headers it defines. */
+/** A tab this script owns outright, with headers it defines. Private book. */
 function plainTab(name, headers) {
-  var ss = book();
+  var ss = adminBook();
   var sh = ss.getSheetByName(name);
   if (!sh) {
     sh = ss.insertSheet(name);
@@ -794,6 +805,28 @@ function onOpen() {
     .addItem('Install 15-minute refresh', 'installTrigger')
     .addItem('Add a team member…', 'promptAddTeamMember')
     .addToUi();
+}
+
+/**
+ * Standalone setup, for when this script is not bound to a spreadsheet (so there
+ * is no Post-It menu). Edit the three values, press Run, and read the key from
+ * the execution log.
+ */
+function ADD_PERSON() {
+  var name       = 'Jan Dela Cruz';
+  var role       = 'Intern';          // Intern | Manager | Admin
+  var fbAccounts = '';                // comma separated; blank = any
+
+  var key = addTeamMember(name, '', role, fbAccounts);
+  Logger.log('%s (%s) key: %s', name, role, key);
+  return key;
+}
+
+/** Standalone equivalent of the menu item, for a first run. */
+function SETUP() {
+  var count = buildIndex();
+  installTrigger();
+  Logger.log('Indexed %s properties. 15-minute refresh installed.', count);
 }
 
 function promptAddTeamMember() {
