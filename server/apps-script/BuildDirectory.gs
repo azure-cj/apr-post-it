@@ -36,6 +36,10 @@ var CFG = {
   // How deep to keep descending before treating a folder as a property.
   MAX_DEPTH: 4,
 
+  // Sub-folders that are never listings. "Pics (DO NOT POST) - for clients
+  // only" sits inside a property folder and must not become a row of its own.
+  NOT_A_LISTING: /\b(do not post|for clients only|private|internal|draft|backup|old)\b/i,
+
   // A sub-folder whose name looks like this is a listing type, not a property.
   LISTING_TYPE: /^\s*for\s+(sale|lease|rent)\b/i,
 
@@ -195,11 +199,16 @@ function descend_(folder, category, listingType, subCategory, depth, queue) {
   forEachFolder_(folder, function (child) {
     var name = child.getName();
 
-    // A folder with no sub-folders is a property. Past MAX_DEPTH, stop
-    // regardless. Testing for sub-folders rather than for files keeps this to
-    // one Drive call per folder — the files listing is done later, per
-    // property, where it is needed anyway.
-    if (depth >= CFG.MAX_DEPTH || !child.getFolders().hasNext()) {
+    // Never a listing in its own right, whatever it contains.
+    if (CFG.NOT_A_LISTING.test(name)) return;
+
+    // A folder with no sub-folders is a property, and so is one that holds
+    // files of its own — a listing may keep a "Pics" folder beside its
+    // document, and descending past it loses the listing and promotes the
+    // sub-folder in its place. The files listing costs a second Drive call,
+    // so it is only made for the few folders that have sub-folders at all.
+    var hasSubFolders = child.getFolders().hasNext();
+    if (depth >= CFG.MAX_DEPTH || !hasSubFolders || child.getFiles().hasNext()) {
       queue.push([category, listingType, subCategory, name, child.getId()]);
       return;
     }
