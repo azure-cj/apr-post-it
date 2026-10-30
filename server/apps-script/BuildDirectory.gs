@@ -19,7 +19,7 @@
  */
 
 var CFG = {
-  ROOT_FOLDER_ID: '1GXeGULYswb7jXcMGCCRm2RQ_h0EKsDlI',
+  ROOT_FOLDER_ID: '1GXeGULYswb7jXcMGCCRm2RQ_h0EKsDll',   // the "APR LISTING" folder
   SHEET_ID: '1jelzICcu6rmR-mQqK7tGD19VieN6B4Y2L6fNaMMkjTs',
 
   TAB: 'Directory',

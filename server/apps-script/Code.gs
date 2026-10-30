@@ -12,7 +12,7 @@
 
 const CONFIG = {
   // Drive folder holding <Category>/<Property>/ sub-folders (or <Property>/ directly).
-  PROPERTIES_FOLDER_ID: '1GXeGULYswb7jXcMGCCRm2RQ_h0EKsDlI',
+  PROPERTIES_FOLDER_ID: '1GXeGULYswb7jXcMGCCRm2RQ_h0EKsDll',
 
   // Only these category folders are scanned. Everything else under the root —
   // SOLD, Contents, Hiring and the rest — is ignored. Empty = scan them all.
