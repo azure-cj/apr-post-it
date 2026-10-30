@@ -190,11 +190,14 @@ public class PrePostCheckerTests
     }
 
     [Test]
-    public void Missing_internal_marker_is_a_warning()
+    public void Missing_internal_marker_blocks_copying()
     {
+        // Not a warning. A document with no separator has not been checked by
+        // anyone, and in the real library those are exactly the ones carrying
+        // the owner's mobile number.
         var check = Check("FOR SALE\nPrice: ₱1M", "Internal section hidden");
-        Assert.Equal(CheckStatus.Warn, check.Status);
-        Assert.Equal("No internal marker found — check the whole text before posting", check.Detail);
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.Contains("No separator", check.Detail);
     }
 
     [Test]

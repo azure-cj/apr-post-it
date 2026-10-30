@@ -36,9 +36,15 @@ public static class PrePostChecker
             CheckPrice(publicText),
             CheckContacts(publicText),
             CheckCommission(publicText),
+            // Blocks, rather than warns. Across the real library, 79 of 1,474
+            // documents had no marker of any kind, and documents in that state
+            // were found to carry owner names, mobile numbers and commission
+            // terms. "No marker" does not mean "nothing private in here", it
+            // means nobody has separated it yet — so Copy waits for a person.
             text.HasInternalSection
                 ? new CheckResult("Internal section hidden", CheckStatus.Pass, "Kept out of the copy")
-                : new CheckResult("Internal section hidden", CheckStatus.Warn, "No internal marker found — check the whole text before posting"),
+                : new CheckResult("Internal section hidden", CheckStatus.Fail,
+                    "No separator in the document, so none of this text is confirmed safe to post. Add one above the owner's details."),
         };
     }
 
