@@ -1,0 +1,175 @@
+/*
+ * The design system, copied from Alpha Listing Hub (the checker) so the two
+ * apps read as one family. Copied rather than shared as a package, by
+ * decision — see docs/DECISIONS.md D12.
+ *
+ * The rule that makes the resemblance read: gold does exactly four jobs —
+ * the brand word, the one primary button on a screen, what is selected, and
+ * keyboard focus. Everything else is carried by the status colours.
+ *
+ * Dark only. There is no light theme.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- surfaces ---- */
+  --bg: #0e0c08;
+  --bg-glow: rgba(212, 166, 58, 0.1);
+  --surface: #17140e;
+  --surface-raised: #1e1a12;
+  --input-bg: #0b0906;
+  --card-bg: linear-gradient(180deg, #1c1811 0%, #16130d 100%);
+  --tip-bg: #241f16;
+  --top-bar-bg: rgba(14, 12, 8, 0.94);
+  --viewer-bg: rgba(5, 4, 2, 0.94);
+  --inset: rgba(0, 0, 0, 0.25);
+  --inset-edge: rgba(255, 255, 255, 0.08);
+
+  /* ---- text ---- */
+  --text: #f3eee4;
+  --text-label: #d9d2c4;
+  --text-muted: #b8af9c;
+  --placeholder: #8a8170;
+  --zero-text: #5c5547;
+
+  /* ---- edges: cream at an alpha, never gold ---- */
+  --border-soft: rgba(243, 238, 228, 0.06);
+  --border: rgba(243, 238, 228, 0.1);
+  --button-edge: rgba(243, 238, 228, 0.18);
+  --border-strong: rgba(243, 238, 228, 0.24);
+  --pick-edge: rgba(243, 238, 228, 0.4);
+  --row-hover: rgba(243, 238, 228, 0.03);
+  --outline-shape: rgba(243, 238, 228, 0.07);
+  --card-edge: linear-gradient(
+    180deg,
+    rgba(243, 238, 228, 0.14) 0%,
+    rgba(243, 238, 228, 0.08) 25%,
+    rgba(243, 238, 228, 0.06) 100%
+  );
+
+  /* ---- gold: brand, the primary action, selection, focus ---- */
+  --gold: #e0b84a;
+  --gold-edge: rgba(224, 184, 74, 0.55);
+  --gold-soft: rgba(224, 184, 74, 0.12);
+  --on-gold: #1a1408;
+  --gold-gradient: linear-gradient(135deg, #f6dc8a 0%, #e0b84a 45%, #b98a26 100%);
+
+  /* ---- status ---- */
+  --danger-bg: rgba(229, 83, 75, 0.15);
+  --danger-text: #ff9d95;
+  --danger-strong: #f0645a;
+  --danger-soft: rgba(240, 100, 90, 0.18);
+  --danger-line: rgba(240, 100, 90, 0.32);
+  --danger-edge: rgba(255, 157, 149, 0.55);
+  --on-danger: #1f0a08;
+
+  --info-bg: rgba(111, 168, 220, 0.12);
+  --info-text: #a9cdef;
+  --info-strong: #6fa8dc;
+  --info-soft: rgba(111, 168, 220, 0.18);
+  --info-line: rgba(111, 168, 220, 0.28);
+  --info-edge: rgba(169, 205, 239, 0.55);
+
+  --ok-bg: rgba(90, 180, 110, 0.14);
+  --ok-text: #93d9a3;
+  --ok-strong: #62c47e;
+  --ok-soft: rgba(98, 196, 126, 0.18);
+  --ok-line: rgba(98, 196, 126, 0.26);
+  --ok-edge: rgba(147, 217, 163, 0.5);
+
+  --neutral-bg: rgba(255, 255, 255, 0.06);
+  --neutral-text: #c9c2b4;
+  --neutral-strong: #9c937f;
+  --neutral-soft: rgba(255, 255, 255, 0.12);
+
+  --warn-bg: rgba(240, 150, 60, 0.14);
+  --warn-text: #f5b77a;
+  --warn-edge: rgba(245, 183, 122, 0.45);
+
+  /* ---- listing types: one hue per type, everywhere ---- */
+  --type-commercial: #3987e5;
+  --type-condo: #d95926;
+  --type-office: #199e70;
+  --type-warehouse: #c98500;
+  --type-unsorted: #6f685a;
+
+  /* ---- type ---- */
+  --body-font: "Segoe UI", system-ui, sans-serif;
+  --heading-font: "Montserrat", "Segoe UI Semibold", var(--body-font);
+  --weight-label: 500;
+  --weight-heading: 600;
+  --weight-display: 700;
+
+  --text-caption: 14px;  --lh-caption: 20px;
+  --text-meta: 15px;     --lh-meta: 22px;
+  --text-body: 16px;     --lh-body: 24px;
+  --text-name: 17px;     --lh-name: 23px;
+  --text-title: 20px;    --lh-title: 26px;
+  --text-heading: 24px;  --lh-heading: 30px;
+  --text-verdict: 28px;  --lh-verdict: 34px;
+
+  /* Nothing under 14px, and no tracked capitals: spaced caps read smaller
+     than they are. Sentence case everywhere. */
+  --letter-spacing: 0;
+
+  /* ---- spacing, a 2px base ---- */
+  --space-1: 2px;   --space-2: 4px;   --space-3: 6px;   --space-4: 8px;
+  --space-5: 10px;  --space-6: 12px;  --space-7: 14px;  --space-8: 16px;
+  --space-9: 18px;  --space-10: 20px; --space-12: 24px; --space-14: 28px;
+  --space-20: 40px; --space-24: 48px;
+
+  /* ---- radii. Pills are half their own height, which in CSS is 999px. ---- */
+  --radius-sm: 4px;
+  --radius-chip: 8px;
+  --radius-input: 12px;
+  --radius-row: 14px;
+  --radius-verdict: 16px;
+  --radius-card: 18px;
+  --radius-pill: 999px;
+  --border-width: 1px;
+
+  /* ---- motion: one easing curve, no bounce, no spring ---- */
+  --dur-press: 80ms;
+  --dur-fast: 120ms;
+  --dur-exit: 150ms;
+  --dur-enter: 200ms;
+  --dur-move: 250ms;
+  --dur-scroll: 300ms;
+  --stagger: 40ms;
+  --rise: 8px;
+  --press-scale: 0.98;
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
+
+  /* ---- layout. Breakpoints are measured against container width after the
+     text-size zoom, not the viewport. ---- */
+  --bp-stack: 900px;
+  --bp-compact: 1100px;
+  --page-max: 1320px;
+  --pane-regular: 400px;
+  --pane-compact: 340px;
+  --gap-regular: 40px;
+  --gap-compact: 24px;
+  --page-pad-regular: 24px;
+  --page-pad-compact: 16px;
+  --page-pad-narrow: 12px;
+
+  --focus-ring: 2px solid var(--gold);
+  --focus-offset: 3px;
+  --focus-radius: 14px;
+}
+
+/* Windows' "Animation effects" reaches the WebView as prefers-reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-press: 0ms;
+    --dur-fast: 0ms;
+    --dur-exit: 0ms;
+    --dur-enter: 0ms;
+    --dur-move: 0ms;
+    --dur-scroll: 0ms;
+    --stagger: 0ms;
+    --rise: 0px;
+    --press-scale: 1;
+  }
+}
