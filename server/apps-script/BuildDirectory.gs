@@ -45,7 +45,24 @@ var HEADERS = [
 function START() {
   STOP();
   var book = SpreadsheetApp.openById(CFG.SHEET_ID);
-  var queue = scanFolders_();
+
+  var queue;
+  try {
+    queue = scanFolders_();
+  } catch (e) {
+    // Almost always a root folder this account cannot see. Say so in plain
+    // words and run the diagnosis straight away rather than making you find it.
+    Logger.log('Could not open the library folder %s.', CFG.ROOT_FOLDER_ID);
+    Logger.log('Looking for the right one...\n');
+    FIND_ROOT();
+    Logger.log('\nPut the id above into CFG.ROOT_FOLDER_ID at the top, then run START again.');
+    return;
+  }
+  if (!queue.length) {
+    Logger.log('That folder has no sub-folders. Is %s the folder that holds the categories?',
+               CFG.ROOT_FOLDER_ID);
+    return;
+  }
 
   var q = resetTab_(book, CFG.QUEUE_TAB, ['Category', 'Listing type', 'Property', 'FolderId']);
   if (queue.length) q.getRange(2, 1, queue.length, 4).setValues(queue);
