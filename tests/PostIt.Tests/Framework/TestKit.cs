@@ -115,9 +115,10 @@ public sealed class TestApp
         Settings, SampleData, Clock);
 
     /// <summary>Services as a page view-model sees them (notifier = FakeNotifier).</summary>
-    public AppServices Services()
+    public AppServices Services(IBackendConnection? backend = null)
     {
         var c = Core();
-        return new AppServices(c.Posting, c.Assignments, c.Tracker, c.Settings, c.SampleData, c.Clock, Ui, Notifier, Session);
+        return new AppServices(c.Posting, c.Assignments, c.Tracker, c.Settings, c.SampleData, c.Clock,
+                               Ui, Notifier, Session, backend);
     }
 }

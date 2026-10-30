@@ -313,6 +313,7 @@ public sealed class SettingsViewModel : PageViewModel
             UserRole role;
             if (roleText.Equals("intern", StringComparison.OrdinalIgnoreCase)) role = UserRole.Intern;
             else if (roleText.Equals("manager", StringComparison.OrdinalIgnoreCase)) role = UserRole.Manager;
+            else if (roleText.Equals("admin", StringComparison.OrdinalIgnoreCase)) role = UserRole.Admin;
             else return (users, $"Line {i + 1}: the role must be Intern or Manager.");
 
             if (users.Any(u => ManagerFormat.SamePerson(u.Name, name))) return (users, $"{name} is listed twice.");
@@ -320,7 +321,7 @@ public sealed class SettingsViewModel : PageViewModel
         }
 
         if (users.Count == 0) return (users, "Add the team: one person per line.");
-        if (users.All(u => u.Role != UserRole.Manager)) return (users, "Add at least one manager, e.g. “Maria Santos, Manager”.");
+        if (users.All(u => !u.CanManage)) return (users, "Add at least one manager, e.g. “Maria Santos, Manager”.");
         return (users, null);
     }
 

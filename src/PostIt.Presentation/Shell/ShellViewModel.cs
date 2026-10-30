@@ -38,10 +38,11 @@ public sealed class ShellViewModel : ViewModelBase, INavigator, INotifier
     private ToastMessage? _toast;
     private int _toastVersion;
 
-    public ShellViewModel(CoreServices core, IUiServices ui)
+    public ShellViewModel(CoreServices core, IUiServices ui, IBackendConnection? backend = null)
     {
         Session = new Session();
-        S = new AppServices(core.Posting, core.Assignments, core.Tracker, core.Settings, core.SampleData, core.Clock, ui, this, Session);
+        S = new AppServices(core.Posting, core.Assignments, core.Tracker, core.Settings, core.SampleData,
+                            core.Clock, ui, this, Session, backend);
         NavigateCommand = Command<NavKey>(k => Navigate(k));
         SignOutCommand = Command(SignOut, () => Session.User is not null);
         DismissToastCommand = Command(() => Toast = null);
@@ -98,7 +99,7 @@ public sealed class ShellViewModel : ViewModelBase, INavigator, INotifier
         S.Settings.Save(s);
 
         NavItems.Clear();
-        if (user.Role == UserRole.Manager)
+        if (user.CanManage)
         {
             NavItems.Add(new NavItem(NavKey.Tracker, "Tracker", ""));
             NavItems.Add(new NavItem(NavKey.Assign, "Assign", ""));
@@ -113,7 +114,7 @@ public sealed class ShellViewModel : ViewModelBase, INavigator, INotifier
 
         Raise(nameof(Tagline), nameof(UserLabel), nameof(UserInitials), nameof(IsSignedIn), nameof(UsingSampleData));
         _back.Clear();
-        if (user.Role == UserRole.Manager) ShowTracker(); else ShowMyQueue();
+        if (user.CanManage) ShowTracker(); else ShowMyQueue();
         _ = RefreshBadgesAsync();
     }
 

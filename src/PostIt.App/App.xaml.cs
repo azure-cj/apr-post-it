@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Threading;
 using PostIt.App.Services;
 using PostIt.Core;
+using PostIt.Core.Google;
 using PostIt.Presentation;
 
 namespace PostIt.App;
@@ -27,9 +28,25 @@ public partial class App : Application
             var sample = new SampleDataSeeder(settings, clock, Path.Combine(AppContext.BaseDirectory, "SampleData"));
             sample.EnsureSeeded();
 
-            // Storage adapters. Swap these two for Google Drive / Google Sheets versions later; nothing else changes.
-            var properties = new FolderPropertyRepository(settings);
-            var tracker = new CsvTrackerRepository(settings);
+            // The only place that knows whether this is the real thing or the
+            // prototype. Settings carry a web app link and a key, so Google;
+            // otherwise local folders and the bundled sample data. Everything
+            // above this line is identical either way.
+            var script = new ScriptClient(() =>
+                (settings.Current.ScriptUrl, settings.Current.ScriptKey));
+
+            IPropertyRepository properties;
+            ITrackerRepository tracker;
+            if (settings.Current.UsingGoogle)
+            {
+                properties = new ScriptPropertyRepository(script);
+                tracker = new ScriptTrackerRepository(script);
+            }
+            else
+            {
+                properties = new FolderPropertyRepository(settings);
+                tracker = new CsvTrackerRepository(settings);
+            }
 
             var core = new CoreServices(
                 new PostingService(properties, tracker, settings, clock),
@@ -39,7 +56,7 @@ public partial class App : Application
                 sample,
                 clock);
 
-            var shell = new ShellViewModel(core, new WpfUiServices());
+            var shell = new ShellViewModel(core, new WpfUiServices(), new BackendConnection(script));
             var window = new MainWindow { DataContext = shell };
             MainWindow = window;
             window.Show();

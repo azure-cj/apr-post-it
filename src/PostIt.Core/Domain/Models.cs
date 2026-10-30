@@ -4,7 +4,7 @@ namespace PostIt.Core;
 //  Domain model. Shared contract for every layer — change only with care.
 // ============================================================================
 
-public enum UserRole { Intern, Manager }
+public enum UserRole { Intern, Manager, Admin }
 
 public sealed record AppUser(string Name, UserRole Role)
 {
@@ -20,7 +20,21 @@ public sealed record AppUser(string Name, UserRole Role)
         }
     }
 
-    public string RoleLabel => Role == UserRole.Manager ? "Manager" : "Intern";
+    public string RoleLabel => Role switch
+    {
+        UserRole.Admin => "Admin",
+        UserRole.Manager => "Manager",
+        _ => "Intern",
+    };
+
+    /// <summary>
+    /// Manager powers. Ask this rather than testing for Manager, or an admin
+    /// silently loses the screens they are meant to have.
+    /// </summary>
+    public bool CanManage => Role is UserRole.Manager or UserRole.Admin;
+
+    /// <summary>Settings: folders, rules, the team and their keys.</summary>
+    public bool IsAdmin => Role == UserRole.Admin;
 }
 
 /// <summary>One property folder (Drive folder in production, a local folder in the prototype).</summary>

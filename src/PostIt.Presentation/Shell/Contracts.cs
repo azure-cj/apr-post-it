@@ -58,8 +58,9 @@ public sealed class Session : ObservableObject
 {
     private AppUser? _user;
     public AppUser? User { get => _user; set { if (Set(ref _user, value)) Raise(nameof(IsManager), nameof(IsIntern), nameof(Name)); } }
-    public bool IsManager => User?.Role == UserRole.Manager;
+    public bool IsManager => User?.CanManage == true;
     public bool IsIntern => User?.Role == UserRole.Intern;
+    public bool IsAdmin => User?.IsAdmin == true;
     public string Name => User?.Name ?? "";
 }
 
@@ -82,7 +83,8 @@ public sealed record AppServices(
     IClock Clock,
     IUiServices Ui,
     INotifier Notifier,
-    Session Session);
+    Session Session,
+    IBackendConnection? Backend = null);
 
 /// <summary>Base class for every page shown in the shell's content area.</summary>
 public abstract class PageViewModel : ViewModelBase

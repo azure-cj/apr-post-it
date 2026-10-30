@@ -5,26 +5,68 @@ using PostIt.Presentation.Mvvm;
 namespace PostIt.Presentation.ViewModels;
 
 /// <summary>
-/// Prototype sign-in: pick your name from the team in settings. No sidebar is shown on this page.
-/// The real app would sign people in with their company Google account.
+/// Sign in, two ways.
+///
+/// Connected to the company Drive, you paste the key your manager gave you and
+/// the server says who you are — the app never decides its own role. On the
+/// prototype's sample data there are no keys, so you pick a name from a list.
 /// </summary>
 public sealed class SignInViewModel : PageViewModel
 {
     private string _propertiesFolderText = "";
     private string _trackerFolderText = "";
     private bool _usingSampleData;
+    private string _scriptUrl = "";
+    private string _key = "";
+    private string _status = "";
+    private bool _busy;
 
     public SignInViewModel(AppServices s, INavigator n) : base(s, n)
     {
         ResetSampleDataCommand = Command(ResetSampleData);
+        ConnectCommand = AsyncCommand(ConnectAsync, () => !Busy && CanConnect);
         Reload();
     }
 
     public override string Title => "Sign in";
     public override NavKey Nav => NavKey.None;
 
-    public string Heading => "Who's using Post-It?";
-    public string Subtitle => "Prototype sign-in — pick your name. The real app would sign you in with your company Google account.";
+    public string Heading => UsingKey ? "Sign in to Post-It" : "Who's using Post-It?";
+
+    public string Subtitle => UsingKey
+        ? "Paste the key your manager gave you. It says who you are and what you can do."
+        : "Prototype sign-in — pick your name. Connect to the company Drive in Settings to use keys instead.";
+
+    /// <summary>True when a backend is wired up, so a key is what signs you in.</summary>
+    public bool UsingKey => S.Backend is not null;
+
+    /// <summary>The list of names, used only on sample data.</summary>
+    public bool UsingNames => !UsingKey;
+
+    /// <summary>The web app's /exec link. Shown so a first-time setup can be done here.</summary>
+    public string ScriptUrl
+    {
+        get => _scriptUrl;
+        set { if (Set(ref _scriptUrl, value)) Raise(nameof(CanConnect)); }
+    }
+
+    /// <summary>This person's key from the Team tab. Never shown back once saved.</summary>
+    public string Key
+    {
+        get => _key;
+        set { if (Set(ref _key, value)) Raise(nameof(CanConnect)); }
+    }
+
+    public bool CanConnect => !string.IsNullOrWhiteSpace(ScriptUrl) && !string.IsNullOrWhiteSpace(Key);
+
+    /// <summary>What happened on the last attempt. Empty until one is made.</summary>
+    public string Status { get => _status; private set => Set(ref _status, value); }
+
+    public bool HasStatus => !string.IsNullOrWhiteSpace(Status);
+
+    public bool Busy { get => _busy; private set => Set(ref _busy, value); }
+
+    public AsyncRelayCommand ConnectCommand { get; }
 
     public ObservableCollection<UserTileViewModel> Managers { get; } = new();
     public ObservableCollection<UserTileViewModel> Interns { get; } = new();
@@ -58,7 +100,7 @@ public sealed class SignInViewModel : PageViewModel
         foreach (var user in settings.Users)
         {
             var tile = new UserTileViewModel(user, u => Navigator.SignIn(u));
-            (user.Role == UserRole.Manager ? Managers : Interns).Add(tile);
+            (user.CanManage ? Managers : Interns).Add(tile);
         }
 
         PropertiesFolderText = string.IsNullOrWhiteSpace(settings.PropertiesFolder)
@@ -68,7 +110,45 @@ public sealed class SignInViewModel : PageViewModel
             ? "Tracker: no folder set yet"
             : $"Tracker: {settings.TrackerFolder} (Posts.csv, Assignments.csv)";
         UsingSampleData = settings.UsingSampleData;
-        Raise(nameof(HasManagers), nameof(HasInterns), nameof(HasUsers), nameof(HasNoUsers));
+        _scriptUrl = settings.ScriptUrl;
+        _key = settings.ScriptKey;
+        Raise(nameof(HasManagers), nameof(HasInterns), nameof(HasUsers), nameof(HasNoUsers),
+              nameof(ScriptUrl), nameof(Key), nameof(CanConnect), nameof(UsingKey), nameof(UsingNames),
+              nameof(Heading), nameof(Subtitle));
+    }
+
+    /// <summary>
+    /// Saves the link and key, then asks the server who this is. The reply, not
+    /// the app, decides the role — so a tampered client gains nothing.
+    /// </summary>
+    private async Task ConnectAsync()
+    {
+        if (S.Backend is null) return;
+
+        Busy = true;
+        Status = "Checking with the server\u2026";
+        Raise(nameof(HasStatus));
+        try
+        {
+            var settings = S.Settings.Current.Clone();
+            settings.ScriptUrl = ScriptUrl.Trim();
+            settings.ScriptKey = Key.Trim();
+            S.Settings.Save(settings);
+
+            var signedIn = await S.Backend.SignInAsync();
+            Status = "";
+            Raise(nameof(HasStatus));
+            Navigator.SignIn(signedIn.User);
+        }
+        catch (Exception ex)
+        {
+            Status = ex is UserFacingException ? ex.Message : "Could not reach the server. Check the link and try again.";
+            Raise(nameof(HasStatus));
+        }
+        finally
+        {
+            Busy = false;
+        }
     }
 
     private void ResetSampleData()
@@ -103,7 +183,7 @@ public sealed class UserTileViewModel
     public string RoleLabel => User.RoleLabel;
 
     /// <summary>Manager → gold, intern → neutral.</summary>
-    public string BadgeKind => User.Role == UserRole.Manager ? "gold" : "neutral";
+    public string BadgeKind => User.CanManage ? "gold" : "neutral";
 
     public RelayCommand SignInCommand { get; }
 }
