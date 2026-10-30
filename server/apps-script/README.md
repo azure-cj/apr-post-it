@@ -11,6 +11,21 @@ which runs **as the owner** and returns JSON. That one decision buys three thing
   so two interns saving the same property at the same moment cannot both get through.
   A client-side check can always be raced or bypassed.
 
+## Building the listing directory first
+
+`BuildDirectory.gs` is separate and standalone: paste it into a new Apps Script project,
+run `START`, and it writes one row per property into the directory spreadsheet — category,
+listing type, name, photo download links, and the posting text with the owner's section
+stripped. It walks three levels (Category → For sale/For lease → Property) and copes with a
+category that holds properties directly.
+
+It is also the fastest doc-health report you will get: the **Issues** column names every
+property with no document, no photos, or no `__` separator. That last one matters most —
+without the separator the whole document counts as postable, owner details included.
+
+Run it before anything else. Once the directory exists, the app can read it instead of
+walking Drive, which turns a search into a single sheet read.
+
 ## Two spreadsheets
 
 * **The tracker** — the one the company already uses. Posts and Assignments rows go here,
