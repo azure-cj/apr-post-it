@@ -444,3 +444,73 @@ function FIND_ROOT() {
     if (!found) Logger.log('"%s": no folder of that name is visible to this account.', name);
   });
 }
+
+// ---------------------------------------------------------------- verification
+
+/**
+ * Answers "is everything in Drive in the sheet?" by walking the library again
+ * and comparing, rather than trusting the scan.
+ *
+ * Reports anything in Drive that never reached the Directory tab, and anything
+ * in the sheet that is no longer in Drive. Run it after a build finishes.
+ */
+function VERIFY() {
+  var book = SpreadsheetApp.openById(CFG.SHEET_ID);
+  var sheet = book.getSheetByName(CFG.TAB);
+  if (!sheet || sheet.getLastRow() < 2) { Logger.log('Directory is empty.'); return; }
+
+  var idColumn = HEADERS.indexOf('FolderId');
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, HEADERS.length).getValues();
+  var inSheet = {};
+  rows.forEach(function (r) { if (r[idColumn]) inSheet[r[idColumn]] = r[3]; });
+
+  // Every folder under the root, and which of them look like listings.
+  var seen = {}, leaves = {}, deep = [], excluded = 0;
+  function walk(folder, depth, trail) {
+    var it = folder.getFolders(), any = false;
+    while (it.hasNext()) {
+      var child = it.next();
+      any = true;
+      seen[child.getId()] = true;
+      var path = trail + ' / ' + child.getName();
+      if (depth >= CFG.MAX_DEPTH) { deep.push(path); leaves[child.getId()] = path; continue; }
+      if (!walk(child, depth + 1, path)) leaves[child.getId()] = path;   // no sub-folders: a listing
+    }
+    return any;
+  }
+
+  var root = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID);
+  var top = root.getFolders();
+  while (top.hasNext()) {
+    var category = top.next();
+    if (CFG.EXCLUDE.indexOf(category.getName().trim().toLowerCase()) !== -1) { excluded++; continue; }
+    walk(category, 1, category.getName());
+  }
+
+  var missing = Object.keys(leaves).filter(function (id) { return !inSheet[id]; });
+  var stale = Object.keys(inSheet).filter(function (id) { return !seen[id]; });
+
+  Logger.log('Folders under the library: %s', Object.keys(seen).length);
+  Logger.log('Of those, listing folders: %s', Object.keys(leaves).length);
+  Logger.log('Rows in the sheet:         %s', Object.keys(inSheet).length);
+  Logger.log('Categories skipped:        %s', excluded);
+  Logger.log('');
+
+  if (!missing.length && !stale.length) {
+    Logger.log('Everything in Drive is in the sheet, and nothing in the sheet is gone from Drive.');
+  }
+  if (missing.length) {
+    Logger.log('MISSING from the sheet (%s):', missing.length);
+    missing.slice(0, 40).forEach(function (id) { Logger.log('  %s', leaves[id]); });
+    if (missing.length > 40) Logger.log('  ...and %s more', missing.length - 40);
+  }
+  if (stale.length) {
+    Logger.log('In the sheet but no longer in Drive (%s):', stale.length);
+    stale.slice(0, 20).forEach(function (id) { Logger.log('  %s', inSheet[id]); });
+  }
+  if (deep.length) {
+    Logger.log('');
+    Logger.log('Hit the depth limit (%s) — these may have listings nested below them:', deep.length);
+    deep.slice(0, 20).forEach(function (p) { Logger.log('  %s', p); });
+  }
+}
