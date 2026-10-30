@@ -293,65 +293,8 @@ function isDoc_(file, mime) {
       || /\.(docx?|txt|md)$/i.test(file.getName());
 }
 
-/**
- * Split the document into what may be posted and what may not.
- *
- * The documents do not agree on one marker. Some use a line of underscores,
- * others a line of heavy bars, and the broker-only section is sometimes just a
- * heading. So every known marker is checked and the text is cut at whichever
- * comes FIRST — the cautious direction, since too little posted is a nuisance
- * and too much is a leak. Which marker was used is reported in "Cut at" so the
- * result can be audited.
- */
-function splitAtSeparator_(text) {
-  var raw = String(text || '').replace(/\r\n?/g, '\n');
-  var lines = raw.split('\n');
-
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i];
-    var kind = markerKind_(line);
-    if (kind) {
-      return { posting: lines.slice(0, i).join('\n').trim(), found: true, cutAt: kind };
-    }
-  }
-
-  // Underscores running into the text rather than sitting on their own line.
-  var inline = raw.search(/_{2,}/);
-  if (inline !== -1) {
-    return { posting: raw.slice(0, inline).trim(), found: true, cutAt: 'inline __' };
-  }
-  return { posting: raw.trim(), found: false, cutAt: '' };
-}
-
-function markerKind_(line) {
-  if (/^\s*_{2,}\s*$/.test(line))                  return '__ line';
-  if (/^\s*[─-╿]{3,}\s*$/.test(line))    return 'bar line';
-  if (/^\s*[=~]{3,}\s*$/.test(line))               return 'equals line';
-  if (/^\s*[-\u2013\u2014]{3,}\s*$/.test(line))     return '--- line';
-
-  // A broker-only heading, with or without decoration around it.
-  if (/^\s*[*_=\-#•\s]*(owner|internal|commission|net\s+to\s+owner|net\s+price|for\s+agents?|do\s+not\s+post|not\s+for\s+posting)\b/i
-        .test(line)) {
-    return 'heading: ' + line.trim().replace(/\s+/g, ' ').slice(0, 40);
-  }
-  // "1 MONTH STANDARD COMMISSION" and friends: a short all-caps line naming it.
-  if (/^[^a-z]{0,60}\b(COMMISSION|NET TO OWNER|OWNER'?S? (DETAILS|INFO))\b/.test(line.trim())) {
-    return 'heading: ' + line.trim().replace(/\s+/g, ' ').slice(0, 40);
-  }
-
-  // Broker terms do not always sit under a heading of their own. "Sale: 3-5%
-  // Commission" begins with "Sale", so matching only the start of a line let
-  // 21 of these through. Anywhere in the line counts now: a listing that
-  // mentions commission at all is one to cut, and cutting a line too early is
-  // recoverable in a way that publishing the owner's terms is not.
-  if (/\b(commission|net\s+to\s+owner|net\s+price)\b/i.test(line)) {
-    return 'mentions commission';
-  }
-  if (/\bowner'?s?\s*(name|contact|number|mobile|viber)\b/i.test(line)) {
-    return 'mentions the owner';
-  }
-  return '';
-}
+// splitAtSeparator_ and markerKind_ live in Separators.gs, which this project
+// must also contain. They are shared with Code.gs and the desktop app (D13).
 
 /** Google Docs natively; .docx by converting a temporary copy; .txt as bytes. */
 function readDoc_(file) {

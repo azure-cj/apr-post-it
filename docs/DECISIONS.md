@@ -104,3 +104,51 @@ Both apps read the same library, so they must agree on what counts as a listing.
 `Contents`, `Hiring`, `Sir Mark`, `TV VIDEO`, `VO`, `Virtual Office for posting`, plus the
 ones Post-It found for itself. Matched as whole names: the checker matches `VO` as a prefix,
 which would also exclude a top-level folder beginning "Vo…".
+
+### D12. The design system is copied from the checker, not shared as a package (Oct 31, 2026)
+
+The two apps must read as one family, and will later sit in one launcher. The
+colours, type scale, spacing, motion and focus rule are copied into
+`app/src/theme/tokens.css`. A shared package would keep them in step
+automatically, but needs somewhere to live and a release process; a copy is
+what was asked for. When the checker changes a token, change it here too.
+
+The discipline that comes with it: gold does exactly four jobs — the brand
+word, the one primary button on a screen, what is selected, and keyboard
+focus. Everything else is carried by status colour.
+
+### D13. Where the postable text ends is decided in one file (Oct 31, 2026)
+
+`server/apps-script/Separators.gs` decides it. The directory builder, the web
+app's live re-read when a property is opened, and the desktop app all use that
+one file unchanged — the app links it at build time, so nothing is run from a
+string.
+
+This replaced three implementations, and the reason it had to is the worst
+thing found so far. `BuildDirectory.gs` learned the real separators on Oct 30
+(D5). `Code.gs`, which re-reads a document live whenever somebody opens a
+property, still had the older list from before anyone had looked at the
+library. On every document separated by `---`, `__`, `===` or a bar — 93% of
+them — the owner's name, mobile number and commission would have been sent to
+the intern who opened it. It was never deployed, so nothing leaked. The
+checker's D2, "one matcher, linked, never copied", exists to prevent exactly
+this.
+
+Neither old list was complete: the library's missed `[Do not post]` and `For
+internal use`, the prototype's missed every bare divider. The one file has the
+union. Porting it to TypeScript then found six more gaps in it, closed the same
+day: a curly apostrophe in "owner’s" (which Google Docs types by default), an
+emoji before a heading, the plural "commissions", "call the owner at 0917…",
+a heading ending in "line" being taken for a divider, and listing copy such as
+"Internal area: 120 sqm" and "Owner financing available" being cut.
+
+Two further rules came with it:
+
+- **An intern is never sent text nobody has separated.** Blocking the Copy
+  button (D6) is not enough: text on screen can be selected and copied by
+  hand. When no separator is found, an intern's reply has an empty
+  `publicText` and `withheld: true`; a manager still gets the whole document,
+  to fix it.
+- **The file is pure ASCII.** Literal characters inside its regexes broke two
+  edits, and the file is pasted into the Apps Script editor, where an encoding
+  slip would silently corrupt a rule. A test enforces it.

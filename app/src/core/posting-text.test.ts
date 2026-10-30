@@ -153,52 +153,102 @@ describe('parsePostingText — beyond the C# tests', () => {
     expect(text.internalText).toBe('Owner: Mr. Reyes');
   });
 
-  it('needs the marker words at the start of the line, after any decoration', () => {
+  it('needs a marker heading at the start of a line, after any decoration', () => {
     expect(parsePostingText('FOR INTERNAL USE ONLY\nx').hasInternal).toBe(true);
     expect(parsePostingText('Notes: internal only\nx').hasInternal).toBe(false);
     expect(parsePostingText('Please do not post this photo twice').hasInternal).toBe(false);
   });
 
-  // Each of these reads differently under a literal translation of the .NET pattern
-  // into JS, and each expectation is what .NET 8 returns for the same input.
-  describe('reads text as .NET does', () => {
-    it('counts U+0085 as a space before a marker, as .NET\'s \\s does and JS\'s does not', () => {
-      const text = parsePostingText('FOR SALE: lot\n\x85=== INTERNAL ===\nOwner: 0917 123 4567');
+  // The metadata lines are still read by this file's own port of the C#, so
+  // .NET is still the reference for them.
+  it('lets "." cover U+2028 in a metadata value, as .NET\'s does', () => {
+    const text = parsePostingText('Location: Pasay\u{2028}City\nFOR SALE');
 
-      expect(text.hasInternal).toBe(true);
-      expect(text.publicText).toBe('FOR SALE: lot');
+    expect(text.location).toBe('Pasay\u{2028}City');
+    expect(text.publicText).toBe('FOR SALE');
+  });
+});
+
+// Where the postable text ends is no longer the C#'s rule, so .NET is no longer
+// the reference for it. The cut is Separators.gs, the file Apps Script runs,
+// linked in at build time (D13); Apps Script and the WebView are both V8, so the
+// app agrees with the server by construction. These tests pin that shared
+// behaviour end to end through this parser; separators.test.ts pins the file.
+describe('parsePostingText — the cut, as the server makes it', () => {
+  it('says where it cut, for auditing', () => {
+    expect(parsePostingText(STANDARD_DOC).cutAt).toBe('heading: === INTERNAL — DO NOT POST ===');
+    expect(parsePostingText('FOR SALE\n---\nMr. Reyes').cutAt).toBe('--- line');
+    expect(parsePostingText(SUNRISE_DOC).cutAt).toBe('');
+  });
+
+  it('cuts at a line that mentions commission, wherever in the line it does', () => {
+    const text = parsePostingText('FOR SALE: lot\nPrice: ₱1M\nSale: 3-5% Commission to agents\nCall 0917 123 4567');
+
+    expect(text.publicText).toBe('FOR SALE: lot\nPrice: ₱1M');
+    expect(text.internalText).toBe('Sale: 3-5% Commission to agents\nCall 0917 123 4567');
+    expect(text.cutAt).toBe('mentions commission');
+  });
+
+  it("cuts at the owner's details, and keeps them for a manager", () => {
+    const text = parsePostingText('FOR SALE: lot\nPrice: ₱1M\nOwner Name: Cruz\n0917 123 4567');
+
+    expect(text.publicText).toBe('FOR SALE: lot\nPrice: ₱1M');
+    expect(text.internalText).toBe('Owner Name: Cruz\n0917 123 4567');
+    expect(text.cutAt).toBe('heading: Owner Name: Cruz');
+  });
+
+  it('cuts at a divider line and leaves the line itself out of both parts', () => {
+    expect(parsePostingText('FOR SALE: lot\n━━━━━━━━\nMr. Reyes, 0917 123 4567')).toMatchObject({
+      publicText: 'FOR SALE: lot',
+      internalText: 'Mr. Reyes, 0917 123 4567',
+      hasInternal: true,
+      cutAt: 'bar line',
     });
+  });
 
-    it('counts a non-breaking space before a marker as a space', () => {
-      expect(parsePostingText('FOR SALE\n\u{A0}\u{A0}=== INTERNAL ===\nOwner').hasInternal).toBe(true);
-    });
+  it('breaks lines at NEL, U+2028 and U+2029', () => {
+    for (const br of ['\x85', '\u{2028}', '\u{2029}']) {
+      const text = parsePostingText(`FOR SALE${br}Price: ₱1M${br}=== INTERNAL ===${br}Mr. Reyes`);
 
-    it('does not end a marker word at an accented letter, as .NET\'s \\b does not', () => {
-      expect(parsePostingText('Internalé notes\nOwner').hasInternal).toBe(false);
-      expect(parsePostingText('Internal\u{301} notes\nOwner').hasInternal).toBe(false);
-    });
+      expect(text.publicText).toBe('FOR SALE\nPrice: ₱1M');
+      expect(text.internalText).toBe('Mr. Reyes');
+    }
+  });
 
-    it('ends a marker word at punctuation outside ASCII', () => {
-      expect(parsePostingText('INTERNAL—DO NOT POST\nOwner').hasInternal).toBe(true);
-      expect(parsePostingText('Internal’s notes\nOwner').hasInternal).toBe(true);
-    });
+  it("finds a marker on a line begun by NEL, which JS's \\s alone would let past", () => {
+    const text = parsePostingText('FOR SALE: lot\n\x85=== INTERNAL ===\nOwner: 0917 123 4567');
 
-    it('ends a marker word at "fancy" text outside the BMP, which .NET never takes for a letter', () => {
-      const text = parsePostingText('FOR SALE\n## For agents only𝗫\nOwner');
+    expect(text.hasInternal).toBe(true);
+    expect(text.publicText).toBe('FOR SALE: lot');
+  });
+
+  it('counts a non-breaking space before a marker as a space', () => {
+    expect(parsePostingText('FOR SALE\n\u{A0}\u{A0}=== INTERNAL ===\nOwner').hasInternal).toBe(true);
+  });
+
+  it('ends a marker word at punctuation outside ASCII', () => {
+    expect(parsePostingText('INTERNAL—DO NOT POST\nOwner').hasInternal).toBe(true);
+    expect(parsePostingText('Internal’s notes\nOwner').hasInternal).toBe(true);
+  });
+
+  // JS's \b ends a word at any character outside ASCII, letters included, where
+  // .NET's did not end one at é or a combining accent. So these lines cut now
+  // and did not in the C# prototype. That is the safe direction: a line lost
+  // from a post, never one leaked into it.
+  it('cuts at a marker word run into an accented letter, where the C# did not', () => {
+    for (const line of ['Internalé notes', 'Internal\u{301} notes']) {
+      const text = parsePostingText(`FOR SALE\n${line}\nOwner`);
 
       expect(text.hasInternal).toBe(true);
       expect(text.publicText).toBe('FOR SALE');
-    });
+      expect(text.cutAt).toBe(`heading: ${line}`);
+    }
+  });
 
-    it('lets "." cover U+2028 in a metadata value, as .NET\'s does', () => {
-      const text = parsePostingText('Location: Pasay\u{2028}City\nFOR SALE');
+  it('ends a marker word at "fancy" text outside the BMP', () => {
+    const text = parsePostingText('FOR SALE\n## For agents only𝗫\nOwner');
 
-      expect(text.location).toBe('Pasay\u{2028}City');
-      expect(text.publicText).toBe('FOR SALE');
-    });
-
-    it('trims U+0085 from the end of a line but leaves U+FEFF, as .NET\'s TrimEnd does', () => {
-      expect(parsePostingText('FOR SALE\x85\nPrice\u{FEFF}').publicText).toBe('FOR SALE\nPrice\u{FEFF}');
-    });
+    expect(text.hasInternal).toBe(true);
+    expect(text.publicText).toBe('FOR SALE');
   });
 });

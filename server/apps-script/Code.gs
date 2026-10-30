@@ -36,13 +36,8 @@ const CONFIG = {
   TZ: 'Asia/Manila',
 };
 
-// Lines that start the part of a posting doc that must never reach an intern.
-const INTERNAL_MARKERS = [
-  /^\s*=+\s*internal/i,
-  /^\s*internal\s*(notes|only|section)?\s*[:\-]?\s*$/i,
-  /^\s*for\s+agents?\s+only/i,
-  /^\s*do\s+not\s+post/i,
-];
+// Where the postable text ends is decided in Separators.gs, which this project
+// must also contain. Do not add a marker list here (D13).
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const DOC_MIME    = 'application/vnd.google-apps.document';
@@ -272,19 +267,33 @@ function getProperty(id, includeInternal) {
   var row = directoryRows().filter(function (r) { return r.id === id; })[0];
   if (!row) throw new Error('property not found: ' + id);
 
+  // The sheet's copy was already cut by BuildDirectory.gs; it is the fallback.
   var publicText = String(row.postingText || '');
   var internalText = '';
+  var separated = row.hasOwner === 'Yes';
+  var cutAt = String(row.cutAt || '');
   var live = false;
 
   if (row.docId) {
     try {
-      var parsed = splitPosting(readDoc(row.docId, DOC_MIME));
-      publicText = parsed.publicText;
-      internalText = parsed.internalText;
+      // The same splitter the directory uses (Separators.gs), never a copy of
+      // it. A second, older list here once missed 93% of the library (D13).
+      var cut = splitAtSeparator_(readDoc(row.docId, DOC_MIME));
+      publicText = cut.posting;
+      internalText = cut.internal;
+      separated = cut.found;
+      cutAt = cut.cutAt;
       live = true;
     } catch (e) {
       // Fall back to the sheet's copy rather than failing the whole screen.
     }
+  }
+
+  // Nobody has separated this document, so none of it is confirmed safe.
+  // Blocking the Copy button is not enough: the text can still be selected and
+  // copied by hand. An intern is not sent it at all; a manager is, to fix it.
+  if (!separated && !includeInternal) {
+    publicText = '';
   }
 
   var photos = String(row.photoLinks || '')
@@ -309,32 +318,17 @@ function getProperty(id, includeInternal) {
     subCategory: row.subCategory,
     folder: row.folder,
     publicText: publicText,
-    hasInternal: internalText.length > 0 || row.hasOwner === 'Yes',
-    cutAt: row.cutAt,
+    hasInternal: separated,
+    // True when the text was withheld because nobody has separated it yet, so
+    // the screen can say why it is empty rather than look broken.
+    withheld: !separated && !includeInternal,
+    cutAt: cutAt,
     issues: row.issues,
     live: live,
     photos: photos,
   };
   if (includeInternal) out.internalText = internalText;
   return out;
-}
-
-/** Public part, internal part, and the Category:/Location: header lines. */
-function splitPosting(text) {
-  var lines = String(text || '').split(/\r?\n/);
-  var cut = -1;
-  for (var i = 0; i < lines.length; i++) {
-    if (INTERNAL_MARKERS.some(function (m) { return m.test(lines[i]); })) { cut = i; break; }
-  }
-  var pub = cut === -1 ? lines.slice() : lines.slice(0, cut);
-  var internal = cut === -1 ? '' : lines.slice(cut + 1).join('\n').trim();
-
-  var meta = {};
-  while (pub.length && /^\s*(category|location)\s*:/i.test(pub[0])) {
-    var parts = pub.shift().split(':');
-    meta[parts[0].trim().toLowerCase()] = parts.slice(1).join(':').trim();
-  }
-  return { publicText: pub.join('\n').trim(), internalText: internal, meta: meta };
 }
 
 function readDoc(fileId, mimeType) {
