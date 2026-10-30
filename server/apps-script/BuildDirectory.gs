@@ -180,8 +180,11 @@ function descend_(folder, category, listingType, subCategory, depth, queue) {
   forEachFolder_(folder, function (child) {
     var name = child.getName();
 
-    // Holds files, so it is a property. Past MAX_DEPTH, stop regardless.
-    if (depth >= CFG.MAX_DEPTH || child.getFiles().hasNext()) {
+    // A folder with no sub-folders is a property. Past MAX_DEPTH, stop
+    // regardless. Testing for sub-folders rather than for files keeps this to
+    // one Drive call per folder — the files listing is done later, per
+    // property, where it is needed anyway.
+    if (depth >= CFG.MAX_DEPTH || !child.getFolders().hasNext()) {
       queue.push([category, listingType, subCategory, name, child.getId()]);
       return;
     }
@@ -295,7 +298,7 @@ function markerKind_(line) {
   if (/^\s*_{2,}\s*$/.test(line))                  return '__ line';
   if (/^\s*[─-╿]{3,}\s*$/.test(line))    return 'bar line';
   if (/^\s*[=~]{3,}\s*$/.test(line))               return '=== line';
-  if (/^\s*[-]{5,}\s*$/.test(line))                return '--- line';
+  if (/^\s*[-\u2013\u2014]{3,}\s*$/.test(line))     return '--- line';
 
   // A broker-only heading, with or without decoration around it.
   if (/^\s*[*_=\-#•\s]*(owner|internal|commission|net\s+to\s+owner|net\s+price|for\s+agents?|do\s+not\s+post|not\s+for\s+posting)\b/i
