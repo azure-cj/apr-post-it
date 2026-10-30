@@ -8,10 +8,11 @@
  * Paste this into a NEW standalone Apps Script project (script.google.com) and
  * run START. It needs no advanced services and no manifest editing.
  *
- *   START      scan the folders and queue every property   (seconds)
- *   CONTINUE   read docs and write rows, in batches         (runs itself until done)
- *   STOP       cancel a run in progress
+ *   START      begin. Refuses if a run is already going.
  *   STATUS     how far along it is
+ *   CONTINUE   resume after a STOP (a live run does this by itself)
+ *   STOP       pause
+ *   RESTART    throw away all progress and build again from zero
  *
  * There can be thousands of folders, and Apps Script stops a function after six
  * minutes, so CONTINUE does about four minutes of work, saves its place, and
@@ -26,7 +27,14 @@ var CFG = {
   QUEUE_TAB: '_Queue',
 
   // Top-level folders that are not property categories.
-  EXCLUDE: ['sold', 'contents', 'hiring', 'archive', 'templates', 'old'],
+  EXCLUDE: [
+    'sold', 'contents', 'hiring', 'archive', 'templates', 'old',
+    'hiring-intern-staff-format',
+    'vo',                          // LOGOS, PEGS, PICSS, VIDS — design assets
+  ],
+
+  // How deep to keep descending before treating a folder as a property.
+  MAX_DEPTH: 4,
 
   // A sub-folder whose name looks like this is a listing type, not a property.
   LISTING_TYPE: /^\s*for\s+(sale|lease|rent)\b/i,
@@ -36,13 +44,32 @@ var CFG = {
 };
 
 var HEADERS = [
-  'Category', 'Listing type', 'Property', 'Folder',
-  'Photos', 'Photo links', 'Posting text', 'Owner section', 'Issues',
+  'Category', 'Listing type', 'Sub-category', 'Property', 'Folder',
+  'Photos', 'Photo links', 'Posting text', 'Cut at', 'Owner section', 'Issues',
+  // The app reads these two. FolderId is each property's stable id — folders
+  // can be renamed, ids cannot. DocId lets it re-read the document live when
+  // somebody opens a property, so a typo fixed minutes ago is already gone.
+  'FolderId', 'DocId',
 ];
 
 // ---------------------------------------------------------------- commands
 
 function START() {
+  var props = PropertiesService.getScriptProperties();
+  var done = Number(props.getProperty('cursor') || 0);
+  var total = Number(props.getProperty('total') || 0);
+
+  if (total && done < total) {
+    Logger.log('A run is already going: %s of %s properties done.', done, total);
+    Logger.log('It continues on its own every minute — leave it be, or run STATUS to check.');
+    Logger.log('To throw it away and begin again from zero, run RESTART.');
+    return;
+  }
+  RESTART();
+}
+
+/** Discard any progress and build the directory from scratch. */
+function RESTART() {
   STOP();
   var book = SpreadsheetApp.openById(CFG.SHEET_ID);
 
@@ -64,14 +91,15 @@ function START() {
     return;
   }
 
-  var q = resetTab_(book, CFG.QUEUE_TAB, ['Category', 'Listing type', 'Property', 'FolderId']);
-  if (queue.length) q.getRange(2, 1, queue.length, 4).setValues(queue);
+  var q = resetTab_(book, CFG.QUEUE_TAB, ['Category', 'Listing type', 'Sub-category', 'Property', 'FolderId']);
+  if (queue.length) q.getRange(2, 1, queue.length, 5).setValues(queue);
 
   var out = resetTab_(book, CFG.TAB, HEADERS);
   out.setFrozenRows(1);
-  out.setColumnWidth(3, 260);
-  out.setColumnWidth(6, 220);
-  out.setColumnWidth(7, 520);
+  out.setColumnWidth(4, 260);
+  out.setColumnWidth(7, 220);
+  out.setColumnWidth(8, 520);
+  out.hideColumns(12, 2);        // FolderId, DocId: for the app, not for reading
 
   PropertiesService.getScriptProperties().setProperties({ cursor: '0', total: String(queue.length) });
   Logger.log('Queued %s properties across %s categories.', queue.length, countCategories_(queue));
@@ -92,8 +120,8 @@ function CONTINUE() {
   var rows = [];
 
   while (cursor < total && (Date.now() - started) / 1000 < CFG.BATCH_SECONDS) {
-    var item = queue.getRange(cursor + 2, 1, 1, 4).getValues()[0];
-    rows.push(describe_(item[0], item[1], item[2], item[3]));
+    var item = queue.getRange(cursor + 2, 1, 1, 5).getValues()[0];
+    rows.push(describe_(item[0], item[1], item[2], item[3], item[4]));
     cursor++;
 
     if (rows.length >= 25) { flush_(out, rows); rows = []; props.setProperty('cursor', String(cursor)); }
@@ -124,30 +152,49 @@ function STATUS() {
 
 // ---------------------------------------------------------------- scanning
 
-/** Category -> (For sale | For lease) -> property. A category may also hold properties directly. */
+/**
+ * Walk the library.
+ *
+ * The depth is not fixed. COMMERCIAL SPACE goes Category > For lease >
+ * Property, while CONDO / HOUSE AND LOT goes Category > FOR SALE > Lot >
+ * Property. So rather than counting levels, a folder is taken to be a property
+ * when it holds files, and otherwise to be another layer of organisation.
+ */
 function scanFolders_() {
   var root = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID);
   var queue = [];
 
   forEachFolder_(root, function (category) {
     if (CFG.EXCLUDE.indexOf(category.getName().trim().toLowerCase()) !== -1) return;
-
-    forEachFolder_(category, function (child) {
-      if (CFG.LISTING_TYPE.test(child.getName())) {
-        forEachFolder_(child, function (property) {
-          queue.push([category.getName(), child.getName(), property.getName(), property.getId()]);
-        });
-      } else {
-        // No For sale / For lease level under this category.
-        queue.push([category.getName(), '', child.getName(), child.getId()]);
-      }
-    });
+    descend_(category, category.getName(), '', '', 1, queue);
   });
 
   queue.sort(function (a, b) {
-    return (a[0] + '|' + a[1] + '|' + a[2]).localeCompare(b[0] + '|' + b[1] + '|' + b[2]);
+    return (a[0] + '|' + a[1] + '|' + a[2] + '|' + a[3])
+      .localeCompare(b[0] + '|' + b[1] + '|' + b[2] + '|' + b[3]);
   });
   return queue;
+}
+
+function descend_(folder, category, listingType, subCategory, depth, queue) {
+  forEachFolder_(folder, function (child) {
+    var name = child.getName();
+
+    // Holds files, so it is a property. Past MAX_DEPTH, stop regardless.
+    if (depth >= CFG.MAX_DEPTH || child.getFiles().hasNext()) {
+      queue.push([category, listingType, subCategory, name, child.getId()]);
+      return;
+    }
+
+    // Another layer: a For sale / For lease folder, or a sub-category like "Lot".
+    var isListingType = CFG.LISTING_TYPE.test(name);
+    descend_(child,
+             category,
+             isListingType ? name : listingType,
+             isListingType ? subCategory : name,
+             depth + 1,
+             queue);
+  });
 }
 
 function forEachFolder_(parent, fn) {
@@ -157,7 +204,7 @@ function forEachFolder_(parent, fn) {
 
 // ---------------------------------------------------------------- one property
 
-function describe_(category, listingType, name, folderId) {
+function describe_(category, listingType, subCategory, name, folderId) {
   var issues = [];
   var photos = [], doc = null;
 
@@ -173,7 +220,7 @@ function describe_(category, listingType, name, folderId) {
     issues.push('Could not open folder: ' + e.message);
   }
 
-  var posting = '', hasOwner = 'No';
+  var posting = '', hasOwner = 'No', cutAt = '';
   if (!doc) {
     issues.push('No document');
   } else {
@@ -181,7 +228,8 @@ function describe_(category, listingType, name, folderId) {
       var split = splitAtSeparator_(readDoc_(doc));
       posting = split.posting;
       hasOwner = split.found ? 'Yes' : 'No';
-      if (!split.found) issues.push('No "__" separator — the whole document is treated as postable. Check it.');
+      cutAt = split.cutAt;
+      if (!split.found) issues.push('No separator line — the whole document is treated as postable. Check it.');
       if (!posting.trim()) issues.push('Document is empty above the separator');
     } catch (e) {
       issues.push('Could not read document: ' + e.message);
@@ -192,13 +240,17 @@ function describe_(category, listingType, name, folderId) {
   return [
     category,
     listingType,
+    subCategory,
     name,
     'https://drive.google.com/drive/folders/' + folderId,
     photos.length,
     photos.map(function (p) { return 'https://drive.google.com/uc?export=download&id=' + p.getId(); }).join('\n'),
     posting,
+    cutAt,
     hasOwner,
     issues.join(' · '),
+    folderId,
+    doc ? doc.getId() : '',
   ];
 }
 
@@ -210,29 +262,51 @@ function isDoc_(file, mime) {
 }
 
 /**
- * The owner's details sit below a line of underscores. Everything above it is
- * what gets posted.
+ * Split the document into what may be posted and what may not.
+ *
+ * The documents do not agree on one marker. Some use a line of underscores,
+ * others a line of heavy bars, and the broker-only section is sometimes just a
+ * heading. So every known marker is checked and the text is cut at whichever
+ * comes FIRST — the cautious direction, since too little posted is a nuisance
+ * and too much is a leak. Which marker was used is reported in "Cut at" so the
+ * result can be audited.
  */
 function splitAtSeparator_(text) {
-  var lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+  var raw = String(text || '').replace(/\r\n?/g, '\n');
+  var lines = raw.split('\n');
 
   for (var i = 0; i < lines.length; i++) {
-    if (/^\s*_{2,}\s*$/.test(lines[i])) {
-      return { posting: lines.slice(0, i).join('\n').trim(), found: true };
+    var line = lines[i];
+    var kind = markerKind_(line);
+    if (kind) {
+      return { posting: lines.slice(0, i).join('\n').trim(), found: true, cutAt: kind };
     }
   }
-  // Underscores run into the text rather than sitting on their own line.
-  var inline = String(text || '').search(/_{2,}/);
+
+  // Underscores running into the text rather than sitting on their own line.
+  var inline = raw.search(/_{2,}/);
   if (inline !== -1) {
-    return { posting: String(text).slice(0, inline).trim(), found: true };
+    return { posting: raw.slice(0, inline).trim(), found: true, cutAt: 'inline __' };
   }
-  // Last resort: a heading that names the owner's section.
-  for (var j = 0; j < lines.length; j++) {
-    if (/^\s*[*_=\-#\s]*(owner|internal|commission|for agents?|do not post)\b/i.test(lines[j])) {
-      return { posting: lines.slice(0, j).join('\n').trim(), found: true };
-    }
+  return { posting: raw.trim(), found: false, cutAt: '' };
+}
+
+function markerKind_(line) {
+  if (/^\s*_{2,}\s*$/.test(line))                  return '__ line';
+  if (/^\s*[─-╿]{3,}\s*$/.test(line))    return 'bar line';
+  if (/^\s*[=~]{3,}\s*$/.test(line))               return '=== line';
+  if (/^\s*[-]{5,}\s*$/.test(line))                return '--- line';
+
+  // A broker-only heading, with or without decoration around it.
+  if (/^\s*[*_=\-#•\s]*(owner|internal|commission|net\s+to\s+owner|net\s+price|for\s+agents?|do\s+not\s+post|not\s+for\s+posting)\b/i
+        .test(line)) {
+    return 'heading: ' + line.trim().replace(/\s+/g, ' ').slice(0, 40);
   }
-  return { posting: String(text || '').trim(), found: false };
+  // "1 MONTH STANDARD COMMISSION" and friends: a short all-caps line naming it.
+  if (/^[^a-z]{0,60}\b(COMMISSION|NET TO OWNER|OWNER'?S? (DETAILS|INFO))\b/.test(line.trim())) {
+    return 'heading: ' + line.trim().replace(/\s+/g, ' ').slice(0, 40);
+  }
+  return '';
 }
 
 /** Google Docs natively; .docx by converting a temporary copy; .txt as bytes. */
