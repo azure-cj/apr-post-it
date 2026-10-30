@@ -324,6 +324,18 @@ function markerKind_(line) {
   if (/^[^a-z]{0,60}\b(COMMISSION|NET TO OWNER|OWNER'?S? (DETAILS|INFO))\b/.test(line.trim())) {
     return 'heading: ' + line.trim().replace(/\s+/g, ' ').slice(0, 40);
   }
+
+  // Broker terms do not always sit under a heading of their own. "Sale: 3-5%
+  // Commission" begins with "Sale", so matching only the start of a line let
+  // 21 of these through. Anywhere in the line counts now: a listing that
+  // mentions commission at all is one to cut, and cutting a line too early is
+  // recoverable in a way that publishing the owner's terms is not.
+  if (/\b(commission|net\s+to\s+owner|net\s+price)\b/i.test(line)) {
+    return 'mentions commission';
+  }
+  if (/\bowner'?s?\s*(name|contact|number|mobile|viber)\b/i.test(line)) {
+    return 'mentions the owner';
+  }
   return '';
 }
 
