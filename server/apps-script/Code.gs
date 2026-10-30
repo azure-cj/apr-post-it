@@ -43,6 +43,17 @@ const DOC_MIME    = 'application/vnd.google-apps.document';
 const PHOTO_MIME  = /^image\/(jpeg|png|webp|gif)$/;
 const DOC_NAME    = /\.(docx?|txt|md)$/i;
 
+const TEAM_HEADERS   = ['Name', 'Email', 'Role', 'Key', 'FB Accounts', 'Active'];
+const ROLES = ['Intern', 'Manager', 'Admin'];
+
+// What each role may call. Admin may call anything.
+const PERMISSIONS = {
+  Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink'],
+  Manager: ['ping', 'properties', 'property', 'texts', 'posts', 'assignments',
+            'logPost', 'addLink', 'saveQueue', 'reindex'],
+  Admin:   ['*'],
+};
+
 const INDEX_HEADERS  = ['PropertyId', 'Name', 'Category', 'DocId', 'DocMime', 'DocModified', 'PhotoCount', 'Photos', 'Modified'];
 const POST_HEADERS   = ['Date', 'Type', 'Title', 'Time', 'Status', 'FB Account', 'Post Link', 'Posted By', 'PropertyId'];
 const ASSIGN_HEADERS = ['Date', 'Assigned To', 'Property', 'Status', 'PropertyId'];
@@ -62,19 +73,21 @@ function parseBody(e) {
 
 function route(req) {
   try {
-    if (!CONFIG.SHARED_KEY || req.key !== CONFIG.SHARED_KEY) {
-      return json({ ok: false, error: 'unauthorized' });
+    var me = identify(req.key);
+    if (!me) return json({ ok: false, error: 'unauthorized', message: 'This copy of Post-It is not registered. Ask your manager for a key.' });
+    if (!allowed(me.role, req.action)) {
+      return json({ ok: false, error: 'forbidden', message: 'Your account cannot do that.' });
     }
     switch (req.action) {
-      case 'ping':        return json({ ok: true, signedInAs: activeEmail(), time: now() });
+      case 'ping':        return json({ ok: true, name: me.name, role: me.role, fbAccounts: me.fbAccounts, time: now() });
       case 'properties':  return json({ ok: true, properties: listProperties() });
-      case 'property':    return json({ ok: true, property: getProperty(req.id, truthy(req.internal)) });
+      case 'property':    return json({ ok: true, property: getProperty(req.id, me.canSeeInternal) });
       case 'texts':       return json({ ok: true, texts: allTexts(Number(req.limit) || 50, Number(req.offset) || 0) });
-      case 'posts':       return json({ ok: true, posts: readSheet('Posts', POST_HEADERS) });
-      case 'assignments': return json({ ok: true, assignments: readSheet('Assignments', ASSIGN_HEADERS) });
-      case 'logPost':     return json(logPost(req));
-      case 'addLink':     return json(addLink(req));
-      case 'saveQueue':   return json(saveQueue(req));
+      case 'posts':       return json({ ok: true, posts: mine(me, readSheet('Posts', POST_HEADERS), 'Posted By') });
+      case 'assignments': return json({ ok: true, assignments: mine(me, readSheet('Assignments', ASSIGN_HEADERS), 'Assigned To') });
+      case 'logPost':     return json(logPost(req, me));
+      case 'addLink':     return json(addLink(req, me));
+      case 'saveQueue':   return json(saveQueue(req, me));
       case 'reindex':     return json({ ok: true, indexed: buildIndex() });
       default:            return json({ ok: false, error: 'unknown action: ' + req.action });
     }
@@ -87,6 +100,69 @@ function json(payload) {
   return ContentService
     .createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ---------------------------------------------------------------- identity
+//
+// Every person gets their own key, listed on the Team tab. The key is how the
+// script knows who is calling, so a role is enforced here rather than being a
+// suggestion the client is trusted to honour. Revoking somebody is a matter of
+// setting Active to FALSE.
+
+function identify(key) {
+  if (!key) return null;
+  var team = teamRows();
+
+  if (!team.length) {
+    // Nothing set up yet: CONFIG.SHARED_KEY is a temporary admin key so you can
+    // reindex and add the first people. It stops working once Team has a row.
+    return (CONFIG.SHARED_KEY && key === CONFIG.SHARED_KEY)
+      ? { name: 'Setup', email: '', role: 'Admin', fbAccounts: [], canSeeInternal: true }
+      : null;
+  }
+
+  var row = team.filter(function (t) {
+    return String(t.Key) === String(key) && String(t.Active).toUpperCase() !== 'FALSE';
+  })[0];
+  if (!row) return null;
+
+  var role = ROLES.indexOf(row.Role) === -1 ? 'Intern' : row.Role;
+  return {
+    name: row.Name,
+    email: row.Email,
+    role: role,
+    fbAccounts: String(row['FB Accounts'] || '').split(',').map(function (x) { return x.trim(); }).filter(String),
+    canSeeInternal: role !== 'Intern',
+  };
+}
+
+/** The Team tab, cached for a minute so a key check is not a sheet read. */
+function teamRows() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('team');
+  if (hit) return JSON.parse(hit);
+  var rows = readSheet('Team', TEAM_HEADERS);
+  try { cache.put('team', JSON.stringify(rows), 60); } catch (e) { /* ignore */ }
+  return rows;
+}
+
+function allowed(role, action) {
+  var list = PERMISSIONS[role] || [];
+  return list.indexOf('*') !== -1 || list.indexOf(action) !== -1;
+}
+
+/** Interns see their own tracker rows and nobody else's. */
+function mine(me, rows, column) {
+  if (me.role !== 'Intern') return rows;
+  return rows.filter(function (r) { return r[column] === me.name; });
+}
+
+/** Admin helper: add a person and hand back their key. */
+function addTeamMember(name, email, role, fbAccounts) {
+  var key = Utilities.getUuid().replace(/-/g, '');
+  tab('Team', TEAM_HEADERS).appendRow([name, email || '', role || 'Intern', key, fbAccounts || '', true]);
+  CacheService.getScriptCache().remove('team');
+  return key;
 }
 
 // ---------------------------------------------------------------- the index
@@ -359,8 +435,17 @@ function allTexts(limit, offset) {
 // The cooldown is enforced here, under a lock. Two interns clicking Save on
 // the same property at the same time cannot both get through.
 
-function logPost(req) {
-  requireAll(req, ['property', 'propertyId', 'fbAccount', 'postedBy']);
+function logPost(req, me) {
+  requireAll(req, ['property', 'propertyId', 'fbAccount']);
+
+  // Who the row is credited to comes from the key, not from the request, so an
+  // intern cannot log a post against somebody else's name. A manager may log on
+  // an intern's behalf.
+  var postedBy = (me.role !== 'Intern' && req.postedBy) ? req.postedBy : me.name;
+
+  if (me.fbAccounts.length && me.fbAccounts.indexOf(req.fbAccount) === -1) {
+    return { ok: false, error: 'forbidden', message: 'You are not assigned to ' + req.fbAccount + '.' };
+  }
 
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
@@ -380,10 +465,10 @@ function logPost(req) {
       status,
       req.fbAccount,
       link,
-      req.postedBy,
+      postedBy,
       req.propertyId,
     ]);
-    setAssignmentStatus(req.propertyId, req.postedBy, status);
+    setAssignmentStatus(req.propertyId, postedBy, status);
     return { ok: true, status: status, date: Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd') };
   } finally {
     lock.releaseLock();
@@ -416,7 +501,7 @@ function cooldownFor(propertyId, propertyName) {
 }
 
 /** Turn a Pending row into Posted once the live link exists. */
-function addLink(req) {
+function addLink(req, me) {
   requireAll(req, ['propertyId', 'postLink']);
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
@@ -424,12 +509,13 @@ function addLink(req) {
     var sh = tab('Posts', POST_HEADERS);
     var values = sh.getDataRange().getValues();
     for (var r = values.length - 1; r >= 1; r--) {
-      if (values[r][8] === req.propertyId && values[r][4] === 'Pending') {
-        sh.getRange(r + 1, 5).setValue('Posted');
-        sh.getRange(r + 1, 7).setValue(req.postLink);
-        setAssignmentStatus(req.propertyId, values[r][7], 'Posted');
-        return { ok: true, row: r + 1 };
-      }
+      if (values[r][8] !== req.propertyId || values[r][4] !== 'Pending') continue;
+      if (me.role === 'Intern' && values[r][7] !== me.name) continue;   // not yours to complete
+
+      sh.getRange(r + 1, 5).setValue('Posted');
+      sh.getRange(r + 1, 7).setValue(req.postLink);
+      setAssignmentStatus(req.propertyId, values[r][7], 'Posted');
+      return { ok: true, row: r + 1 };
     }
     return { ok: false, error: 'no pending post for that property' };
   } finally {
@@ -439,7 +525,7 @@ function addLink(req) {
 
 // ---------------------------------------------------------------- queues
 
-function saveQueue(req) {
+function saveQueue(req, me) {
   requireAll(req, ['date', 'assignedTo']);
   var items = req.items || [];
   if (typeof items === 'string') items = JSON.parse(items);
@@ -531,7 +617,18 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('Post-It')
     .addItem('Rebuild property index', 'buildIndex')
     .addItem('Install 15-minute refresh', 'installTrigger')
+    .addItem('Add a team member…', 'promptAddTeamMember')
     .addToUi();
+}
+
+function promptAddTeamMember() {
+  var ui = SpreadsheetApp.getUi();
+  var name = ui.prompt('Full name').getResponseText();
+  if (!name) return;
+  var role = ui.prompt('Role: Intern, Manager or Admin').getResponseText();
+  var fb = ui.prompt('Facebook accounts they may post from (comma separated, blank = any)').getResponseText();
+  var key = addTeamMember(name, '', role, fb);
+  ui.alert('Key for ' + name + ':\n\n' + key + '\n\nPaste it into their copy of Post-It. It is on the Team tab if you need it again.');
 }
 
 function installTrigger() {
