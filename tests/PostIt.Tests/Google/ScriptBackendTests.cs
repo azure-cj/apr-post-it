@@ -243,6 +243,39 @@ public class ScriptBackendTests
     }
 
     [Test]
+    public async Task The_folder_path_becomes_the_category_line()
+    {
+        // The library nests Category > Sub-category > Listing type, and all three
+        // matter when telling two "Lot 7"s apart.
+        var stub = new Stub("""
+            {"ok":true,"properties":[
+              {"id":"1","name":"Lot 7","category":"CONDO / HOUSE AND LOT",
+               "listingType":"FOR SALE","subCategory":"Lot","photoCount":3},
+              {"id":"2","name":"Silang 40","category":"COMMERCIAL SPACE",
+               "listingType":"For lease","photoCount":7}]}
+            """);
+        var all = await new ScriptPropertyRepository(Client(stub)).GetAllAsync();
+
+        Assert.Equal("CONDO / HOUSE AND LOT \u00b7 Lot \u00b7 FOR SALE", all[0].Category);
+        Assert.Equal("COMMERCIAL SPACE \u00b7 For lease", all[1].Category);   // no sub-category, no empty gap
+    }
+
+    [Test]
+    public async Task Photo_links_from_the_directory_sheet_become_photo_paths()
+    {
+        var stub = new Stub("""
+            {"ok":true,"property":{"id":"1","name":"Silang 40","category":"COMMERCIAL SPACE",
+             "publicText":"FOR RENT","cutAt":"--- line","live":true,
+             "photos":[{"id":"p1","url":"https://drive.google.com/uc?export=download&id=p1","thumb":"t1"},
+                       {"id":"p2","url":"https://drive.google.com/uc?export=download&id=p2","thumb":"t2"}]}}
+            """);
+        var property = Assert.NotNull(await new ScriptPropertyRepository(Client(stub)).GetAsync("1"));
+
+        Assert.Count(2, property.PhotoPaths);
+        Assert.Contains("id=p2", property.PhotoPaths[1]);
+    }
+
+    [Test]
     public async Task The_property_list_is_fetched_once_and_then_cached_until_refreshed()
     {
         var stub = new Stub("""

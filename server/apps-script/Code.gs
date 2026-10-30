@@ -11,26 +11,18 @@
 // ---------------------------------------------------------------- config
 
 const CONFIG = {
-  // Drive folder holding <Category>/<Property>/ sub-folders (or <Property>/ directly).
-  PROPERTIES_FOLDER_ID: '1GXeGULYswb7jXcMGCCRm2RQ_h0EKsDll',
-
-  // Only these category folders are scanned. Everything else under the root —
-  // SOLD, Contents, Hiring and the rest — is ignored. Empty = scan them all.
-  CATEGORY_FOLDERS: [
-    'Commercial Space',
-    'Condo/House and Lot',
-    'Lot',
-    'Office Space',
-    'Warehouse',
-  ],
+  // The directory spreadsheet built by BuildDirectory.gs. This script does not
+  // walk Drive at all: searching reads one sheet instead of hundreds of folders.
+  DIRECTORY_SHEET_ID: '1jelzICcu6rmR-mQqK7tGD19VieN6B4Y2L6fNaMMkjTs',
+  DIRECTORY_TAB: 'Directory',
 
   // The company tracker. Leave blank only when this script is bound to it.
   TRACKER_SHEET_ID: '',
 
-  // A SEPARATE, PRIVATE spreadsheet for the script's own tabs: Index and Team.
-  // Team holds everyone's key, so it must not live in a sheet the team can open
-  // — anyone who can read a manager's key can act as that manager. Leave blank
-  // only if the tracker itself is private to you.
+  // A SEPARATE, PRIVATE spreadsheet for the Team tab, which holds everyone's
+  // key. It must not live in a sheet the team can open: anyone who can read a
+  // manager's key can act as that manager. Leave blank only if the tracker
+  // itself is private to you.
   ADMIN_SHEET_ID: '',
 
   // Tab names in that spreadsheet. POSTS_TAB must match the real one.
@@ -41,13 +33,7 @@ const CONFIG = {
   SHARED_KEY: '',
 
   COOLDOWN_DAYS: 7,
-  REPOST_DAYS: 14,
   TZ: 'Asia/Manila',
-
-  // Give property photos "anyone with the link can view" so the client can
-  // download them directly from Drive. These photos get posted publicly on
-  // Facebook anyway. Set false to keep photos private (client gets no URLs).
-  PUBLISH_PHOTOS: true,
 };
 
 // Lines that start the part of a posting doc that must never reach an intern.
@@ -69,12 +55,11 @@ const ROLES = ['Intern', 'Manager', 'Admin'];
 // What each role may call. Admin may call anything.
 const PERMISSIONS = {
   Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink', 'setStatus'],
-  Manager: ['ping', 'properties', 'property', 'texts', 'posts', 'assignments',
-            'logPost', 'addLink', 'saveQueue', 'setStatus', 'reindex'],
+  Manager: ['ping', 'properties', 'property', 'posts', 'assignments',
+            'logPost', 'addLink', 'saveQueue', 'setStatus'],
   Admin:   ['*'],
 };
 
-const INDEX_HEADERS  = ['PropertyId', 'Name', 'Category', 'DocId', 'DocMime', 'DocModified', 'PhotoCount', 'Photos', 'Modified'];
 
 // ---------------------------------------------------------------- routing
 
@@ -100,14 +85,12 @@ function route(req) {
       case 'ping':        return json({ ok: true, name: me.name, role: me.role, fbAccounts: me.fbAccounts, time: now() });
       case 'properties':  return json({ ok: true, properties: listProperties() });
       case 'property':    return json({ ok: true, property: getProperty(req.id, me.canSeeInternal) });
-      case 'texts':       return json({ ok: true, texts: allTexts(Number(req.limit) || 50, Number(req.offset) || 0) });
       case 'posts':       return json({ ok: true, posts: mine(me, readRows(CONFIG.POSTS_TAB, POST_FIELDS), 'postedBy') });
       case 'assignments': return json({ ok: true, assignments: mine(me, readRows(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS), 'assignedTo') });
       case 'logPost':     return json(logPost(req, me));
       case 'addLink':     return json(addLink(req, me));
       case 'saveQueue':   return json(saveQueue(req, me));
       case 'setStatus':   return json(setStatus(req, me));
-      case 'reindex':     return json({ ok: true, indexed: buildIndex() });
       default:            return json({ ok: false, error: 'unknown action: ' + req.action });
     }
   } catch (err) {
@@ -165,19 +148,6 @@ function teamRows() {
   return rows;
 }
 
-/** Property name for a folder id, from the index. */
-function nameOf(propertyId) {
-  var row = indexRows().filter(function (r) { return r.id === propertyId; })[0];
-  return row ? row.name : '';
-}
-
-/** Folder id for a property name, so the client can send either one. */
-function idOf(propertyName) {
-  var want = String(propertyName || '').trim().toLowerCase();
-  var row = indexRows().filter(function (r) { return String(r.name).trim().toLowerCase() === want; })[0];
-  return row ? row.id : '';
-}
-
 function allowed(role, action) {
   var list = PERMISSIONS[role] || [];
   return list.indexOf('*') !== -1 || list.indexOf(action) !== -1;
@@ -197,134 +167,155 @@ function addTeamMember(name, email, role, fbAccounts) {
   return key;
 }
 
-// ---------------------------------------------------------------- the index
+// ---------------------------------------------------------------- the directory
 //
-// Walking Drive on every search is far too slow. A time-driven trigger walks
-// it and writes one row per property to an "Index" tab; reads are then a
-// single getValues() on that tab.
+// BuildDirectory.gs walks Drive on a schedule and writes one row per property.
+// This script only reads that sheet, so a search is a single read rather than
+// hundreds of Drive calls. Columns are found by header name, as with the
+// tracker, so the sheet can be rearranged without breaking anything.
 
-function buildIndex() {
-  var root = CONFIG.PROPERTIES_FOLDER_ID;
-  if (!root) throw new Error('Set CONFIG.PROPERTIES_FOLDER_ID first.');
+const DIRECTORY_FIELDS = {
+  category:    { headers: ['Category'], required: true },
+  listingType: { headers: ['Listing type'] },
+  subCategory: { headers: ['Sub-category'] },
+  name:        { headers: ['Property'], required: true },
+  folder:      { headers: ['Folder'] },
+  photoCount:  { headers: ['Photos'] },
+  photoLinks:  { headers: ['Photo links'] },
+  postingText: { headers: ['Posting text'] },
+  cutAt:       { headers: ['Cut at'] },
+  hasOwner:    { headers: ['Owner section'] },
+  issues:      { headers: ['Issues'] },
+  id:          { headers: ['FolderId'], required: true },
+  docId:       { headers: ['DocId'] },
+};
 
-  var groups = children(root, FOLDER_MIME);
-  if (CONFIG.CATEGORY_FOLDERS && CONFIG.CATEGORY_FOLDERS.length) {
-    groups = groups.filter(function (g) { return CONFIG.CATEGORY_FOLDERS.indexOf(g.name) !== -1; });
-    if (!groups.length) {
-      throw new Error('None of CONFIG.CATEGORY_FOLDERS were found under the root folder.');
-    }
-  } else if (!groups.length) {
-    groups = [{ id: root, name: '' }];   // no category level at all
+function directoryBook() {
+  return CONFIG.DIRECTORY_SHEET_ID
+    ? SpreadsheetApp.openById(CONFIG.DIRECTORY_SHEET_ID)
+    : book();
+}
+
+/** Every property, cached for a minute so a burst of calls is one read. */
+function directoryRows() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('dir');
+  if (hit) return JSON.parse(hit);
+
+  var sh = directoryBook().getSheetByName(CONFIG.DIRECTORY_TAB);
+  if (!sh) {
+    throw new Error('No "' + CONFIG.DIRECTORY_TAB + '" tab. Run BuildDirectory.gs first.');
   }
+  if (sh.getLastRow() < 2) return [];
 
-  var rows = [];
-  groups.forEach(function (group) {
-    children(group.id, FOLDER_MIME).forEach(function (prop) {
-      var files  = children(prop.id, null);
-      var doc    = files.filter(isPostingDoc)[0];
-      var photos = files.filter(function (f) { return PHOTO_MIME.test(f.mimeType); });
-      rows.push([
-        prop.id,
-        prop.name,
-        group.name,
-        doc ? doc.id : '',
-        doc ? doc.mimeType : '',
-        doc ? (doc.modifiedTime || '') : '',
-        photos.length,
-        JSON.stringify(photos.map(function (p) { return { id: p.id, name: p.name }; })),
-        prop.modifiedTime || '',
-      ]);
+  var col = columnsOf(sh, DIRECTORY_FIELDS);
+  var values = sh.getDataRange().getValues();
+
+  var out = values.slice(1)
+    .filter(function (r) { return r[col.id]; })
+    .map(function (r) {
+      var o = {};
+      Object.keys(DIRECTORY_FIELDS).forEach(function (f) {
+        o[f] = col[f] === -1 ? '' : r[col[f]];
+      });
+      return o;
     });
-  });
 
-  var sh = plainTab('Index', INDEX_HEADERS);
-  sh.clearContents();
-  sh.getRange(1, 1, 1, INDEX_HEADERS.length).setValues([INDEX_HEADERS]);
-  if (rows.length) sh.getRange(2, 1, rows.length, INDEX_HEADERS.length).setValues(rows);
-
-  CacheService.getScriptCache().remove('index');
-  return rows.length;
-}
-
-function isPostingDoc(f) {
-  return f.mimeType === DOC_MIME || DOC_NAME.test(f.name || '');
-}
-
-/** One Drive API page-through. mimeType null = everything except folders. */
-function children(parentId, mimeType) {
-  var q = "'" + parentId + "' in parents and trashed = false"
-        + (mimeType ? " and mimeType = '" + mimeType + "'"
-                    : " and mimeType != '" + FOLDER_MIME + "'");
-  var out = [], token = null;
-  do {
-    var page = Drive.Files.list({
-      q: q,
-      fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
-      pageSize: 1000,
-      pageToken: token,
-      orderBy: 'name',
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    });
-    out = out.concat(page.files || []);
-    token = page.nextPageToken;
-  } while (token);
+  try { cache.put('dir', JSON.stringify(out), 60); } catch (e) { /* too big to cache */ }
   return out;
 }
 
-function indexRows() {
-  var sh = plainTab('Index', INDEX_HEADERS);
-  if (sh.getLastRow() < 2) buildIndex();
-  var values = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), INDEX_HEADERS.length).getValues();
-  return values.filter(function (r) { return r[0]; }).map(function (r) {
-    return {
-      id: r[0], name: r[1], category: r[2], docId: r[3], docMime: r[4], docModified: r[5],
-      photoCount: Number(r[6]) || 0, photos: r[7], modified: r[8],
-    };
-  });
+/** Property name for a folder id. */
+function nameOf(propertyId) {
+  var row = directoryRows().filter(function (r) { return r.id === propertyId; })[0];
+  return row ? row.name : '';
+}
+
+/** Folder id for a property name, so the client may send either. */
+function idOf(propertyName) {
+  var want = String(propertyName || '').trim().toLowerCase();
+  var row = directoryRows().filter(function (r) {
+    return String(r.name).trim().toLowerCase() === want;
+  })[0];
+  return row ? row.id : '';
 }
 
 // ---------------------------------------------------------------- properties
 
-/** Search list: small payload, no document text. */
+/** The search list: small, no document text. */
 function listProperties() {
-  return indexRows().map(function (r) {
-    return { id: r.id, name: r.name, category: r.category, photoCount: r.photoCount, modified: r.modified };
+  return directoryRows().map(function (r) {
+    return {
+      id: r.id,
+      name: r.name,
+      category: r.category,
+      listingType: r.listingType,
+      subCategory: r.subCategory,
+      photoCount: Number(r.photoCount) || 0,
+      hasIssues: !!String(r.issues || '').trim(),
+    };
   });
 }
 
 /**
- * One property. includeInternal is honoured only for managers — see the note
- * on identity in README.md. When false the internal text never leaves here.
+ * One property.
+ *
+ * The document is re-read live when it can be, so a typo corrected in Drive a
+ * moment ago is already gone — the sheet is only as fresh as the last nightly
+ * rebuild. The sheet's text is the fallback when there is no document id or the
+ * read fails.
+ *
+ * includeInternal is decided by role, not by the client. For an intern the
+ * internal half is never put in the reply at all.
  */
 function getProperty(id, includeInternal) {
-  var row = indexRows().filter(function (r) { return r.id === id; })[0];
+  var row = directoryRows().filter(function (r) { return r.id === id; })[0];
   if (!row) throw new Error('property not found: ' + id);
 
-  var parsed = row.docId
-    ? splitPosting(readDoc(row.docId, row.docMime))      // live: no `modified` argument
-    : { publicText: '', internalText: '', meta: {} };
+  var publicText = String(row.postingText || '');
+  var internalText = '';
+  var live = false;
 
-  var photos = JSON.parse(row.photos || '[]');
-  if (CONFIG.PUBLISH_PHOTOS) publish(photos);
+  if (row.docId) {
+    try {
+      var parsed = splitPosting(readDoc(row.docId, DOC_MIME));
+      publicText = parsed.publicText;
+      internalText = parsed.internalText;
+      live = true;
+    } catch (e) {
+      // Fall back to the sheet's copy rather than failing the whole screen.
+    }
+  }
+
+  var photos = String(row.photoLinks || '')
+    .split(/[\n,]/)
+    .map(function (u) { return u.trim(); })
+    .filter(function (u) { return u; })
+    .map(function (u, i) {
+      var m = u.match(/[?&]id=([^&]+)/);
+      return {
+        id: m ? m[1] : String(i),
+        name: 'photo ' + (i + 1),
+        url: u,
+        thumb: m ? 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w640' : '',
+      };
+    });
 
   var out = {
     id: row.id,
     name: row.name,
-    category: parsed.meta.category || row.category,
-    location: parsed.meta.location || '',
-    publicText: parsed.publicText,
-    hasInternal: parsed.internalText.length > 0,
-    photos: photos.map(function (p) {
-      return {
-        id: p.id,
-        name: p.name,
-        url:   CONFIG.PUBLISH_PHOTOS ? 'https://drive.google.com/uc?export=download&id=' + p.id : '',
-        thumb: CONFIG.PUBLISH_PHOTOS ? 'https://drive.google.com/thumbnail?id=' + p.id + '&sz=w640' : '',
-      };
-    }),
+    category: row.category,
+    listingType: row.listingType,
+    subCategory: row.subCategory,
+    folder: row.folder,
+    publicText: publicText,
+    hasInternal: internalText.length > 0 || row.hasOwner === 'Yes',
+    cutAt: row.cutAt,
+    issues: row.issues,
+    live: live,
+    photos: photos,
   };
-  if (includeInternal) out.internalText = parsed.internalText;
+  if (includeInternal) out.internalText = internalText;
   return out;
 }
 
@@ -346,67 +337,27 @@ function splitPosting(text) {
   return { publicText: pub.join('\n').trim(), internalText: internal, meta: meta };
 }
 
-/**
- * Read a posting doc as the plain text that will be pasted into Facebook.
- *
- * Pass `modified` (the doc's modifiedTime from the index) to allow caching;
- * omit it to force a live read. Opening a property reads live, so a typo fixed
- * in Drive a moment ago is already gone. The doc-health sweep reads cached,
- * because a 15-minute-old answer is fine for a report.
- */
-function readDoc(fileId, mimeType, modified) {
-  var cache = CacheService.getScriptCache();
-  var key = 'doc:' + fileId + ':' + (modified || '');
-  if (modified) {
-    var hit = cache.get(key);
-    if (hit) return hit;
-  }
-
-  var text;
-  if (mimeType === DOC_MIME) {
-    text = docToText(DocumentApp.openById(fileId));
-  } else if (mimeType === 'text/plain' || mimeType === 'text/markdown') {
-    text = DriveApp.getFileById(fileId).getBlob().getDataAsString('UTF-8');
-  } else {
-    // .docx and friends: convert to a temporary Google Doc, read it, bin it.
-    var copy = Drive.Files.copy({ name: 'postit-tmp', mimeType: DOC_MIME }, fileId, { supportsAllDrives: true });
-    try {
-      text = docToText(DocumentApp.openById(copy.id));
-    } finally {
-      try { Drive.Files.remove(copy.id); } catch (e) { /* leave the temp file */ }
-    }
-  }
-
-  if (modified) {
-    try { cache.put(key, text, 21600); } catch (e) { /* over the 100KB cache limit */ }
-  }
-  return text;
+function readDoc(fileId, mimeType) {
+  if (mimeType === DOC_MIME) return docToText(DocumentApp.openById(fileId));
+  if (mimeType === 'text/plain') return DriveApp.getFileById(fileId).getBlob().getDataAsString('UTF-8');
+  return docToText(DocumentApp.openById(fileId));
 }
 
 /**
- * Flatten a Google Doc to posting text.
- *
- * Body.getText() is not enough: it drops bullet glyphs, so a feature list
- * arrives as unreadable run-on lines, and it concatenates table cells with no
- * separator. Walk the body instead.
+ * getBody().getText() drops bullet glyphs and runs table cells together, which
+ * ruins a feature list, so walk the body instead.
  */
 function docToText(doc) {
-  var body = doc.getBody();
-  var counters = {};
-  var out = [];
-  for (var i = 0; i < body.getNumChildren(); i++) {
-    out.push(elementText(body.getChild(i), counters));
-  }
+  var body = doc.getBody(), counters = {}, out = [];
+  for (var i = 0; i < body.getNumChildren(); i++) out.push(elementText(body.getChild(i), counters));
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function elementText(el, counters) {
-  var T = DocumentApp.ElementType;
-  var type = el.getType();
+  var T = DocumentApp.ElementType, type = el.getType();
 
   if (type === T.LIST_ITEM) {
-    var level = el.getNestingLevel();
-    var marker = '\u2022';
+    var level = el.getNestingLevel(), marker = '•';
     if (el.getGlyphType() === DocumentApp.GlyphType.NUMBER) {
       var key = el.getListId() + ':' + level;
       counters[key] = (counters[key] || 0) + 1;
@@ -414,59 +365,18 @@ function elementText(el, counters) {
     }
     return new Array(level + 1).join('   ') + marker + ' ' + el.getText();
   }
-
   if (type === T.TABLE) {
     var rows = [];
     for (var r = 0; r < el.getNumRows(); r++) {
-      var row = el.getRow(r);
-      var cells = [];
-      for (var c = 0; c < row.getNumCells(); c++) {
-        cells.push(row.getCell(c).getText().trim());
-      }
+      var row = el.getRow(r), cells = [];
+      for (var c = 0; c < row.getNumCells(); c++) cells.push(row.getCell(c).getText().trim());
       cells = cells.filter(String);
-      // A two-column spec table reads naturally as "Lot area: 120 sqm".
       rows.push(cells.length === 2 ? cells[0].replace(/:$/, '') + ': ' + cells[1] : cells.join('  '));
     }
     return rows.join('\n');
   }
-
   if (type === T.HORIZONTAL_RULE || type === T.PAGE_BREAK) return '';
   return el.getText ? el.getText() : '';
-}
-
-function publish(photos) {
-  photos.forEach(function (p) {
-    try {
-      var f = DriveApp.getFileById(p.id);
-      if (f.getSharingAccess() !== DriveApp.Access.ANYONE_WITH_LINK) {
-        f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      }
-    } catch (e) { /* shared drive policy may forbid it */ }
-  });
-}
-
-/**
- * Public text for a page of properties, for the manager's doc-health screen.
- *
- * Paged on purpose: reading a few hundred docs in one request would run past
- * the 6-minute execution limit. The client walks it 50 at a time. Internal
- * text is never included — only whether a marker was found.
- */
-function allTexts(limit, offset) {
-  return indexRows().slice(offset, offset + limit).map(function (r) {
-    var parsed = r.docId
-      ? splitPosting(readDoc(r.docId, r.docMime, r.docModified))   // cached
-      : { publicText: '', internalText: '', meta: {} };
-    return {
-      id: r.id,
-      name: r.name,
-      hasDoc: !!r.docId,
-      docMime: r.docMime,
-      publicText: parsed.publicText,
-      hasInternal: parsed.internalText.length > 0,
-      photoCount: r.photoCount,
-    };
-  });
 }
 
 // ---------------------------------------------------------------- posting
@@ -801,9 +711,8 @@ function requireAll(req, names) {
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Post-It')
-    .addItem('Rebuild property index', 'buildIndex')
-    .addItem('Install 15-minute refresh', 'installTrigger')
     .addItem('Add a team member…', 'promptAddTeamMember')
+    .addItem('Check the connection', 'SETUP')
     .addToUi();
 }
 
@@ -822,11 +731,15 @@ function ADD_PERSON() {
   return key;
 }
 
-/** Standalone equivalent of the menu item, for a first run. */
+/** Check that everything this script depends on is reachable. */
 function SETUP() {
-  var count = buildIndex();
-  installTrigger();
-  Logger.log('Indexed %s properties. 15-minute refresh installed.', count);
+  var properties = listProperties();
+  Logger.log('Directory: %s properties.', properties.length);
+  Logger.log('Tracker tab "%s": %s rows.', CONFIG.POSTS_TAB, readRows(CONFIG.POSTS_TAB, POST_FIELDS).length);
+  Logger.log('Team: %s people.', teamRows().length);
+  if (!properties.length) {
+    Logger.log('The directory is empty — run BuildDirectory.gs before using the app.');
+  }
 }
 
 function promptAddTeamMember() {
@@ -839,9 +752,3 @@ function promptAddTeamMember() {
   ui.alert('Key for ' + name + ':\n\n' + key + '\n\nPaste it into their copy of Post-It. It is on the Team tab if you need it again.');
 }
 
-function installTrigger() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'buildIndex') ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger('buildIndex').timeBased().everyMinutes(15).create();
-}

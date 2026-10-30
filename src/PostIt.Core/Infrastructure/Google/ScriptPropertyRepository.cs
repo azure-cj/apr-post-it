@@ -36,7 +36,7 @@ public sealed class ScriptPropertyRepository : IPropertyRepository
                 .Select(p => new Property(
                     Id: p.Id,
                     Name: p.Name,
-                    Category: p.Category ?? "",
+                    Category: Describe(p.Category, p.ListingType, p.SubCategory),
                     Location: null,
                     FolderPath: DriveFolderUrl(p.Id),
                     PostingDocPath: null,
@@ -62,7 +62,7 @@ public sealed class ScriptPropertyRepository : IPropertyRepository
         return new Property(
             Id: detail.Id,
             Name: detail.Name,
-            Category: detail.Category ?? "",
+            Category: Describe(detail.Category, detail.ListingType, detail.SubCategory),
             Location: string.IsNullOrWhiteSpace(detail.Location) ? null : detail.Location,
             FolderPath: DriveFolderUrl(detail.Id),
             PostingDocPath: null,
@@ -108,6 +108,11 @@ public sealed class ScriptPropertyRepository : IPropertyRepository
     }
 
     private static string DriveFolderUrl(string id) => $"https://drive.google.com/drive/folders/{id}";
+
+    /// <summary>"COMMERCIAL SPACE · For lease" — the folder path, as one line.</summary>
+    private static string Describe(string? category, string? listingType, string? subCategory) =>
+        string.Join(" · ", new[] { category, subCategory, listingType }
+            .Where(part => !string.IsNullOrWhiteSpace(part)));
 }
 
 // ---------------------------------------------------------------- payloads
@@ -122,7 +127,12 @@ public sealed class PropertySummary
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public string? Category { get; set; }
+    public string? ListingType { get; set; }
+    public string? SubCategory { get; set; }
     public int PhotoCount { get; set; }
+
+    /// <summary>The directory flagged something: no document, no photos, no separator.</summary>
+    public bool HasIssues { get; set; }
 }
 
 public sealed class PropertyReply : ScriptReply
@@ -142,6 +152,19 @@ public sealed class PropertyDetail
     public string? InternalText { get; set; }
 
     public bool HasInternal { get; set; }
+
+    public string? ListingType { get; set; }
+    public string? SubCategory { get; set; }
+
+    /// <summary>Which marker the posting text was cut at, for auditing.</summary>
+    public string? CutAt { get; set; }
+
+    /// <summary>What the directory flagged about this property, if anything.</summary>
+    public string? Issues { get; set; }
+
+    /// <summary>True when the text was re-read from the document rather than taken from the sheet.</summary>
+    public bool Live { get; set; }
+
     public List<PhotoRef> Photos { get; set; } = new();
 }
 
