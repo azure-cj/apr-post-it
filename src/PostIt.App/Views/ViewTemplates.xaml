@@ -1,0 +1,16 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:vm="clr-namespace:PostIt.Presentation.ViewModels;assembly=PostIt.Presentation"
+                    xmlns:v="clr-namespace:PostIt.App.Views">
+
+    <!-- Page view-model → view. The shell shows CurrentPage in a ContentControl; WPF picks the view here. -->
+    <DataTemplate DataType="{x:Type vm:SearchViewModel}"><v:SearchView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:PropertyViewModel}"><v:PropertyView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:LogPostViewModel}"><v:LogPostView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:CompletePendingViewModel}"><v:CompletePendingView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:MyQueueViewModel}"><v:MyQueueView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SignInViewModel}"><v:SignInView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:AssignViewModel}"><v:AssignView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:TrackerViewModel}"><v:TrackerView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><v:SettingsView /></DataTemplate>
+</ResourceDictionary>

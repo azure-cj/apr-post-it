@@ -1,0 +1,170 @@
+<UserControl x:Class="PostIt.App.Views.SearchView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:PostIt.Presentation.ViewModels;assembly=PostIt.Presentation"
+             xmlns:ui="clr-namespace:PostIt.App.Controls"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SearchViewModel}"
+             d:DesignWidth="1080" d:DesignHeight="720"
+             FocusManager.FocusedElement="{Binding ElementName=SearchBox}">
+
+    <!-- Step 1 · Find (mockup 01-search): search on the left, what happens next + today's logs on the right. -->
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" MinWidth="300" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============================ Find a property ============================ -->
+        <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,16,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Text.Label}" Text="FIND A PROPERTY" VerticalAlignment="Center" />
+                    <ui:Badge Grid.Column="1" Kind="neutral" Content="{Binding CountText}"
+                              Visibility="{Binding CountText, Converter={StaticResource EmptyToCollapsed}}" />
+                </Grid>
+
+                <Grid Grid.Row="1" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="SearchBox" Grid.Column="0" Style="{StaticResource TextBox.Search}" Tag="Type part of the property name"
+                             Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Column="1" Style="{StaticResource Btn.Icon}" Command="{Binding ClearCommand}" ToolTip="Clear the search"
+                            Margin="8,0,0,0" VerticalAlignment="Center"
+                            Visibility="{Binding Query, Converter={StaticResource EmptyToCollapsed}}">
+                        <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Close}" FontSize="12" />
+                    </Button>
+                </Grid>
+
+                <TextBlock Grid.Row="2" Style="{StaticResource Text.Hint}" Margin="2,0,0,14"
+                           Text="Results come from the property folders." />
+
+                <!-- Results -->
+                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              Visibility="{Binding HasResults, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl ItemsSource="{Binding Results}" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:SearchPropertyRow}">
+                                <Border Style="{StaticResource Item}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Width="42" Height="42" CornerRadius="9" Margin="0,0,14,0" VerticalAlignment="Center"
+                                                Background="{StaticResource Brush.GoldSoft}" BorderBrush="{StaticResource Brush.Line}" BorderThickness="1">
+                                            <TextBlock Style="{StaticResource Text.Glyph}" Text="{Binding Glyph}" FontSize="17"
+                                                       Foreground="{StaticResource Brush.GoldDim}" HorizontalAlignment="Center" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource Text.ItemTitle}" Text="{Binding Name}" />
+                                            <TextBlock Style="{StaticResource Text.Muted}" Text="{Binding Meta}" Margin="0,2,0,0"
+                                                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                            <ui:Badge Kind="cool" ShowDot="True" Content="{Binding CooldownText}" Margin="0,0,8,0"
+                                                      Visibility="{Binding IsInCooldown, Converter={StaticResource BoolToVis}}" />
+                                            <ui:Badge Kind="pending" ShowDot="True" Content="Due" Margin="0,0,8,0"
+                                                      ToolTip="Not posted for a while — good to repost"
+                                                      Visibility="{Binding IsDue, Converter={StaticResource BoolToVis}}" />
+                                            <ui:Badge Kind="cat" Content="{Binding Category}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="3" Style="{StaticResource Btn.Secondary.Sm}" Content="Open" Command="{Binding OpenCommand}"
+                                                Margin="12,0,0,0" VerticalAlignment="Center" MinWidth="72" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- No matches -->
+                <StackPanel Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Top" MaxWidth="380" Margin="0,40,0,0"
+                            Visibility="{Binding NoResults, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Search}" FontSize="30"
+                               Foreground="{StaticResource Brush.Muted2}" HorizontalAlignment="Center" />
+                    <TextBlock Style="{StaticResource Text.ItemTitle}" Text="No matches" HorizontalAlignment="Center" Margin="0,14,0,6" />
+                    <TextBlock Style="{StaticResource Text.Muted}" Text="{Binding NoResultsText}" TextAlignment="Center" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============================ Next steps + today's logs ============================ -->
+        <Border Grid.Column="1" Style="{StaticResource Card}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <ui:StepChips ActiveStep="1" />
+
+                    <Border Margin="0,18,0,0" Padding="24,30" CornerRadius="14" Background="{StaticResource Brush.Input}"
+                            BorderBrush="{StaticResource Brush.Line2}" BorderThickness="1">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Document}" FontSize="34"
+                                       Foreground="{StaticResource Brush.Muted}" HorizontalAlignment="Center" />
+                            <TextBlock Style="{StaticResource Text.Title}" Text="Pick a property to see its posting text" TextWrapping="Wrap"
+                                       TextAlignment="Center" HorizontalAlignment="Center" Margin="0,16,0,8" />
+                            <TextBlock Style="{StaticResource Text.Muted}" TextAlignment="Center" HorizontalAlignment="Center"
+                                       Text="Only the public text opens, with a Copy button. The internal section (commission, terms) stays hidden and is never copied. Checks run before you post, and the photos download in one click." />
+                            <WrapPanel HorizontalAlignment="Center" Margin="0,16,0,0">
+                                <ui:Badge Kind="neutral" Content="Public text only" Margin="4" />
+                                <ui:Badge Kind="neutral" Content="Pre-post checks" Margin="4" />
+                                <ui:Badge Kind="neutral" Content="Photo downloads" Margin="4" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Divider}" Margin="0,20,0,16" />
+
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Text.Label}" Text="YOUR LOGS TODAY" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource Text.Hint}" Text="{Binding TodayLabel}" VerticalAlignment="Center" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource Text.Hint}" Text="Nothing logged yet today."
+                               Visibility="{Binding NoMyLogs, Converter={StaticResource BoolToVis}}" />
+                    <ItemsControl ItemsSource="{Binding MyLogs}" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:MyLogTodayRow}">
+                                <Border Style="{StaticResource Item}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource Text.ItemTitle}" FontSize="14.5" Text="{Binding Title}" />
+                                            <TextBlock Style="{StaticResource Text.Hint}" Text="{Binding Meta}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Style="{StaticResource Btn.Link}" Content="View post" Command="{Binding ViewPostCommand}"
+                                                Margin="10,0,0,0" Visibility="{Binding HasLink, Converter={StaticResource BoolToVis}}" />
+                                        <ui:Badge Grid.Column="2" Kind="{Binding BadgeKind}" Content="{Binding StatusLabel}" Margin="10,0,0,0" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,289 @@
+<UserControl x:Class="PostIt.App.Views.LogPostView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:PostIt.Presentation.ViewModels;assembly=PostIt.Presentation"
+             xmlns:ui="clr-namespace:PostIt.App.Controls"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:LogPostViewModel}"
+             d:DesignWidth="1080" d:DesignHeight="720">
+
+    <!-- Step 4 · Log (mockups 03-log, 03b-log-cooldown): two inputs and the row the app writes; the cooldown guard on the right. -->
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3*" />
+            <ColumnDefinition Width="2*" MinWidth="300" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============================ Load error ============================ -->
+        <Border Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource Card}" VerticalAlignment="Top"
+                Visibility="{Binding HasLoadError, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <ui:Alert Kind="error">
+                    <TextBlock TextWrapping="Wrap" Text="{Binding LoadError}" />
+                </ui:Alert>
+                <Button Style="{StaticResource Btn.Secondary}" Command="{Binding BackCommand}" HorizontalAlignment="Left" Margin="0,16,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Back}" Margin="0,0,8,0" />
+                        <TextBlock Text="Back" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- ============================ The form ============================ -->
+        <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,16,0"
+                Visibility="{Binding IsLoaded, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Steps + Back -->
+                <Grid Grid.Row="0" Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:StepChips Grid.Column="0" ActiveStep="4" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Style="{StaticResource Btn.Ghost.Sm}" Command="{Binding BackCommand}" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Back}" FontSize="12" Margin="0,0,6,0" />
+                            <TextBlock Text="Back" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <!-- Title + status (Live post | Pending approval) -->
+                <Grid Grid.Row="1" Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Style="{StaticResource Text.Title}" FontSize="22" Text="Log this post" />
+                        <TextBlock Style="{StaticResource Text.Subtitle}" Text="{Binding Subtitle}" Margin="0,2,0,0" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Style="{StaticResource Segment}" VerticalAlignment="Center" Margin="12,0,0,0"
+                            ToolTip="Pending approval is for group posts the admin has not approved yet">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource Segment.Option}" GroupName="LogPostStatus" Content="Live post"
+                                         IsChecked="{Binding Status, Converter={StaticResource EnumEquals}, ConverterParameter=Posted}" />
+                            <RadioButton Style="{StaticResource Segment.Option}" GroupName="LogPostStatus" Content="Pending approval"
+                                         IsChecked="{Binding Status, Converter={StaticResource EnumEquals}, ConverterParameter=Pending}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Cooldown verdict -->
+                <StackPanel Grid.Row="2">
+                    <ui:Alert Kind="error" Margin="0,0,0,14" Visibility="{Binding IsInCooldown, Converter={StaticResource BoolToVis}}">
+                        <TextBlock TextWrapping="Wrap"><Run Text="{Binding CooldownLead, Mode=OneWay}" FontWeight="Bold" Foreground="{StaticResource Brush.Red}" /><Run Text=" " /><Run Text="{Binding CooldownRest, Mode=OneWay}" /></TextBlock>
+                    </ui:Alert>
+                    <ui:Alert Kind="ok" Margin="0,0,0,14" Visibility="{Binding ShowOk, Converter={StaticResource BoolToVis}}">
+                        <TextBlock TextWrapping="Wrap"><Run Text="OK to log." FontWeight="Bold" Foreground="{StaticResource Brush.Green}" /><Run Text=" " /><Run Text="{Binding OkMessage, Mode=OneWay}" /></TextBlock>
+                    </ui:Alert>
+                </StackPanel>
+
+                <!-- Inputs + the row written for you -->
+                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,0,4,0">
+                        <Grid Margin="0,0,0,14" Visibility="{Binding IsPendingStatus, Converter={StaticResource BoolToVis}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Clock}" FontSize="13"
+                                       Foreground="{StaticResource Brush.Amber}" VerticalAlignment="Top" Margin="0,1,8,0" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource Text.Hint}"
+                                       Text="For group posts waiting for the admin. You can add the live link later from My Queue." />
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource Text.FieldLabel}" Text="FB account name" />
+                        <ComboBox IsEditable="True" ItemsSource="{Binding Accounts}"
+                                  Text="{Binding FbAccount, UpdateSourceTrigger=PropertyChanged}"
+                                  ToolTip="Pick the page or account you posted from, or type it" />
+
+                        <TextBlock Style="{StaticResource Text.FieldLabel}" Text="Post link" Margin="0,14,0,7" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Tag="Paste the Facebook post link" Text="{Binding PostLink, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Column="1" Style="{StaticResource Btn.Secondary}" Command="{Binding PasteCommand}" Margin="10,0,0,0"
+                                    ToolTip="Paste the link from the clipboard">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Paste}" Margin="0,0,8,0" />
+                                    <TextBlock Text="Paste" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <Border Style="{StaticResource Divider}" Margin="0,16,0,14" />
+
+                        <TextBlock Style="{StaticResource Text.Label}" Text="WRITTEN FOR YOU" />
+                        <TextBlock Style="{StaticResource Text.Muted}" Margin="0,6,0,10"
+                                   Text="Nothing else is typed by hand. The app fills in this row for the tracker sheet:" />
+                        <Border BorderBrush="{StaticResource Brush.Line}" BorderThickness="1" CornerRadius="10" Padding="14,10,14,12"
+                                Background="{StaticResource Brush.Input}" Visibility="{Binding HasPreview, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <Border BorderThickness="0,0,0,1" BorderBrush="{StaticResource Brush.Line}" Padding="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="96" />
+                                            <ColumnDefinition Width="92" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="52" />
+                                            <ColumnDefinition Width="84" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Style="{StaticResource Text.TableHeader}" Text="DATE" />
+                                        <TextBlock Grid.Column="1" Style="{StaticResource Text.TableHeader}" Text="TYPE" />
+                                        <TextBlock Grid.Column="2" Style="{StaticResource Text.TableHeader}" Text="TITLE" />
+                                        <TextBlock Grid.Column="3" Style="{StaticResource Text.TableHeader}" Text="TIME" />
+                                        <TextBlock Grid.Column="4" Style="{StaticResource Text.TableHeader}" Text="STATUS" />
+                                    </Grid>
+                                </Border>
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="96" />
+                                        <ColumnDefinition Width="92" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="52" />
+                                        <ColumnDefinition Width="84" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Style="{StaticResource Text.Cell}" Text="{Binding RowDate}" />
+                                    <TextBlock Grid.Column="1" Style="{StaticResource Text.Cell}" Text="{Binding RowType}" Margin="0,0,10,0" />
+                                    <TextBlock Grid.Column="2" Style="{StaticResource Text.Cell}" Text="{Binding RowTitle}" Margin="0,0,10,0" />
+                                    <TextBlock Grid.Column="3" Style="{StaticResource Text.Cell}" Text="{Binding RowTime}" />
+                                    <ui:Badge Grid.Column="4" Kind="{Binding RowStatusKind}" Content="{Binding RowStatus}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Save -->
+                <StackPanel Grid.Row="4">
+                    <Border Style="{StaticResource Divider}" Margin="0,12,0,14" />
+                    <Button Style="{StaticResource Btn.Primary}" Command="{Binding SaveCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Save}" Margin="0,0,10,0" />
+                            <TextBlock Text="Save" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Style="{StaticResource Text.Hint}" Text="{Binding SaveHint}" Margin="0,10,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============================ Cooldown guard ============================ -->
+        <Border Grid.Column="1" Style="{StaticResource Card}" Visibility="{Binding IsLoaded, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Text.Label}" Text="COOLDOWN GUARD" VerticalAlignment="Center" />
+                    <ui:Badge Grid.Column="1" Kind="{Binding GuardBadgeKind}" ShowDot="True" Content="{Binding GuardBadgeText}"
+                              Visibility="{Binding HasPreview, Converter={StaticResource BoolToVis}}" />
+                </Grid>
+
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding GuardChecks}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:CooldownGuardRow}">
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="26" Height="26" CornerRadius="13" VerticalAlignment="Top"
+                                        Background="{Binding Status, Converter={StaticResource CheckBgBrush}}">
+                                    <TextBlock Style="{StaticResource Text.Glyph}" FontSize="11" HorizontalAlignment="Center"
+                                               Text="{Binding Status, Converter={StaticResource CheckGlyph}}"
+                                               Foreground="{Binding Status, Converter={StaticResource CheckBrush}}" />
+                                </Border>
+                                <TextBlock Grid.Column="1" Style="{StaticResource Text.Body}" Text="{Binding Text}" Margin="12,2,0,0" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Grid Grid.Row="2" Margin="0,4,0,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Style="{StaticResource Divider}" />
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource Text.Label}" Text="YOUR LOGS TODAY" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource Text.Hint}" Text="{Binding TodayLabel}" VerticalAlignment="Center" />
+                    </Grid>
+                </Grid>
+
+                <Grid Grid.Row="3">
+                    <TextBlock Style="{StaticResource Text.Hint}" Text="Nothing logged yet today."
+                               Visibility="{Binding NoMyLogs, Converter={StaticResource BoolToVis}}" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding MyLogs}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:MyLogTodayRow}">
+                                    <Border Style="{StaticResource Item}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <TextBlock Style="{StaticResource Text.ItemTitle}" FontSize="14.5" Text="{Binding Title}" />
+                                                <TextBlock Style="{StaticResource Text.Hint}" Text="{Binding Meta}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <ui:Badge Grid.Column="1" Kind="{Binding BadgeKind}" Content="{Binding StatusLabel}" Margin="10,0,0,0" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
+                <Grid Grid.Row="4" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource StatTile}" Margin="0,0,12,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Text.Stat}" Foreground="{StaticResource Brush.Green}" Text="{Binding LoggedTodayCount}" />
+                            <TextBlock Style="{StaticResource Text.Muted}" Text="Logged today" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource StatTile}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Text.Stat}" Foreground="{StaticResource Brush.Gold}" Text="{Binding StillInQueueCount}" />
+                            <TextBlock Style="{StaticResource Text.Muted}" Text="Still in your queue" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

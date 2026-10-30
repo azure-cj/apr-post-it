@@ -1,0 +1,169 @@
+<UserControl x:Class="PostIt.App.Views.CompletePendingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:PostIt.Presentation.ViewModels;assembly=PostIt.Presentation"
+             xmlns:ui="clr-namespace:PostIt.App.Controls"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:CompletePendingViewModel}"
+             d:DesignWidth="1080" d:DesignHeight="720">
+
+    <!-- A Pending group post went live: paste its link so the tracker row becomes Posted. -->
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="7*" />
+            <ColumnDefinition Width="5*" MinWidth="280" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============================ Form ============================ -->
+        <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,16,0" Visibility="{Binding IsLoaded, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Steps + Back -->
+                <Grid Grid.Row="0" Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:StepChips Grid.Column="0" ActiveStep="4" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Style="{StaticResource Btn.Ghost.Sm}" Command="{Binding BackCommand}" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Back}" FontSize="12" Margin="0,0,6,0" />
+                            <TextBlock Text="Back" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <StackPanel Grid.Row="1" Margin="0,0,0,16">
+                    <TextBlock Style="{StaticResource Text.Title}" FontSize="22" Text="Add the live link" />
+                    <TextBlock Style="{StaticResource Text.Subtitle}" Margin="0,2,0,0"
+                               Text="The group admin approved the post — now it gets its real link." />
+                </StackPanel>
+
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,0,4,0">
+
+                        <!-- Missing post -->
+                        <StackPanel Visibility="{Binding IsMissing, Converter={StaticResource BoolToVis}}">
+                            <ui:Alert Kind="error">
+                                <TextBlock TextWrapping="Wrap" Text="{Binding MissingMessage}" />
+                            </ui:Alert>
+                            <Button Style="{StaticResource Btn.Secondary}" Command="{Binding BackCommand}" HorizontalAlignment="Left" Margin="0,16,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Back}" Margin="0,0,8,0" />
+                                    <TextBlock Text="Back" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Already live -->
+                        <ui:Alert Kind="ok" Visibility="{Binding IsAlreadyLive, Converter={StaticResource BoolToVis}}">
+                            <TextBlock TextWrapping="Wrap" Text="This post is already live — nothing left to add." />
+                        </ui:Alert>
+
+                        <!-- The pending row -->
+                        <Border Style="{StaticResource Item.Pinned}" Margin="0,0,0,14"
+                                Visibility="{Binding CanEdit, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Style="{StaticResource NumberCircle}" Background="Transparent"
+                                        BorderBrush="{StaticResource Brush.Amber}" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Pin}" FontSize="12"
+                                               Foreground="{StaticResource Brush.Amber}" HorizontalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource Text.ItemTitle}" Text="{Binding PropertyName}" />
+                                    <TextBlock Style="{StaticResource Text.Muted}" Text="{Binding Meta}" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <ui:Badge Grid.Column="2" Kind="pending" ShowDot="True" Content="Pending" Margin="12,0,0,0" />
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Visibility="{Binding CanEdit, Converter={StaticResource BoolToVis}}">
+                            <ui:Alert Kind="info" Margin="0,0,0,16">
+                                <TextBlock TextWrapping="Wrap"
+                                           Text="Once the group admin approves the post, open it on Facebook, copy its link and paste it here." />
+                            </ui:Alert>
+
+                            <TextBlock Style="{StaticResource Text.FieldLabel}" Text="Live post link" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Tag="Paste the Facebook post link" Text="{Binding PostLink, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="1" Style="{StaticResource Btn.Secondary}" Command="{Binding PasteCommand}" Margin="10,0,0,0"
+                                        ToolTip="Paste the link from the clipboard">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Paste}" Margin="0,0,8,0" />
+                                        <TextBlock Text="Paste" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <TextBlock Style="{StaticResource Text.Hint}" Text="It must be a facebook.com link." Margin="2,8,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <StackPanel Grid.Row="3" Visibility="{Binding CanEdit, Converter={StaticResource BoolToVis}}">
+                    <Border Style="{StaticResource Divider}" Margin="0,14,0,16" />
+                    <Button Style="{StaticResource Btn.Primary}" Command="{Binding SaveCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Save}" Margin="0,0,10,0" />
+                            <TextBlock Text="Save" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource Btn.Ghost}" Command="{Binding BackCommand}" Content="Back" Margin="0,10,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============================ What happens ============================ -->
+        <Border Grid.Column="1" Style="{StaticResource Card}" VerticalAlignment="Top">
+            <StackPanel>
+                <TextBlock Style="{StaticResource Text.Label}" Text="WHAT HAPPENS ON SAVE" Margin="0,0,0,14" />
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource Brush.GreenBg}" VerticalAlignment="Top">
+                        <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Check}" FontSize="11"
+                                   Foreground="{StaticResource Brush.Green}" HorizontalAlignment="Center" />
+                    </Border>
+                    <TextBlock Grid.Column="1" Style="{StaticResource Text.Body}" Margin="12,2,0,0"
+                               Text="The tracker row changes from Pending to Posted with the link." />
+                </Grid>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource Brush.GreenBg}" VerticalAlignment="Top">
+                        <TextBlock Style="{StaticResource Text.Glyph}" Text="{StaticResource Icon.Check}" FontSize="11"
+                                   Foreground="{StaticResource Brush.Green}" HorizontalAlignment="Center" />
+                    </Border>
+                    <TextBlock Grid.Column="1" Style="{StaticResource Text.Body}" Margin="12,2,0,0"
+                               Text="The item leaves the top of your queue." />
+                </Grid>
+
+                <Border Style="{StaticResource Divider}" />
+
+                <TextBlock Style="{StaticResource Text.Label}" Text="NOT APPROVED YET?" Margin="0,0,0,8" />
+                <TextBlock Style="{StaticResource Text.Muted}"
+                           Text="Leave it pending. It stays pinned at the top of My Queue, and the cooldown already counts from the day you posted." />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
