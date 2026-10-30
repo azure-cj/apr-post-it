@@ -12,10 +12,24 @@
 
 const CONFIG = {
   // Drive folder holding <Category>/<Property>/ sub-folders (or <Property>/ directly).
-  PROPERTIES_FOLDER_ID: '',
+  PROPERTIES_FOLDER_ID: '1GXeGULYswb7jXcMGCCRm2RQ_h0EKsDlI',
+
+  // Only these category folders are scanned. Everything else under the root —
+  // SOLD, Contents, Hiring and the rest — is ignored. Empty = scan them all.
+  CATEGORY_FOLDERS: [
+    'Commercial Space',
+    'Condo/House and Lot',
+    'Lot',
+    'Office Space',
+    'Warehouse',
+  ],
 
   // Tracker spreadsheet. Leave blank when this script is bound to that sheet.
   TRACKER_SHEET_ID: '',
+
+  // Tab names in that spreadsheet. POSTS_TAB must match the real one.
+  POSTS_TAB: 'Posts',
+  ASSIGNMENTS_TAB: 'Assignments',
 
   // Long random string. The client sends it on every call. Never commit the real one.
   SHARED_KEY: '',
@@ -48,15 +62,13 @@ const ROLES = ['Intern', 'Manager', 'Admin'];
 
 // What each role may call. Admin may call anything.
 const PERMISSIONS = {
-  Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink'],
+  Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink', 'setStatus'],
   Manager: ['ping', 'properties', 'property', 'texts', 'posts', 'assignments',
-            'logPost', 'addLink', 'saveQueue', 'reindex'],
+            'logPost', 'addLink', 'saveQueue', 'setStatus', 'reindex'],
   Admin:   ['*'],
 };
 
 const INDEX_HEADERS  = ['PropertyId', 'Name', 'Category', 'DocId', 'DocMime', 'DocModified', 'PhotoCount', 'Photos', 'Modified'];
-const POST_HEADERS   = ['Date', 'Type', 'Title', 'Time', 'Status', 'FB Account', 'Post Link', 'Posted By', 'PropertyId'];
-const ASSIGN_HEADERS = ['Date', 'Assigned To', 'Property', 'Status', 'PropertyId'];
 
 // ---------------------------------------------------------------- routing
 
@@ -83,11 +95,12 @@ function route(req) {
       case 'properties':  return json({ ok: true, properties: listProperties() });
       case 'property':    return json({ ok: true, property: getProperty(req.id, me.canSeeInternal) });
       case 'texts':       return json({ ok: true, texts: allTexts(Number(req.limit) || 50, Number(req.offset) || 0) });
-      case 'posts':       return json({ ok: true, posts: mine(me, readSheet('Posts', POST_HEADERS), 'Posted By') });
-      case 'assignments': return json({ ok: true, assignments: mine(me, readSheet('Assignments', ASSIGN_HEADERS), 'Assigned To') });
+      case 'posts':       return json({ ok: true, posts: mine(me, readRows(CONFIG.POSTS_TAB, POST_FIELDS), 'postedBy') });
+      case 'assignments': return json({ ok: true, assignments: mine(me, readRows(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS), 'assignedTo') });
       case 'logPost':     return json(logPost(req, me));
       case 'addLink':     return json(addLink(req, me));
       case 'saveQueue':   return json(saveQueue(req, me));
+      case 'setStatus':   return json(setStatus(req, me));
       case 'reindex':     return json({ ok: true, indexed: buildIndex() });
       default:            return json({ ok: false, error: 'unknown action: ' + req.action });
     }
@@ -146,6 +159,19 @@ function teamRows() {
   return rows;
 }
 
+/** Property name for a folder id, from the index. */
+function nameOf(propertyId) {
+  var row = indexRows().filter(function (r) { return r.id === propertyId; })[0];
+  return row ? row.name : '';
+}
+
+/** Folder id for a property name, so the client can send either one. */
+function idOf(propertyName) {
+  var want = String(propertyName || '').trim().toLowerCase();
+  var row = indexRows().filter(function (r) { return String(r.name).trim().toLowerCase() === want; })[0];
+  return row ? row.id : '';
+}
+
 function allowed(role, action) {
   var list = PERMISSIONS[role] || [];
   return list.indexOf('*') !== -1 || list.indexOf(action) !== -1;
@@ -160,7 +186,7 @@ function mine(me, rows, column) {
 /** Admin helper: add a person and hand back their key. */
 function addTeamMember(name, email, role, fbAccounts) {
   var key = Utilities.getUuid().replace(/-/g, '');
-  tab('Team', TEAM_HEADERS).appendRow([name, email || '', role || 'Intern', key, fbAccounts || '', true]);
+  plainTab('Team', TEAM_HEADERS).appendRow([name, email || '', role || 'Intern', key, fbAccounts || '', true]);
   CacheService.getScriptCache().remove('team');
   return key;
 }
@@ -176,7 +202,14 @@ function buildIndex() {
   if (!root) throw new Error('Set CONFIG.PROPERTIES_FOLDER_ID first.');
 
   var groups = children(root, FOLDER_MIME);
-  if (!groups.length) groups = [{ id: root, name: '' }];   // no category level
+  if (CONFIG.CATEGORY_FOLDERS && CONFIG.CATEGORY_FOLDERS.length) {
+    groups = groups.filter(function (g) { return CONFIG.CATEGORY_FOLDERS.indexOf(g.name) !== -1; });
+    if (!groups.length) {
+      throw new Error('None of CONFIG.CATEGORY_FOLDERS were found under the root folder.');
+    }
+  } else if (!groups.length) {
+    groups = [{ id: root, name: '' }];   // no category level at all
+  }
 
   var rows = [];
   groups.forEach(function (group) {
@@ -198,7 +231,7 @@ function buildIndex() {
     });
   });
 
-  var sh = tab('Index', INDEX_HEADERS);
+  var sh = plainTab('Index', INDEX_HEADERS);
   sh.clearContents();
   sh.getRange(1, 1, 1, INDEX_HEADERS.length).setValues([INDEX_HEADERS]);
   if (rows.length) sh.getRange(2, 1, rows.length, INDEX_HEADERS.length).setValues(rows);
@@ -234,7 +267,7 @@ function children(parentId, mimeType) {
 }
 
 function indexRows() {
-  var sh = tab('Index', INDEX_HEADERS);
+  var sh = plainTab('Index', INDEX_HEADERS);
   if (sh.getLastRow() < 2) buildIndex();
   var values = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), INDEX_HEADERS.length).getValues();
   return values.filter(function (r) { return r[0]; }).map(function (r) {
@@ -453,23 +486,23 @@ function logPost(req, me) {
     var guard = cooldownFor(req.propertyId, req.property);
     if (guard) return guard;
 
-    var link   = String(req.postLink || '').trim();
+    var link = String(req.postLink || '').trim();
     var status = link ? 'Posted' : 'Pending';
-    var when   = new Date();
+    var when = new Date();
 
-    tab('Posts', POST_HEADERS).appendRow([
-      Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd'),
-      req.type || 'Group post',
-      req.property,
-      Utilities.formatDate(when, CONFIG.TZ, 'HH:mm'),
-      status,
-      req.fbAccount,
-      link,
-      postedBy,
-      req.propertyId,
-    ]);
-    setAssignmentStatus(req.propertyId, postedBy, status);
-    return { ok: true, status: status, date: Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd') };
+    appendRow(CONFIG.POSTS_TAB, POST_FIELDS, {
+      date:       Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd'),
+      type:       req.type || 'Group post',
+      title:      req.property,
+      time:       Utilities.formatDate(when, CONFIG.TZ, 'HH:mm'),
+      status:     status,
+      fbAccount:  req.fbAccount,
+      postLink:   link,
+      postedBy:   postedBy,
+      propertyId: req.propertyId,
+    });
+    setAssignmentStatus(req.propertyId, req.property, postedBy, status);
+    return { ok: true, status: status, date: Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd'), postedBy: postedBy };
   } finally {
     lock.releaseLock();
   }
@@ -478,10 +511,10 @@ function logPost(req, me) {
 /** Returns a refusal object when the property is inside its cooldown, else null. */
 function cooldownFor(propertyId, propertyName) {
   var last = null;
-  readSheet('Posts', POST_HEADERS).forEach(function (p) {
-    var same = p.PropertyId ? p.PropertyId === propertyId : p.Title === propertyName;
-    if (!same || p.Status !== 'Posted') return;
-    var d = new Date(p.Date);
+  readRows(CONFIG.POSTS_TAB, POST_FIELDS).forEach(function (p) {
+    var same = p.propertyId ? p.propertyId === propertyId : p.title === propertyName;
+    if (!same || p.status !== 'Posted') return;
+    var d = new Date(p.date);
     if (!isNaN(d) && (!last || d > last)) last = d;
   });
   if (!last) return null;
@@ -502,22 +535,33 @@ function cooldownFor(propertyId, propertyName) {
 
 /** Turn a Pending row into Posted once the live link exists. */
 function addLink(req, me) {
-  requireAll(req, ['propertyId', 'postLink']);
+  requireAll(req, ['postLink']);
+  if (!req.propertyId && !req.property) throw new Error('missing: property');
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    var sh = tab('Posts', POST_HEADERS);
+    var sh = sheetFor(CONFIG.POSTS_TAB, POST_FIELDS);
+    var col = columnsOf(sh, POST_FIELDS);
     var values = sh.getDataRange().getValues();
-    for (var r = values.length - 1; r >= 1; r--) {
-      if (values[r][8] !== req.propertyId || values[r][4] !== 'Pending') continue;
-      if (me.role === 'Intern' && values[r][7] !== me.name) continue;   // not yours to complete
 
-      sh.getRange(r + 1, 5).setValue('Posted');
-      sh.getRange(r + 1, 7).setValue(req.postLink);
-      setAssignmentStatus(req.propertyId, values[r][7], 'Posted');
+    // Match on the folder id when the sheet carries one, otherwise on the name.
+    var name = req.property || nameOf(req.propertyId);
+    var id = req.propertyId || idOf(name);
+
+    for (var r = values.length - 1; r >= 1; r--) {
+      var isOurs = col.propertyId !== -1 && id
+        ? values[r][col.propertyId] === id
+        : String(values[r][col.title]).trim() === String(name).trim();
+      if (!isOurs) continue;
+      if (values[r][col.status] !== 'Pending') continue;
+      if (me.role === 'Intern' && values[r][col.postedBy] !== me.name) continue;  // not yours
+
+      sh.getRange(r + 1, col.status + 1).setValue('Posted');
+      sh.getRange(r + 1, col.postLink + 1).setValue(req.postLink);
+      setAssignmentStatus(id, name, values[r][col.postedBy], 'Posted');
       return { ok: true, row: r + 1 };
     }
-    return { ok: false, error: 'no pending post for that property' };
+    return { ok: false, error: 'notfound', message: 'No pending post for that property.' };
   } finally {
     lock.releaseLock();
   }
@@ -533,17 +577,24 @@ function saveQueue(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    var sh = tab('Assignments', ASSIGN_HEADERS);
+    var sh = sheetFor(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
+    var col = columnsOf(sh, ASSIGN_FIELDS);
     var values = sh.getDataRange().getValues();
 
-    // Replace this person's rows for this date, keep everything else.
+    // Replace this person's rows for this date, leave everyone else's alone.
     for (var r = values.length - 1; r >= 1; r--) {
-      if (String(values[r][0]) === String(req.date) && values[r][1] === req.assignedTo) {
-        sh.deleteRow(r + 1);
-      }
+      var d = values[r][col.date];
+      var same = (d instanceof Date ? Utilities.formatDate(d, CONFIG.TZ, 'yyyy-MM-dd') : String(d));
+      if (same === String(req.date) && values[r][col.assignedTo] === req.assignedTo) sh.deleteRow(r + 1);
     }
     items.forEach(function (it) {
-      sh.appendRow([req.date, req.assignedTo, it.property, it.status || 'To post', it.propertyId || '']);
+      appendRow(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS, {
+        date:       req.date,
+        assignedTo: req.assignedTo,
+        property:   it.property,
+        status:     it.status || 'To post',
+        propertyId: it.propertyId || idOf(it.property),
+      });
     });
     return { ok: true, saved: items.length };
   } finally {
@@ -551,18 +602,65 @@ function saveQueue(req, me) {
   }
 }
 
-function setAssignmentStatus(propertyId, assignedTo, status) {
-  var sh = tab('Assignments', ASSIGN_HEADERS);
+/** Set one queue item's status directly (the client's UpdateAssignmentAsync). */
+function setStatus(req, me) {
+  requireAll(req, ['property', 'assignedTo', 'status']);
+  if (me.role === 'Intern' && req.assignedTo !== me.name) {
+    return { ok: false, error: 'forbidden', message: 'That is not your queue item.' };
+  }
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
+  try {
+    setAssignmentStatus(req.propertyId || idOf(req.property), req.property, req.assignedTo, req.status);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function setAssignmentStatus(propertyId, propertyName, assignedTo, status) {
+  var sh = sheetFor(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
+  var col = columnsOf(sh, ASSIGN_FIELDS);
   var values = sh.getDataRange().getValues();
   for (var r = values.length - 1; r >= 1; r--) {
-    if (values[r][4] === propertyId && values[r][1] === assignedTo && values[r][3] !== 'Posted') {
-      sh.getRange(r + 1, 4).setValue(status);
+    var isOurs = col.propertyId !== -1
+      ? values[r][col.propertyId] === propertyId
+      : String(values[r][col.property]).trim() === String(propertyName).trim();
+    if (isOurs &&
+        values[r][col.assignedTo] === assignedTo &&
+        values[r][col.status] !== 'Posted') {
+      sh.getRange(r + 1, col.status + 1).setValue(status);
       return;
     }
   }
 }
 
 // ---------------------------------------------------------------- sheets
+//
+// The tracker already exists, with its own columns in its own order, and it is
+// a live business document. So nothing here writes by position: every field is
+// located by matching the header row against a list of accepted spellings. A
+// column the sheet does not have is simply skipped, unless it is required.
+
+const POST_FIELDS = {
+  date:       { headers: ['Date'], required: true },
+  type:       { headers: ['Type', 'Category', 'Property Type'] },
+  title:      { headers: ['Title', 'Property', 'Property Name'], required: true },
+  time:       { headers: ['Time'] },
+  status:     { headers: ['Status'], required: true },
+  fbAccount:  { headers: ['FB Account', 'Account', 'Facebook Account', 'FB'] },
+  postLink:   { headers: ['Post Link', 'Link', 'URL', 'Facebook Link'], required: true },
+  postedBy:   { headers: ['Posted By', 'Posted by', 'Intern', 'By'], required: true },
+  propertyId: { headers: ['PropertyId', 'Property Id', 'Folder Id'] },
+};
+
+const ASSIGN_FIELDS = {
+  date:       { headers: ['Date'], required: true },
+  assignedTo: { headers: ['Assigned To', 'Assigned to', 'Intern'], required: true },
+  property:   { headers: ['Property', 'Title', 'Property Name'], required: true },
+  status:     { headers: ['Status'], required: true },
+  propertyId: { headers: ['PropertyId', 'Property Id', 'Folder Id'] },
+};
 
 function book() {
   return CONFIG.TRACKER_SHEET_ID
@@ -570,7 +668,99 @@ function book() {
     : SpreadsheetApp.getActiveSpreadsheet();
 }
 
-function tab(name, headers) {
+/** The tab, created with default headers only when it does not exist yet. */
+function sheetFor(name, fields) {
+  var ss = book();
+  var sh = ss.getSheetByName(name);
+  if (sh) return sh;
+
+  var headers = Object.keys(fields).map(function (f) { return fields[f].headers[0]; });
+  sh = ss.insertSheet(name);
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+  sh.setFrozenRows(1);
+  return sh;
+}
+
+/** Logical field name -> 0-based column index, from the sheet's own header row. */
+function columnsOf(sh, fields) {
+  var cacheKey = 'cols:' + sh.getSheetId();
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get(cacheKey);
+  if (hit) return JSON.parse(hit);
+
+  var header = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0]
+                 .map(function (h) { return String(h).trim().toLowerCase(); });
+
+  var col = {}, missing = [];
+  Object.keys(fields).forEach(function (f) {
+    var idx = -1;
+    fields[f].headers.some(function (h) {
+      idx = header.indexOf(h.toLowerCase());
+      return idx !== -1;
+    });
+    if (idx === -1 && fields[f].required) missing.push(fields[f].headers[0]);
+    col[f] = idx;
+  });
+
+  if (missing.length) {
+    throw new Error('Tab "' + sh.getName() + '" has no column for: ' + missing.join(', ') +
+                    '. Add it, or add an accepted spelling to POST_FIELDS/ASSIGN_FIELDS.');
+  }
+  try { cache.put(cacheKey, JSON.stringify(col), 300); } catch (e) { /* ignore */ }
+  return col;
+}
+
+/** Rows as objects keyed by logical field name. */
+function readRows(name, fields) {
+  var sh = sheetFor(name, fields);
+  if (sh.getLastRow() < 2) return [];
+  var col = columnsOf(sh, fields);
+  var values = sh.getDataRange().getValues();
+
+  return values.slice(1).filter(function (r) { return r.join(''); }).map(function (r) {
+    var o = {};
+    Object.keys(fields).forEach(function (f) {
+      var v = col[f] === -1 ? '' : r[col[f]];
+      o[f] = v instanceof Date ? Utilities.formatDate(v, CONFIG.TZ, 'yyyy-MM-dd') : v;
+    });
+    return o;
+  });
+}
+
+/** Append, placing each value in whichever column the sheet keeps it in. */
+function appendRow(name, fields, values) {
+  var sh = sheetFor(name, fields);
+  var col = columnsOf(sh, fields);
+  var width = Math.max(sh.getLastColumn(), 1);
+  var row = new Array(width).fill('');
+  Object.keys(values).forEach(function (f) {
+    if (col[f] !== undefined && col[f] !== -1) row[col[f]] = values[f];
+  });
+  sh.appendRow(row);
+}
+
+/** The Team tab, read plainly — this one is ours, so its columns are known. */
+function readSheet(name, headers) {
+  var ss = book();
+  var sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    return [];
+  }
+  if (sh.getLastRow() < 2) return [];
+  var values = sh.getDataRange().getValues();
+  var head = values[0];
+  return values.slice(1).filter(function (r) { return r.join(''); }).map(function (r) {
+    var o = {};
+    head.forEach(function (h, i) { o[h] = r[i]; });
+    return o;
+  });
+}
+
+/** A tab this script owns outright, with headers it defines. */
+function plainTab(name, headers) {
   var ss = book();
   var sh = ss.getSheetByName(name);
   if (!sh) {
@@ -579,21 +769,6 @@ function tab(name, headers) {
     sh.setFrozenRows(1);
   }
   return sh;
-}
-
-/** Rows as objects keyed by header. */
-function readSheet(name, headers) {
-  var sh = tab(name, headers);
-  if (sh.getLastRow() < 2) return [];
-  var values = sh.getDataRange().getValues();
-  var head = values[0];
-  return values.slice(1).filter(function (r) { return r.join(''); }).map(function (r) {
-    var o = {};
-    head.forEach(function (h, i) {
-      o[h] = r[i] instanceof Date ? Utilities.formatDate(r[i], CONFIG.TZ, 'yyyy-MM-dd') : r[i];
-    });
-    return o;
-  });
 }
 
 // ---------------------------------------------------------------- odds and ends

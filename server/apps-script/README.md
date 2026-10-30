@@ -18,15 +18,21 @@ which runs **as the owner** and returns JSON. That one decision buys three thing
 2. Replace `Code.gs` with this file. Then ⚙ *Project Settings* → "Show `appsscript.json`",
    and paste the manifest here. That enables the advanced Drive service, which is roughly
    ten times faster than `DriveApp` for walking folders.
-3. Fill in `CONFIG`:
-   * `PROPERTIES_FOLDER_ID` — from the Drive folder URL, `/folders/<THIS>`.
-   * `SHARED_KEY` — a long random string. Keep it out of git.
+3. Check `CONFIG`:
+   * `PROPERTIES_FOLDER_ID` — already set to the live library folder.
+   * `CATEGORY_FOLDERS` — the five real category folders. Everything else under the
+     root (SOLD, Contents, Hiring…) is ignored. Empty the list to scan them all.
+   * `POSTS_TAB` / `ASSIGNMENTS_TAB` — **must match the real tab names.**
+   * `SHARED_KEY` — a long random string, used only until the Team tab has its first row.
 4. Run `buildIndex` once from the editor and accept the permission prompt.
 5. *Post-It → Install 15-minute refresh* to keep the index current.
-6. Deploy → New deployment → **Web app**. Execute as **Me**;
-   access **Anyone** (personal Gmail) or **Anyone within <your domain>** (Workspace).
-   Copy the `/exec` URL.
-7. Check it: `<exec-url>?action=ping&key=<your key>` in a browser.
+6. *Post-It → Add a team member…* for each person. Each gets their own key; paste it
+   into their copy of Post-It. `SHARED_KEY` stops working the moment the first row exists.
+7. Deploy → New deployment → **Web app**. Execute as **Me**, access **Anyone**.
+   "Execute as Me" is the whole point: every Drive read happens as the library's owner,
+   so nobody else needs Drive access. Copy the `/exec` URL.
+8. Check it: `<exec-url>?action=ping&key=<your key>` in a browser. It should name you
+   and your role.
 
 ## Endpoints
 
@@ -39,9 +45,20 @@ which runs **as the owner** and returns JSON. That one decision buys three thing
 | `POST {action:'logPost', …}` | appends a tracker row, or refuses with `error:'cooldown'` |
 | `POST {action:'addLink', …}` | turns a Pending row into Posted |
 | `POST {action:'saveQueue', …}` | replaces one intern's queue for one date |
+| `POST {action:'setStatus', …}` | moves one queue item's status |
 | `POST {action:'reindex'}` | forces an index rebuild |
 
-Every call carries `key`.
+Every call carries `key`, and the key *is* the identity — see `docs/ROLES.md`.
+
+## Your existing tracker is not reformatted
+
+Nothing is written by column position. Each field is found by matching the sheet's own
+header row against a list of accepted spellings (`POST_FIELDS` / `ASSIGN_FIELDS`), so the
+tracker keeps its column order and wording. A column the sheet does not have is skipped;
+a *required* one that is missing raises a message naming it.
+
+The one column worth adding is **PropertyId**. Without it, rows are matched by property
+name, which breaks the moment a folder is renamed. With it, matching is exact.
 
 ## Why there is an Index tab
 
@@ -71,19 +88,14 @@ up immediately. Only the slow `.docx` conversion path is cached, for 10 minutes.
   Workspace. The 15-minute index rebuild is the only heavy job; if it ever approaches the
   limit, move it to hourly.
 
-## Identity, and why it decides the roles question
+## Identity without Google sign-in
 
-`Session.getActiveUser().getEmail()` only returns a real address when the caller is
-authenticated in the same Workspace domain. On a personal Gmail deployment it returns `''`,
-so the script cannot tell who is calling — the client would assert "I am Jan, an intern",
-and that assertion is trivially forged.
+The script runs as the Drive owner, so `Session.getActiveUser()` says nothing useful about
+who is calling. Identity comes from the key instead: each person has their own row on the
+**Team** tab, and the key resolves to their name and role before anything is dispatched.
 
-* **Google Workspace** — deploy with domain access and have the client sign in with Google.
-  The script knows who is calling, looks the role up in a `Team` tab, and enforces it.
-  Roles become real.
-* **Personal Gmail** — roles are an honour system in the UI. Still worth having, but it is
-  a guard rail, not a boundary. The one thing that stays enforced either way is the
-  cooldown, because that does not depend on who is asking.
+That means roles are enforced on the server, not asserted by the client — no Workspace and
+no per-user Google sign-in needed. `docs/ROLES.md` has the matrix and the consequences.
 
 ## The C# side
 

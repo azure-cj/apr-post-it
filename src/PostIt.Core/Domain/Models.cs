@@ -117,6 +117,15 @@ public sealed class AppSettings
     /// <summary>True while the app is pointed at the bundled PROTOTYPE sample data.</summary>
     public bool UsingSampleData { get; set; }
 
+    /// <summary>The Apps Script web app's /exec link. Set = use Drive and the tracker sheet instead of local folders.</summary>
+    public string ScriptUrl { get; set; } = "";
+
+    /// <summary>This person's key from the Team tab. It is also their identity: the server reads their role from it.</summary>
+    public string ScriptKey { get; set; } = "";
+
+    /// <summary>True once both the web app link and a key are set.</summary>
+    public bool UsingGoogle => !string.IsNullOrWhiteSpace(ScriptUrl) && !string.IsNullOrWhiteSpace(ScriptKey);
+
     public string? LastUserName { get; set; }
 
     public AppSettings Clone() => new()
@@ -128,6 +137,8 @@ public sealed class AppSettings
         FbAccounts = new List<string>(FbAccounts),
         Users = new List<AppUser>(Users),
         UsingSampleData = UsingSampleData,
+        ScriptUrl = ScriptUrl,
+        ScriptKey = ScriptKey,
         LastUserName = LastUserName,
     };
 }
