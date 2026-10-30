@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Windows desktop app (WPF, .NET 8). No NuGet packages: builds with just the .NET 8 SDK. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>PostIt.App</RootNamespace>
+    <AssemblyName>APG.PostIt</AssemblyName>
+    <Product>APG Post-It</Product>
+    <Company>Alpha Premier Group of Companies</Company>
+    <Version>0.1.0</Version>
+    <ApplicationIcon>Assets\postit.ico</ApplicationIcon>
+    <!-- Lets the project be restored/edited from macOS or Linux too (it still only runs on Windows). -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PostIt.Presentation\PostIt.Presentation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Fonts\*.ttf" />
+    <Resource Include="Assets\logo.png" />
+    <Resource Include="Assets\postit.ico" />
+    <None Include="Fonts\OFL.txt" />
+    <!-- PROTOTYPE sample property folders, copied to %LOCALAPPDATA%\APG.PostIt on first run. -->
+    <Content Include="SampleData\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
