@@ -365,7 +365,25 @@ def check_file(path, types, keys):
             walk(child, new_ctx, in_resources)
 
     walk(root, root_ctx, False)
+    check_converter_targets(rel, src, errors)
     return errors, warns
+
+
+
+# A converter that yields a Visibility, bound to a property that wants a bool,
+# looks fine in XAML and fails only at runtime. Caught one of these by eye.
+VIS_CONVERTERS = ("BoolToVis", "BoolToVisInverted", "EmptyToCollapsed", "EmptyToVisible")
+BOOL_PROPS = ("IsEnabled", "IsChecked", "IsReadOnly", "IsHitTestVisible", "Focusable", "IsExpanded")
+
+
+def check_converter_targets(path, text, errors):
+    for m in re.finditer(r'(\w+)\s*=\s*"\{Binding[^"}]*Converter=\{StaticResource\s+(\w+)\}[^"]*"', text):
+        prop, conv = m.group(1), m.group(2)
+        if conv in VIS_CONVERTERS and prop in BOOL_PROPS:
+            line = text[: m.start()].count("\n") + 1
+            errors.append(
+                f"{path}:{line}: {prop} is bound through {conv}, which returns a Visibility, not a bool"
+            )
 
 
 def main(argv):

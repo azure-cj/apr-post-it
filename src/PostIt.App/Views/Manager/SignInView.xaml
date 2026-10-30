@@ -18,6 +18,29 @@
                     <TextBlock Style="{StaticResource Text.PageTitle}" Text="{Binding Heading}" />
                     <TextBlock Style="{StaticResource Text.Subtitle}" Text="{Binding Subtitle}" Margin="0,8,0,0" />
 
+                    <!-- Signing in with a key. Hidden on sample data, where names are picked instead. -->
+                    <StackPanel Margin="0,24,0,0" Visibility="{Binding UsingKey, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Style="{StaticResource Text.FieldLabel}" Text="Web app link" />
+                        <TextBox Text="{Binding ScriptUrl, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding NotBusy}" Margin="0,4,0,0" />
+
+                        <TextBlock Style="{StaticResource Text.FieldLabel}" Text="Your key" Margin="0,14,0,0" />
+                        <TextBox x:Name="KeyBox"
+                                 Text="{Binding Key, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding NotBusy}" Margin="0,4,0,0" />
+                        <TextBlock Style="{StaticResource Text.Hint}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                   Text="Your manager gives you this. It is also your identity — don't share it." />
+
+                        <Button Style="{StaticResource Btn.Primary}" Content="Sign in" Margin="0,18,0,0"
+                                HorizontalAlignment="Left"
+                                Command="{Binding ConnectCommand}" IsDefault="True" />
+
+                        <ui:Alert Kind="warn" Margin="0,16,0,0"
+                                  Visibility="{Binding HasStatus, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding Status, Mode=OneWay}" TextWrapping="Wrap" />
+                        </ui:Alert>
+                    </StackPanel>
+
                     <!-- Nobody on the team -->
                     <StackPanel Margin="0,24,0,0" Visibility="{Binding HasNoUsers, Converter={StaticResource BoolToVis}}">
                         <ui:Alert Kind="warn">

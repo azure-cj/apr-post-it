@@ -64,17 +64,27 @@ public sealed class SignInViewModel : PageViewModel
 
     public bool HasStatus => !string.IsNullOrWhiteSpace(Status);
 
-    public bool Busy { get => _busy; private set => Set(ref _busy, value); }
+    public bool Busy
+    {
+        get => _busy;
+        private set { if (Set(ref _busy, value)) Raise(nameof(NotBusy)); }
+    }
+
+    /// <summary>For IsEnabled bindings, which want a bool and not a Visibility.</summary>
+    public bool NotBusy => !Busy;
 
     public AsyncRelayCommand ConnectCommand { get; }
 
     public ObservableCollection<UserTileViewModel> Managers { get; } = new();
     public ObservableCollection<UserTileViewModel> Interns { get; } = new();
 
-    public bool HasManagers => Managers.Count > 0;
-    public bool HasInterns => Interns.Count > 0;
+    // All four are false when a key signs you in, so the name list and its
+    // "nobody on the team" notice stay out of the way without the view having
+    // to nest anything.
+    public bool HasManagers => UsingNames && Managers.Count > 0;
+    public bool HasInterns => UsingNames && Interns.Count > 0;
     public bool HasUsers => HasManagers || HasInterns;
-    public bool HasNoUsers => !HasUsers;
+    public bool HasNoUsers => UsingNames && !HasUsers;
 
     /// <summary>"Properties: C:\…\Properties".</summary>
     public string PropertiesFolderText { get => _propertiesFolderText; private set => Set(ref _propertiesFolderText, value); }
