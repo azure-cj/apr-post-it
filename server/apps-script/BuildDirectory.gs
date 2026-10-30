@@ -27,10 +27,15 @@ var CFG = {
   QUEUE_TAB: '_Queue',
 
   // Top-level folders that are not property categories.
+  // The checker's list (its Config.gs EXCLUDED_FOLDERS), so both apps agree on
+  // what counts as a listing. Matched as whole names, not prefixes: the
+  // checker matches 'vo' as a prefix, which would also exclude a top-level
+  // folder beginning "Vo...".
   EXCLUDE: [
-    'sold', 'contents', 'hiring', 'archive', 'templates', 'old',
+    'contents', 'hiring', 'sir mark', 'tv video', 'vo',
+    'virtual office for posting',
     'hiring-intern-staff-format',
-    'vo',                          // LOGOS, PEGS, PICSS, VIDS — design assets
+    'sold', 'archive', 'templates', 'old',
   ],
 
   // How deep to keep descending before treating a folder as a property.
