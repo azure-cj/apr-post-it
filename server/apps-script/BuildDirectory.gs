@@ -103,7 +103,14 @@ function RESTART() {
 
   PropertiesService.getScriptProperties().setProperties({ cursor: '0', total: String(queue.length) });
   Logger.log('Queued %s properties across %s categories.', queue.length, countCategories_(queue));
-  CONTINUE();
+
+  // Hand the writing to a trigger rather than calling CONTINUE here. Apps
+  // Script kills a function at six minutes, and the scan can use most of that:
+  // called inline, CONTINUE would be killed before it wrote a row OR scheduled
+  // its own follow-up, leaving a full queue, an empty sheet and nothing
+  // running. On its own trigger it gets a fresh six minutes.
+  ScriptApp.newTrigger('CONTINUE').timeBased().after(30 * 1000).create();
+  Logger.log('Writing starts in half a minute and continues on its own.');
 }
 
 function CONTINUE() {
@@ -115,6 +122,11 @@ function CONTINUE() {
   var book = SpreadsheetApp.openById(CFG.SHEET_ID);
   var queue = book.getSheetByName(CFG.QUEUE_TAB);
   var out = book.getSheetByName(CFG.TAB);
+
+  // Schedule the next batch up front. If this one overruns its slice and is
+  // killed, the run still carries on instead of stalling silently.
+  clearTriggers_();
+  ScriptApp.newTrigger('CONTINUE').timeBased().after(5 * 60 * 1000).create();
 
   var started = Date.now();
   var rows = [];
@@ -130,8 +142,7 @@ function CONTINUE() {
   props.setProperty('cursor', String(cursor));
 
   if (cursor < total) {
-    Logger.log('%s of %s done. Continuing in a minute.', cursor, total);
-    ScriptApp.newTrigger('CONTINUE').timeBased().after(60 * 1000).create();
+    Logger.log('%s of %s done. Continuing shortly.', cursor, total);
   } else {
     clearTriggers_();
     book.getSheetByName(CFG.QUEUE_TAB).hideSheet();
