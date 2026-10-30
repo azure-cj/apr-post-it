@@ -11,24 +11,41 @@ which runs **as the owner** and returns JSON. That one decision buys three thing
   so two interns saving the same property at the same moment cannot both get through.
   A client-side check can always be raced or bypassed.
 
+## Two spreadsheets
+
+* **The tracker** — the one the company already uses. Posts and Assignments rows go here,
+  into its existing columns. Do not make a new one.
+* **A private admin sheet** — create this one, and share it with nobody. It holds the
+  script's own `Index` and `Team` tabs. `Team` lists everyone's key, so it cannot live in
+  a sheet the team can open: whoever reads a manager's key can act as that manager.
+
 ## Set it up
 
-1. Open the **tracker spreadsheet** → Extensions → Apps Script. Binding the script to the
-   sheet is what gives you the *Post-It* menu and lets `TRACKER_SHEET_ID` stay blank.
-2. Replace `Code.gs` with this file. Then ⚙ *Project Settings* → "Show `appsscript.json`",
-   and paste the manifest here. That enables the advanced Drive service, which is roughly
-   ten times faster than `DriveApp` for walking folders.
-3. Check `CONFIG`:
+1. Make the private admin spreadsheet. Copy its id from the URL
+   (`/spreadsheets/d/<THIS>/edit`).
+2. Create the script. If the tracker already has a bound Apps Script project — and it does
+   if the earlier web app was built from its Extensions menu — a second bound project is not
+   possible, so make a **standalone** script at <https://script.google.com> instead. A
+   standalone script has no spreadsheet menu; run `SETUP` and `ADD_PERSON` from the editor
+   instead, as below.
+3. Paste in `Code.gs`. Then ⚙ *Project Settings* → "Show `appsscript.json`", and paste the
+   manifest. That enables the advanced Drive service, roughly ten times faster than
+   `DriveApp` for walking folders.
+4. Check `CONFIG`:
+   * `TRACKER_SHEET_ID` — the company tracker's id. Required for a standalone script.
+   * `ADMIN_SHEET_ID` — the private sheet from step 1.
    * `PROPERTIES_FOLDER_ID` — already set to the live library folder.
    * `CATEGORY_FOLDERS` — the five real category folders. Everything else under the
      root (SOLD, Contents, Hiring…) is ignored. Empty the list to scan them all.
    * `POSTS_TAB` / `ASSIGNMENTS_TAB` — **must match the real tab names.**
    * `SHARED_KEY` — a long random string, used only until the Team tab has its first row.
-4. Run `buildIndex` once from the editor and accept the permission prompt.
-5. *Post-It → Install 15-minute refresh* to keep the index current.
-6. *Post-It → Add a team member…* for each person. Each gets their own key; paste it
-   into their copy of Post-It. `SHARED_KEY` stops working the moment the first row exists.
+5. Run **`SETUP`** from the editor and accept the permission prompt. It builds the index
+   and installs the 15-minute refresh. (Bound script: *Post-It → Rebuild property index*.)
+6. For each person, edit the three values at the top of **`ADD_PERSON`** and press Run. The
+   key is printed in the execution log — paste it into their copy of Post-It.
+   `SHARED_KEY` stops working the moment the Team tab has its first row.
 7. Deploy → New deployment → **Web app**. Execute as **Me**, access **Anyone**.
+   Leave any earlier deployment running until the desktop app is proven.
    "Execute as Me" is the whole point: every Drive read happens as the library's owner,
    so nobody else needs Drive access. Copy the `/exec` URL.
 8. Check it: `<exec-url>?action=ping&key=<your key>` in a browser. It should name you
