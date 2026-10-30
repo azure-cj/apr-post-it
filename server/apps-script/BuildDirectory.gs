@@ -301,3 +301,37 @@ function countCategories_(queue) {
   queue.forEach(function (r) { seen[r[0]] = 1; });
   return Object.keys(seen).length;
 }
+
+// ---------------------------------------------------------------- diagnosis
+
+/**
+ * Run this when START says it cannot find the root folder. It reports which
+ * account is actually running, whether the configured id resolves, and — by
+ * looking for the category folders by name — what the right id probably is.
+ */
+function FIND_ROOT() {
+  Logger.log('Running as: %s', Session.getEffectiveUser().getEmail());
+
+  try {
+    var f = DriveApp.getFolderById(CFG.ROOT_FOLDER_ID);
+    Logger.log('Configured id resolves to "%s" — so the problem is elsewhere.', f.getName());
+  } catch (e) {
+    Logger.log('Configured id %s: NOT VISIBLE to this account.', CFG.ROOT_FOLDER_ID);
+  }
+
+  ['COMMERCIAL SPACE', 'OFFICE SPACE', 'WAREHOUSE', 'LOT'].forEach(function (name) {
+    var found = false;
+    var it = DriveApp.getFoldersByName(name);
+    while (it.hasNext()) {
+      found = true;
+      var folder = it.next();
+      var parents = folder.getParents();
+      if (!parents.hasNext()) Logger.log('"%s" sits at the top of a drive (no parent folder).', name);
+      while (parents.hasNext()) {
+        var p = parents.next();
+        Logger.log('"%s" is inside "%s"  ->  ROOT_FOLDER_ID: %s', name, p.getName(), p.getId());
+      }
+    }
+    if (!found) Logger.log('"%s": no folder of that name is visible to this account.', name);
+  });
+}
