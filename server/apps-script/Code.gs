@@ -43,7 +43,7 @@ const DOC_MIME    = 'application/vnd.google-apps.document';
 const PHOTO_MIME  = /^image\/(jpeg|png|webp|gif)$/;
 const DOC_NAME    = /\.(docx?|txt|md)$/i;
 
-const INDEX_HEADERS  = ['PropertyId', 'Name', 'Category', 'DocId', 'DocMime', 'PhotoCount', 'Photos', 'Modified'];
+const INDEX_HEADERS  = ['PropertyId', 'Name', 'Category', 'DocId', 'DocMime', 'DocModified', 'PhotoCount', 'Photos', 'Modified'];
 const POST_HEADERS   = ['Date', 'Type', 'Title', 'Time', 'Status', 'FB Account', 'Post Link', 'Posted By', 'PropertyId'];
 const ASSIGN_HEADERS = ['Date', 'Assigned To', 'Property', 'Status', 'PropertyId'];
 
@@ -69,6 +69,7 @@ function route(req) {
       case 'ping':        return json({ ok: true, signedInAs: activeEmail(), time: now() });
       case 'properties':  return json({ ok: true, properties: listProperties() });
       case 'property':    return json({ ok: true, property: getProperty(req.id, truthy(req.internal)) });
+      case 'texts':       return json({ ok: true, texts: allTexts(Number(req.limit) || 50, Number(req.offset) || 0) });
       case 'posts':       return json({ ok: true, posts: readSheet('Posts', POST_HEADERS) });
       case 'assignments': return json({ ok: true, assignments: readSheet('Assignments', ASSIGN_HEADERS) });
       case 'logPost':     return json(logPost(req));
@@ -113,6 +114,7 @@ function buildIndex() {
         group.name,
         doc ? doc.id : '',
         doc ? doc.mimeType : '',
+        doc ? (doc.modifiedTime || '') : '',
         photos.length,
         JSON.stringify(photos.map(function (p) { return { id: p.id, name: p.name }; })),
         prop.modifiedTime || '',
@@ -161,8 +163,8 @@ function indexRows() {
   var values = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), INDEX_HEADERS.length).getValues();
   return values.filter(function (r) { return r[0]; }).map(function (r) {
     return {
-      id: r[0], name: r[1], category: r[2], docId: r[3], docMime: r[4],
-      photoCount: Number(r[5]) || 0, photos: r[6], modified: r[7],
+      id: r[0], name: r[1], category: r[2], docId: r[3], docMime: r[4], docModified: r[5],
+      photoCount: Number(r[6]) || 0, photos: r[7], modified: r[8],
     };
   });
 }
@@ -185,7 +187,7 @@ function getProperty(id, includeInternal) {
   if (!row) throw new Error('property not found: ' + id);
 
   var parsed = row.docId
-    ? splitPosting(readDoc(row.docId, row.docMime))
+    ? splitPosting(readDoc(row.docId, row.docMime))      // live: no `modified` argument
     : { publicText: '', internalText: '', meta: {} };
 
   var photos = JSON.parse(row.photos || '[]');
@@ -229,26 +231,92 @@ function splitPosting(text) {
   return { publicText: pub.join('\n').trim(), internalText: internal, meta: meta };
 }
 
-function readDoc(fileId, mimeType) {
-  if (mimeType === DOC_MIME) {
-    return DocumentApp.openById(fileId).getBody().getText();   // live, no cache
-  }
-  if (mimeType === 'text/plain' || mimeType === 'text/markdown') {
-    return DriveApp.getFileById(fileId).getBlob().getDataAsString('UTF-8');
-  }
-  // .docx: convert to a temporary Google Doc. Slow, so cache the result.
+/**
+ * Read a posting doc as the plain text that will be pasted into Facebook.
+ *
+ * Pass `modified` (the doc's modifiedTime from the index) to allow caching;
+ * omit it to force a live read. Opening a property reads live, so a typo fixed
+ * in Drive a moment ago is already gone. The doc-health sweep reads cached,
+ * because a 15-minute-old answer is fine for a report.
+ */
+function readDoc(fileId, mimeType, modified) {
   var cache = CacheService.getScriptCache();
-  var hit = cache.get('doc:' + fileId);
-  if (hit) return hit;
-
-  var copy = Drive.Files.copy({ name: 'postit-tmp', mimeType: DOC_MIME }, fileId, { supportsAllDrives: true });
-  try {
-    var text = DocumentApp.openById(copy.id).getBody().getText();
-    try { cache.put('doc:' + fileId, text, 600); } catch (e) { /* over 100KB */ }
-    return text;
-  } finally {
-    try { Drive.Files.remove(copy.id); } catch (e) { /* leave the temp file */ }
+  var key = 'doc:' + fileId + ':' + (modified || '');
+  if (modified) {
+    var hit = cache.get(key);
+    if (hit) return hit;
   }
+
+  var text;
+  if (mimeType === DOC_MIME) {
+    text = docToText(DocumentApp.openById(fileId));
+  } else if (mimeType === 'text/plain' || mimeType === 'text/markdown') {
+    text = DriveApp.getFileById(fileId).getBlob().getDataAsString('UTF-8');
+  } else {
+    // .docx and friends: convert to a temporary Google Doc, read it, bin it.
+    var copy = Drive.Files.copy({ name: 'postit-tmp', mimeType: DOC_MIME }, fileId, { supportsAllDrives: true });
+    try {
+      text = docToText(DocumentApp.openById(copy.id));
+    } finally {
+      try { Drive.Files.remove(copy.id); } catch (e) { /* leave the temp file */ }
+    }
+  }
+
+  if (modified) {
+    try { cache.put(key, text, 21600); } catch (e) { /* over the 100KB cache limit */ }
+  }
+  return text;
+}
+
+/**
+ * Flatten a Google Doc to posting text.
+ *
+ * Body.getText() is not enough: it drops bullet glyphs, so a feature list
+ * arrives as unreadable run-on lines, and it concatenates table cells with no
+ * separator. Walk the body instead.
+ */
+function docToText(doc) {
+  var body = doc.getBody();
+  var counters = {};
+  var out = [];
+  for (var i = 0; i < body.getNumChildren(); i++) {
+    out.push(elementText(body.getChild(i), counters));
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function elementText(el, counters) {
+  var T = DocumentApp.ElementType;
+  var type = el.getType();
+
+  if (type === T.LIST_ITEM) {
+    var level = el.getNestingLevel();
+    var marker = '\u2022';
+    if (el.getGlyphType() === DocumentApp.GlyphType.NUMBER) {
+      var key = el.getListId() + ':' + level;
+      counters[key] = (counters[key] || 0) + 1;
+      marker = counters[key] + '.';
+    }
+    return new Array(level + 1).join('   ') + marker + ' ' + el.getText();
+  }
+
+  if (type === T.TABLE) {
+    var rows = [];
+    for (var r = 0; r < el.getNumRows(); r++) {
+      var row = el.getRow(r);
+      var cells = [];
+      for (var c = 0; c < row.getNumCells(); c++) {
+        cells.push(row.getCell(c).getText().trim());
+      }
+      cells = cells.filter(String);
+      // A two-column spec table reads naturally as "Lot area: 120 sqm".
+      rows.push(cells.length === 2 ? cells[0].replace(/:$/, '') + ': ' + cells[1] : cells.join('  '));
+    }
+    return rows.join('\n');
+  }
+
+  if (type === T.HORIZONTAL_RULE || type === T.PAGE_BREAK) return '';
+  return el.getText ? el.getText() : '';
 }
 
 function publish(photos) {
@@ -259,6 +327,30 @@ function publish(photos) {
         f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       }
     } catch (e) { /* shared drive policy may forbid it */ }
+  });
+}
+
+/**
+ * Public text for a page of properties, for the manager's doc-health screen.
+ *
+ * Paged on purpose: reading a few hundred docs in one request would run past
+ * the 6-minute execution limit. The client walks it 50 at a time. Internal
+ * text is never included — only whether a marker was found.
+ */
+function allTexts(limit, offset) {
+  return indexRows().slice(offset, offset + limit).map(function (r) {
+    var parsed = r.docId
+      ? splitPosting(readDoc(r.docId, r.docMime, r.docModified))   // cached
+      : { publicText: '', internalText: '', meta: {} };
+    return {
+      id: r.id,
+      name: r.name,
+      hasDoc: !!r.docId,
+      docMime: r.docMime,
+      publicText: parsed.publicText,
+      hasInternal: parsed.internalText.length > 0,
+      photoCount: r.photoCount,
+    };
   });
 }
 
