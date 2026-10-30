@@ -96,6 +96,10 @@ function RESTART() {
 
   var out = resetTab_(book, CFG.TAB, HEADERS);
   out.setFrozenRows(1);
+  // Plain text for the whole sheet. Posting text is arbitrary prose and may
+  // open with '=', '+' or '-', which Sheets would otherwise evaluate.
+  out.getRange(1, 1, out.getMaxRows(), HEADERS.length).setNumberFormat('@');
+
   out.setColumnWidth(4, 260);
   out.setColumnWidth(7, 220);
   out.setColumnWidth(8, 520);
@@ -308,7 +312,7 @@ function splitAtSeparator_(text) {
 function markerKind_(line) {
   if (/^\s*_{2,}\s*$/.test(line))                  return '__ line';
   if (/^\s*[─-╿]{3,}\s*$/.test(line))    return 'bar line';
-  if (/^\s*[=~]{3,}\s*$/.test(line))               return '=== line';
+  if (/^\s*[=~]{3,}\s*$/.test(line))               return 'equals line';
   if (/^\s*[-\u2013\u2014]{3,}\s*$/.test(line))     return '--- line';
 
   // A broker-only heading, with or without decoration around it.
