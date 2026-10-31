@@ -109,7 +109,7 @@ which would also exclude a top-level folder beginning "Vo…".
 
 The two apps must read as one family, and will later sit in one launcher. The
 colours, type scale, spacing, motion and focus rule are copied into
-`app/src/theme/tokens.css`. A shared package would keep them in step
+`src/theme/tokens.css`. A shared package would keep them in step
 automatically, but needs somewhere to live and a release process; a copy is
 what was asked for. When the checker changes a token, change it here too.
 
@@ -119,7 +119,7 @@ focus. Everything else is carried by status colour.
 
 ### D13. Where the postable text ends is decided in one file (Oct 31, 2026)
 
-`server/apps-script/Separators.gs` decides it. The directory builder, the web
+`server/Separators.gs` decides it. The directory builder, the web
 app's live re-read when a property is opened, and the desktop app all use that
 one file unchanged — the app links it at build time, so nothing is run from a
 string.

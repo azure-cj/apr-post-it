@@ -20,21 +20,21 @@ Built with Tauri 2, React and TypeScript (D10). Who can do what: `docs/ROLES.md`
 
 * **`run.cmd`**: runs the app from source. Installs packages on the first run.
 * **`build.cmd`**: installs packages, runs the tests, and builds the installer into
-  `app\src-tauri\target\release\bundle\nsis`. Give that `.exe` to whoever needs the app.
+  `src-tauri\target\release\bundle\nsis`. Give that `.exe` to whoever needs the app.
 * **`uninstall.cmd`**: removes the installed app, its settings and its saved key from this
   PC. It asks first, and never touches the Google sheets, Drive or this folder.
 
-From a terminal in `app\`: `npm test` runs the tests, `npm run tauri dev` runs the app, and
+From a terminal in this folder: `npm test` runs the tests, `npm run tauri dev` runs the app, and
 `npm run dev` runs it in a browser for development, against the real web app.
 
 ## Set up the server (once)
 
-Full details, and what each action does: `server/apps-script/README.md`.
+Full details, and what each action does: `server/README.md`.
 
 1. Make a **private** spreadsheet for the Team tab, shared with nobody: it holds everyone's
    key (D3).
 2. At <https://script.google.com> make a project and add **`Code.gs`** and
-   **`Separators.gs`** from `server/apps-script` (plus `BuildDirectory.gs`, which builds the
+   **`Separators.gs`** from `server` (plus `BuildDirectory.gs`, which builds the
    listing directory, and the `appsscript.json` manifest).
 3. At the top of `Code.gs`, set **`TRACKER_SHEET_ID`** (the company tracker) and
    **`ADMIN_SHEET_ID`** (the private spreadsheet). Build the directory with `START` in

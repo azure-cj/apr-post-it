@@ -8,7 +8,7 @@
  * It shares one Apps Script project with Separators.gs, which it requires, and
  * BuildDirectory.gs. Apps Script gives every file in a project one global
  * scope: a top-level name declared in two of them breaks the project or
- * silently replaces the other. app/src/server-tests loads them the same way.
+ * silently replaces the other. src/server-tests loads them the same way.
  *
  * Deploy: see README.md next to this file.
  */
@@ -470,7 +470,7 @@ function logPost(req, me) {
 /**
  * Returns a refusal object when the property is inside its cooldown, else null.
  *
- * The app applies the same rule before it asks (app/src/core/cooldown.ts), and
+ * The app applies the same rule before it asks (src/core/cooldown.ts), and
  * the two must agree:
  *
  * - Every row counts, Pending as much as Posted: a post still waiting for its
@@ -549,7 +549,7 @@ function addLink(req, me) {
 // ---------------------------------------------------------------- which property a row is
 //
 // The app decides these the same way (cooldown.ts, matcher.ts, tracker.ts),
-// and the tests in app/src/server-tests hold the two to agreeing.
+// and the tests in src/server-tests hold the two to agreeing.
 
 const NAME_ABBREVIATIONS = { blk: 'block', lt: 'lot', ph: 'phase', bldg: 'building' };
 

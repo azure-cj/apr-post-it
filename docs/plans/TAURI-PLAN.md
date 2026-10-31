@@ -42,7 +42,7 @@ Record anything that changes on the way under Deviations at the end.
 | TypeScript does | The screens, and every rule: the directory, the posting-text split, the pre-post checks, the cooldown, the name matcher, queues, the tracker, settings |
 | Rust does | Only what the WebView can't: the clipboard, saving photos to disk, opening Explorer and the browser, the per-PC key, and the global shortcut. The rules stay in TypeScript so they can move to a Cloud Function as they are |
 | The OS | One TypeScript interface, `platform`, is the screens' and rules' only way to the OS, with two versions: Tauri's, and a fake for the browser and tests. With the fake the whole app runs in a plain browser |
-| The backend | The Apps Script web app stays (`server/apps-script/Code.gs`). It is the only holder of Google credentials. The directory sheet is the index; the tracker sheet is the record |
+| The backend | The Apps Script web app stays (`server/Code.gs`). It is the only holder of Google credentials. The directory sheet is the index; the tracker sheet is the record |
 | Sign-in | Per-user keys on a Team tab, as built. **Not** the checker's anonymous model: Post-It decides who may see commission and owner details, and records who posted what, so it needs to know who is calling (see §7) |
 | Look | The checker's design system, as CSS variables. Same palette, type scale, spacing, motion and focus rule. The two apps must read as one family |
 | Tools | Vite, React, TypeScript in strict mode. Vitest for rules, Playwright for screens, `cargo test` for Rust. Styling, router and package manager follow the IT head's conventions (open question 1) |

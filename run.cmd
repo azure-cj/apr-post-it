@@ -2,11 +2,7 @@
 rem APG Post-It: run the desktop app from source (development).
 rem Needs Node.js LTS and Rust. Installs the app's packages on first run.
 setlocal
-cd /d "%~dp0app"
-if errorlevel 1 (
-  echo Could not find the app folder next to run.cmd.
-  goto :fail
-)
+cd /d "%~dp0"
 
 where node >nul 2>nul
 if errorlevel 1 (

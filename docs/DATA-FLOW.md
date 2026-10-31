@@ -17,7 +17,7 @@ Neither, uniformly. There are four kinds of data and they want three different a
 ### Where the cache goes
 
 The property list is kept in the app's local store: one JSON file under
-`%LOCALAPPDATA%\com.alphapremier.apgpostit` (`app/src/platform/tauri.ts`). The key is not in it:
+`%LOCALAPPDATA%\com.alphapremier.apgpostit` (`src/platform/tauri.ts`). The key is not in it:
 that is in the operating system's credential store.
 
 `%LOCALAPPDATA%` rather than `%APPDATA%` on purpose: this is regenerable data and must not
@@ -25,12 +25,12 @@ follow a roaming profile around.
 
 **Invalidation** is by time. The list is refreshed on launch and every 15 minutes, and a refresh
 that succeeds drops every property detail held in memory, so the next one opened is fetched
-again (`app/src/core/directory.ts`). The directory sheet carries no `modifiedTime` to compare.
+again (`src/core/directory.ts`). The directory sheet carries no `modifiedTime` to compare.
 
 **Size** is capped — prune the oldest thumbnails past ~500 MB. Nothing else is big enough to matter.
 
 **Internal text never reaches the disk.** An intern's reply never contains it: the server leaves
-it out, decided by the key's role and never by the request (see `server/apps-script/README.md`).
+it out, decided by the key's role and never by the request (see `server/README.md`).
 A manager's is held in memory only, forgotten when the list is refreshed or the key changes, so
 a stolen laptop does not hand over every commission figure.
 
@@ -77,14 +77,14 @@ Commission: 3%
 
 The documents do not agree on one separator: `---`, `__`, `===`, a bar of box-drawing
 characters, or a heading such as `1 MONTH STANDARD COMMISSION`. So the text is cut at whichever
-comes first (D5). That is decided in exactly one file, `server/apps-script/Separators.gs`, a
+comes first (D5). That is decided in exactly one file, `server/Separators.gs`, a
 **required** file of the Apps Script project, which the directory builder, the web app and the
 desktop app all run unchanged (D13). Never copy its rules anywhere else.
 
 Metadata keys are allow-listed (`Category`, `Type`, `Location`) rather than "any `Key:` line at
 the top", so a listing that opens with `Contact: …` does not silently lose it. The server sends
 the text above the marker as it stands; reading the metadata off it is the app's
-(`app/src/core/posting-text.ts`).
+(`src/core/posting-text.ts`).
 
 ### A document with no marker
 
@@ -102,7 +102,7 @@ column names each listing with no document, no photos, or no marker, and its **C
 says which marker the text was cut at, so the result can be audited rather than trusted (D5).
 The `properties` list carries `hasIssues`, and an opened property its `issues`.
 
-When a property is opened, the app runs its pre-post checks (`app/src/core/checks.ts`) over the
+When a property is opened, the app runs its pre-post checks (`src/core/checks.ts`) over the
 public text: a price, a contact number, no commission wording, and a marker found. A missing
 marker blocks Copy (D6).
 

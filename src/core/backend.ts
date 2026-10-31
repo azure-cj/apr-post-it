@@ -1,6 +1,6 @@
 /**
  * The transport. Every byte between Post-It and Google goes through `call`:
- * one POST to the Apps Script web app (server/apps-script/Code.gs), whose reply
+ * one POST to the Apps Script web app (server/Code.gs), whose reply
  * is always `{ ok: true, ... }` or `{ ok: false, error, message? }`.
  *
  * Ported from PostIt.Core/Infrastructure/Google/ScriptClient.cs. Three rules

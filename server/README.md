@@ -28,7 +28,7 @@ All of these go into **one** Apps Script project:
 
 Apps Script gives every file in a project **one global scope**. A top-level name declared in
 two files breaks the project when it is a `const`, and silently replaces the other when it
-is a `function`. `app/src/server-tests` loads the three files into one scope the same way,
+is a `function`. `src/server-tests` loads the three files into one scope the same way,
 and fails if two of them declare the same name.
 
 ## Building the listing directory first
@@ -156,7 +156,7 @@ and the usual abbreviations ignored, as the app matches names.
 A listing posted, or logged as Pending, fewer than `COOLDOWN_DAYS` calendar days ago on
 Manila's calendar cannot be logged again. Pending counts because a post still waiting for its
 link must stop a second intern posting the same listing. The app predicts the same answer
-before it asks (`app/src/core/cooldown.ts`), but the server's answer is the one that holds,
+before it asks (`src/core/cooldown.ts`), but the server's answer is the one that holds,
 because it is given under the lock.
 
 ## Why there is a directory sheet
@@ -204,14 +204,14 @@ no per-user Google sign-in needed. `docs/ROLES.md` has the matrix and the conseq
 
 ## The app's side
 
-`app/src/core/backend.ts` POSTs `{ action, key, … }` as JSON to the `/exec` URL and turns
+`src/core/backend.ts` POSTs `{ action, key, … }` as JSON to the `/exec` URL and turns
 every refusal into a sentence a person can act on. `tracker.ts` and `directory.ts` read the
 replies. A logged post's date, time and Posted By are always taken from the reply, never from
 the PC's clock.
 
 ## Testing it
 
-`app/src/server-tests` runs these files in Node, in one shared scope, with every Google
+`src/server-tests` runs these files in Node, in one shared scope, with every Google
 service they use faked, including a Sheets that evaluates what it is given as Sheets does:
 
 ```

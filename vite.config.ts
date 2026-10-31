@@ -32,15 +32,16 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@server': fileURLToPath(new URL('../server/apps-script', import.meta.url)),
+      '@server': fileURLToPath(new URL('./server', import.meta.url)),
     },
   },
   clearScreen: false,
   server: {
     port: 1420,
     strictPort: true,
-    // server/apps-script sits beside app/, outside Vite's root.
-    fs: { allow: ['..'] },
+    // Rust's build output changes constantly and Windows locks files in it while
+    // compiling; watching it crashes the dev server (EBUSY). Vite needs none of it.
+    watch: { ignored: ['**/src-tauri/**'] },
   },
   build: { target: 'es2022', sourcemap: false },
   test: {

@@ -1,5 +1,5 @@
 /**
- * Pins server/apps-script/Separators.gs: the one place that decides where a
+ * Pins server/Separators.gs: the one place that decides where a
  * listing's postable text ends (D5, D13). The file under test is the file Apps
  * Script runs, linked in at build time, and both run it in V8, so what these
  * tests say of it is true on the server too.
@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { markerKind_, splitAtSeparator_ } from '@server/Separators.gs';
 
-const SOURCE = new URL('../../../server/apps-script/Separators.gs', import.meta.url);
+const SOURCE = new URL('../../server/Separators.gs', import.meta.url);
 
 // Not itself a marker, so a test that cuts above it cut at the line meant to.
 const PRIVATE = 'Mr. Reyes, 0917 123 4567';

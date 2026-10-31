@@ -4,7 +4,7 @@
  *
  * A leading block of `Category:` / `Type:` / `Location:` lines is metadata, not
  * posting text, and is read here. **Where the postable text ends is not decided
- * here.** It is decided once, in `server/apps-script/Separators.gs`, which the
+ * here.** It is decided once, in `server/Separators.gs`, which the
  * directory builder and the web app also use, linked in at build time (D13).
  *
  * Do not add a marker list to this file. A second list that drifted from the

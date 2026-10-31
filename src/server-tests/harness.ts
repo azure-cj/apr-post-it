@@ -1,7 +1,7 @@
 /**
  * Runs the Apps Script project in Node, the way Apps Script runs it.
  *
- * The .gs files are read from server/apps-script, concatenated in project
+ * The .gs files are read from server, concatenated in project
  * order and run in ONE node:vm context. That is the scope Apps Script gives a
  * project: every file shares one global scope, so Code.gs calls Separators.gs's
  * splitAtSeparator_ as a plain global, and a top-level name declared in two
@@ -34,11 +34,11 @@ import { HarnessError, MANILA, MANILA_OFFSET_MS, SheetsWorld } from './fake-shee
 export { HarnessError } from './fake-sheets';
 
 /**
- * server/apps-script, beside app/. POSTIT_APPS_SCRIPT_DIR points the tests at
+ * server/ at the repo root. POSTIT_APPS_SCRIPT_DIR points the tests at
  * another copy, such as the version deployed now, to see what it gets wrong.
  */
 export const SERVER_DIR =
-  process.env['POSTIT_APPS_SCRIPT_DIR'] ?? fileURLToPath(new URL('../../../server/apps-script/', import.meta.url));
+  process.env['POSTIT_APPS_SCRIPT_DIR'] ?? fileURLToPath(new URL('../../server/', import.meta.url));
 
 /** The project's files in the order Apps Script loads them. */
 export const PROJECT_FILES: readonly string[] = ['Separators.gs', 'Code.gs', 'BuildDirectory.gs'];

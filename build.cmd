@@ -1,11 +1,7 @@
 @echo off
 rem APG Post-It: install packages, run the tests, and build the Windows installer.
 setlocal
-cd /d "%~dp0app"
-if errorlevel 1 (
-  echo Could not find the app folder next to build.cmd.
-  goto :fail
-)
+cd /d "%~dp0"
 
 where node >nul 2>nul
 if errorlevel 1 (

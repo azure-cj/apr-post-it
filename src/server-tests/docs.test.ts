@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { loadProject, readServerFile } from './harness';
 
 const README = readServerFile('README.md');
-const DATA_FLOW = readFileSync(new URL('../../../docs/DATA-FLOW.md', import.meta.url), 'utf8');
+const DATA_FLOW = readFileSync(new URL('../../docs/DATA-FLOW.md', import.meta.url), 'utf8');
 
 /** The actions Code.gs's route() answers. */
 function routedActions(): string[] {
@@ -24,7 +24,7 @@ function documentedActions(): Map<string, string> {
 }
 
 describe.each([
-  ['server/apps-script/README.md', README],
+  ['server/README.md', README],
   ['docs/DATA-FLOW.md', DATA_FLOW],
 ])('%s', (_name, doc) => {
   it('describes no parameter or action the server does not have', () => {
