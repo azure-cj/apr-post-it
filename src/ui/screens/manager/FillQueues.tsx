@@ -38,7 +38,7 @@ export const SKIP_WORDS: Record<SkipReason, string> = {
  * until Save all.
  */
 export function FillQueues({ interns, properties, posts, assignments, rules, today, onSave, onSaved, onClose }: FillQueuesProps) {
-  const [perText, setPerText] = useState(String(DEFAULT_PER_INTERN));
+  const [perText, setPerText] = useState(String(rules.perIntern ?? DEFAULT_PER_INTERN));
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set(interns));
   const [date, setDate] = useState(addDays(today, 1));
   const [keep, setKeep] = useState(true);

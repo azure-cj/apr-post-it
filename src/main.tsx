@@ -5,6 +5,7 @@ import './theme/base.css';
 import { setPlatform, type Platform } from './platform';
 import { App } from './ui/App';
 import { AppStateProvider } from './ui/state';
+import { applySavedTheme } from './ui/state/theme';
 
 /**
  * Tauri's platform inside the app. In a plain browser during development, the
@@ -37,6 +38,8 @@ async function start(): Promise<void> {
     return;
   }
   setPlatform(platform);
+  // Before the first render, so the first frame is already in the chosen theme.
+  await applySavedTheme(platform);
   createRoot(root).render(
     <StrictMode>
       <AppStateProvider platform={platform}>

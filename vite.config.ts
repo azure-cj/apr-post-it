@@ -35,6 +35,8 @@ export default defineConfig({
       '@server': fileURLToPath(new URL('./server', import.meta.url)),
     },
   },
+  // Settings → App → About shows when this copy was built.
+  define: { __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)) },
   clearScreen: false,
   server: {
     port: 1420,

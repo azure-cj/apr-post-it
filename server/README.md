@@ -11,7 +11,7 @@ runs **as the owner** and returns JSON. That one decision buys three things:
   at all, and a document nobody has separated reaches an intern as no text, marked
   `withheld` (below). The **role** decides this, from the key. Nothing in the request can
   ask for more.
-* **The 7-day cooldown is a real guarantee.** `logPost` checks it under `LockService`,
+* **The cooldown is a real guarantee.** `logPost` checks it under `LockService`,
   so two interns saving the same property at the same moment cannot both get through.
   A client-side check can always be raced or bypassed.
 
@@ -23,7 +23,7 @@ All of these go into **one** Apps Script project:
 |---|---|
 | `Code.gs` | The web app: every action below. |
 | `Separators.gs` | **Required.** The one place that decides where a listing's postable text ends (D13). `Code.gs` calls it whenever a property is opened; without it, opening a property fails with "Separators.gs is missing from this Apps Script project", and `SETUP` says the same. Paste it unchanged. It is pure ASCII so the editor cannot corrupt a rule, and its rules are never copied into another file. |
-| `BuildDirectory.gs` | Builds the directory sheet from the Drive library (`START`, `STATUS`, `CONTINUE`, `STOP`, `RESTART`, `VERIFY`). |
+| `BuildDirectory.gs` | Builds the directory sheet from the Drive library (`START`, `STATUS`, `CONTINUE`, `STOP`, `RESTART`, `VERIFY`, `FIND_ROOT`), and `RESTART_FROM_APP`, which the app's rebuild button runs on a trigger. |
 | `appsscript.json` | The manifest. |
 
 Apps Script gives every file in a project **one global scope**. A top-level name declared in
@@ -51,7 +51,7 @@ read rather than hundreds of Drive calls.
 * **The tracker**: the one the company already uses. Posts and Assignments rows go here,
   into its existing columns. Do not make a new one.
 * **A private admin sheet**: create this one, and share it with nobody. It holds the
-  script's `Team` tab: `Name`, `Email`, `Role`, `Key`, `FB Accounts` (the FB broker
+  script's `Settings` tab (the rules, below) and its `Team` tab: `Name`, `Email`, `Role`, `Key`, `FB Accounts` (the FB broker
   name(s), the Facebook account name the person posts as; comma separated), `FB Profile Link`
   and `Active`. Columns are found by header name. A tab made before `FB Profile Link`
   existed keeps working: the column is added after the last one the first time a Team row is
@@ -79,7 +79,9 @@ read rather than hundreds of Drive calls.
      `CFG.SHEET_ID` must name the same spreadsheet.
    * `POSTS_TAB` / `ASSIGNMENTS_TAB`: **must match the real tab names.**
    * `SHARED_KEY`: a long random string, used only until the Team tab has its first row.
-   * `COOLDOWN_DAYS` and `TZ`: 7 days, on Manila's calendar.
+   * `COOLDOWN_DAYS`, `REPOST_DUE_DAYS` and `PER_INTERN`: the rules' **defaults** only
+     (7, 14 and 20). The live values are set from the app and kept on the Settings tab
+     (below). `TZ`: Manila's calendar.
    * `CHECKER_INDEX_CSV_URL`: leave it as it is, the listing checker's published Index CSV
      (below). `''` switches the join off.
 5. Check `CFG` at the top of `BuildDirectory.gs` (`ROOT_FOLDER_ID`, `SHEET_ID`), and run
@@ -123,7 +125,7 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 
 | Action | Who | What it does |
 |---|---|---|
-| `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`. |
+| `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`; also `version` (`SERVER_VERSION` at the top of `Code.gs`) and `rules`: `{ cooldownDays, repostDueDays, perIntern }`, the live values (below). |
 | `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. |
 | `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. The checker's fields too, joined as for `properties`. |
 | `posts` | everyone | The Posts tab as rows, every value text. An intern gets only their own. |
@@ -138,6 +140,9 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | `newKey` | Admin | `{ name }`: gives the person a new key, replying `{ key }`. The old one stops working at once. |
 | `saveQueue` | Admin | Replaces one person's queue for one date. |
 | `saveQueues` | Admin | `{ date, queues: [{ assignedTo, items: [{ propertyName, propertyId?, status? }] }] }`: replaces several interns' queues for one date, all or none, under one lock, replying `{ saved }`. Every `assignedTo` must be an active Intern on the Team tab (`'bad-intern'`). |
+| `setRules` | Admin | `{ cooldownDays?, repostDueDays?, perIntern? }`: changes only the rules sent, each a whole number (cooldown 1–60 days, repost 1–120 days, per intern 1–100), else `'bad-rules'` (with `field`) and nothing is written. Replies `{ rules }`, all three as they now are. |
+| `rebuildDirectory` | Admin | Schedules `BuildDirectory.gs`'s `RESTART` on a one-off trigger (`RESTART_FROM_APP`) about 10 seconds later and replies `{ started: true }` at once. `'busy'` while a build is running or already scheduled; `'no-builder'` when `BuildDirectory.gs` is not in the project. |
+| `directoryStatus` | Admin | `{ running, done, total, builtAt }`: whether a build is scheduled or under way, how many listings it has written of how many, and when the last one finished (ISO, Manila; `''` before the first). |
 | `indexCheck` | Admin | Compares the directory with the checker's index, read fresh: `checkedAt`, `directoryCount`, `checkerCount`, `directoryOnly` and `sold` (`{ id, name }`), and `checkerOnly` (`{ id, name, path }`). `'checker-off'` or `'checker-unavailable'` when it cannot. |
 
 Two things in a reply come from the key, never from the request:
@@ -237,13 +242,76 @@ by its folder id when both have one, so renaming a folder breaks nothing. A row 
 such as every row logged before the column was added, is matched by its title, with case,
 accents, punctuation and the usual abbreviations ignored, as the app matches names.
 
+## The rules: the Settings tab
+
+Three rules are the admin's to set, from the app's Settings page (`setRules`):
+
+| Key | What | Default | Range |
+|---|---|---|---|
+| cooldownDays | Days before a listing may be posted again. The server's own check uses it. | 7 | 1–60 |
+| repostDueDays | Days without a post after which a listing is due for a repost. | 14 | 1–120 |
+| perIntern | How many items the planner fills each intern's queue with by default. | 20 | 1–100 |
+
+They are kept on the **Settings** tab of the private admin sheet, two columns, `Key` and
+`Value`, one row per rule, written as text. The tab is made the first time a rule is saved.
+Every reader, `ping` and the cooldown check alike, reads them through one function, cached
+for 30 seconds; a save clears that cache, so it holds from the next call. A rule the tab does
+not have, or has as anything other than a whole number in its range, is CONFIG's default.
+You may type a value on the tab by hand; it takes effect within half a minute.
+
+`ping` sends the rules with every sign-in, and the app uses them in place of its own
+defaults.
+
 ## The cooldown
 
-A listing posted, or logged as Pending, fewer than `COOLDOWN_DAYS` calendar days ago on
-Manila's calendar cannot be logged again. Pending counts because a post still waiting for its
+A listing posted, or logged as Pending, fewer than `cooldownDays` (the rule above) calendar
+days ago on Manila's calendar cannot be logged again. Pending counts because a post still waiting for its
 link must stop a second intern posting the same listing. The app predicts the same answer
 before it asks (`src/core/cooldown.ts`), but the server's answer is the one that holds,
 because it is given under the lock.
+
+## Rebuilding the directory from the app
+
+The app's Settings page has a button to rebuild the directory. A full rebuild takes
+minutes, longer than a web request may run, so `rebuildDirectory` only sets a one-off
+trigger for `RESTART_FROM_APP` (in `BuildDirectory.gs`) about 10 seconds later, and
+answers at once. That trigger deletes itself and runs `RESTART`, exactly as pressing Run
+on `RESTART` would: the scan, then `CONTINUE` in batches on its own triggers. While the
+scan runs, the script property `rebuildStarted` marks it (forgotten after 10 minutes, in
+case Apps Script stopped it), and once queued, the properties `cursor` and `total` say how
+far it has got. When a build finishes, `CONTINUE` writes the time to the property
+`builtAt`. `directoryStatus` reports all of this, and `rebuildDirectory` refuses (`busy`)
+while a build is scheduled, scanning, or part way through. `STOP` in the editor still
+pauses it.
+
+## What to run from the editor
+
+The editor's **Run** list shows every function whose name does not end in `_`, and the app's
+actions used to be in it, where pressing Run on one did nothing useful. Every function only
+the web app calls now ends in `_`, so the list holds only these:
+
+| Function | When |
+|---|---|
+| SETUP | After pasting the files: checks everything the web app depends on. |
+| ADD_PERSON | Once, for your first admin key (above). |
+| START | To build the directory the first time, or after a `STOP`. |
+| STATUS | How far a build has got. |
+| STOP, CONTINUE | Pause and resume a build. |
+| RESTART | Throw a build away and start again. The app's rebuild button does the same. |
+| VERIFY | After a build: is everything in Drive in the sheet? |
+| FIND_ROOT | When `START` cannot open the library folder. |
+
+`doGet` and `doPost` are the web app, `onOpen` and `promptAddTeamMember` the spreadsheet
+menu, and `RESTART_FROM_APP` the app's rebuild trigger: none of these is for the Run button.
+A trigger can only call a function without the `_`, which is why those keep their names. A
+test in `src/server-tests` holds the list to exactly these.
+
+## The server's version
+
+`SERVER_VERSION` at the top of `Code.gs` (`yyyy-MM-dd.n`) is sent with every `ping`. The
+app holds the version it was built against, `EXPECTED_SERVER_VERSION` in `src/config.ts`,
+and says when the deployment is older (a test keeps the two equal). Change both whenever an
+action or a reply changes, then deploy a New version.
 
 ## Why there is a directory sheet
 

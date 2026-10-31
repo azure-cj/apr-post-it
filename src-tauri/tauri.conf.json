@@ -22,8 +22,7 @@
         "resizable": true,
         "decorations": false,
         "visible": false,
-        "backgroundColor": "#0E0C08",
-        "theme": "Dark",
+        "backgroundColor": "#121212",
         "dragDropEnabled": false
       }
     ],

@@ -26,3 +26,10 @@ const fromEnv = typeof import.meta.env.VITE_SCRIPT_URL === 'string' ? import.met
 
 /** The web app's /exec link for this build, or '' when none is built in. */
 export const BUILT_IN_SCRIPT_URL: string = fromEnv || PASTED_SCRIPT_URL.trim();
+
+/**
+ * The server version this app was built against: SERVER_VERSION at the top of
+ * server/Code.gs, which ping sends. Change both together (a test holds them
+ * equal). A server older than this is told to be redeployed (serverVersionStatus).
+ */
+export const EXPECTED_SERVER_VERSION = '2026-10-31.1';

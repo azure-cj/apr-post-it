@@ -24,7 +24,7 @@ import { cooldown } from './cooldown';
 import { normalize } from './matcher';
 import { readIssues, type DirectoryRow, type Rules } from './summary';
 import type { QueueItemInput } from './tracker';
-import { queueStatus, type Assignment, type PostLogEntry } from './types';
+import { DEFAULT_RULES, queueStatus, type Assignment, type PostLogEntry } from './types';
 
 export type SkipReason = 'sold' | 'noSeparator' | 'noDocument' | 'queued' | 'cooldown';
 
@@ -38,7 +38,7 @@ export interface PlanInput {
   readonly assignments: readonly Assignment[];
   /** Exactly as the Team tab has them: queues are matched with ===. */
   readonly interns: readonly string[];
-  /** Default 20. */
+  /** Default: the rules' `perIntern` (the server's, from ping), else DEFAULT_PER_INTERN. */
   readonly perIntern?: number | undefined;
   /** yyyy-MM-dd */
   readonly date: string;
@@ -63,7 +63,16 @@ export interface Plan {
   readonly skipped: { readonly reason: SkipReason; readonly count: number }[];
 }
 
-export const DEFAULT_PER_INTERN = 20;
+/** Used only when neither the input nor the rules say: the rules' own default. */
+export const DEFAULT_PER_INTERN = DEFAULT_RULES.perIntern;
+
+/** How many items per intern a plan aims for: the input's, else the rules', else the default. */
+export function perInternOf(input: Pick<PlanInput, 'perIntern' | 'rules'>): number {
+  for (const value of [input.perIntern, input.rules.perIntern]) {
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value));
+  }
+  return DEFAULT_PER_INTERN;
+}
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -139,7 +148,7 @@ function byPriority(a: Candidate, b: Candidate): number {
 export function planQueues(input: PlanInput): Plan {
   const { date, rules } = input;
   if (!isDay(date)) throw new Error(`Expected a yyyy-MM-dd date, got "${date}".`);
-  const perIntern = Math.max(0, Math.floor(input.perIntern ?? DEFAULT_PER_INTERN));
+  const perIntern = perInternOf(input);
 
   const interns: string[] = [];
   for (const name of input.interns) if (name.trim() && !interns.includes(name)) interns.push(name);

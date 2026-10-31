@@ -94,7 +94,7 @@ describe('with a link built into this version', () => {
 
   it('shows the link read-only in Settings, marked as built in, with Copy', async () => {
     const platform = fakeServer();
-    renderApp({ platform, user: admin, path: '/settings' });
+    renderApp({ platform, user: admin, path: '/settings?tab=app' });
     const link = screen.getByLabelText('Web app link') as HTMLInputElement;
     // The test signs in with another link; the built-in one wins.
     expect(link.value).toBe(BUILT_IN);
@@ -117,7 +117,7 @@ describe('with no link built in', () => {
 
   it('keeps a saved link, and Settings does not call it built in', () => {
     expect(parseSettings(JSON.stringify({ scriptUrl: OLD })).scriptUrl).toBe(OLD);
-    renderApp({ platform: fakeServer(), user: admin, path: '/settings' });
+    renderApp({ platform: fakeServer(), user: admin, path: '/settings?tab=app' });
     expect((screen.getByLabelText('Web app link') as HTMLInputElement).value).toBe(EXEC);
     expect(screen.queryByText(/Built into this version of the app/)).toBeNull();
   });

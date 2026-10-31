@@ -159,6 +159,8 @@ export interface Settings {
   readonly scriptKey: string;
   readonly cooldownDays: number;
   readonly repostDueDays: number;
+  /** How many items the planner fills each intern's queue with by default. */
+  readonly perIntern: number;
 }
 
 export const defaultSettings: Settings = {
@@ -166,7 +168,52 @@ export const defaultSettings: Settings = {
   scriptKey: '',
   cooldownDays: 7,
   repostDueDays: 14,
+  perIntern: 20,
 };
+
+/**
+ * The rules the admin sets from the app (server action `setRules`), kept on
+ * the Settings tab of the admin sheet and sent with every `ping`. The server's
+ * cooldown check uses the same values.
+ */
+export interface ServerRules {
+  /** Days before a listing may be posted again. */
+  readonly cooldownDays: number;
+  /** Days without a post after which a listing is due for a repost. */
+  readonly repostDueDays: number;
+  /** The planner's default number of items per intern. */
+  readonly perIntern: number;
+}
+
+/** The defaults, which are also Code.gs's CONFIG defaults. */
+export const DEFAULT_RULES: ServerRules = Object.freeze({
+  cooldownDays: defaultSettings.cooldownDays,
+  repostDueDays: defaultSettings.repostDueDays,
+  perIntern: defaultSettings.perIntern,
+});
+
+/** The whole numbers each rule may be, inclusive. Code.gs's ruleSpecs_ holds the same. */
+export const RULE_LIMITS: Readonly<Record<keyof ServerRules, { readonly min: number; readonly max: number; readonly label: string }>> =
+  Object.freeze({
+    cooldownDays: { min: 1, max: 60, label: 'The cooldown' },
+    repostDueDays: { min: 1, max: 120, label: 'The repost age' },
+    perIntern: { min: 1, max: 100, label: 'Items per intern' },
+  });
+
+/** How the server's version compares with the one this app was built for. */
+export type ServerVersionStatus = 'current' | 'behind' | 'unknown';
+
+/** The `directoryStatus` reply: how a rebuild of the directory sheet is going. */
+export interface DirectoryBuildStatus {
+  /** A build is scheduled or under way. */
+  readonly running: boolean;
+  /** Listings written so far. */
+  readonly done: number;
+  /** Listings queued in this build. */
+  readonly total: number;
+  /** When the last build finished, as the server sent it (ISO, Manila). Blank when none has. */
+  readonly builtAt: string;
+}
 
 /** Thrown for anything the user should read. Everything else is a bug. */
 export class UserFacingError extends Error {

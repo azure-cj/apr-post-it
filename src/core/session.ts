@@ -7,16 +7,48 @@
  * Ported from BackendConnection.cs.
  */
 
-import { asList, asText, type Backend } from './backend';
-import { UserFacingError, type Role, type User } from './types';
+import { EXPECTED_SERVER_VERSION } from '../config';
+import { asList, asRecord, asText, type Backend, type Reply } from './backend';
+import {
+  DEFAULT_RULES,
+  RULE_LIMITS,
+  UserFacingError,
+  type Role,
+  type ServerRules,
+  type ServerVersionStatus,
+  type User,
+} from './types';
+
+/** What `ping` says about the server itself, besides who you are. */
+export interface ServerInfo {
+  /** Code.gs's SERVER_VERSION. Blank from a server older than v4, which sends none. */
+  readonly version: string;
+  /** The live rules. Null from a server that sends none: then the app's own defaults apply. */
+  readonly rules: ServerRules | null;
+}
+
+/** Who the key belongs to, and what the server said about itself. */
+export interface PingResult {
+  readonly user: User;
+  readonly server: ServerInfo;
+}
 
 /**
  * Asks the server who this key belongs to. Rejects with a sentence when the
  * key is unknown, the server cannot be reached, or nothing is set up yet.
  */
 export async function signIn(backend: Pick<Backend, 'call'>): Promise<User> {
-  const reply = await backend.call('ping');
+  return (await ping(backend)).user;
+}
 
+/** `signIn`, with the server's version and rules from the same reply. */
+export async function ping(backend: Pick<Backend, 'call'>): Promise<PingResult> {
+  const reply = await backend.call('ping');
+  return { user: readUser(reply), server: readServerInfo(reply) };
+}
+
+/** The person a `ping` reply names. Rejects a reply that names nobody. */
+export function readUser(reply: Reply): User {
   // Kept exactly as sent: the server matches this name with === against the
   // tracker's Posted By and Assigned To.
   const name = asText(reply['name']);
@@ -26,6 +58,49 @@ export async function signIn(backend: Pick<Backend, 'call'>): Promise<User> {
     );
   }
   return { name, role: parseRole(reply['role']), fbAccounts: readAccounts(reply['fbAccounts']) };
+}
+
+/** The version and rules a `ping` reply carries. Anything missing or damaged reads as absent. */
+export function readServerInfo(reply: Reply): ServerInfo {
+  return { version: asText(reply['version']).trim(), rules: readRules(reply['rules']) };
+}
+
+/**
+ * The rules as the server sent them, or null when it sent none. A field that
+ * is missing, or not a whole number in its range, is its default: one bad
+ * cell on the Settings tab must not stop anyone working.
+ */
+export function readRules(value: unknown): ServerRules | null {
+  const raw = asRecord(value);
+  if (!raw) return null;
+  const rule = (name: keyof ServerRules): number => {
+    const v = raw[name];
+    const n = typeof v === 'number' ? v : typeof v === 'string' && /^\s*\d+\s*$/.test(v) ? Number(v) : NaN;
+    const { min, max } = RULE_LIMITS[name];
+    return Number.isInteger(n) && n >= min && n <= max ? n : DEFAULT_RULES[name];
+  };
+  return { cooldownDays: rule('cooldownDays'), repostDueDays: rule('repostDueDays'), perIntern: rule('perIntern') };
+}
+
+// yyyy-MM-dd.n, as SERVER_VERSION is written.
+const VERSION = /^(\d{4})-(\d{2})-(\d{2})\.(\d+)$/;
+
+/**
+ * How the server's version compares with the one this app was built for:
+ * 'current' when it is that version or newer, 'behind' when it is older (the
+ * admin should deploy the latest Code.gs), 'unknown' when it sent none or one
+ * that cannot be read (a server older than versions).
+ */
+export function serverVersionStatus(version: string, expected: string = EXPECTED_SERVER_VERSION): ServerVersionStatus {
+  const have = VERSION.exec(version.trim());
+  const want = VERSION.exec(expected.trim());
+  if (!have || !want) return 'unknown';
+  for (let i = 1; i <= 4; i++) {
+    const a = Number(have[i]);
+    const b = Number(want[i]);
+    if (a !== b) return a > b ? 'current' : 'behind';
+  }
+  return 'current';
 }
 
 /** Anything unrecognised is an intern: the least power, not the most. */

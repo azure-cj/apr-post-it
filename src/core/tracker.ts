@@ -18,8 +18,11 @@
 
 import { asList, asRecord, asText, unreadableReply, type Backend } from './backend';
 import { facebookProfileProblem, normalizeProfileLink, postLinkProblem } from './links';
-import { parseRole, readAccounts } from './session';
+import { parseRole, readAccounts, readRules } from './session';
 import {
+  RULE_LIMITS,
+  type DirectoryBuildStatus,
+  type ServerRules,
   type IndexCheck,
   type Role,
   type TeamMember,
@@ -41,7 +44,7 @@ export interface AddPersonResult {
 }
 
 export const PROFILE_LINK_DROPPED =
-  "The profile link wasn't saved: the web app is an older version. Deploy a New version in Apps Script, then use Edit to add it.";
+  "The profile link wasn't saved: the web app is an older version. Deploy a New version in Apps Script, then open their row to add it.";
 
 export interface TrackerDeps {
   readonly backend: Pick<Backend, 'call'>;
@@ -166,6 +169,23 @@ export interface Tracker {
 
   /** How the Directory sheet and the listing checker's index disagree (Admin). */
   indexCheck(): Promise<IndexCheck>;
+
+  /**
+   * Changes the rules (Admin): only the fields given, each a whole number in
+   * its range (RULE_LIMITS), checked here before any request. Resolves with
+   * every rule as the server now has it.
+   */
+  setRules(changes: Partial<ServerRules>): Promise<ServerRules>;
+
+  /**
+   * Starts rebuilding the directory sheet from Drive (Admin). The server
+   * schedules it and answers at once; follow it with `directoryStatus`.
+   * Rejects with code 'busy' when a rebuild is already running.
+   */
+  rebuildDirectory(): Promise<{ readonly started: true }>;
+
+  /** How a rebuild of the directory is going, and when the last one finished (Admin). */
+  directoryStatus(): Promise<DirectoryBuildStatus>;
 }
 
 const ONLY_THE_LINK =
@@ -438,6 +458,38 @@ export function createTracker(deps: TrackerDeps): Tracker {
         checkerOnly: readNamed(checkerOnly),
         sold: readNamed(sold).map(({ id, name }) => ({ id, name })),
       };
+    },
+
+    async setRules(changes: Partial<ServerRules>): Promise<ServerRules> {
+      const payload: Record<string, number> = {};
+      for (const name of Object.keys(RULE_LIMITS) as (keyof ServerRules)[]) {
+        const value = changes[name];
+        if (value === undefined) continue;
+        const { min, max, label } = RULE_LIMITS[name];
+        if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+          throw new UserFacingError(`${label} must be a whole number from ${min} to ${max}.`);
+        }
+        payload[name] = value;
+      }
+      const reply = await backend.call('setRules', payload);
+      const rules = readRules(reply['rules']);
+      if (!rules) throw unreadableReply('setRules');
+      return rules;
+    },
+
+    async rebuildDirectory(): Promise<{ readonly started: true }> {
+      const reply = await backend.call('rebuildDirectory');
+      if (reply['started'] !== true) throw unreadableReply('rebuildDirectory');
+      return { started: true };
+    },
+
+    async directoryStatus(): Promise<DirectoryBuildStatus> {
+      const reply = await backend.call('directoryStatus');
+      const running = reply['running'];
+      if (typeof running !== 'boolean') throw unreadableReply('directoryStatus');
+      const done = count(reply['done']);
+      const total = count(reply['total']);
+      return { running, done: Math.min(done, total || done), total, builtAt: asText(reply['builtAt']).trim() };
     },
   };
 }

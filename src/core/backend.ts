@@ -37,7 +37,10 @@ export type Action =
   | 'updatePerson'
   | 'newKey'
   | 'saveQueues'
-  | 'indexCheck';
+  | 'indexCheck'
+  | 'setRules'
+  | 'rebuildDirectory'
+  | 'directoryStatus';
 
 /** Where the web app is, and who is asking. Blank, null or missing means "not set". */
 export interface BackendConfig {
@@ -126,6 +129,9 @@ export type BackendErrorCode =
   | 'bad-active'
   | 'bad-accounts'
   | 'name-required'
+  | 'bad-rules'
+  // rebuildDirectory: BuildDirectory.gs is not in the Apps Script project.
+  | 'no-builder'
   // The listing checker's index (indexCheck): not a failure of ours, nothing to fix here.
   | 'checker-off'
   | 'checker-unavailable'
@@ -206,6 +212,9 @@ const DOING: Readonly<Record<Action, string>> = {
   newKey: 'make a new key',
   saveQueues: 'save the queues',
   indexCheck: 'compare the directory with the checker',
+  setRules: 'save the rules',
+  rebuildDirectory: 'start rebuilding the directory',
+  directoryStatus: 'check the directory rebuild',
 };
 
 /** Completes "Google sent … in a form Post-It could not read". */
@@ -226,6 +235,9 @@ const WHAT: Readonly<Record<Action, string>> = {
   newKey: 'the new key',
   saveQueues: 'its answer',
   indexCheck: 'the comparison',
+  setRules: 'the rules',
+  rebuildDirectory: 'its answer',
+  directoryStatus: 'the rebuild\'s progress',
 };
 
 /** Calls that change the sheet. When one times out it may still have gone through. */
@@ -239,6 +251,8 @@ const WRITES: ReadonlySet<Action> = new Set<Action>([
   'updatePerson',
   'newKey',
   'saveQueues',
+  'setRules',
+  'rebuildDirectory',
 ]);
 
 const TIMED_OUT = Symbol('timed out');
@@ -396,6 +410,10 @@ function refusal(reply: Reply, action: Action): BackendError {
       return new BackendError('cooldown', action, theirs(fallback), { lastPosted, nextAllowed });
     }
     case 'busy':
+      // A rebuild already running is not a moment's wait: say so, with the server's count.
+      if (action === 'rebuildDirectory') {
+        return new BackendError('busy', action, theirs('The directory is already being rebuilt.'));
+      }
       return new BackendError('busy', action, 'Someone else is saving right now. Try again in a moment.');
     case 'notfound':
       return new BackendError('notfound', action,
@@ -430,6 +448,12 @@ function refusal(reply: Reply, action: Action): BackendError {
       return new BackendError('bad-active', action, 'Choose active or not.');
     case 'name-required':
       return new BackendError('name-required', action, "Type the person's name.");
+    // The server's sentence names the rule and its range.
+    case 'bad-rules':
+      return new BackendError('bad-rules', action, theirs('Each rule must be a whole number in its range.'));
+    case 'no-builder':
+      return new BackendError('no-builder', action,
+        theirs('BuildDirectory.gs is missing from the Apps Script project, so the directory cannot be rebuilt from here.'));
     case 'checker-off':
       return new BackendError('checker-off', action, 'The listings check is turned off.');
     case 'checker-unavailable':

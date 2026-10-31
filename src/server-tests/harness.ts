@@ -9,7 +9,8 @@
  *
  * Every service Code.gs touches is faked — SpreadsheetApp (fake-sheets.ts),
  * LockService, CacheService, Utilities, ContentService, DocumentApp, DriveApp,
- * UrlFetchApp (FakeWeb), Session and Logger — and each keeps the real one's rules wherever Code.gs
+ * UrlFetchApp (FakeWeb), ScriptApp's triggers (FakeTriggers),
+ * PropertiesService, Session and Logger — and each keeps the real one's rules wherever Code.gs
  * could trip on them. A fake kinder than Google hides the bugs it is here to
  * find.
  *
@@ -340,6 +341,152 @@ function cacheKey(key: unknown): string {
   return key;
 }
 
+// ------------------------------------------------------------------ PropertiesService
+
+const SIGNATURE = (method: string): Error =>
+  new Error(`Exception: The parameters don't match the method signature for ${method}.`);
+
+/** The script's properties: text keys to text values, kept across executions. */
+export class FakeProperties {
+  readonly values = new Map<string, string>();
+
+  readonly service = Object.freeze({
+    getScriptProperties: () => this.#store,
+  });
+
+  readonly #store = Object.freeze({
+    getProperty: (key: unknown): string | null => {
+      if (typeof key !== 'string') throw SIGNATURE('PropertiesService.Properties.getProperty');
+      return this.values.get(key) ?? null;
+    },
+    // A value must be text: setProperty('cursor', 3) is refused here, as a
+    // number would come back from getProperty as the text "3.0" in Apps Script.
+    setProperty: (key: unknown, value: unknown): object => {
+      if (typeof key !== 'string' || typeof value !== 'string') throw SIGNATURE('PropertiesService.Properties.setProperty');
+      this.values.set(key, value);
+      return this.#store;
+    },
+    setProperties: (properties: unknown, deleteAllOthers: unknown = false): object => {
+      if (typeof properties !== 'object' || properties === null) throw SIGNATURE('PropertiesService.Properties.setProperties');
+      const entries = Object.entries(properties as Record<string, unknown>);
+      if (entries.some(([, v]) => typeof v !== 'string')) throw SIGNATURE('PropertiesService.Properties.setProperties');
+      if (deleteAllOthers === true) this.values.clear();
+      for (const [k, v] of entries) this.values.set(k, v as string);
+      return this.#store;
+    },
+    deleteProperty: (key: unknown): object => {
+      if (typeof key !== 'string') throw SIGNATURE('PropertiesService.Properties.deleteProperty');
+      this.values.delete(key);
+      return this.#store;
+    },
+    deleteAllProperties: (): object => {
+      this.values.clear();
+      return this.#store;
+    },
+    getProperties: (): Record<string, string> => Object.fromEntries(this.values),
+    getKeys: (): string[] => [...this.values.keys()],
+  });
+}
+
+// ------------------------------------------------------------------ ScriptApp's triggers
+
+/** A trigger as a test sees it. */
+export interface TriggerInfo {
+  readonly id: string;
+  readonly handler: string;
+  /** When it fires (ms since 1970). */
+  readonly at: number;
+}
+
+/** Apps Script's limit on triggers per user per script. */
+const TRIGGER_LIMIT = 20;
+
+/**
+ * One-off time triggers, as BuildDirectory.gs and Code.gs make them:
+ * newTrigger(name).timeBased().after(ms).create(). A trigger can only call a
+ * top-level function whose name has no trailing underscore, as in Apps Script,
+ * where such a function is private. Recurring schedules are not faked.
+ */
+export class FakeTriggers {
+  readonly #list: TriggerInfo[] = [];
+  readonly #now: () => number;
+  readonly #callable: (name: string) => boolean;
+  #next = 1;
+
+  constructor(now: () => number, callable: (name: string) => boolean) {
+    this.#now = now;
+    this.#callable = callable;
+  }
+
+  /** Every trigger waiting, oldest first. */
+  list(): TriggerInfo[] {
+    return [...this.#list];
+  }
+
+  /** Removes the trigger, as it fires. */
+  take(id: string): void {
+    const i = this.#list.findIndex((t) => t.id === id);
+    if (i !== -1) this.#list.splice(i, 1);
+  }
+
+  #view(t: TriggerInfo): object {
+    return Object.freeze({
+      getUniqueId: () => t.id,
+      getHandlerFunction: () => t.handler,
+      getEventType: () => 'CLOCK',
+      getTriggerSource: () => 'CLOCK',
+    });
+  }
+
+  #create(handler: string, at: number): object {
+    if (!this.#callable(handler)) {
+      throw new HarnessError(
+        `A trigger for ${handler} would never run: it must name a top-level function with no trailing underscore.`,
+      );
+    }
+    if (this.#list.length >= TRIGGER_LIMIT) {
+      throw new Error('Exception: This script has too many triggers. Triggers must be deleted from the script before more can be added.');
+    }
+    const t: TriggerInfo = { id: `trigger-${this.#next++}`, handler, at };
+    this.#list.push(t);
+    return this.#view(t);
+  }
+
+  readonly scriptApp = Object.freeze({
+    newTrigger: (functionName: unknown): object => {
+      if (typeof functionName !== 'string') throw SIGNATURE('ScriptApp.newTrigger');
+      return Object.freeze({
+        timeBased: () => {
+          let at: number | null = null;
+          const builder = {
+            after: (ms: unknown) => {
+              if (typeof ms !== 'number' || !(ms >= 0)) throw SIGNATURE('ScriptApp.ClockTriggerBuilder.after');
+              at = this.#now() + ms;
+              return builder;
+            },
+            at: (date: unknown) => {
+              if (Object.prototype.toString.call(date) !== '[object Date]') throw SIGNATURE('ScriptApp.ClockTriggerBuilder.at');
+              at = (date as Date).getTime();
+              return builder;
+            },
+            create: () => {
+              if (at === null) throw new HarnessError('The fake makes one-off triggers only: call after() or at() before create().');
+              return this.#create(functionName, at);
+            },
+          };
+          return builder;
+        },
+      });
+    },
+    getProjectTriggers: (): object[] => this.#list.map((t) => this.#view(t)),
+    deleteTrigger: (trigger: unknown): void => {
+      const id = (trigger as { getUniqueId?: () => string } | null)?.getUniqueId?.();
+      if (typeof id !== 'string') throw SIGNATURE('ScriptApp.deleteTrigger');
+      this.take(id);
+    },
+  });
+}
+
 // ------------------------------------------------------------------ ContentService
 
 const MIME_TYPES = Object.freeze({
@@ -630,6 +777,16 @@ export interface Project {
   readonly web: FakeWeb;
   readonly clock: Clock;
   readonly cache: { clear(): void };
+  /** The script properties, as PropertiesService keeps them. */
+  readonly properties: Map<string, string>;
+  /** The triggers waiting to fire. */
+  readonly triggers: { list(): TriggerInfo[] };
+  /**
+   * Runs every trigger due by now, each as an execution of its own, and
+   * removes it, as a one-off trigger is once it has fired. Returns the
+   * handlers run, in order. One that throws is logged, as Apps Script would.
+   */
+  fireTriggers(): string[];
   /** Everything Logger.log and console wrote, oldest first. */
   readonly logs: string[];
   /** Sets fields of CONFIG. */
@@ -741,6 +898,11 @@ export function loadProject(options: ProjectOptions = {}): Project {
   const drive = new FakeDrive();
   const web = new FakeWeb();
   const cache = new FakeCache(() => clock.now());
+  const properties = new FakeProperties();
+  const triggers = new FakeTriggers(
+    () => clock.now(),
+    (name) => !name.endsWith('_') && typeof sandbox[name] === 'function',
+  );
 
   const format = (args: readonly unknown[]): string => {
     const [first, ...rest] = args;
@@ -762,6 +924,8 @@ export function loadProject(options: ProjectOptions = {}): Project {
     UrlFetchApp: web.urlFetchApp,
     LockService: Object.freeze({ getScriptLock: () => new FakeLock(lockState, executions) }),
     CacheService: Object.freeze({ getScriptCache: () => cache }),
+    PropertiesService: properties.service,
+    ScriptApp: triggers.scriptApp,
     ContentService: Object.freeze({
       MimeType: MIME_TYPES,
       createTextOutput: (content?: unknown) => new TextOutput(content === undefined ? '' : String(content)),
@@ -845,6 +1009,24 @@ export function loadProject(options: ProjectOptions = {}): Project {
     clock,
     cache,
     logs,
+    properties: properties.values,
+    triggers,
+
+    fireTriggers() {
+      const ran: string[] = [];
+      for (;;) {
+        const due = triggers.list().filter((t) => t.at <= clock.now())[0];
+        if (!due) return ran;
+        triggers.take(due.id);
+        ran.push(due.handler);
+        try {
+          execute(() => global(due.handler)());
+        } catch (err) {
+          if (err instanceof HarnessError) throw err;
+          logs.push(`Trigger ${due.handler} failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    },
 
     configure(values) {
       Object.assign(vm.runInContext('CONFIG', context) as object, values);

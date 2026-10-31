@@ -13,6 +13,12 @@
  *   CONTINUE   resume after a STOP (a live run does this by itself)
  *   STOP       pause
  *   RESTART    throw away all progress and build again from zero
+ *   VERIFY     compare the finished sheet with Drive
+ *   FIND_ROOT  find the library folder when START cannot open it
+ *
+ * The app's Settings page can rebuild it too: Code.gs's rebuildDirectory sets
+ * a one-off trigger for RESTART_FROM_APP, which runs RESTART. When a build
+ * finishes, CONTINUE records when in the script property builtAt.
  *
  * There can be thousands of folders, and Apps Script stops a function after six
  * minutes, so CONTINUE does about four minutes of work, saves its place, and
@@ -159,8 +165,43 @@ function CONTINUE() {
   } else {
     clearTriggers_();
     book.getSheetByName(CFG.QUEUE_TAB).hideSheet();
+    // When, for the app's Settings page (Code.gs's directoryStatus_).
+    props.setProperty('builtAt', Utilities.formatDate(new Date(), CFG.TZ, "yyyy-MM-dd'T'HH:mm:ssXXX"));
     Logger.log('Finished: %s properties written to "%s".', total, CFG.TAB);
   }
+}
+
+/**
+ * RESTART, run by the one-off trigger Code.gs's rebuildDirectory sets. Not
+ * for the editor: run RESTART there. Its name has no underscore because a
+ * trigger can only call a function the editor could run too.
+ *
+ * While RESTART scans the library, which takes minutes and sets cursor and
+ * total only at the end, the script property rebuildStarted says a build is
+ * under way, so the app neither shows it idle nor starts a second one.
+ */
+function RESTART_FROM_APP() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'RESTART_FROM_APP') ScriptApp.deleteTrigger(t);
+  });
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty(REBUILD_STARTED, String(Date.now()));
+  try {
+    RESTART();
+  } finally {
+    props.deleteProperty(REBUILD_STARTED);
+  }
+}
+
+// RESTART_FROM_APP's mark. Apps Script stops a function at six minutes, and
+// then the finally above never runs: a mark older than this is ignored.
+var REBUILD_STARTED = 'rebuildStarted';
+var REBUILD_STARTED_MS = 10 * 60 * 1000;
+
+/** True while RESTART_FROM_APP is scanning the library (Code.gs's directoryStatus_ asks). */
+function rebuildStarting_(props) {
+  var since = Number(props.getProperty(REBUILD_STARTED) || 0);
+  return since > 0 && Date.now() - since < REBUILD_STARTED_MS;
 }
 
 function STOP() {

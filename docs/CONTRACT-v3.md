@@ -118,3 +118,30 @@ its column names, words and formats (server/README.md has the detail).
 
 Admin nav: Tracker, Assign, Interns, Records, Find, Settings.
 Intern nav: My queue, Find.
+
+## v4 additions: the Settings page and light mode
+
+Server:
+
+| action | who | request | reply |
+|---|---|---|---|
+| `ping` | all | (unchanged) | also `version: <SERVER_VERSION string>` and `rules: { cooldownDays, repostDueDays, perIntern }` |
+| `setRules` | admin | `{ cooldownDays?, repostDueDays?, perIntern? }` (whole numbers: cooldown 1–60, repost 1–120, per intern 1–100) | `{ rules }`, saved on a "Settings" tab (Key, Value) beside the Team tab (adminBook) |
+| `rebuildDirectory` | admin | — | `{ started: true }`. It schedules BuildDirectory's RESTART on a time trigger about 10 s later and returns at once. If a build is already running it replies `error:'busy'`. |
+| `directoryStatus` | admin | — | `{ running:boolean, done:number, total:number, builtAt:string\|'' }`. `builtAt` is set by BuildDirectory when a build finishes (script property). |
+
+- `SERVER_VERSION` is a const at the top of Code.gs, e.g. `'2026-10-31.1'`.
+- The app holds `EXPECTED_SERVER_VERSION` in `src/config.ts`.
+- The cooldown, repost and planner rules come from the Settings tab. CONFIG values are only the defaults.
+
+Core:
+- `Rules` gains `perIntern`.
+- `session`/`ping` reading exposes `version` and `rules`.
+- `tracker.setRules`, `tracker.rebuildDirectory` and `tracker.directoryStatus`.
+- `serverVersionStatus(version) → 'current' | 'behind' | 'unknown'`.
+
+Theme:
+- `src/ui/state/theme.ts` exports `type ThemeChoice = 'dark' | 'light' | 'system'`.
+- `useTheme(): { choice, resolved: 'dark'|'light', setChoice }` is persisted with `platform.writeLocal('theme')` and applied as `<html data-theme="dark|light">`.
+- `applySavedTheme()` is called in main.tsx before the first render, so nothing flashes.
+- Light mode: black and gold on white. Gold text needs a darker gold to pass AA on white.

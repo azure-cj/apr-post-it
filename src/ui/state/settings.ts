@@ -1,5 +1,5 @@
 import { BUILT_IN_SCRIPT_URL } from '@/config';
-import { defaultSettings } from '@/core/types';
+import { defaultSettings, RULE_LIMITS, type ServerRules } from '@/core/types';
 
 /**
  * What this PC remembers between launches, apart from the key. The key is not
@@ -12,10 +12,16 @@ export interface AppSettings {
    * one (src/config.ts); otherwise whatever was typed at sign-in.
    */
   readonly scriptUrl: string;
-  /** Days before a listing may be posted again. The server enforces its own; this one is for display. */
+  /**
+   * Days before a listing may be posted again. The server's rule, from ping
+   * (withServerRules), once signed in; until then the last one kept here, or
+   * the default. The server enforces its own.
+   */
   readonly cooldownDays: number;
-  /** Days without a post after which a listing is due for a repost. */
+  /** Days without a post after which a listing is due for a repost. The server's rule, as cooldownDays. */
   readonly repostDueDays: number;
+  /** The planner's default items per intern. The server's rule, as cooldownDays. */
+  readonly perIntern: number;
 }
 
 /** Where the settings are kept, through platform.readLocal / writeLocal. */
@@ -25,7 +31,26 @@ export const defaultAppSettings: AppSettings = Object.freeze({
   scriptUrl: defaultSettings.scriptUrl,
   cooldownDays: defaultSettings.cooldownDays,
   repostDueDays: defaultSettings.repostDueDays,
+  perIntern: defaultSettings.perIntern,
 });
+
+/**
+ * The settings with the server's rules in place of the ones kept here: the
+ * rules are the admin's, set on the server (setRules) and sent with every
+ * ping. Null (a server that sends none) leaves the settings as they are. The
+ * same object back when nothing changes.
+ */
+export function withServerRules(settings: AppSettings, rules: ServerRules | null | undefined): AppSettings {
+  if (!rules) return settings;
+  if (
+    settings.cooldownDays === rules.cooldownDays &&
+    settings.repostDueDays === rules.repostDueDays &&
+    settings.perIntern === rules.perIntern
+  ) {
+    return settings;
+  }
+  return { ...settings, cooldownDays: rules.cooldownDays, repostDueDays: rules.repostDueDays, perIntern: rules.perIntern };
+}
 
 /**
  * The settings with the link built into this version, when there is one. A
@@ -53,6 +78,7 @@ export function parseSettings(text: string | null | undefined): AppSettings {
     scriptUrl: typeof saved['scriptUrl'] === 'string' ? saved['scriptUrl'].trim() : defaultAppSettings.scriptUrl,
     cooldownDays: wholeDays(saved['cooldownDays'], defaultAppSettings.cooldownDays),
     repostDueDays: wholeDays(saved['repostDueDays'], defaultAppSettings.repostDueDays),
+    perIntern: inRange(saved['perIntern'], RULE_LIMITS.perIntern, defaultAppSettings.perIntern),
   });
 }
 
@@ -61,7 +87,14 @@ export function serializeSettings(settings: AppSettings): string {
     scriptUrl: settings.scriptUrl,
     cooldownDays: settings.cooldownDays,
     repostDueDays: settings.repostDueDays,
+    perIntern: settings.perIntern,
   });
+}
+
+function inRange(value: unknown, limits: { readonly min: number; readonly max: number }, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= limits.min && value <= limits.max
+    ? value
+    : fallback;
 }
 
 function wholeDays(value: unknown, fallback: number): number {

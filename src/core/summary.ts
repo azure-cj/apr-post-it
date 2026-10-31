@@ -23,8 +23,14 @@ import { queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry,
  */
 export type DirectoryRow = Property & { readonly issues?: string | undefined };
 
-/** The two numbers the rules need. AppSettings and Settings both fit. */
-export type Rules = Pick<Settings, 'cooldownDays' | 'repostDueDays'>;
+/**
+ * The rules: the server's (ServerRules, from ping), or AppSettings and
+ * Settings, which all fit. `perIntern` is the planner's default; without it
+ * the planner uses DEFAULT_PER_INTERN.
+ */
+export type Rules = Pick<Settings, 'cooldownDays' | 'repostDueDays'> & {
+  readonly perIntern?: number | undefined;
+};
 
 // ------------------------------------------------------------------ dates
 

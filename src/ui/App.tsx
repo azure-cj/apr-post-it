@@ -15,7 +15,7 @@ import {
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { BUILT_IN_SCRIPT_URL } from '@/config';
 import { activeInterns, addDays, isDate, peopleIn, samePerson } from '@/core/summary';
-import { canManage, isAdmin, UserFacingError, type Role, type User } from '@/core/types';
+import { canManage, DEFAULT_RULES, isAdmin, UserFacingError, type Role, type User } from '@/core/types';
 import {
   Button,
   Card,
@@ -30,7 +30,8 @@ import {
 import { SignInScreen } from './screens/SignInScreen';
 import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
-import { AssignScreen, InternsScreen, RecordsScreen, SettingsScreen, TrackerScreen, type QueueSave } from './screens/manager';
+import { AssignScreen, InternsScreen, RecordsScreen, SettingsScreen, settingsTab, TrackerScreen, type QueueSave } from './screens/manager';
+import { useTheme } from './state/theme';
 import type { Platform } from '@/platform';
 import {
   manilaTime,
@@ -922,29 +923,65 @@ function RecordsRoute() {
 function SettingsRoute() {
   const app = useApp();
   const notify = useNotify();
-  const { platform } = app;
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const { platform, tracker } = app;
   const team = useTeam({ maxAgeMs: 60_000 });
+  const posts = usePosts({ maxAgeMs: 120_000 });
+  const server = useStore(app.server);
+  const theme = useTheme();
   const me = useUser();
-  const { tracker } = app;
+  // The version and rules as the server says them now, not as at sign-in.
+  const [asked, setAsked] = useState(false);
+  useEffect(() => {
+    void app.refreshServer().finally(() => setAsked(true));
+  }, [app]);
+  const copy = (text: string) =>
+    platform.copyText(text).then(
+      () => notify('Copied.', 'ok'),
+      () => notify("Couldn't copy. Select the text and copy it instead.", 'warn'),
+    );
+  const open = (url: string) => void platform.open(url);
+  // A server that sends no rules can't save them: its defaults show, read-only.
+  const rules =
+    server.rules ??
+    (server.known || asked
+      ? { cooldownDays: app.settings.cooldownDays, repostDueDays: app.settings.repostDueDays, perIntern: DEFAULT_RULES.perIntern }
+      : null);
   return (
     <SettingsScreen
-      settings={app.settings}
-      builtInLink={BUILT_IN_SCRIPT_URL !== ''}
-      team={team.data}
-      me={me.name}
-      loading={team.loading}
-      error={team.data ? null : team.error}
-      onAddPerson={(input) => tracker.addPerson(input)}
-      onSetActive={(name, active) => tracker.setActive(name, active)}
-      onUpdatePerson={(name, changes) => tracker.updatePerson(name, changes)}
-      onOpenLink={(url) => void platform.open(url)}
-      onNewKey={(name) => tracker.newKey(name)}
-      onIndexCheck={() => tracker.indexCheck()}
-      onCopy={(text) => {
-        platform.copyText(text).then(
-          () => notify('Copied.', 'ok'),
-          () => notify("Couldn't copy. Select the text and copy it instead.", 'warn'),
-        );
+      tab={settingsTab(params.get('tab'))}
+      onTabChange={(tab) => setParams({ tab }, { replace: true })}
+      team={{
+        team: team.data,
+        me: me.name,
+        posts: posts.data,
+        today: app.today(),
+        loading: team.loading,
+        error: team.data ? null : team.error,
+        onAddPerson: (input) => tracker.addPerson(input),
+        onSetActive: (name, active) => tracker.setActive(name, active),
+        onUpdatePerson: (name, changes) => tracker.updatePerson(name, changes),
+        onNewKey: (name) => tracker.newKey(name),
+        onOpenLink: open,
+        onCopy: copy,
+        onOpenInterns: () => navigate(paths.interns),
+      }}
+      listings={{
+        onDirectoryStatus: () => tracker.directoryStatus(),
+        onRebuildDirectory: () => tracker.rebuildDirectory(),
+        onIndexCheck: () => tracker.indexCheck(),
+        onOpenLink: open,
+      }}
+      rules={{ rules, onSave: server.rules ? (next) => tracker.setRules(next) : undefined }}
+      app={{
+        scriptUrl: app.settings.scriptUrl,
+        builtInLink: BUILT_IN_SCRIPT_URL !== '',
+        onCopy: copy,
+        versionStatus: server.known ? server.versionStatus : undefined,
+        serverVersion: server.version || undefined,
+        theme: theme.choice,
+        onThemeChange: theme.setChoice,
       }}
     />
   );

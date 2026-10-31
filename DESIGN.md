@@ -18,8 +18,9 @@ reference of every component and variant is at `#/kit` in development.
    links, not icons, not borders, not counts.
 2. **Everything else is carried by the status colours**: ok (green), warn (amber), danger
    (red), info (blue), neutral.
-3. **Dark only, OLED black.** A `#121212` page and neutral greys; no warm tint except the
-   gold. There is no light theme and no theme switch.
+3. **Dark first, OLED black.** A `#121212` page and neutral greys; no warm tint except the
+   gold. Dark is the default. A light theme (black and gold on white) swaps the colour
+   tokens only, chosen in Settings (§2, "Light theme").
 4. **No box-shadows.** Depth comes from the card's vertical gradient and its top-lit edge.
 5. **Montserrat** (500, 600, 700) for headings, labels and buttons. **Segoe UI** for body text.
 6. **Nothing under 14px.**
@@ -62,7 +63,75 @@ brown tint anywhere except the gold itself.** Every grey is neutral (R = G = B).
    `--tip-bg`.
 6. **No raw colour outside `tokens.css`.** Components use tokens only.
 
-### Surfaces
+### Light theme
+
+Black and gold on white, for people who work in a bright office. `<html data-theme="light">`
+(set by `src/ui/state/theme.ts`) overrides **every colour token and nothing else**, so no
+component knows which theme it is in. The choice is `dark` (the default), `light` or
+`system` (follows Windows' mode, live). It is kept with `platform().writeLocal('theme')` and
+applied in `main.tsx` before the first render. `color-scheme` follows the theme, so native
+controls, the date picker and scrollbars do too. Screens read it with `useTheme()`.
+
+**The rules**
+
+1. **Light goes down in steps, not up.** Page `#FAFAFA` → sidebar `#F5F5F5` → raised
+   `#F0F0F0`; cards and inputs are white. A white card separates from the page by its edge
+   (`#E5E5E5`, `#D9D9D9` at the bottom: still lit from above), not by a shadow. There are
+   still no shadows.
+2. **Washes are black, not white.** Hover 3%, neutral 5%, pressed 9%.
+3. **Two golds.** The primary button keeps the bright gradient with `#121212` text (6.0:1 on
+   its darkest stop). Everything that draws gold as text or a thin mark, the brand word,
+   the selected chip's text and tick, the current-item mark, the focus ring, uses the
+   deep gold `#806210`: 5.5:1 on the page, 5.7:1 on a card, 4.8:1 on the selected wash
+   over the sidebar. Bright `#E0B84A` on white is 1.9:1 and is never text there.
+4. **Status hues are darkened for white**, and every `-strong` passes 4.5:1 as well, since
+   a few screens use it as text. Warn is a burnt orange, `#A34B05`, kept 17° of hue away
+   from the gold so "look again" never reads as "selected".
+5. **The photo viewer stays dark** in both themes: `:root[data-theme="light"] .viewer`
+   re-declares the dark tokens, so a photo is still the only lit thing on screen.
+6. **Selected text** is solid gold with `#121212` in dark (9.9:1), a 45% gold wash with
+   `#121212` in light (13.8:1).
+
+| Token | Dark | Light | Light, measured |
+|---|---|---|---|
+| `--bg` | `#121212` | `#fafafa` | page |
+| `--surface` | `#1a1a1a` | `#f5f5f5` | sidebar, side wells |
+| `--card-bg` | `#1e1e1e`→`#1a1a1a` | `#ffffff` | cards |
+| `--surface-raised` | `#222222` | `#f0f0f0` | avatars, raised wells |
+| `--tip-bg` | `#2a2a2a` | `#ffffff` | tooltips, toasts (with `--border-strong` edge) |
+| `--input-bg` | `#0c0c0c` | `#ffffff` | inputs |
+| `--top-bar-bg` | `#121212` 94% | `#fafafa` 94% | title bar |
+| `--inset` | black 30% | black 4% | recessed well |
+| `--text` | `#e0e0e0` | `#121212` | 18.0:1 page, 18.7:1 card |
+| `--text-label` | `#cccccc` | `#2e2e2e` | 13.0:1 page |
+| `--text-muted` | `#b0b0b0` | `#4a4a4a` | 8.5:1 page, 7.8:1 raised |
+| `--placeholder` | `#8c8c8c` | `#6b6b6b` | 5.3:1 input, 4.7:1 raised |
+| `--zero-text` | `#5c5c5c` | `#9e9e9e` | 2.6:1, decorative only (§11.2) |
+| `--border-soft` | `#2e2e2e` | `#ebebeb` | row dividers |
+| `--border` | `#444444` | `#e0e0e0` | borders |
+| `--button-edge` | `#4d4d4d` | `#c8c8c8` | ghost button edge |
+| `--border-strong` | `#5c5c5c` | `#b5b5b5` | scrollbar thumb, toast edge |
+| `--pick-edge` | `#888888` | `#858585` | input edge, 3.7:1 on a card |
+| `--card-edge` | `#444`→`#2e2e2e` | `#e5e5e5`→`#d9d9d9` | card edge |
+| `--row-hover` / `--neutral-bg` / `--neutral-soft` | white 3/6/12% | black 3/5/9% | washes |
+| `--gold` | `#e0b84a` | `#806210` | 5.5:1 page; ring ≥5.0:1 everywhere |
+| `--gold-soft` | gold 12% | gold 16% | selected wash; gold text on it 5.2:1 |
+| `--gold-edge` | gold 55% | `#a67e16` 60% | selected chip edge |
+| `--gold-gradient` / `--on-gold` | unchanged | unchanged | 6.0–13.9:1 |
+| `--ok-text` / `-strong` | `#93d9a3` / `#62c47e` | `#1a6331` / `#23803f` | 6.3:1 on its tint / 5.0:1 |
+| `--warn-text` | `#f5b77a` | `#a34b05` | 5.1:1 on its tint over the page |
+| `--danger-text` / `-strong` | `#ff9d95` / `#f0645a` | `#a8261b` / `#c42b1c` | 6.0:1 / 5.7:1 |
+| `--on-danger` | `#1f0a08` | `#ffffff` | close button glyph, 5.7:1 |
+| `--info-text` / `-strong` | `#a9cdef` / `#6fa8dc` | `#1c5596` / `#2668b3` | 6.4:1 / 5.7:1; links 7.2:1 |
+| `--neutral-text` / `-strong` | `#cccccc` / `#888888` | `#333333` / `#737373` | 10.8:1 / 4.2:1 dot |
+| `--type-*` | as above | `#2f78d4` `#c94e1e` `#158a62` `#a87000` `#858585` | each ≥3.5:1 as a dot |
+| `--selection-bg` | `#e0b84a` | gold 45% | text on it 9.9:1 / 13.8:1 |
+| `--scrim` | black 75% | `#121212` 45% | behind a dialog |
+
+Every pair the components use is checked by the contrast script for both themes (text
+4.5:1, rings, dots and input edges 3:1); none fails.
+
+### Surfaces (dark)
 
 | Token | Value | Use |
 |---|---|---|
@@ -108,7 +177,7 @@ Unchanged from the checker. Gold on the page is 9.9:1; on the highest grey (`#2a
 | `--gold-gradient` | The one primary button (`#f6dc8a` → `#e0b84a` → `#b98a26`) |
 | `--on-gold` `#121212` | Text on the primary button: 6.0:1 on the darkest stop, 13.9:1 on the lightest |
 | `--gold-soft` | The wash behind a selected chip or segment (gold text on it: 7.3:1 on a card) |
-| `--gold-edge` | The edge of a selected chip; text selection |
+| `--gold-edge` | The edge of a selected chip |
 
 ### Status
 

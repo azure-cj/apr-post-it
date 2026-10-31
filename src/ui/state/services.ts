@@ -1,7 +1,17 @@
-import { createBackend, type Backend } from '@/core/backend';
+import { createBackend, type Action, type Backend, type Payload, type Reply } from '@/core/backend';
 import { createDirectory, type Directory } from '@/core/directory';
+import { readServerInfo, serverVersionStatus } from '@/core/session';
 import { createTracker, type Tracker } from '@/core/tracker';
-import { canManage, type Assignment, type PostLogEntry, type PropertyDetail, type TeamMember, type User } from '@/core/types';
+import {
+  canManage,
+  type Assignment,
+  type PostLogEntry,
+  type PropertyDetail,
+  type ServerRules,
+  type ServerVersionStatus,
+  type TeamMember,
+  type User,
+} from '@/core/types';
 import type { Platform } from '@/platform';
 import { createRemote, sentenceOf, type RemoteResource } from './remote';
 import type { AppSettings } from './settings';
@@ -26,8 +36,25 @@ export interface FindState {
   readonly listingType: string;
 }
 
+/** What the server said about itself in its last `ping`. */
+export interface ServerState {
+  /** True once a ping has been answered since sign-in. */
+  readonly known: boolean;
+  /** Code.gs's SERVER_VERSION; blank from a server that sends none. */
+  readonly version: string;
+  /** How that compares with EXPECTED_SERVER_VERSION (src/config.ts). */
+  readonly versionStatus: ServerVersionStatus;
+  /**
+   * The live rules (cooldown, repost age, items per intern). Null until a ping
+   * is answered, or from a server that sends none: then the settings' own
+   * apply. Use withServerRules (./settings) to put them over the settings.
+   */
+  readonly rules: ServerRules | null;
+}
+
 export const EMPTY_FIND: FindState = Object.freeze({ query: '', category: '', listingType: '' });
 const IDLE: DirectoryStatus = Object.freeze({ refreshing: false, error: null, lastAttempt: null });
+const UNKNOWN_SERVER: ServerState = Object.freeze({ known: false, version: '', versionStatus: 'unknown', rules: null });
 
 /** Everything the screens use that is not React: built once per window. */
 export interface Services {
@@ -36,6 +63,10 @@ export interface Services {
   /** The tracker. Every write marks the posts and queues held below as stale. */
   readonly tracker: Tracker;
   readonly directoryStatus: Store<DirectoryStatus>;
+  /** The server's version and rules, from every ping made through `backend` (sign-in included). */
+  readonly server: Store<ServerState>;
+  /** Pings the server now, for its version and rules. Never rejects. */
+  refreshServer(): Promise<void>;
   /** The Posts rows you may see: an intern's own, everyone's for a manager. Shared for a few seconds. */
   readonly posts: RemoteResource<readonly PostLogEntry[]>;
   /** The Assignments rows you may see. Shared for a few seconds. */
@@ -47,7 +78,11 @@ export interface Services {
   readonly savedFolders: Store<ReadonlyMap<string, string>>;
   /** Fetches the property list now and records how it went. Never rejects. */
   refreshDirectory(): Promise<void>;
-  /** On sign-in: the list from disk at once when there is one, then a fresh one. Never rejects. */
+  /**
+   * On sign-in: the list from disk at once when there is one, then a fresh
+   * one; and the server's version and rules, when no ping has told them yet.
+   * Never rejects.
+   */
   startDirectory(): Promise<void>;
   /** A listing as this person may see it: see `forViewer`. */
   openProperty(id: string, viewer: User): Promise<PropertyDetail>;
@@ -58,10 +93,38 @@ export interface Services {
 export function createServices(p: Platform, getSettings: () => AppSettings, now: () => number): Services {
   // The link and key are read before every call, so a link changed in
   // Settings applies at once and the key never lives in React state.
-  const backend = createBackend({
+  const inner = createBackend({
     post: p.post,
     getConfig: async () => ({ url: getSettings().scriptUrl, key: await p.readKey() }),
   });
+  const server = createStore<ServerState>(UNKNOWN_SERVER);
+  // Every ping answered through here says what the server is and its rules.
+  const backend: Backend = {
+    ...inner,
+    async call<T extends object = Reply>(action: Action, payload?: Payload): Promise<T> {
+      const reply = await inner.call<T>(action, payload);
+      if (action === 'ping') noteServer(reply as Reply);
+      return reply;
+    },
+  };
+
+  /** The server's version and rules from a ping. Never throws: the sign-in it came with matters more. */
+  function noteServer(reply: Reply): void {
+    try {
+      const info = readServerInfo(reply);
+      server.set({ known: true, version: info.version, versionStatus: serverVersionStatus(info.version), rules: info.rules });
+    } catch {
+      server.set({ ...UNKNOWN_SERVER, known: true });
+    }
+  }
+
+  async function refreshServer(): Promise<void> {
+    try {
+      await backend.call('ping');
+    } catch {
+      // Kept as it was: the rules already known, or the settings' own.
+    }
+  }
   const directory = createDirectory({ backend, store: p, now });
   const raw = createTracker({ backend });
 
@@ -114,6 +177,13 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
     updatePerson: (name, changes) => teamWrite(() => raw.updatePerson(name, changes)),
     newKey: (name) => teamWrite(() => raw.newKey(name)),
     indexCheck: () => raw.indexCheck(),
+    async setRules(changes) {
+      const rules = await raw.setRules(changes);
+      server.set((s) => ({ ...s, rules }));
+      return rules;
+    },
+    rebuildDirectory: () => raw.rebuildDirectory(),
+    directoryStatus: () => raw.directoryStatus(),
   };
 
   const directoryStatus = createStore<DirectoryStatus>(IDLE);
@@ -135,6 +205,8 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
     directory,
     tracker,
     directoryStatus,
+    server,
+    refreshServer,
     posts,
     assignments,
     team,
@@ -147,6 +219,7 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
       // Yesterday's list from disk is on screen at once; the refresh below
       // shares the one request when there is no disk copy to show.
       void directory.list().catch(() => undefined);
+      if (!server.get().known) void refreshServer();
       await refreshDirectory();
     },
 
@@ -160,6 +233,7 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
       assignments.reset();
       team.reset();
       directoryStatus.set(IDLE);
+      server.set(UNKNOWN_SERVER);
       find.set(EMPTY_FIND);
       savedFolders.set(new Map());
     },

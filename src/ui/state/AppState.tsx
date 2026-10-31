@@ -30,6 +30,7 @@ import { ToastRegion, useToasts, type ToastTone } from '../components';
 import { manilaDate } from './clock';
 import { sentenceOf } from './remote';
 import { createServices, type Services } from './services';
+import { useStore } from './store';
 import { BUILT_IN_SCRIPT_URL } from '@/config';
 import {
   defaultAppSettings,
@@ -37,6 +38,7 @@ import {
   serializeSettings,
   SETTINGS_KEY,
   withBuiltInLink,
+  withServerRules,
   type AppSettings,
 } from './settings';
 
@@ -242,12 +244,16 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
     [services, user],
   );
 
+  // The server's rules win once a ping has brought them; until then the kept ones.
+  const serverRules = useStore(services.server).rules;
+  const effectiveSettings = useMemo(() => withServerRules(settings, serverRules), [settings, serverRules]);
+
   const value = useMemo<AppState>(() => {
     const { openProperty: _forAnyViewer, forget: _forget, ...shared } = services;
     return {
       ...shared,
       platform,
-      settings,
+      settings: effectiveSettings,
       saveSettings,
       session,
       user,
@@ -259,7 +265,7 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
       today: () => manilaDate(clock()),
       now: clock,
     };
-  }, [services, platform, settings, saveSettings, session, user, signIn, retrySignIn, showSignIn, signOut, openProperty, clock]);
+  }, [services, platform, effectiveSettings, saveSettings, session, user, signIn, retrySignIn, showSignIn, signOut, openProperty, clock]);
 
   return (
     <AppStateContext.Provider value={value}>

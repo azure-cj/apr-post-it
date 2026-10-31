@@ -308,7 +308,7 @@ describe('the cooldown is decided under the lock', () => {
   /** logPost with its cooldown check moved above the lock: the bug this test exists to catch. */
   function checkBeforeLock(file: string, src: string): string {
     if (file !== 'Code.gs') return src;
-    const start = src.indexOf('function logPost(');
+    const start = src.indexOf('function logPost_(');
     const lock = src.indexOf('  var lock = LockService.getScriptLock();', start);
     const checkStart = src.indexOf('    var when = new Date();', lock);
     const checkEnd = src.indexOf('    if (guard) return guard;\n', checkStart);

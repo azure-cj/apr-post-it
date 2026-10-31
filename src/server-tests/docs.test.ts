@@ -14,7 +14,7 @@ const DATA_FLOW = readFileSync(new URL('../../docs/DATA-FLOW.md', import.meta.ur
 /** The actions Code.gs's route() answers. */
 function routedActions(): string[] {
   const code = readServerFile('Code.gs');
-  const route = code.slice(code.indexOf('function route('), code.indexOf('function json('));
+  const route = code.slice(code.indexOf('function route_('), code.indexOf('function json_('));
   return Array.from(route.matchAll(/case '(\w+)':/g), (m) => m[1]!).sort();
 }
 

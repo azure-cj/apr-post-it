@@ -38,10 +38,10 @@ describe('the project loads as Apps Script loads it', () => {
 
   it('refuses a project where two files declare the same name', () => {
     const load = () =>
-      loadProject({ patch: (file, src) => (file === 'BuildDirectory.gs' ? `${src}\nfunction route(req) {}\n` : src) });
+      loadProject({ patch: (file, src) => (file === 'BuildDirectory.gs' ? `${src}\nfunction route_(req) {}\n` : src) });
 
     expect(load).toThrow(HarnessError);
-    expect(load).toThrow(/route \(Code\.gs and BuildDirectory\.gs\)/);
+    expect(load).toThrow(/route_ \(Code\.gs and BuildDirectory\.gs\)/);
   });
 
   it('runs Code.gs and Separators.gs in one scope: the splitter is a plain global', () => {
@@ -53,7 +53,7 @@ describe('the project loads as Apps Script loads it', () => {
 
   it('says which file and line will not load', () => {
     const load = () =>
-      loadProject({ patch: (file, src) => (file === 'Code.gs' ? src.replace('function now() {', 'function now() { var = 1;') : src) });
+      loadProject({ patch: (file, src) => (file === 'Code.gs' ? src.replace('function now_() {', 'function now_() { var = 1;') : src) });
 
     expect(load).toThrow(/Code\.gs:\d+/);
   });

@@ -237,6 +237,7 @@ class SheetState {
   readonly grid: Cell[][];
   maxColumns: number;
   frozenRows = 0;
+  hidden = false;
 
   constructor(
     readonly book: BookState,
@@ -391,6 +392,20 @@ class FakeSheet {
 
   getFrozenRows(): number {
     return this.#s.frozenRows;
+  }
+
+  hideSheet(): FakeSheet {
+    this.#s.hidden = true;
+    return this;
+  }
+
+  showSheet(): FakeSheet {
+    this.#s.hidden = false;
+    return this;
+  }
+
+  isSheetHidden(): boolean {
+    return this.#s.hidden;
   }
 
   setFrozenRows(rows: unknown): FakeSheet {
@@ -572,6 +587,14 @@ class FakeRange {
     return this;
   }
 
+  setVerticalAlignment(_alignment: unknown): FakeRange {
+    return this;
+  }
+
+  setWrap(_wrap: unknown): FakeRange {
+    return this;
+  }
+
   clearContent(): FakeRange {
     this.#op('clearContent', () =>
       this.#each((cell) => {
@@ -728,6 +751,11 @@ export class Tab {
 
   get name(): string {
     return this.#s.name;
+  }
+
+  /** Hidden with Sheet.hideSheet(). */
+  get hidden(): boolean {
+    return this.#s.hidden;
   }
 
   get gid(): number {

@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Assignment, PostLogEntry } from '@/core/types';
 import type { DirectoryRow } from '@/core/summary';
-import { SettingsScreen, TrackerScreen } from './index';
+import { TrackerScreen } from './index';
 
 const TODAY = '2026-10-29';
 
@@ -64,28 +63,5 @@ describe('TrackerScreen', () => {
     expect(screen.getByText('No posts today yet.')).toBeTruthy();
     const groups = Array.from(document.querySelectorAll('.health-group__title')).map((h) => h.textContent);
     expect(groups).toEqual(['No separator', 'No photos']);
-  });
-});
-
-describe('SettingsScreen', () => {
-  it('shows the rules, the team with who is off, and copies the link', async () => {
-    const onCopy = vi.fn();
-    render(
-      <SettingsScreen
-        settings={{ scriptUrl: 'https://script.google.com/macros/s/abc/exec', cooldownDays: 7, repostDueDays: 14 }}
-        team={[
-          { name: 'Maria Santos', role: 'Admin' },
-          { name: 'Carlo Mendoza', role: 'Intern', active: false },
-        ]}
-        onCopy={onCopy}
-      />,
-    );
-    expect(screen.getByText('Off')).toBeTruthy();
-    expect(screen.getByText('7 days')).toBeTruthy();
-    // No team actions without the callbacks.
-    expect(screen.queryByRole('button', { name: 'Add person' })).toBeNull();
-    expect(screen.queryByRole('textbox', { name: /cooldown/i })).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Copy the web app link' }));
-    expect(onCopy).toHaveBeenCalledWith('https://script.google.com/macros/s/abc/exec');
   });
 });

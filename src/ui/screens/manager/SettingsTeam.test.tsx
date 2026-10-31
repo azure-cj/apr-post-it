@@ -1,90 +1,191 @@
 // @vitest-environment jsdom
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { admin, fakeServer, intern, renderApp } from '../../state/testing';
+import { admin, fakeServer, intern, renderApp, TODAY } from '../../state/testing';
 
 const TEAM = {
   ok: true,
   team: [
     { name: admin.name, role: 'Admin', email: '', fbAccounts: '', active: true },
     { name: intern.name, role: 'Intern', email: '', fbAccounts: 'APG Main', fbProfileLink: 'https://www.facebook.com/jan.delacruz', active: true },
-    { name: 'Carlo Mendoza', role: 'Intern', email: '', fbAccounts: '', active: false },
+    { name: 'Carlo Mendoza', role: 'Intern', email: '', fbAccounts: 'CARLO M', active: false },
+    { name: 'Bea Lim', role: 'Admin', email: '', fbAccounts: 'BEA LIM', active: true },
+  ],
+};
+
+const post = (date: string, time: string, status: 'Posted' | 'Pending', postedBy = intern.name) => ({
+  date,
+  time,
+  type: 'Warehouse',
+  title: 'Valenzuela Warehouse 1,200 sqm',
+  status,
+  fbAccount: 'APG Main',
+  postLink: 'https://www.facebook.com/groups/x/posts/1/',
+  postedBy,
+  propertyId: '1Valenzuela',
+});
+
+// Sat 31 Oct: the week runs from Mon 26 Oct.
+const POSTS = {
+  ok: true,
+  posts: [
+    post('2026-10-20', '09:00', 'Posted'), // last week: not counted
+    post('2026-10-26', '09:00', 'Posted'),
+    post('2026-10-29', '10:15', 'Posted'),
+    post('2026-10-30', '16:40', 'Pending'),
+    post(TODAY, '08:30', 'Posted', 'Bea Lim'),
   ],
 };
 
 const actionsOf = (platform: ReturnType<typeof fakeServer>) => platform.posts.map((p) => p.action);
-const PROFILE = 'https://www.facebook.com/cyrus.orbano';
+const names = () =>
+  screen
+    .getAllByRole('row')
+    .slice(1)
+    .map((r) => within(r).getAllByRole('cell')[0]!.querySelector('button')!.textContent);
+const panel = (name: string) => screen.getByRole('complementary', { name: new RegExp(`^${name}`) });
 
-/** The Add person form, opened. */
-async function openAdd(platform: ReturnType<typeof fakeServer>) {
+async function openTeam(replies: Parameters<typeof fakeServer>[0] = {}) {
+  const platform = fakeServer({ team: TEAM, posts: POSTS, ...replies });
   renderApp({ platform, user: admin, path: '/settings' });
-  await screen.findByRole('cell', { name: intern.name });
-  await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
-  return screen.getByRole('dialog', { name: 'Add person' });
+  await screen.findByRole('button', { name: intern.name });
+  return platform;
 }
 
-const row = (name: string) => screen.getByRole('cell', { name: new RegExp(`^${name}`) }).closest('tr')!;
-
 describe('Settings → Team', () => {
-  it('adds a person and shows the key once, with Copy', async () => {
-    const platform = fakeServer({
-      team: TEAM,
-      addPerson: (body) => ({
-        ok: true,
-        person: { name: body['name'], role: body['role'], fbAccounts: (body['fbAccounts'] as string[]).join(', '), active: true },
-        key: 'k-9f3a-77',
-      }),
-    });
-    renderApp({ platform, user: admin, path: '/settings' });
-    await screen.findByRole('cell', { name: intern.name });
+  it('lists the team in a slim table, you tagged, with the filters counted', async () => {
+    await openTeam();
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Name', 'FB broker name', 'Status']);
+    expect(names()).toEqual([admin.name, intern.name, 'Carlo Mendoza', 'Bea Lim']);
+    const mine = screen.getByRole('button', { name: admin.name }).closest('tr')!;
+    expect(within(mine).getByText('You')).toBeTruthy();
+    expect(within(screen.getByRole('button', { name: 'Carlo Mendoza' }).closest('tr')!).getByText('Turned off')).toBeTruthy();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
-    const dialog = screen.getByRole('dialog', { name: 'Add person' });
-    await userEvent.type(within(dialog).getByLabelText('Intern name'), 'Mika Reyes');
-    await userEvent.type(within(dialog).getByLabelText(/^FB broker name/), 'APG Main, , APG South ');
-    await userEvent.type(within(dialog).getByLabelText(/^FB profile link/), 'facebook.com/mika.reyes');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add person' }));
-
-    const shown = await screen.findByRole('dialog', { name: 'Mika Reyes added' });
-    const sent = platform.posts.find((p) => p.action === 'addPerson')!.body;
-    expect(sent).toMatchObject({
-      name: 'Mika Reyes',
-      role: 'Intern',
-      fbAccounts: ['APG Main', 'APG South'],
-      fbProfileLink: 'https://facebook.com/mika.reyes',
-    });
-    expect(within(shown).getByText('k-9f3a-77')).toBeTruthy();
-    expect(within(shown).getByText(/You won’t see this again/)).toBeTruthy();
-    // This fake answers like an older web app: no fbProfileLink in the person.
-    expect(within(shown).getByText('Profile link not saved')).toBeTruthy();
-    await userEvent.click(within(shown).getByRole('button', { name: 'Copy the key' }));
-    await waitFor(() => expect(platform.copied).toEqual(['k-9f3a-77']));
-
-    await userEvent.click(within(shown).getByRole('button', { name: 'Done' }));
-    expect(screen.queryByText('k-9f3a-77')).toBeNull();
-    // The team is read again after the change.
-    await waitFor(() => expect(actionsOf(platform).filter((a) => a === 'team').length).toBeGreaterThan(1));
+    const filters = screen.getByRole('group', { name: 'Show only' });
+    expect(within(filters).getAllByRole('button').map((b) => b.textContent)).toEqual(['Interns2', 'Admins2', 'Turned off1']);
+    // Add person is the one gold button.
+    expect(screen.getByRole('button', { name: 'Add person' }).className).toContain('button--primary');
   });
 
-  it('says a duplicate name before asking the server', async () => {
-    const platform = fakeServer({ team: TEAM });
-    renderApp({ platform, user: admin, path: '/settings' });
-    await screen.findByRole('cell', { name: intern.name });
-    await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
-    const dialog = screen.getByRole('dialog', { name: 'Add person' });
-    await userEvent.type(within(dialog).getByLabelText('Intern name'), 'jan dela cruz');
-    await userEvent.type(within(dialog).getByLabelText(/^FB broker name/), 'JAN DELA CRUZ');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add person' }));
-    expect(within(dialog).getByText('Jan Dela Cruz is already on the team.')).toBeTruthy();
-    expect(actionsOf(platform)).not.toContain('addPerson');
+  it('filters by role and by turned off, and searches names and FB broker names', async () => {
+    await openTeam();
+    await userEvent.click(screen.getByRole('button', { name: /^Interns/ }));
+    expect(names()).toEqual([intern.name, 'Carlo Mendoza']);
+    await userEvent.click(screen.getByRole('button', { name: /^Turned off/ }));
+    expect(names()).toEqual(['Carlo Mendoza']);
+    await userEvent.click(screen.getByRole('button', { name: /^Interns/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Turned off/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Admins/ }));
+    expect(names()).toEqual([admin.name, 'Bea Lim']);
+    await userEvent.click(screen.getByRole('button', { name: /^Admins/ }));
+
+    const search = screen.getByRole('searchbox', { name: 'Search the team' });
+    await userEvent.type(search, 'apg main');
+    expect(names()).toEqual([intern.name]);
+    await userEvent.clear(search);
+    await userEvent.type(search, 'nobody');
+    expect(screen.getByText('No one matches')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(names()).toHaveLength(4);
+  });
+
+  it('says so when no one is on the team yet', async () => {
+    renderApp({ platform: fakeServer({ team: { ok: true, team: [] } }), user: admin, path: '/settings' });
+    expect(await screen.findByText('No one yet')).toBeTruthy();
+    expect(screen.getByText('Add your first intern.')).toBeTruthy();
+  });
+
+  it('opens a row in the side panel, with this week counted from the posts', async () => {
+    await openTeam();
+    await userEvent.click(screen.getByRole('button', { name: intern.name }).closest('tr')!.querySelectorAll('td')[1]!);
+    const side = panel(intern.name);
+    expect(document.activeElement).toBe(within(side).getByRole('heading', { level: 2 }));
+    expect(screen.getByRole('button', { name: intern.name }).getAttribute('aria-expanded')).toBe('true');
+
+    const week = within(side).getByRole('region', { name: 'This week' });
+    expect(within(week).getByText('Posted').nextElementSibling?.textContent).toBe('2');
+    expect(within(week).getByText('Pending').nextElementSibling?.textContent).toBe('1');
+    expect(within(week).getByText('Last post').nextElementSibling?.textContent).toBe('Yesterday, 16:40');
+    expect(within(week).getByRole('heading', { level: 3 }).textContent).toBe('This week since Mon 26 Oct');
+
+    // Escape closes it, and focus goes back to the row.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('complementary', { name: intern.name })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: intern.name }));
+  });
+
+  it('opens with Enter, links to Interns, and opens the profile in the browser', async () => {
+    const platform = await openTeam();
+    screen.getByRole('button', { name: intern.name }).focus();
+    await userEvent.keyboard('{Enter}');
+    const side = panel(intern.name);
+    await userEvent.click(within(side).getByRole('button', { name: `Open ${intern.name}'s Facebook profile` }));
+    await waitFor(() => expect(platform.opened).toEqual(['https://www.facebook.com/jan.delacruz']));
+    await userEvent.click(within(side).getByRole('button', { name: 'See their queue in Interns' }));
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Interns');
+  });
+
+  it('edits the FB broker name and profile link in place, then reads the team again', async () => {
+    const platform = await openTeam({
+      updatePerson: (body) => ({
+        ok: true,
+        person: { name: body['name'], role: 'Intern', fbAccounts: body['fbAccounts'], fbProfileLink: body['fbProfileLink'], active: true },
+      }),
+    });
+    await userEvent.click(screen.getByRole('button', { name: intern.name }));
+    expect(within(panel(intern.name)).getByText('Intern')).toBeTruthy();
+    const details = within(panel(intern.name)).getByRole('region', { name: 'Details' });
+    const save = within(details).getByRole('button', { name: 'Save' });
+    expect(save).toHaveProperty('disabled', true);
+
+    const broker = within(details).getByLabelText(/^FB broker name/);
+    await userEvent.clear(broker);
+    await userEvent.click(save);
+    expect(within(details).getByText('Type their FB broker name.')).toBeTruthy();
+    expect(actionsOf(platform)).not.toContain('updatePerson');
+
+    await userEvent.type(broker, 'CYRUS ORBANO, APG South');
+    const link = within(details).getByLabelText(/^FB profile link/);
+    await userEvent.clear(link);
+    await userEvent.type(link, 'm.facebook.com/cyrus.orbano');
+    const teamReads = actionsOf(platform).filter((a) => a === 'team').length;
+    await userEvent.click(save);
+
+    expect(await within(details).findByText('Saved')).toBeTruthy();
+    const sent = platform.posts.find((p) => p.action === 'updatePerson')!.body;
+    expect(sent).toEqual(
+      expect.objectContaining({ name: intern.name, fbAccounts: ['CYRUS ORBANO', 'APG South'], fbProfileLink: 'https://m.facebook.com/cyrus.orbano' }),
+    );
+    expect(sent).not.toHaveProperty('role');
+    expect(sent).not.toHaveProperty('active');
+    await waitFor(() => expect(actionsOf(platform).filter((a) => a === 'team').length).toBeGreaterThan(teamReads));
+  });
+
+  it('blocks a profile link that is not Facebook', async () => {
+    const platform = await openTeam();
+    await userEvent.click(screen.getByRole('button', { name: intern.name }));
+    const details = within(panel(intern.name)).getByRole('region', { name: 'Details' });
+    const link = within(details).getByLabelText(/^FB profile link/);
+    await userEvent.clear(link);
+    await userEvent.type(link, 'https://instagram.com/jan');
+    await userEvent.click(within(details).getByRole('button', { name: 'Save' }));
+    expect(within(details).getByText("That isn't a Facebook profile link.")).toBeTruthy();
+    expect(document.activeElement).toBe(link);
+    expect(actionsOf(platform)).not.toContain('updatePerson');
+  });
+
+  it('never offers New key or Turn off for yourself', async () => {
+    await openTeam();
+    await userEvent.click(screen.getByRole('button', { name: admin.name }));
+    const access = within(panel(admin.name)).getByRole('region', { name: 'Access' });
+    expect(within(access).queryByRole('button')).toBeNull();
+    expect(within(access).getByText('This is you. Another admin can change your access.')).toBeTruthy();
   });
 
   it('asks before making a new key, then shows it once', async () => {
-    const platform = fakeServer({ team: TEAM, newKey: { ok: true, key: 'k-new-123' } });
-    renderApp({ platform, user: admin, path: '/settings' });
-    await screen.findByRole('cell', { name: intern.name });
-
-    await userEvent.click(screen.getByRole('button', { name: `New key for ${intern.name}` }));
+    const platform = await openTeam({ newKey: { ok: true, key: 'k-new-123' } });
+    await userEvent.click(screen.getByRole('button', { name: intern.name }));
+    await userEvent.click(within(panel(intern.name)).getByRole('button', { name: 'New key' }));
     const ask = screen.getByRole('dialog', { name: `New key for ${intern.name}?` });
     expect(within(ask).getByText('Their current key stops working at once.')).toBeTruthy();
     expect(document.activeElement).toBe(within(ask).getByRole('button', { name: 'Cancel' }));
@@ -93,178 +194,70 @@ describe('Settings → Team', () => {
     await userEvent.click(within(ask).getByRole('button', { name: 'Make new key' }));
     const shown = await screen.findByRole('dialog', { name: `New key for ${intern.name}` });
     expect(within(shown).getByText('k-new-123')).toBeTruthy();
+    expect(within(shown).getByText(/You won’t see this again/)).toBeTruthy();
     expect(platform.posts.find((p) => p.action === 'newKey')!.body).toMatchObject({ name: intern.name });
   });
 
-  it('asks before turning someone off or on, and never offers to turn yourself off', async () => {
-    const platform = fakeServer({
-      team: TEAM,
+  it('asks before turning someone off or on; no new key for someone turned off', async () => {
+    const platform = await openTeam({
       setActive: (body) => ({ ok: true, person: { name: body['name'], role: 'Intern', active: body['active'] } }),
     });
-    renderApp({ platform, user: admin, path: '/settings' });
-    await screen.findByRole('cell', { name: intern.name });
-
-    // Your own row can be edited, never turned off or given a new key.
-    expect(within(row(admin.name)).getAllByRole('button').map((b) => b.textContent)).toEqual(['Edit']);
-    expect(within(row(admin.name)).getByText('You')).toBeTruthy();
-
-    await userEvent.click(screen.getByRole('button', { name: `Turn off ${intern.name}` }));
+    await userEvent.click(screen.getByRole('button', { name: intern.name }));
+    await userEvent.click(within(panel(intern.name)).getByRole('button', { name: 'Turn off' }));
     const ask = screen.getByRole('dialog', { name: `Turn off ${intern.name}?` });
     await userEvent.click(within(ask).getByRole('button', { name: 'Cancel' }));
     expect(actionsOf(platform)).not.toContain('setActive');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Turn on Carlo Mendoza' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Carlo Mendoza' }));
+    const access = within(panel('Carlo Mendoza')).getByRole('region', { name: 'Access' });
+    expect(within(access).queryByRole('button', { name: 'New key' })).toBeNull();
+    await userEvent.click(within(access).getByRole('button', { name: 'Turn on' }));
     await userEvent.click(within(screen.getByRole('dialog', { name: 'Turn on Carlo Mendoza?' })).getByRole('button', { name: 'Turn on' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(platform.posts.find((p) => p.action === 'setActive')!.body).toMatchObject({ name: 'Carlo Mendoza', active: true });
   });
 
-  it('lays out the form in order: Intern name, Role, FB broker name, FB profile link', async () => {
-    const dialog = await openAdd(fakeServer({ team: TEAM }));
-
+  it('adds a person and shows the key once, with the profile-link warning', async () => {
+    const platform = await openTeam({
+      addPerson: (body) => ({
+        ok: true,
+        person: { name: body['name'], role: body['role'], fbAccounts: (body['fbAccounts'] as string[]).join(', '), active: true },
+        key: 'k-9f3a-77',
+      }),
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add person' });
     const order = Array.from(dialog.querySelectorAll('label.field__label, legend')).map((l) => l.textContent);
     expect(order).toEqual(['Intern name', 'Role', 'FB broker name', 'FB profile link (optional)']);
-    expect(within(dialog).getByRole('radio', { name: 'Intern' })).toHaveProperty('checked', true);
-    expect(within(dialog).getByText('The name shown on Facebook.')).toBeTruthy();
-    expect(within(dialog).getByLabelText(/^FB profile link/).getAttribute('placeholder')).toBe('https://www.facebook.com/…');
-
-    // An Admin is a "Name", and their broker name is optional.
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'Admin' }));
-    const after = Array.from(dialog.querySelectorAll('label.field__label, legend')).map((l) => l.textContent);
-    expect(after).toEqual(['Name', 'Role', 'FB broker name (optional)', 'FB profile link (optional)']);
-  });
-
-  it('requires the broker name for an intern, not for an admin', async () => {
-    const platform = fakeServer({
-      team: TEAM,
-      addPerson: (body) => ({ ok: true, person: { name: body['name'], role: body['role'], active: true }, key: 'k-1' }),
-    });
-    const dialog = await openAdd(platform);
     await userEvent.type(within(dialog).getByLabelText('Intern name'), 'Mika Reyes');
+    await userEvent.type(within(dialog).getByLabelText(/^FB broker name/), 'APG Main, , APG South ');
+    await userEvent.type(within(dialog).getByLabelText(/^FB profile link/), 'facebook.com/mika.reyes');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add person' }));
 
+    const shown = await screen.findByRole('dialog', { name: 'Mika Reyes added' });
+    expect(platform.posts.find((p) => p.action === 'addPerson')!.body).toMatchObject({
+      name: 'Mika Reyes',
+      role: 'Intern',
+      fbAccounts: ['APG Main', 'APG South'],
+      fbProfileLink: 'https://facebook.com/mika.reyes',
+    });
+    expect(within(shown).getByText('k-9f3a-77')).toBeTruthy();
+    // This fake answers like an older web app: no fbProfileLink in the person.
+    expect(within(shown).getByText('Profile link not saved')).toBeTruthy();
+    await userEvent.click(within(shown).getByRole('button', { name: 'Copy the key' }));
+    await waitFor(() => expect(platform.copied).toEqual(['k-9f3a-77']));
+    await userEvent.click(within(shown).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByText('k-9f3a-77')).toBeNull();
+  });
+
+  it('says a duplicate name before asking the server, and requires a broker name for an intern', async () => {
+    const platform = await openTeam();
+    await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add person' });
+    await userEvent.type(within(dialog).getByLabelText('Intern name'), 'jan dela cruz');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add person' }));
+    expect(within(dialog).getByText('Jan Dela Cruz is already on the team.')).toBeTruthy();
     expect(within(dialog).getByText('Type their FB broker name.')).toBeTruthy();
-    expect(document.activeElement).toBe(within(dialog).getByLabelText(/^FB broker name/));
     expect(actionsOf(platform)).not.toContain('addPerson');
-
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'Admin' }));
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add person' }));
-    await screen.findByRole('dialog', { name: 'Mika Reyes added' });
-    expect(platform.posts.find((p) => p.action === 'addPerson')!.body).toMatchObject({ name: 'Mika Reyes', role: 'Admin' });
-  });
-
-  it('checks the profile link as it is typed, and a bad one blocks Add', async () => {
-    const platform = fakeServer({ team: TEAM });
-    const dialog = await openAdd(platform);
-    await userEvent.type(within(dialog).getByLabelText('Intern name'), 'Cyrus Orbano');
-    await userEvent.type(within(dialog).getByLabelText(/^FB broker name/), 'CYRUS ORBANO');
-    const link = within(dialog).getByLabelText(/^FB profile link/);
-    await userEvent.type(link, 'https://instagram.com/cyrus');
-    await userEvent.tab();
-
-    expect(within(dialog).getByText("That isn't a Facebook profile link.")).toBeTruthy();
-    expect(link.getAttribute('aria-invalid')).toBe('true');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add person' }));
-    expect(actionsOf(platform)).not.toContain('addPerson');
-    expect(document.activeElement).toBe(link);
-
-    // Fixed as it is typed: the message goes.
-    await userEvent.clear(link);
-    await userEvent.type(link, PROFILE);
-    expect(within(dialog).queryByText("That isn't a Facebook profile link.")).toBeNull();
-  });
-
-  it('shows the broker name and an Open link to the profile, which opens it in the browser', async () => {
-    const platform = fakeServer({ team: TEAM });
-    renderApp({ platform, user: admin, path: '/settings' });
-    await screen.findByRole('cell', { name: intern.name });
-
-    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
-    expect(headers).toEqual(['Name', 'Role', 'FB broker name', 'FB profile', 'Active', 'Actions']);
-    expect(within(row(intern.name)).getByText('APG Main')).toBeTruthy();
-    expect(within(row(admin.name)).queryByRole('button', { name: /Facebook profile/ })).toBeNull();
-
-    await userEvent.click(within(row(intern.name)).getByRole('button', { name: `Open ${intern.name}'s Facebook profile` }));
-    await waitFor(() => expect(platform.opened).toEqual(['https://www.facebook.com/jan.delacruz']));
-  });
-
-  it('edits only the broker name and the link, then reads the team again', async () => {
-    const platform = fakeServer({
-      team: TEAM,
-      updatePerson: (body) => ({
-        ok: true,
-        person: { name: body['name'], role: 'Intern', fbAccounts: body['fbAccounts'], fbProfileLink: body['fbProfileLink'], active: true },
-      }),
-    });
-    renderApp({ platform, user: admin, path: '/settings' });
-    await screen.findByRole('cell', { name: intern.name });
-
-    await userEvent.click(screen.getByRole('button', { name: `Edit ${intern.name}` }));
-    const dialog = screen.getByRole('dialog', { name: `Edit ${intern.name}` });
-    expect(within(dialog).getByLabelText('Intern name')).toHaveProperty('readOnly', true);
-    expect(within(dialog).getByLabelText('Intern name')).toHaveProperty('value', intern.name);
-    expect(within(dialog).getByLabelText('Role')).toHaveProperty('readOnly', true);
-    expect(within(dialog).queryByRole('radio')).toBeNull();
-    const broker = within(dialog).getByLabelText(/^FB broker name/);
-    expect(broker).toHaveProperty('value', 'APG Main');
-    expect(document.activeElement).toBe(broker);
-
-    await userEvent.clear(broker);
-    await userEvent.type(broker, 'CYRUS ORBANO');
-    const link = within(dialog).getByLabelText(/^FB profile link/);
-    await userEvent.clear(link);
-    await userEvent.type(link, 'm.facebook.com/cyrus.orbano');
-    const teamReads = actionsOf(platform).filter((a) => a === 'team').length;
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(platform.posts.find((p) => p.action === 'updatePerson')!.body).toEqual(
-      expect.objectContaining({
-        name: intern.name,
-        fbAccounts: ['CYRUS ORBANO'],
-        fbProfileLink: 'https://m.facebook.com/cyrus.orbano',
-      }),
-    );
-    const sent = platform.posts.find((p) => p.action === 'updatePerson')!.body;
-    expect(sent).not.toHaveProperty('role');
-    expect(sent).not.toHaveProperty('active');
-    await waitFor(() => expect(actionsOf(platform).filter((a) => a === 'team').length).toBeGreaterThan(teamReads));
-  });
-
-  it('shows the listings check as counts and folded lists', async () => {
-    const platform = fakeServer({
-      team: TEAM,
-      indexCheck: {
-        ok: true,
-        checkedAt: '31 Oct 2026, 10:00',
-        directoryCount: 1474,
-        checkerCount: 1471,
-        directoryOnly: [{ id: 'd1', name: 'Kapitolyo Ground Floor Retail, Pasig' }],
-        checkerOnly: [],
-        sold: [{ id: 's1', name: 'Seaside Residences 2BR, Pasay' }],
-      },
-    });
-    renderApp({ platform, user: admin, path: '/settings' });
-    const card = screen.getByRole('region', { name: 'Listings check' });
-    await userEvent.click(within(card).getByRole('button', { name: 'Check' }));
-    expect(await within(card).findByText('1,474')).toBeTruthy();
-    expect(within(card).getByText('1,471')).toBeTruthy();
-    expect(within(card).getByText('Only in Directory').closest('summary')).not.toBeNull();
-    expect(within(card).getByText('Only in checker').closest('summary')).toBeNull();
-    expect(within(card).getByText('Seaside Residences 2BR, Pasay')).toBeTruthy();
-  });
-
-  it.each([
-    ['checker-off', 'The listings check is turned off.'],
-    ['checker-unavailable', "The listing checker can't be reached right now. Try again later."],
-  ])('says %s as one quiet line, not an error', async (code, line) => {
-    const platform = fakeServer({ team: TEAM, indexCheck: { ok: false, error: code, message: 'Server words.' } });
-    renderApp({ platform, user: admin, path: '/settings' });
-    const card = screen.getByRole('region', { name: 'Listings check' });
-    await userEvent.click(within(card).getByRole('button', { name: 'Check' }));
-
-    expect(await within(card).findByText(line)).toBeTruthy();
-    expect(within(card).queryByRole('alert')).toBeNull();
-    expect(card.querySelector('.notice')).toBeNull();
   });
 });

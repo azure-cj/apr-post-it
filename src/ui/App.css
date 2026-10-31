@@ -162,8 +162,7 @@
 }
 
 .confirm::backdrop {
-  background: var(--viewer-bg);
-  opacity: 0.8;
+  background: var(--scrim);
 }
 
 .confirm__title {
