@@ -85,6 +85,11 @@
   color: var(--text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* Bounded, so a long document never pushes the checks and photos out of
+     reach; it scrolls inside, and takes focus so the keyboard can scroll it. */
+  max-height: min(26rem, 55vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .post-text--ready .post-text__body {

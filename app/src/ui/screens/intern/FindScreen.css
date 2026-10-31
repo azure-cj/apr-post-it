@@ -49,7 +49,7 @@
 }
 
 .find__count {
-  padding-inline: var(--space-8);
+  margin: 0;
 }
 
 .find__more {

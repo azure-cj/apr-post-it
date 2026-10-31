@@ -175,6 +175,8 @@
 }
 
 .queue-item__name--link {
+  display: inline-block;
+  min-block-size: 24px; /* WCAG 2.5.8 */
   border-radius: var(--radius-sm);
   text-decoration: none;
 }

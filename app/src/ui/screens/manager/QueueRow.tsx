@@ -91,6 +91,12 @@ export const QueueRow = forwardRef<HTMLLIElement, QueueRowProps>(function QueueR
             <span>{warning}</span>
           </p>
         ) : null}
+        {!entry.property && !started ? (
+          <p className="assign-warning">
+            <Icon name="warn" size={16} className="assign-warning__icon" />
+            <span>Its folder isn&rsquo;t in the library any more. Remove it, then add the listing again under its new name.</span>
+          </p>
+        ) : null}
         {entry.property && !started ? <PostingWarning property={entry.property} className="assign-warning" /> : null}
       </div>
       <div className="queue-row__move">

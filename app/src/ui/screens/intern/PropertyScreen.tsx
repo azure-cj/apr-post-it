@@ -402,7 +402,7 @@ export function PropertyScreen() {
         </div>
 
         <aside className="two-pane__side" aria-label="Before you post">
-          <Verdict gate={gate} cool={cool} />
+          <Verdict gate={gate} cool={cool} manager={manager} />
 
           <Card title="Pre-post checks" headingLevel={2} padding="tight">
             {detail === null ? (
@@ -534,9 +534,9 @@ function PostText({
         &ldquo;{detail.name}&rdquo;.
       </Notice>
     ) : (
-      <Notice tone="danger" title="Nobody has separated this document yet" className="post-text__withheld">
-        A manager has to add a separator above the owner's details before any of it can be shown or copied. None of it
-        is confirmed safe to post until then. Tell your manager it's &ldquo;{detail.name}&rdquo;.
+      <Notice tone="danger" title="There's nothing safe to show yet" className="post-text__withheld">
+        Nobody has separated this document. A manager has to add a separator above the owner's details before any of
+        it can be shown or copied. Tell your manager it's &ldquo;{detail.name}&rdquo;.
       </Notice>
     );
   }
@@ -602,7 +602,15 @@ function InternalSection({ detail }: { readonly detail: PropertyDetail }) {
 }
 
 /** The big answer, first thing in the side pane: may this listing be posted now? */
-function Verdict({ gate, cool }: { readonly gate: CopyGate; readonly cool: CooldownState | null }) {
+function Verdict({
+  gate,
+  cool,
+  manager,
+}: {
+  readonly gate: CopyGate;
+  readonly cool: CooldownState | null;
+  readonly manager: boolean;
+}) {
   const [tone, word, line] = ((): readonly ['ok' | 'danger' | 'neutral', string, string] => {
     if (gate.kind === 'ready') return ['ok', 'Ready to post', 'Copy the text, download the photos, then post it.'];
     if (gate.kind === 'waiting') return ['neutral', 'Checking…', gate.text];
@@ -616,7 +624,13 @@ function Verdict({ gate, cool }: { readonly gate: CopyGate; readonly cool: Coold
       case 'empty':
         return ['danger', 'Nothing to post', 'The document has no public text.'];
       case 'check':
-        return ['danger', 'Copy is blocked', 'A check failed. The reason is beside the Copy button.'];
+        return [
+          'danger',
+          'Copy is blocked',
+          manager
+            ? 'The document needs fixing first. The failed check says what to change.'
+            : 'Ask your manager to fix the document. The failed check says what is wrong.',
+        ];
     }
   })();
   return (

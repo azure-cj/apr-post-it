@@ -124,7 +124,7 @@ describe('a document nobody has separated', () => {
     });
     renderApp({ platform, path: PATH });
 
-    expect(await screen.findByText('Nobody has separated this document yet')).toBeTruthy();
+    expect(await screen.findByText("There's nothing safe to show yet")).toBeTruthy();
     expect(screen.getByText(/A manager has to add a separator above the owner's details/)).toBeTruthy();
     expect(screen.queryByRole('document')).toBeNull();
     expect(copyButton().disabled).toBe(true);
@@ -142,7 +142,7 @@ describe('a document nobody has separated', () => {
     });
     renderApp({ platform, path: PATH });
 
-    expect(await screen.findByText('Nobody has separated this document yet')).toBeTruthy();
+    expect(await screen.findByText("There's nothing safe to show yet")).toBeTruthy();
     expect(document.body.textContent).not.toContain('Edgardo Lim');
     expect(document.body.textContent).not.toContain('0918 555 0135');
     expect(document.body.textContent).not.toContain('Price: ₱4.2M');

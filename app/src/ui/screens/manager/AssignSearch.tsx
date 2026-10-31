@@ -81,7 +81,7 @@ interface ResultRowProps {
 
 function ResultRow({ property, check, added, today, intern, onAdd }: ResultRowProps) {
   const reasonId = useId();
-  const blockedByCooldown = check?.block === 'cooldown';
+  const blocked = check !== null && !check.canAdd && check.reason !== '';
   return (
     <li className={['assign-result', check && !check.canAdd && !added ? 'assign-result--blocked' : null].filter(Boolean).join(' ')}>
       <div className="assign-result__body">
@@ -90,7 +90,7 @@ function ResultRow({ property, check, added, today, intern, onAdd }: ResultRowPr
           <CategoryTag category={property.category} />
           {check ? <StatusWord check={check} today={today} intern={intern} /> : null}
         </div>
-        {blockedByCooldown && !added ? (
+        {blocked && !added ? (
           <p className="assign-result__reason" id={reasonId}>
             {check.reason}
           </p>
@@ -104,7 +104,7 @@ function ResultRow({ property, check, added, today, intern, onAdd }: ResultRowPr
           size="small"
           disabled={!check?.canAdd}
           aria-label={`Add ${property.name}`}
-          aria-describedby={blockedByCooldown ? reasonId : undefined}
+          aria-describedby={blocked && !added ? reasonId : undefined}
           onClick={onAdd}
         >
           Add
