@@ -14,6 +14,8 @@ and (Phase 2) lets the manager build each intern's queue and watch progress on t
 2. Double-click **`run.cmd`** (or `dotnet run --project src\PostIt.App`).
    The first run copies the bundled sample data to `%LOCALAPPDATA%\APG.PostIt\PROTOTYPE-sample` and opens the sign-in page.
 
+To remove Post-It from a PC (the installed app, its data and saved key, and the prototype's `%LOCALAPPDATA%\APG.PostIt`), double-click **`uninstall.cmd`**. It asks first, and never touches the Google sheets, Drive or this folder.
+
 `build.cmd` builds everything and runs the 183 tests. Visual Studio 2022 opens `APG.PostIt.sln` directly (no extensions, no NuGet packages needed).
 
 ## Try the demo
