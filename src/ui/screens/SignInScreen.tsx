@@ -16,13 +16,19 @@ export interface SignInScreenProps {
   readonly error?: string | null | undefined;
   /** The link from last time, so only the key needs pasting. */
   readonly initialUrl?: string | undefined;
+  /**
+   * The link built into this version of the app (src/config.ts). When set,
+   * only the key is asked for and this link is the one sent.
+   */
+  readonly builtInUrl?: string | undefined;
 }
 
 /**
- * Sign in with the web app link and your own key. The server, not the app,
- * says who you are and what you may do.
+ * Sign in with your own key, and the web app link when this version has none
+ * built in. The server, not the app, says who you are and what you may do.
  */
-export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '' }: SignInScreenProps) {
+export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '', builtInUrl = '' }: SignInScreenProps) {
+  const builtIn = builtInUrl.trim();
   const [url, setUrl] = useState(initialUrl);
   const [key, setKey] = useState('');
   const [showKey, setShowKey] = useState(false);
@@ -32,7 +38,7 @@ export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '' 
 
   // Start where the typing starts: the link, or the key if the link is known.
   // Only on arrival, so a later initialUrl doesn't move focus.
-  const arrivedWithUrl = useRef(initialUrl !== '');
+  const arrivedWithUrl = useRef(builtIn !== '' || initialUrl !== '');
   useEffect(() => {
     (arrivedWithUrl.current ? keyRef : urlRef).current?.focus();
   }, []);
@@ -40,7 +46,7 @@ export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '' 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy) return;
-    const cleanUrl = url.trim();
+    const cleanUrl = builtIn || url.trim();
     const cleanKey = key.trim();
     const next = { url: cleanUrl === '', key: cleanKey === '' };
     setMissing(next);
@@ -56,14 +62,14 @@ export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '' 
   };
 
   // Something to stop or clear. With nothing, Cancel stays where it is but can't be pressed.
-  const canCancel = busy || url !== '' || key !== '' || Boolean(error) || missing.url || missing.key;
+  const canCancel = busy || (!builtIn && url !== '') || key !== '' || Boolean(error) || missing.url || missing.key;
   const cancel = () => {
     onCancel?.();
     setUrl('');
     setKey('');
     setShowKey(false);
     setMissing({ url: false, key: false });
-    urlRef.current?.focus();
+    (builtIn ? keyRef : urlRef).current?.focus();
   };
 
   return (
@@ -72,25 +78,31 @@ export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '' 
         <h1 className="sign-in__title" tabIndex={-1}>
           Sign in
         </h1>
-        <p className="sign-in__intro">Paste the web app link and your own key. Your admin sends you both.</p>
+        <p className="sign-in__intro">
+          {builtIn
+            ? 'Paste your own key. Your admin sends it to you.'
+            : 'Paste the web app link and your own key. Your admin sends you both.'}
+        </p>
 
         <form className="sign-in__form" onSubmit={submit} noValidate aria-busy={busy || undefined}>
-          <TextInput
-            ref={urlRef}
-            label="Web app link"
-            type="url"
-            inputMode="url"
-            placeholder="https://script.google.com/macros/s/…/exec"
-            autoComplete="off"
-            spellCheck={false}
-            value={url}
-            readOnly={busy}
-            error={missing.url ? 'Paste the web app link.' : undefined}
-            onChange={(event) => {
-              setUrl(event.target.value);
-              if (missing.url) setMissing((m) => ({ ...m, url: false }));
-            }}
-          />
+          {builtIn ? null : (
+            <TextInput
+              ref={urlRef}
+              label="Web app link"
+              type="url"
+              inputMode="url"
+              placeholder="https://script.google.com/macros/s/…/exec"
+              autoComplete="off"
+              spellCheck={false}
+              value={url}
+              readOnly={busy}
+              error={missing.url ? 'Paste the web app link.' : undefined}
+              onChange={(event) => {
+                setUrl(event.target.value);
+                if (missing.url) setMissing((m) => ({ ...m, url: false }));
+              }}
+            />
+          )}
 
           <TextInput
             ref={keyRef}

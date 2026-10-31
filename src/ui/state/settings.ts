@@ -1,3 +1,4 @@
+import { BUILT_IN_SCRIPT_URL } from '@/config';
 import { defaultSettings } from '@/core/types';
 
 /**
@@ -6,7 +7,10 @@ import { defaultSettings } from '@/core/types';
  * and the backend reads it from there before every call.
  */
 export interface AppSettings {
-  /** The web app's /exec link. Set by signing in, or in Settings. */
+  /**
+   * The web app's /exec link. The one built into this version when there is
+   * one (src/config.ts); otherwise whatever was typed at sign-in.
+   */
   readonly scriptUrl: string;
   /** Days before a listing may be posted again. The server enforces its own; this one is for display. */
   readonly cooldownDays: number;
@@ -23,7 +27,20 @@ export const defaultAppSettings: AppSettings = Object.freeze({
   repostDueDays: defaultSettings.repostDueDays,
 });
 
-/** Reads what was stored. Anything missing, damaged or out of range falls back to the default. */
+/**
+ * The settings with the link built into this version, when there is one. A
+ * link kept by an older install, or typed by hand, never overrides it: the
+ * built-in link is the one this build was made for.
+ */
+export function withBuiltInLink(settings: AppSettings): AppSettings {
+  const builtIn = BUILT_IN_SCRIPT_URL;
+  return builtIn && settings.scriptUrl !== builtIn ? { ...settings, scriptUrl: builtIn } : settings;
+}
+
+/**
+ * Reads what was stored. Anything missing, damaged or out of range falls back
+ * to the default, and a built-in link replaces whatever link was kept.
+ */
 export function parseSettings(text: string | null | undefined): AppSettings {
   let saved: Record<string, unknown> = {};
   try {
@@ -32,11 +49,11 @@ export function parseSettings(text: string | null | undefined): AppSettings {
   } catch {
     // A damaged file is no settings: the defaults, and sign in again.
   }
-  return {
+  return withBuiltInLink({
     scriptUrl: typeof saved['scriptUrl'] === 'string' ? saved['scriptUrl'].trim() : defaultAppSettings.scriptUrl,
     cooldownDays: wholeDays(saved['cooldownDays'], defaultAppSettings.cooldownDays),
     repostDueDays: wholeDays(saved['repostDueDays'], defaultAppSettings.repostDueDays),
-  };
+  });
 }
 
 export function serializeSettings(settings: AppSettings): string {

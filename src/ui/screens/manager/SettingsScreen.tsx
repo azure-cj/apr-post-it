@@ -6,6 +6,8 @@ import './SettingsScreen.css';
 export interface SettingsScreenProps {
   /** The web app link and the two rules. AppSettings fits. The key is never passed, so it can't be shown. */
   readonly settings: Pick<Settings, 'scriptUrl' | 'cooldownDays' | 'repostDueDays'>;
+  /** The link is built into this version of the app (src/config.ts), so nobody types it. */
+  readonly builtInLink?: boolean | undefined;
   /** The Team tab without its keys, in its own order. Null: the web app doesn't send it. */
   readonly team: readonly TeamMember[] | null;
   /** Puts text on the clipboard. Without it, there is no Copy button. */
@@ -23,7 +25,7 @@ const MONO = 'settings__code';
  * changed here: the rules live in the web app, and people and their keys in
  * the private admin sheet, which only the admin can open (DECISIONS D3).
  */
-export function SettingsScreen({ settings, team, onCopy, loading = false, error }: SettingsScreenProps) {
+export function SettingsScreen({ settings, builtInLink = false, team, onCopy, loading = false, error }: SettingsScreenProps) {
   const { scriptUrl, cooldownDays, repostDueDays } = settings;
   const url = scriptUrl.trim();
 
@@ -82,11 +84,22 @@ export function SettingsScreen({ settings, team, onCopy, loading = false, error 
                 Press Run. Their key is printed in the execution log, and kept on the Team tab of the private admin
                 sheet.
               </li>
-              <li>
-                Send them the web app link and their key, privately. The key is their identity: anyone who has it can log
-                posts as them.
-              </li>
-              <li>They paste both into Post-It&rsquo;s sign-in screen, and the web app tells it who they are.</li>
+              {builtInLink ? (
+                <>
+                  <li>
+                    Send them their key, privately. The key is their identity: anyone who has it can log posts as them.
+                  </li>
+                  <li>They paste it into Post-It&rsquo;s sign-in screen, and the web app tells it who they are.</li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    Send them the web app link and their key, privately. The key is their identity: anyone who has it can
+                    log posts as them.
+                  </li>
+                  <li>They paste both into Post-It&rsquo;s sign-in screen, and the web app tells it who they are.</li>
+                </>
+              )}
             </ol>
             <p className="settings__note">
               Spell the name the way the tracker already does: queues and posts are matched to people by name. If the
@@ -101,7 +114,14 @@ export function SettingsScreen({ settings, team, onCopy, loading = false, error 
           </Card>
         </div>
         <div className="settings__side">
-          <Card title="Web app" description="Everyone signs in with this link and their own key.">
+          <Card
+            title="Web app"
+            description={
+              builtInLink
+                ? 'Built into this version of the app. Everyone signs in with their own key only.'
+                : 'Everyone signs in with this link and their own key.'
+            }
+          >
             <TextInput
               label="Web app link"
               value={url}
@@ -115,8 +135,17 @@ export function SettingsScreen({ settings, team, onCopy, loading = false, error 
                   </Button>
                 ) : undefined
               }
-              hint="A new intern needs this link and the key made for them. Send the two separately."
+              hint={
+                builtInLink
+                  ? 'To change it, set it in src/config.ts and build the app again. Keep it by editing the existing deployment with a new version.'
+                  : 'A new intern needs this link and the key made for them. Send the two separately.'
+              }
             />
+            {builtInLink ? (
+              <p className="settings__built-in">
+                <Pill tone="info">Built into this version of the app</Pill>
+              </p>
+            ) : null}
           </Card>
 
           <Card title="Rules" description="The same for everyone.">

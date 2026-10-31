@@ -19,6 +19,7 @@ export type IconName =
   | 'inbox'
   | 'tracker'
   | 'assign'
+  | 'interns'
   | 'settings'
   | 'sidebar'
   | 'refresh';
@@ -86,6 +87,14 @@ const paths: Record<IconName, ReactElement> = {
       <path d="M4 18h7" />
       <path d="M18 14.5v7" />
       <path d="M14.5 18h7" />
+    </>
+  ),
+  interns: (
+    <>
+      <circle cx="9" cy="8.5" r="3.25" />
+      <path d="M3.5 19.5v-.75A4.75 4.75 0 0 1 8.25 14h1.5a4.75 4.75 0 0 1 4.75 4.75v.75" />
+      <path d="M15.75 5.6a3.25 3.25 0 0 1 0 5.8" />
+      <path d="M17.75 14.25a4.75 4.75 0 0 1 2.75 4.5v.75" />
     </>
   ),
   settings: (

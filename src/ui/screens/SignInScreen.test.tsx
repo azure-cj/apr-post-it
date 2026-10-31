@@ -135,4 +135,17 @@ describe('SignInScreen', () => {
       expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(false);
     });
   });
+
+  describe('with a link built into this version', () => {
+    const BUILT_IN = 'https://script.google.com/macros/s/BUILT-IN/exec';
+
+    it('asks only for the key, starts there, and sends the built-in link', async () => {
+      const onSubmit = vi.fn();
+      render(<SignInScreen onSubmit={onSubmit} busy={false} builtInUrl={BUILT_IN} initialUrl="https://old.example/exec" />);
+      expect(screen.queryByLabelText('Web app link')).toBeNull();
+      expect(document.activeElement).toBe(screen.getByLabelText('Your key'));
+      await userEvent.type(screen.getByLabelText('Your key'), ' abc {Enter}');
+      expect(onSubmit).toHaveBeenCalledWith(BUILT_IN, 'abc');
+    });
+  });
 });

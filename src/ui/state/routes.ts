@@ -11,13 +11,14 @@ export const paths = {
   queue: '/queue',
   assign: '/assign',
   tracker: '/tracker',
+  interns: '/interns',
   settings: '/settings',
 } as const;
 
 /** The nav's destinations. */
-export type NavKey = 'queue' | 'find' | 'tracker' | 'assign' | 'settings';
+export type NavKey = 'queue' | 'find' | 'tracker' | 'assign' | 'interns' | 'settings';
 
-export const navKeys: readonly NavKey[] = ['queue', 'find', 'tracker', 'assign', 'settings'];
+export const navKeys: readonly NavKey[] = ['queue', 'find', 'tracker', 'assign', 'interns', 'settings'];
 
 /**
  * What a property and its log page are told about how they were reached, as

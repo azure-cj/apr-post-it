@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useId, useRef, useState, type FocusEvent, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type FocusEvent, type MouseEvent } from 'react';
 import { initials } from '@/core/types';
 import { Icon, type IconName } from './Icon';
 import { Badge } from './Pill';
-import { Spinner } from './Spinner';
 import './TitleBar.css';
 import './Sidebar.css';
 
@@ -23,26 +22,6 @@ export interface SidebarUser {
   readonly role: string;
 }
 
-/** One person in the sidebar's list. */
-export interface SidebarPerson {
-  /** Their name, which is also the key. */
-  readonly name: string;
-  /** Where the row leads: their queue. */
-  readonly href: string;
-  /** Their day: "2 of 5 posted". Absent while the day is being read. */
-  readonly progress?: string | undefined;
-  /** Posts of theirs waiting for a link. Shown as a dot, and said in words. */
-  readonly pending?: number | undefined;
-  /** Their queue is the one open. */
-  readonly selected?: boolean | undefined;
-}
-
-/** The people list's state: reading, couldn't, or here (perhaps empty). */
-export type SidebarPeople =
-  | { readonly status: 'loading' }
-  | { readonly status: 'error'; readonly message: string; readonly onRetry: () => void }
-  | { readonly status: 'ready'; readonly people: readonly SidebarPerson[]; readonly empty: ReactNode };
-
 export interface SidebarProps {
   /** The role's destinations, in order. */
   readonly nav: readonly SidebarNavItem[];
@@ -55,12 +34,6 @@ export interface SidebarProps {
   /** An icon rail when true. */
   readonly collapsed: boolean;
   readonly onToggleCollapsed: () => void;
-  /** The list of people under the nav (an admin's interns). Absent: no list. */
-  readonly people?: SidebarPeople | undefined;
-  /** What the people list is called. */
-  readonly peopleLabel?: string | undefined;
-  /** Called instead of following a person's link. */
-  readonly onOpenPerson?: ((name: string) => void) | undefined;
   /** Where the brand word leads. */
   readonly brandHref?: string | undefined;
   readonly navLabel?: string | undefined;
@@ -72,11 +45,6 @@ export interface SidebarProps {
 
 const isModifiedClick = (e: MouseEvent) => e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
 
-/** "1 post waiting for a link", "3 posts waiting for a link". */
-export function pendingWords(n: number): string {
-  return `${n} ${n === 1 ? 'post' : 'posts'} waiting for a link`;
-}
-
 interface Tip {
   readonly text: string;
   readonly top: number;
@@ -84,8 +52,8 @@ interface Tip {
 }
 
 /**
- * The window's left edge: the brand word, the role's nav, an admin's interns,
- * and who is signed in. Collapses to an icon rail of 64px, where every icon
+ * The window's left edge: the brand word, the role's nav, and who is signed
+ * in. Collapses to an icon rail of 64px, where every icon
  * keeps its name for screen readers and shows it in a tooltip.
  *
  * Icons sit at the same place in both widths, so collapsing only takes the
@@ -99,9 +67,6 @@ export function Sidebar({
   onSignOut,
   collapsed,
   onToggleCollapsed,
-  people,
-  peopleLabel = 'Interns',
-  onOpenPerson,
   brandHref = '#/',
   navLabel = 'Main',
   dragRegion = false,
@@ -109,11 +74,10 @@ export function Sidebar({
 }: SidebarProps) {
   const asideRef = useRef<HTMLElement>(null);
   const id = useId();
-  const peopleHeadingId = `${id}-people`;
   const [tip, setTip] = useState<Tip | null>(null);
 
   // A tooltip names what the rail shows only as an icon. Fixed, so the
-  // scrolling list can't clip it; dismissed by Escape (WCAG 1.4.13).
+  // sidebar's overflow can't clip it; dismissed by Escape (WCAG 1.4.13).
   const showTip = useCallback((target: HTMLElement, text: string) => {
     const edge = asideRef.current?.getBoundingClientRect().right ?? 0;
     const box = target.getBoundingClientRect();
@@ -134,15 +98,6 @@ export function Sidebar({
       window.removeEventListener('scroll', onScroll, true);
     };
   }, [tip]);
-
-  // The open queue's person is in view, however long the list.
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const selectedName = people?.status === 'ready' ? (people.people.find((p) => p.selected)?.name ?? null) : null;
-  useEffect(() => {
-    if (selectedName === null) return;
-    const row = scrollRef.current?.querySelector<HTMLElement>('[aria-current="true"]');
-    if (row && typeof row.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' });
-  }, [selectedName]);
 
   // Nothing to name once the words are back.
   useEffect(() => setTip(null), [collapsed]);
@@ -200,94 +155,7 @@ export function Sidebar({
         </ul>
       </nav>
 
-      {people ? (
-        <section className="sidebar__people" aria-labelledby={peopleHeadingId}>
-          <h2 id={peopleHeadingId} className="sidebar__heading">
-            {peopleLabel}
-          </h2>
-          <div className="sidebar__scroll" ref={scrollRef}>
-            {people.status === 'loading' ? (
-              <p className="sidebar__state">
-                <Spinner size="small" label={`Reading the ${peopleLabel.toLowerCase()}`} />
-                <span className="sidebar__state-text" aria-hidden="true">
-                  Reading the team…
-                </span>
-              </p>
-            ) : people.status === 'error' ? (
-              <div className="sidebar__state sidebar__state--error" role="alert">
-                <Icon name="warn" size={20} className="sidebar__state-icon" />
-                <div className="sidebar__state-text">
-                  <p className="sidebar__state-title">Couldn&rsquo;t load the {peopleLabel.toLowerCase()}.</p>
-                  <p className="sidebar__state-detail">{people.message}</p>
-                </div>
-                <button
-                  type="button"
-                  className="sidebar__retry"
-                  onClick={people.onRetry}
-                  {...tipFor(`Couldn't load the ${peopleLabel.toLowerCase()}. Try again.`)}
-                >
-                  <Icon name="refresh" size={18} className="sidebar__retry-icon" />
-                  <span className="sidebar__retry-label">Try again</span>
-                </button>
-              </div>
-            ) : people.people.length === 0 ? (
-              <p className="sidebar__state sidebar__state--empty">
-                <span className="sidebar__state-text">{people.empty}</span>
-              </p>
-            ) : (
-              <ul className="sidebar__list sidebar__list--people">
-                {people.people.map((person) => {
-                  const pending = person.pending ?? 0;
-                  const said = [person.name, person.progress, pending > 0 ? pendingWords(pending) : '']
-                    .filter(Boolean)
-                    .join(' · ');
-                  return (
-                    <li key={person.name}>
-                      <a
-                        className="sidebar__item sidebar__person"
-                        href={person.href}
-                        aria-current={person.selected ? 'true' : undefined}
-                        onClick={(event) => {
-                          if (!onOpenPerson || isModifiedClick(event)) return;
-                          event.preventDefault();
-                          onOpenPerson(person.name);
-                        }}
-                        {...tipFor(said)}
-                      >
-                        <span className="sidebar__person-text">
-                          <span className="sidebar__person-name">{person.name}</span>
-                          {person.progress ? (
-                            <span className="sidebar__person-progress tabular">
-                              {person.progress}
-                              {pending > 0 ? (
-                                <>
-                                  {' · '}
-                                  <span className="sidebar__person-pending">{pending} pending</span>
-                                </>
-                              ) : null}
-                            </span>
-                          ) : pending > 0 ? (
-                            <span className="sidebar__person-progress">
-                              <span className="sidebar__person-pending">{pending} pending</span>
-                            </span>
-                          ) : null}
-                          {pending > 0 ? <span className="visually-hidden">, {pendingWords(pending)}</span> : null}
-                        </span>
-                        <span className="sidebar__avatar" aria-hidden="true">
-                          {initials(person.name)}
-                          {pending > 0 ? <span className="sidebar__dot" /> : null}
-                        </span>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </section>
-      ) : (
-        <div className="sidebar__spacer" {...drag} />
-      )}
+      <div className="sidebar__spacer" {...drag} />
 
       <div className="sidebar__footer">
         <div className="sidebar__user" {...tipFor(`${user.name} · ${user.role}`)}>

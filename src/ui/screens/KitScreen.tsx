@@ -23,7 +23,6 @@ import {
   categoryLabel,
   useToasts,
   type SidebarNavItem,
-  type SidebarPeople,
 } from '../components';
 import './KitScreen.css';
 
@@ -59,19 +58,10 @@ const internNav: SidebarNavItem[] = [
 const adminNav: SidebarNavItem[] = [
   { key: 'tracker', label: 'Tracker', href: '#/kit', icon: 'tracker' },
   { key: 'assign', label: 'Assign', href: '#/kit', icon: 'assign' },
+  { key: 'interns', label: 'Interns', href: '#/kit', icon: 'interns' },
   { key: 'find', label: 'Find', href: '#/kit', icon: 'search' },
   { key: 'settings', label: 'Settings', href: '#/kit', icon: 'settings' },
 ];
-
-const kitPeople: SidebarPeople = {
-  status: 'ready',
-  empty: 'No interns yet.',
-  people: [
-    { name: 'Bea Lim', href: '#/kit', progress: 'No queue today' },
-    { name: 'Jan Dela Cruz', href: '#/kit', progress: '2 of 5 posted', pending: 1, selected: true },
-    { name: 'Mika Reyes', href: '#/kit', progress: '5 of 5 posted' },
-  ],
-};
 
 export default function KitScreen() {
   const [query, setQuery] = useState('Verdant Hills');
@@ -112,7 +102,6 @@ export default function KitScreen() {
                 collapsed={railed}
                 animate
                 onToggleCollapsed={() => setRailed((now) => !now)}
-                people={kitPeople}
               />
             </div>
             <div className="kit-frame kit-frame--sidebar">
@@ -130,10 +119,10 @@ export default function KitScreen() {
             <div className="kit-frame kit-frame--sidebar">
               <Sidebar
                 nav={adminNav}
+                currentKey="interns"
                 user={{ name: 'Maria Santos', role: 'Admin' }}
-                collapsed={false}
+                collapsed
                 onToggleCollapsed={() => setRailed((now) => !now)}
-                people={{ status: 'error', message: "Couldn't reach the web app.", onRetry: () => toasts.show('Trying again.', 'info') }}
               />
             </div>
           </div>

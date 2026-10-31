@@ -853,3 +853,15 @@ export function internDays(
     };
   });
 }
+
+/**
+ * A person's latest Posted or Pending row, whatever its date: by date, then
+ * time, then sheet order, as `newestFirst` orders them. Undefined when they
+ * have logged nothing.
+ */
+export function lastPostBy(posts: readonly PostLogEntry[], name: string): PostLogEntry | undefined {
+  const theirs = posts.filter(
+    (p) => (p.status === 'Posted' || p.status === 'Pending') && dayOf(p.date) !== undefined && samePerson(p.postedBy, name),
+  );
+  return newestFirst(theirs)[0];
+}

@@ -10,6 +10,7 @@ import {
   firstName,
   internDays,
   isDate,
+  lastPostBy,
   lastPostOf,
   longDate,
   matchPasted,
@@ -599,7 +600,7 @@ describe('doc health', () => {
   });
 });
 
-describe('the team, for the sidebar', () => {
+describe('the team, for the Interns screen', () => {
   const team: readonly TeamMember[] = [
     { name: MIKA, role: 'Intern' },
     { name: 'Maria Santos', role: 'Admin' },
@@ -630,5 +631,16 @@ describe('the team, for the sidebar', () => {
       { name: JAN, total: 5, posted: 2, pendingPosts: 1 },
       { name: MIKA, total: 0, posted: 0, pendingPosts: 1 },
     ]);
+  });
+
+  it("finds a person's latest post on any day, a pending one included", () => {
+    const posts = [
+      post('A', 2, { time: '16:00' }),
+      post('B', 0, { time: '09:10', status: 'Pending' }),
+      post('D', 0, { time: '10:05', by: MIKA }),
+    ];
+    expect(lastPostBy(posts, ' jan dela cruz ')?.title).toBe('B');
+    expect(lastPostBy(posts, MIKA)?.time).toBe('10:05');
+    expect(lastPostBy(posts, BEA)).toBeUndefined();
   });
 });

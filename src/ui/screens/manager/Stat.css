@@ -1,0 +1,54 @@
+/* The numbers across the top of the Tracker and Interns screens. */
+
+.tracker-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  gap: var(--space-8);
+  margin: 0 0 var(--space-12);
+}
+
+.tracker-stat {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+}
+
+.tracker-stat dd {
+  margin: 0;
+}
+
+/* The number on top; the label first for anyone reading it out. */
+.tracker-stat__value {
+  order: -1;
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-verdict);
+  line-height: var(--lh-verdict);
+  font-weight: var(--weight-heading);
+}
+
+/* Zero is information too: shown plainly, in the muted colour that still
+   reads at 9:1, never in --zero-text (DESIGN.md §11.2). */
+.tracker-stat__value--zero {
+  color: var(--text-muted);
+}
+
+.tracker-stat__of {
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  font-weight: var(--weight-label);
+}
+
+.tracker-stat__label {
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.tracker-stat__note {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+

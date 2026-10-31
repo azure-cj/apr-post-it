@@ -67,7 +67,8 @@ Revoking someone is one cell. A leaked intern key grants intern rights only; a l
 admin key is as bad as a shared password. The app never keeps the key in the WebView:
 the OS holds it.
 
-So sign-in is: paste the web app link and your key, and the server says who you are. The
+So sign-in is: paste your key, and the server says who you are. The web app link is
+built into the app (`src/config.ts`), so nobody types it. The
 copy must say that the key is your identity and is not to be shared.
 
 ## The sister app

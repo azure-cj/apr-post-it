@@ -44,6 +44,7 @@ const backLabels: Record<NavKey, string> = {
   find: 'Results',
   tracker: 'Tracker',
   assign: 'Assign',
+  interns: 'Interns',
   settings: 'Settings',
 };
 
@@ -52,6 +53,7 @@ const backPaths: Record<NavKey, string> = {
   find: paths.find,
   tracker: paths.tracker,
   assign: paths.assign,
+  interns: paths.interns,
   settings: paths.settings,
 };
 

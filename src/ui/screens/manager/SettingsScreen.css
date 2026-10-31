@@ -33,6 +33,10 @@
   color: var(--text-muted);
 }
 
+.settings__built-in {
+  margin-top: var(--space-6);
+}
+
 /* ---- rules ---------------------------------------------------------------- */
 
 .settings__rules {

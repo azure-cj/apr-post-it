@@ -177,10 +177,20 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
 - Two-pane screens: a side pane of `--pane-regular` 400 (`--pane-compact` 340 below
   1100), a gap of `--gap-regular` 40 (`--gap-compact` 24), stacking below 900.
 - **A left sidebar holds the app's chrome**: the words "APG Post-It" at the top (no logo
-  mark), the nav, then for an Admin the interns list (today's progress, a pending dot that
-  is never colour alone), and the person, Sign out and the collapse toggle at the bottom.
-  Collapsed it is a 64px icon rail with tooltips; Ctrl+B toggles it; the choice is
-  remembered, and windows under 1000px start collapsed. Width animates only on a toggle.
+  mark), the nav, then the person, Sign out and the collapse toggle at the bottom. It
+  lists no people: an Admin reaches the interns through the **Interns** nav item, which
+  opens the Interns screen, so the sidebar stays the same short height however large the
+  team grows. Collapsed it is a 64px icon rail with tooltips; Ctrl+B toggles it; the
+  choice is remembered, and windows under 1000px start collapsed. Width animates only on
+  a toggle.
+- **The Interns screen** (`/interns`, Admin only) is laid out like the Tracker: the
+  heading and a one-line description, the day picker and Refresh on the right; a row of
+  number tiles (active interns, done, with pending posts, no queue); then one card with a
+  name search and a table of active interns (initials, name, the day's queue as
+  "2 of 5 posted" over a green bar, pending posts as a warn pill, last post, the FB
+  accounts they may use or "Any", and Open queue / Plan tomorrow as links). Revoked
+  people sit in a folded "Revoked" card below it. The Tracker's Interns card links to it
+  with "See all interns".
 - **A slim title bar runs across the content column**: the drag region, with minimize,
   maximize/restore and close at the top-right. Close turns danger red on hover and always
   asks first. Breakpoints measure the content column, so screens fit either sidebar width.
@@ -224,8 +234,11 @@ only, not in the production build) shows each in every variant with the product'
 | **CheckList** | `checks: CheckResult[]`, `label` | Order kept, so a check is always in the same place. Pass, warn, fail each have an icon shape and a word for screen readers; a fail line is tinted so it is found first |
 
 The shell (`src/ui/App.tsx`) holds the routes: Sign in, Find, Property, Log a post, My
-queue, Assign, Tracker, Settings. Nav by role, per `docs/ROLES.md`: an intern gets My
-queue and Find; an admin Tracker, Assign, Find and Settings (D14). The
+queue, Assign, Tracker, Interns, Settings. Nav by role, per `docs/ROLES.md`: an intern
+gets My queue and Find; an admin Tracker, Assign, Interns, Find and Settings (D14).
+
+Sign-in asks only for the key when a web app link is built into the build
+(`src/config.ts`); with none built in it asks for the link too. The
 `.page` and `.page-header` classes in `App.css` lay out a screen.
 
 ## 11. Known tensions in the copied tokens

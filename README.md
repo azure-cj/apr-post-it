@@ -43,4 +43,14 @@ Full details, and what each action does: `server/README.md`.
    Run. The key is in the execution log. Run it again for each person.
 5. Deploy: Deploy, New deployment, **Web app**, Execute as **Me**, access **Anyone**. Copy
    the `/exec` link.
-6. In Post-It, sign in with the **`/exec` link and your key**.
+6. **Build the link into the app, once, before building it.** Paste the `/exec` link into
+   `PASTED_SCRIPT_URL` in **`src/config.ts`**, or put `VITE_SCRIPT_URL=<the /exec link>` in
+   a **`.env.local`** file beside `package.json` (it wins over the file, and git ignores
+   it). Then run `build.cmd`. The link is not a secret; the keys are.
+7. Everyone signs in by pasting **only their key**. Settings shows the built-in link,
+   read-only.
+
+To change the script later, keep the same link: Deploy, **Manage deployments**, edit the
+existing deployment and choose **New version**. A new deployment gets a new link, and every
+copy of the app would have to be rebuilt with it. With no link built in (the empty
+placeholder, as in development and the tests), sign-in asks for the link as well.

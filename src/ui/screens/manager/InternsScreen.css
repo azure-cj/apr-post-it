@@ -1,0 +1,255 @@
+/* The Interns screen: the header and numbers as on the Tracker, then one
+   table of active interns, and the revoked folded away below it. */
+
+.interns__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-8) var(--space-12);
+}
+
+.interns__heading {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.interns__day {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-8);
+}
+
+.interns__updated {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.interns__notice {
+  margin-bottom: var(--space-12);
+}
+
+.interns__waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-24) 0;
+  color: var(--text-muted);
+}
+
+.interns__quiet,
+.interns__muted {
+  color: var(--text-muted);
+}
+
+.interns__code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.94em;
+}
+
+/* The search sits in the card's heading row, and takes the row below it
+   when the heading needs the width. */
+.interns__search {
+  width: min(280px, 100%);
+}
+
+.interns__search .searchbox__input {
+  width: 100%;
+}
+
+/* The input's own preferred width would leave the box short of the edge. */
+.interns .card__actions:has(.interns__search) {
+  justify-content: flex-end;
+}
+
+@container shell (width < 900px) {
+  .interns .card__header:has(.interns__search) {
+    flex-wrap: wrap;
+  }
+
+  .interns .card__actions:has(.interns__search) {
+    flex: 1 1 100%;
+  }
+
+  .interns__search {
+    width: 100%;
+  }
+}
+
+/* ---- the table ------------------------------------------------------------ */
+
+.interns-table__wrap {
+  overflow-x: auto;
+}
+
+.interns-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.interns-table thead th {
+  padding: 0 var(--space-8) var(--space-4) 0;
+  border-bottom: var(--border-width) solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-weight: var(--weight-label);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.interns-table tbody th,
+.interns-table td {
+  padding: var(--space-6) var(--space-8) var(--space-6) 0;
+  border-bottom: var(--border-width) solid var(--border-soft);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  text-align: start;
+  vertical-align: middle;
+}
+
+.interns-table tbody tr:last-child th,
+.interns-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.interns-table th:last-child,
+.interns-table td:last-child {
+  padding-inline-end: 0;
+}
+
+/* The row's name: avatar and name, never wrapped apart. The columns are
+   sized so the whole row, actions included, fits a 1366px window with the
+   sidebar open; narrower than that, the table scrolls sideways. */
+.interns-table__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  white-space: nowrap;
+}
+
+.interns-table__avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: 1;
+  font-weight: var(--weight-heading);
+}
+
+.interns-table__name {
+  color: var(--text);
+  font-family: var(--body-font);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  font-weight: var(--weight-heading);
+}
+
+.interns-table__last {
+  white-space: nowrap;
+}
+
+.interns-table__accounts {
+  min-width: 8rem;
+}
+
+.interns-table td.interns-table__actions {
+  white-space: nowrap;
+  text-align: end;
+}
+
+.interns-table__actions .button--link + .button--link {
+  margin-inline-start: var(--space-6);
+}
+
+/* ---- a queue's progress ---------------------------------------------------- */
+
+.interns-progress {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 9.5rem;
+  max-width: 11rem;
+}
+
+.interns-progress__count {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Posted on a neutral track. The words above carry the meaning; the bar only
+   shows the share at a glance. */
+.interns-progress__bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+}
+
+.interns-progress__posted {
+  background: var(--ok-strong);
+}
+
+/* ---- revoked ---------------------------------------------------------------- */
+
+.interns__revoked {
+  margin-top: var(--space-12);
+}
+
+/* Folded: the heading row is all there is. */
+.interns__revoked .card__header:last-child {
+  margin-bottom: 0;
+}
+
+.interns-revoked {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.interns-revoked__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+  padding: var(--space-5) 0;
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+
+.interns-revoked__row:first-child {
+  padding-top: 0;
+}
+
+.interns-revoked__row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.interns-revoked__name {
+  color: var(--text-label);
+  font-weight: var(--weight-heading);
+}
+
+.interns-revoked__accounts {
+  margin-inline-start: auto;
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}

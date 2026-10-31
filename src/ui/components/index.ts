@@ -38,10 +38,7 @@ export {
 } from './Toast';
 export {
   Sidebar,
-  pendingWords,
   type SidebarNavItem,
-  type SidebarPeople,
-  type SidebarPerson,
   type SidebarProps,
   type SidebarUser,
 } from './Sidebar';

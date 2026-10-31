@@ -205,13 +205,13 @@ describe('the shell', () => {
     for (const user of [manager, admin]) {
       const { unmount } = renderApp({ platform: fakeServer(), user });
       expect(heading()).toBe('Tracker');
-      expect(navNames()).toEqual(['Tracker', 'Assign', 'Find', 'Settings']);
+      expect(navNames()).toEqual(['Tracker', 'Assign', 'Interns', 'Find', 'Settings']);
       unmount();
     }
   });
 
   it("keeps an intern out of the admin's screens, and lets an admin into Settings", async () => {
-    for (const path of ['/assign', '/tracker', '/settings']) {
+    for (const path of ['/assign', '/tracker', '/interns', '/settings']) {
       const { unmount } = renderApp({ platform: fakeServer(), user: intern, path });
       expect(heading()).toBe('My queue');
       unmount();
@@ -256,13 +256,15 @@ describe("the manager's screens", () => {
     expect(heading()).toBe('Tracker');
     await userEvent.click(screen.getByRole('link', { name: 'Assign' }));
     expect(heading()).toBe('Assign');
+    await userEvent.click(screen.getByRole('link', { name: 'Interns' }));
+    expect(heading()).toBe('Interns');
     await userEvent.click(screen.getByRole('link', { name: 'Settings' }));
     expect(heading()).toBe('Settings');
     // The team the web app sent, in Settings' table.
     expect(await screen.findByRole('cell', { name: intern.name })).toBeTruthy();
   });
 
-  it.each(['/tracker', '/assign', '/settings'])('send an intern who asks for %s back to their queue', (path) => {
+  it.each(['/tracker', '/assign', '/interns', '/settings'])('send an intern who asks for %s back to their queue', (path) => {
     renderApp({ platform: fakeServer(), user: intern, path });
     expect(heading()).toBe('My queue');
   });

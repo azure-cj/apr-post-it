@@ -13,7 +13,8 @@ import {
   type ReactNode,
 } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { activeInterns, addDays, internDays, isDate, peopleIn, samePerson } from '@/core/summary';
+import { BUILT_IN_SCRIPT_URL } from '@/config';
+import { activeInterns, addDays, isDate, peopleIn, samePerson } from '@/core/summary';
 import { canManage, isAdmin, UserFacingError, type User } from '@/core/types';
 import {
   Button,
@@ -23,13 +24,12 @@ import {
   Spinner,
   TitleBar,
   type IconName,
-  type SidebarPeople,
   type SidebarProps,
   type WindowControlsProps,
 } from './components';
 import { SignInScreen } from './screens/SignInScreen';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
-import { AssignScreen, SettingsScreen, TrackerScreen, type QueueSave } from './screens/manager';
+import { AssignScreen, InternsScreen, SettingsScreen, TrackerScreen, type QueueSave } from './screens/manager';
 import type { Platform } from '@/platform';
 import {
   manilaTime,
@@ -43,6 +43,7 @@ import {
   useStore,
   useTeam,
   useUser,
+  navKeys,
   type FromList,
   type NavKey,
 } from './state';
@@ -71,6 +72,7 @@ export function navFor(user: User): readonly NavDef[] {
     return [
       { key: 'tracker', label: 'Tracker', path: paths.tracker, icon: 'tracker' },
       { key: 'assign', label: 'Assign', path: paths.assign, icon: 'assign' },
+      { key: 'interns', label: 'Interns', path: paths.interns, icon: 'interns' },
       { key: 'find', label: 'Find', path: paths.find, icon: 'search' },
       { key: 'settings', label: 'Settings', path: paths.settings, icon: 'settings' },
     ];
@@ -81,7 +83,6 @@ export function navFor(user: User): readonly NavDef[] {
   ];
 }
 
-const navKeys: readonly NavKey[] = ['queue', 'find', 'tracker', 'assign', 'settings'];
 
 /**
  * Which nav item a path belongs to. A property and its log page belong to
@@ -102,6 +103,7 @@ function titleFor(pathname: string): string | null {
     '/queue': 'My queue',
     '/assign': 'Assign',
     '/tracker': 'Tracker',
+    '/interns': 'Interns',
     '/settings': 'Settings',
     '/kit': 'UI kit',
   };
@@ -258,7 +260,9 @@ export function AppShell({ signInNote }: AppProps) {
         setSignInError(
           e instanceof UserFacingError
             ? e.message
-            : "Couldn't reach the web app. Check the link and your connection, then try again.",
+            : BUILT_IN_SCRIPT_URL
+              ? "Couldn't reach the web app. Check your connection, then try again."
+              : "Couldn't reach the web app. Check the link and your connection, then try again.",
         );
       } finally {
         if (signingIn.current === attempt) {
@@ -321,8 +325,7 @@ export function AppShell({ signInNote }: AppProps) {
 
       <div className="shell">
         {user ? (
-          <ShellSidebar
-            admin={canManage(user)}
+          <Sidebar
             nav={sidebarNav}
             currentKey={navKeyFor(location.pathname, location.state)}
             user={{ name: user.name, role: user.role }}
@@ -330,7 +333,6 @@ export function AppShell({ signInNote }: AppProps) {
               const target = nav.find((n) => n.key === key);
               if (target) requestLeave(() => navigate(target.path));
             }}
-            onOpenPath={(path) => requestLeave(() => navigate(path))}
             onSignOut={() => requestLeave(() => setConfirmingSignOut(true))}
             collapsed={sidebar.collapsed}
             animate={sidebar.animate}
@@ -364,6 +366,7 @@ export function AppShell({ signInNote }: AppProps) {
                           busy={signInBusy}
                           error={signInError}
                           initialUrl={app.settings.scriptUrl}
+                          builtInUrl={BUILT_IN_SCRIPT_URL}
                         />
                         {signInNote ?? null}
                       </>
@@ -376,6 +379,7 @@ export function AppShell({ signInNote }: AppProps) {
                 <Route path={paths.queue} element={guard(<QueueScreen />)} />
                 <Route path={paths.assign} element={guard(<AssignRoute onDirtyChange={setAssignDirty} />, canManage)} />
                 <Route path={paths.tracker} element={guard(<TrackerRoute />, canManage)} />
+                <Route path={paths.interns} element={guard(<InternsRoute />, canManage)} />
                 <Route path={paths.settings} element={guard(<SettingsRoute />, isAdmin)} />
                 {KitScreen ? (
                   <Route
@@ -521,65 +525,6 @@ function useSidebarState(platform: Platform) {
   }, [platform]);
 
   return { collapsed, animate, toggle };
-}
-
-type ShellSidebarProps = Omit<SidebarProps, 'people' | 'onOpenPerson'> & {
-  /** An admin also gets the interns. */
-  readonly admin: boolean;
-  /** Opens a path, asking first if Assign has unsaved changes. */
-  readonly onOpenPath: (path: string) => void;
-};
-
-/** The sidebar, with an admin's interns under the nav. */
-function ShellSidebar({ admin, onOpenPath, ...props }: ShellSidebarProps) {
-  return admin ? <AdminSidebar {...props} onOpenPath={onOpenPath} /> : <Sidebar {...props} />;
-}
-
-const EMPTY_TEAM = (
-  <>
-    No interns yet. Add them on the Team tab with <code>ADD_PERSON</code>.
-  </>
-);
-
-/**
- * An admin's sidebar: every active intern on the team with today's progress,
- * a dot for posts waiting for a link, and their queue a click away.
- */
-function AdminSidebar({ onOpenPath, ...props }: Omit<ShellSidebarProps, 'admin'>) {
-  const app = useApp();
-  const location = useLocation();
-  const team = useTeam({ maxAgeMs: 300_000, pollMs: 600_000 });
-  const posts = usePosts({ pollMs: 120_000 });
-  const assignments = useAssignments({ pollMs: 120_000 });
-  const today = app.today();
-
-  const open = location.pathname === paths.assign ? new URLSearchParams(location.search).get('intern') : null;
-  const days = useMemo(
-    () => (team.data ? internDays(team.data, assignments.data ?? [], posts.data ?? [], today) : null),
-    [team.data, assignments.data, posts.data, today],
-  );
-
-  let people: SidebarPeople;
-  if (days) {
-    const progressKnown = assignments.data !== null;
-    people = {
-      status: 'ready',
-      empty: EMPTY_TEAM,
-      people: days.map((day) => ({
-        name: day.name,
-        href: `#${assignPath(day.name, today)}`,
-        progress: progressKnown ? (day.total === 0 ? 'No queue today' : `${day.posted} of ${day.total} posted`) : undefined,
-        pending: day.pendingPosts,
-        selected: open !== null && samePerson(open, day.name),
-      })),
-    };
-  } else if (team.error && !team.loading) {
-    people = { status: 'error', message: team.error, onRetry: team.reload };
-  } else {
-    people = { status: 'loading' };
-  }
-
-  return <Sidebar {...props} people={people} onOpenPerson={(name) => onOpenPath(assignPath(name, today))} />;
 }
 
 /**
@@ -889,6 +834,41 @@ function TrackerRoute() {
       onOpenLink={(url) => void platform.open(url)}
       onOpenProperty={(id) => navigate(paths.property(id), { state: { section: 'tracker' } satisfies FromList })}
       onAssign={(intern, day) => navigate(assignPath(intern, day))}
+      internsHref={`#${paths.interns}`}
+      onOpenInterns={() => navigate(paths.interns)}
+    />
+  );
+}
+
+function InternsRoute() {
+  const app = useApp();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const today = app.today();
+  const asked = params.get('date') ?? '';
+  const date = isDate(asked) ? asked : today;
+  const team = useTeam({ maxAgeMs: 300_000, pollMs: 600_000 });
+  const posts = usePosts({ pollMs: 120_000 });
+  const assignments = useAssignments({ pollMs: 120_000 });
+  const loadedAt = posts.loadedAt;
+
+  return (
+    <InternsScreen
+      date={date}
+      today={today}
+      team={team.data}
+      posts={posts.data ?? []}
+      assignments={assignments.data ?? []}
+      onDateChange={(day) => setParams(day === today ? {} : { date: day }, { replace: true })}
+      onRefresh={() => {
+        team.reload();
+        posts.reload();
+        assignments.reload();
+      }}
+      refreshing={team.loading || posts.loading || assignments.loading}
+      error={team.error ?? posts.error ?? assignments.error}
+      updatedAt={loadedAt === null ? null : manilaTime(loadedAt)}
+      onOpenQueue={(intern, day) => navigate(assignPath(intern, day))}
     />
   );
 }
@@ -901,6 +881,7 @@ function SettingsRoute() {
   return (
     <SettingsScreen
       settings={app.settings}
+      builtInLink={BUILT_IN_SCRIPT_URL !== ''}
       team={team.data}
       loading={team.loading}
       error={team.data ? null : team.error}

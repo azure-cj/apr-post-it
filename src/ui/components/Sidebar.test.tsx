@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { Sidebar, type SidebarNavItem, type SidebarProps } from './Sidebar';
 import { TitleBar } from './TitleBar';
 
@@ -87,63 +87,10 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
-  it('has no people list unless given one', () => {
+  it('holds no list of people: an admin reaches the interns from the nav', () => {
     renderSidebar();
-    expect(screen.queryByRole('heading', { name: 'Interns' })).toBeNull();
-  });
-
-  describe('people', () => {
-    it('lists each person with their day, a pending dot said in words, and the open one selected', () => {
-      const onOpenPerson = vi.fn();
-      renderSidebar({
-        onOpenPerson,
-        people: {
-          status: 'ready',
-          empty: 'Nobody',
-          people: [
-            { name: 'Bea Lim', href: '#/assign?intern=Bea+Lim', progress: 'No queue today' },
-            { name: 'Mika Reyes', href: '#/assign?intern=Mika+Reyes', progress: '2 of 5 posted', pending: 1, selected: true },
-          ],
-        },
-      });
-      const list = screen.getByRole('region', { name: 'Interns' });
-      const mika = within(list).getByRole('link', { name: /Mika Reyes/ });
-      expect(mika.textContent).toContain('2 of 5 posted');
-      expect(mika.textContent).toContain('1 post waiting for a link');
-      expect(mika.querySelector('.sidebar__dot')).not.toBeNull();
-      expect(mika.getAttribute('aria-current')).toBe('true');
-      const bea = within(list).getByRole('link', { name: /Bea Lim/ });
-      expect(bea.querySelector('.sidebar__dot')).toBeNull();
-      expect(bea.getAttribute('aria-current')).toBeNull();
-      expect(bea.querySelector('.sidebar__avatar')?.textContent).toBe('BL');
-
-      fireEvent.click(bea);
-      expect(onOpenPerson).toHaveBeenCalledWith('Bea Lim');
-    });
-
-    it('says when it is reading, when it is empty, and offers to try again when it failed', () => {
-      const { rerender } = renderSidebar({ people: { status: 'loading' } });
-      expect(screen.getByRole('status').textContent).toContain('Reading the interns');
-
-      rerender(
-        <Sidebar nav={nav} user={me} collapsed={false} onToggleCollapsed={() => {}} people={{ status: 'ready', people: [], empty: 'No interns yet.' }} />,
-      );
-      expect(screen.getByText('No interns yet.')).toBeTruthy();
-
-      const onRetry = vi.fn();
-      rerender(
-        <Sidebar
-          nav={nav}
-          user={me}
-          collapsed={false}
-          onToggleCollapsed={() => {}}
-          people={{ status: 'error', message: "Couldn't reach the web app.", onRetry }}
-        />,
-      );
-      expect(screen.getByRole('alert').textContent).toContain("Couldn't reach the web app.");
-      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-      expect(onRetry).toHaveBeenCalled();
-    });
+    expect(screen.queryByRole('region')).toBeNull();
+    expect(document.querySelector('.sidebar__avatar:not(.sidebar__avatar--me)')).toBeNull();
   });
 });
 

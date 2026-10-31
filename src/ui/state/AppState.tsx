@@ -30,7 +30,15 @@ import { ToastRegion, useToasts, type ToastTone } from '../components';
 import { manilaDate } from './clock';
 import { sentenceOf } from './remote';
 import { createServices, type Services } from './services';
-import { defaultAppSettings, parseSettings, serializeSettings, SETTINGS_KEY, type AppSettings } from './settings';
+import { BUILT_IN_SCRIPT_URL } from '@/config';
+import {
+  defaultAppSettings,
+  parseSettings,
+  serializeSettings,
+  SETTINGS_KEY,
+  withBuiltInLink,
+  type AppSettings,
+} from './settings';
 
 /** Where the window is in signing you in. */
 export type Session =
@@ -54,6 +62,7 @@ export interface AppState extends Omit<Services, 'openProperty' | 'forget'> {
   /**
    * Asks the server who `key` belongs to; then keeps the key (in the OS) and
    * the link, and signs that person in. Rejects with the server's sentence.
+   * When a link is built into this version, that link is used whatever `url` says.
    *
    * Aborting `signal` stops it: a reply that arrives afterwards signs nobody in
    * and keeps no key, and the promise rejects with the signal's reason.
@@ -92,7 +101,7 @@ export interface AppStateProviderProps {
 }
 
 export function AppStateProvider({ platform, initialUser, initialSettings, now = Date.now, children }: AppStateProviderProps) {
-  const settingsRef = useRef<AppSettings>({ ...defaultAppSettings, ...initialSettings });
+  const settingsRef = useRef<AppSettings>(withBuiltInLink({ ...defaultAppSettings, ...initialSettings }));
   const [settings, setSettings] = useState<AppSettings>(settingsRef.current);
   const [session, setSession] = useState<Session>(
     initialUser ? { status: 'signed-in', user: initialUser } : { status: 'starting' },
@@ -106,14 +115,15 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
   // reads live as long as the window does.
   const services = useMemo(() => createServices(platform, () => settingsRef.current, clock), [platform, clock]);
 
-  const applySettings = useCallback((next: AppSettings) => {
+  const applySettings = useCallback((wanted: AppSettings) => {
+    const next = withBuiltInLink(wanted);
     settingsRef.current = next;
     setSettings(next);
   }, []);
 
   const saveSettings = useCallback(
     async (changes: Partial<AppSettings>) => {
-      const next = { ...settingsRef.current, ...changes };
+      const next = withBuiltInLink({ ...settingsRef.current, ...changes });
       applySettings(next);
       await platform.writeLocal(SETTINGS_KEY, serializeSettings(next));
     },
@@ -180,8 +190,9 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
   }, [user, services, clock]);
 
   const signIn = useCallback(
-    async (url: string, key: string, signal?: AbortSignal): Promise<User> => {
+    async (typed: string, key: string, signal?: AbortSignal): Promise<User> => {
       signal?.throwIfAborted();
+      const url = BUILT_IN_SCRIPT_URL || typed;
       // Asked with exactly what was typed, before anything is kept: a key the
       // server does not know is never saved.
       const probe = createBackend({ post: platform.post, getConfig: () => ({ url, key }) });

@@ -18,6 +18,7 @@ import {
 } from '@/core/summary';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
 import { DayPicker } from './DayPicker';
+import { Stat } from './Stat';
 import './TrackerScreen.css';
 
 export interface TrackerScreenProps {
@@ -52,6 +53,10 @@ export interface TrackerScreenProps {
   readonly onOpenProperty?: ((id: string) => void) | undefined;
   /** Go to Assign for this intern (null: whoever comes first) and day. */
   readonly onAssign?: ((intern: string | null, date: string) => void) | undefined;
+  /** Where the Interns screen is: "See all interns" links there. Without it, no link. */
+  readonly internsHref?: string | undefined;
+  /** Follows that link through the app's router. Without it, the link is followed as it is. */
+  readonly onOpenInterns?: (() => void) | undefined;
 }
 
 /** How many of a list show before "Show all". */
@@ -79,6 +84,8 @@ export function TrackerScreen({
   onOpenLink,
   onOpenProperty,
   onAssign,
+  internsHref,
+  onOpenInterns,
 }: TrackerScreenProps) {
   const { cooldownDays, repostDueDays } = settings;
   const summary = useMemo(
@@ -170,7 +177,26 @@ export function TrackerScreen({
               <PostsTable posts={summary.posts} day={isToday ? 'today' : `on ${day}`} onOpenLink={onOpenLink} />
             </Card>
 
-            <Card className="tracker__interns" title="Interns" description={`Queues for ${day}`}>
+            <Card
+              className="tracker__interns"
+              title="Interns"
+              description={`Queues for ${day}`}
+              actions={
+                internsHref ? (
+                  <a
+                    className="button button--link"
+                    href={internsHref}
+                    onClick={(event) => {
+                      if (!onOpenInterns || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                      event.preventDefault();
+                      onOpenInterns();
+                    }}
+                  >
+                    See all interns
+                  </a>
+                ) : undefined
+              }
+            >
               {summary.interns.length === 0 ? (
                 <p className="tracker__quiet">Nobody has a queue for {day}.</p>
               ) : (
@@ -258,30 +284,6 @@ export function TrackerScreen({
         </>
       )}
     </div>
-  );
-}
-
-// ------------------------------------------------------------------ the numbers
-
-interface StatProps {
-  readonly label: string;
-  readonly value: number;
-  /** "2 of 4": the second number. */
-  readonly of?: number | undefined;
-  readonly note?: string | undefined;
-}
-
-/** A number and what it counts. Zero is shown, in the muted colour, never hidden. */
-function Stat({ label, value, of, note }: StatProps) {
-  return (
-    <Card padding="tight" className="tracker-stat">
-      <dt className="tracker-stat__label">{label}</dt>
-      <dd className={['tracker-stat__value', 'tabular', value === 0 ? 'tracker-stat__value--zero' : null].filter(Boolean).join(' ')}>
-        {value.toLocaleString('en-PH')}
-        {of !== undefined ? <span className="tracker-stat__of"> of {of.toLocaleString('en-PH')}</span> : null}
-      </dd>
-      {note ? <dd className="tracker-stat__note">{note}</dd> : null}
-    </Card>
   );
 }
 

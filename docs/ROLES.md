@@ -31,7 +31,7 @@ blank included, is `Intern`.
 | Doc health sweep | ✘ | ✔ |
 | Settings: folders, cooldown, team, keys | ✘ | ✔ |
 
-In the app an Admin gets Tracker, Assign, Find and Settings; an Intern gets My queue and Find.
+In the app an Admin gets Tracker, Assign, Interns, Find and Settings; an Intern gets My queue and Find.
 
 ## The two that are boundaries, not preferences
 

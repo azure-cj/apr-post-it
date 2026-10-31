@@ -48,5 +48,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],
+    // A link built in through .env.local or src/config.ts is for the app, not
+    // the tests: the setup file makes it empty everywhere, and only a test that
+    // wants a built-in link mocks '@/config' with one.
+    env: { VITE_SCRIPT_URL: '' },
+    setupFiles: ['src/testSetup.ts'],
   },
 });
