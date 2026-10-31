@@ -98,6 +98,9 @@ export type BackendErrorCode =
   | 'http'
   // What came back.
   | 'sign-in-page'
+  | 'old-deployment'
+  | 'needs-authorization'
+  | 'google-page'
   | 'empty'
   | 'unexpected'
   // What the server refused.
@@ -352,9 +355,8 @@ function readBody(raw: unknown, action: Action): Reply {
   if (typeof value === 'string') {
     const text = value.trim(); // also drops a byte-order mark
     if (text === '') throw empty(action);
-    // A web page instead of JSON is Google's sign-in page: the deployment is
-    // not open to "Anyone". The commonest setup mistake there is.
-    if (text.startsWith('<')) throw signInPage(action);
+    // A web page instead of JSON: Google's own page about what is wrong.
+    if (text.startsWith('<')) throw googlePage(action, text);
     try {
       value = JSON.parse(text);
     } catch (err) {
@@ -493,10 +495,29 @@ function failedTrip(err: unknown, action: Action): UserFacingError {
     'Could not reach Google. Check your connection and try again.', { cause: err });
 }
 
-function signInPage(action: Action): BackendError {
-  return new BackendError('sign-in-page', action,
-    'Google sent a sign-in page instead of Post-It\'s data, so the web app is not open to Post-It. ' +
-      'Ask your admin to redeploy it with access set to "Anyone".');
+/**
+ * Google answers with a web page, not JSON, for four setup mistakes. Each gets
+ * its own sentence, because the fixes differ.
+ */
+function googlePage(action: Action, html: string): BackendError {
+  if (/Script function not found|doPost|doGet/i.test(html)) {
+    return new BackendError('old-deployment', action,
+      'The web app is running old code. In Apps Script: Deploy → Manage deployments → pencil → ' +
+        'Version: New version → Deploy.');
+  }
+  if (/authori[sz]ation is required|needs your permission|requires authori[sz]ation/i.test(html)) {
+    return new BackendError('needs-authorization', action,
+      'The script needs permission. In Apps Script, run any function once and click Allow.');
+  }
+  if (/accounts\.google\.com|ServiceLogin|Sign in/i.test(html)) {
+    return new BackendError('sign-in-page', action,
+      'Google asked for a sign-in, so the web app is not open to Post-It. ' +
+        'Redeploy it with "Who has access" set to "Anyone".');
+  }
+  const title = /<title>([^<]{1,120})<\/title>/i.exec(html)?.[1]?.trim();
+  return new BackendError('google-page', action,
+    `Google sent a web page instead of Post-It's data${title ? ` ("${title}")` : ''}. ` +
+      'Check the deployment in Apps Script.');
 }
 
 function empty(action: Action): BackendError {

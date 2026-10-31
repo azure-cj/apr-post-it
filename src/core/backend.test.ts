@@ -402,6 +402,16 @@ describe('a reply', () => {
     expect(error.message).toContain('"Anyone"');
   });
 
+  it.each([
+    ['old-deployment', '<html><title>Error</title><body>Script function not found: doPost</body></html>', /New version/],
+    ['needs-authorization', '<html><body>Authorization is required to perform that action.</body></html>', /click Allow/],
+    ['google-page', '<html><head><title>Page Not Found</title></head><body>Sorry</body></html>', /"Page Not Found"/],
+  ] as const)('that is a Google page (%s) says how to fix that one', async (kind, html, says) => {
+    const { post } = scripted(html);
+    const error = await failure(backendOver(post).call('ping'), kind);
+    expect(error.message).toMatch(says);
+  });
+
   it('that is not JSON at all says to check the link', async () => {
     const { post } = scripted('Service unavailable, try later');
     const error = await failure(backendOver(post).call('posts'), 'unexpected');
