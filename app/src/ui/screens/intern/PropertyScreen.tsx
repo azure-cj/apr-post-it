@@ -109,8 +109,10 @@ export function PropertyScreen() {
   // ---- what may be copied ----------------------------------------------------
 
   // An intern is never sent the text of a document nobody has separated (D13).
-  // Judged here too, so a reply that wrongly carried it shows nothing either.
-  const withheld = detail !== null && !detail.hasInternal && !manager;
+  // The server says so with its `withheld` flag; when a reply has no flag, it
+  // is judged here from `hasInternal`. Either way forViewer has already
+  // emptied the text of an unseparated document, so nothing shows.
+  const withheld = detail !== null && !manager && isWithheld(detail);
   const noDocument = withheld && /\bno document\b/i.test(detail.issues);
   const checks: readonly CheckResult[] = detail && !withheld ? runChecks(detail) : [];
 
@@ -487,6 +489,14 @@ function copyGate(input: {
   }
   if (input.checkingCooldown) return { kind: 'waiting', text: 'Checking when it was last posted…' };
   return { kind: 'ready' };
+}
+
+/**
+ * Withheld when the server says so OR no separator was found. Either is enough:
+ * a server flag of false never unlocks text nobody has separated.
+ */
+function isWithheld(detail: PropertyDetail): boolean {
+  return detail.withheld === true || !detail.hasInternal;
 }
 
 function failReason(check: CheckResult, manager: boolean): string {

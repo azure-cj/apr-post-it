@@ -284,9 +284,73 @@ describe("the checks' own patterns read text as .NET does", () => {
     expect(direct('Call us\u{2028}Price: 4,200,000', PRICE).status).toBe('warn');
   });
 
+  // Beyond .NET: the commission check reads an NFKC copy, so 𝗫 is X there and
+  // "commission𝗫" is one word, not commission. The splitter cuts that line anyway.
   it('never take "fancy" text outside the BMP for letters or digits', () => {
-    expect(direct('commission𝗫', COMMISSION).detail).toBe(found('commission'));
+    expect(direct('commission𝗫', COMMISSION).status).toBe('pass');
     expect(direct('𝗫₱4.2M', PRICE).detail).toBe('₱4.2M');
     expect(direct('Price ₱𝟰.𝟮𝗠', PRICE).status).toBe('warn');
   });
+});
+
+// Wording the C# patterns let through as Clean. The C# is being retired, so the
+// check now goes beyond it; each row below is a real shape of the same offer.
+describe('commission wording the C# missed', () => {
+  it.each([
+    ['Will sign with any broker; 3 percent to whoever closes', '3 percent to whoever closes'],
+    ['three percent to the closing agent', 'three percent to the closing agent'],
+    ['2.5 per cent to the broker', '2.5 per cent to the broker'],
+    ['5% to brokers', '5% to brokers'],
+    ['3% for brokers who bring a buyer', '3% for brokers'],
+    ['2% to co-brokers', '2% to co-brokers'],
+    ['3% sharing', '3% sharing'],
+    ['Open for co-broke', 'co-broke'],
+    ['Co-broker welcome', 'Co-broker'],
+    ['cobroke ok', 'cobroke'],
+    ["Broker's fee shouldered by seller", "Broker's fee"],
+    ['broker fee included', 'broker fee'],
+    ['Sharing 50/50 with agents', 'Sharing 50/50'],
+    ['50/50 split on closing', '50/50 split'],
+    ['Willing to split with brokers', 'split with brokers'],
+    ['May komisyon sa ahente', 'komisyon'],
+    ['Comisyon 3%', 'Comisyon'],
+    ['𝗖𝗼𝗺𝗺𝗶𝘀𝘀𝗶𝗼𝗻 3%', '𝗖𝗼𝗺𝗺𝗶𝘀𝘀𝗶𝗼𝗻'],
+    ['ＣＯＭＭＩＳＳＩＯＮ', 'ＣＯＭＭＩＳＳＩＯＮ'],
+    ['𝟯% to agents', '𝟯% to agents'],
+  ])('fails on %j, quoting it as written', (line, quoted) => {
+    expect(direct(`FOR SALE\n${line}\n`, COMMISSION)).toMatchObject({ status: 'fail', detail: found(quoted) });
+  });
+
+  // Shares of other things, and numbers that are not shares, that real listings post.
+  it.each([
+    '3 percent discount for cash buyers',
+    '10% down payment, balance in 12 months',
+    '50/50 sea and city view',
+    'Near the broker’s office? No, near the market.',
+    '20% DP, 80% bank financing',
+    'Brokers and agents welcome to view',
+    'Split-level house, 3 bedrooms',
+    'Commissioner’s office nearby',
+    'Promisory note available',
+  ])('passes %j', (line) => {
+    expect(direct(`FOR SALE\n${line}\n`, COMMISSION)).toMatchObject({ status: 'pass', detail: 'Clean' });
+  });
+
+  it('counts a number written with dots', () => {
+    expect(direct('Call 0917.123.4567', CONTACTS).detail).toBe('1 found');
+    expect(direct('Call 0917.123.4567 or 0917 123 4567', CONTACTS).detail).toBe('1 found');
+    expect(direct('Lot area 1.234.5678', CONTACTS).status).toBe('warn');
+  });
+});
+
+// V8 compiles a regex after its first use; a pattern it compiles wrongly gives a
+// different answer from the second call on. Ask everything twice.
+describe('the same answer every time', () => {
+  it.each(['50/50 split on closing', 'Sharing 50/50 with agents', 'Call 0917.123.4567', '₱4.2M', '3% to agents'])(
+    'for %j',
+    (text) => {
+      const first = runChecks({ publicText: text, hasInternal: true });
+      for (let i = 0; i < 3; i++) expect(runChecks({ publicText: text, hasInternal: true })).toEqual(first);
+    },
+  );
 });

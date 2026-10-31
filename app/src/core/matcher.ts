@@ -25,7 +25,7 @@ const ABBREVIATIONS: ReadonlyMap<string, string> = new Map([
 // .NET tests one UTF-16 unit at a time, so a character outside the BMP (𝗳𝗮𝗻𝗰𝘆
 // text) is never a letter, digit or combining mark to it.
 const NOT_LETTER_OR_DIGIT = /[^\p{L}\p{Nd}]|[\u{10000}-\u{10FFFF}]/gu;
-const COMBINING_MARK = /(?=[\0-\u{FFFF}])\p{Mn}/gu;
+const COMBINING_MARK = /(?![\u{10000}-\u{10FFFF}])\p{Mn}/gu;
 // .NET's \d is any decimal digit, not only 0-9.
 const DIGIT_RUN = /\p{Nd}+/gu;
 

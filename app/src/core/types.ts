@@ -57,6 +57,8 @@ export interface PropertyDetail extends Property {
   /** Present only for a manager or admin. Absent means "not yours to see". */
   readonly internalText?: string;
   readonly hasInternal: boolean;
+  /** Set by the server when the text was kept from this person (an intern, no separator found). */
+  readonly withheld?: boolean;
   /** Which marker the text was cut at, for auditing. Blank when none was found. */
   readonly cutAt: string;
   readonly issues: string;

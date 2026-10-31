@@ -5,18 +5,33 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent,
   type ReactElement,
 } from 'react';
-import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { addDays, isDate, peopleIn, samePerson } from '@/core/summary';
 import { canManage, isAdmin, UserFacingError, type User } from '@/core/types';
 import { Button, Card, Notice, Spinner, TopBar, type TopBarNavItem } from './components';
-import { PlaceholderScreen } from './screens/PlaceholderScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
-import { paths, sectionOf, useApp, useStore, type NavKey } from './state';
+import { AssignScreen, SettingsScreen, TrackerScreen, type QueueSave } from './screens/manager';
+import {
+  manilaTime,
+  paths,
+  sectionOf,
+  useApp,
+  useAssignments,
+  useDirectoryList,
+  useNotify,
+  usePosts,
+  useStore,
+  useUser,
+  type FromList,
+  type NavKey,
+} from './state';
 import './App.css';
 
 export { paths } from './state';
@@ -116,6 +131,43 @@ export function AppShell({ demo = false }: AppProps) {
   const lastPath = useRef(location.pathname);
   const queueCount = useQueueCount(user);
 
+  // ---- leaving Assign with unsaved changes asks first -------------------------
+  const [assignDirty, setAssignDirty] = useState(false);
+  const [leaving, setLeaving] = useState<(() => void) | null>(null);
+  const requestLeave = useCallback(
+    (go: () => void) => {
+      if (assignDirty) setLeaving(() => go);
+      else go();
+    },
+    [assignDirty],
+  );
+
+  // Every in-app link (the brand, the nav, a link on the screen) goes through
+  // the question while there are unsaved changes; so does closing the window.
+  useEffect(() => {
+    if (!assignDirty) return undefined;
+    const onClick = (event: globalThis.MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest('a[href^="#/"]') : null;
+      if (!link) return;
+      const to = (link.getAttribute('href') ?? '').slice(1);
+      if (to === location.pathname + location.search) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setLeaving(() => () => navigate(to));
+    };
+    const onUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    document.addEventListener('click', onClick, true);
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      document.removeEventListener('click', onClick, true);
+      window.removeEventListener('beforeunload', onUnload);
+    };
+  }, [assignDirty, location.pathname, location.search, navigate]);
+
   // Name the window after the screen.
   useEffect(() => {
     const title = titleFor(location.pathname);
@@ -203,9 +255,9 @@ export function AppShell({ demo = false }: AppProps) {
           user={user ? { name: user.name, role: user.role } : null}
           onNavigate={(key) => {
             const target = nav.find((n) => n.key === key);
-            if (target) navigate(target.path);
+            if (target) requestLeave(() => navigate(target.path));
           }}
-          onSignOut={user ? () => setConfirmingSignOut(true) : undefined}
+          onSignOut={user ? () => requestLeave(() => setConfirmingSignOut(true)) : undefined}
         />
 
         <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
@@ -239,42 +291,9 @@ export function AppShell({ demo = false }: AppProps) {
               <Route path="/property/:id" element={guard(<PropertyScreen />)} />
               <Route path="/property/:id/log" element={guard(<LogPostScreen />)} />
               <Route path={paths.queue} element={guard(<QueueScreen />)} />
-              <Route
-                path={paths.assign}
-                element={guard(
-                  <PlaceholderScreen
-                    title="Assign"
-                    description="Build each intern's queue for the day: search and add, or paste a typed list. A listing in its cooldown, or already in someone's queue, can't be added."
-                    step={7}
-                    arrives="Building, reordering and saving a queue, with typo suggestions for pasted lists."
-                  />,
-                  canManage,
-                )}
-              />
-              <Route
-                path={paths.tracker}
-                element={guard(
-                  <PlaceholderScreen
-                    title="Tracker"
-                    description="The day at a glance: posted today, pending, who's done, what's due for a repost and what has never been posted."
-                    step={7}
-                    arrives="The day's numbers for the whole team, and doc health from the directory."
-                  />,
-                  canManage,
-                )}
-              />
-              <Route
-                path={paths.settings}
-                element={guard(
-                  <PlaceholderScreen
-                    title="Settings"
-                    description="The web app link, the cooldown, and the team with their keys."
-                    step={8}
-                    arrives="Settings, the team and their keys, and updates."
-                  />,
-                  isAdmin,
-                )}
-              />
+              <Route path={paths.assign} element={guard(<AssignRoute onDirtyChange={setAssignDirty} />, canManage)} />
+              <Route path={paths.tracker} element={guard(<TrackerRoute />, canManage)} />
+              <Route path={paths.settings} element={guard(<SettingsRoute />, isAdmin)} />
               {KitScreen ? (
                 <Route
                   path="/kit"
@@ -294,6 +313,22 @@ export function AppShell({ demo = false }: AppProps) {
 
       {confirmingSignOut ? (
         <SignOutDialog onCancel={() => setConfirmingSignOut(false)} onConfirm={confirmSignOut} />
+      ) : null}
+
+      {leaving ? (
+        <ConfirmDialog
+          title="Leave without saving?"
+          body="This queue has changes that aren't saved. Leaving now drops them."
+          cancelLabel="Keep editing"
+          confirmLabel="Leave without saving"
+          onCancel={() => setLeaving(null)}
+          onConfirm={async () => {
+            const go = leaving;
+            setLeaving(null);
+            setAssignDirty(false);
+            go();
+          }}
+        />
       ) : null}
     </>
   );
@@ -385,6 +420,35 @@ function DemoNote() {
  * signed in.
  */
 function SignOutDialog({ onCancel, onConfirm }: { readonly onCancel: () => void; readonly onConfirm: () => Promise<void> }) {
+  return (
+    <ConfirmDialog
+      title="Sign out of Post-It?"
+      body="Post-It will forget your key on this computer. To sign in again you'll need the key your manager gave you."
+      cancelLabel="Stay signed in"
+      confirmLabel="Sign out"
+      busyLabel="Signing out…"
+      failure="Post-It couldn't remove your key. Try again."
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    />
+  );
+}
+
+interface ConfirmDialogProps {
+  readonly title: string;
+  readonly body: string;
+  /** The safe choice. Focus starts on it, and Escape takes it. */
+  readonly cancelLabel: string;
+  readonly confirmLabel: string;
+  readonly busyLabel?: string | undefined;
+  /** Said when `onConfirm` fails with something other than a UserFacingError. */
+  readonly failure?: string | undefined;
+  readonly onCancel: () => void;
+  readonly onConfirm: () => Promise<void>;
+}
+
+/** A question asked before something that can't be taken back. Focus starts on the safe answer. */
+function ConfirmDialog({ title, body, cancelLabel, confirmLabel, busyLabel, failure, onCancel, onConfirm }: ConfirmDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const stayRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
@@ -414,7 +478,7 @@ function SignOutDialog({ onCancel, onConfirm }: { readonly onCancel: () => void;
     try {
       await onConfirm();
     } catch (err) {
-      setError(err instanceof UserFacingError ? err.message : "Post-It couldn't remove your key. Try again.");
+      setError(err instanceof UserFacingError ? err.message : (failure ?? 'That didn’t work. Try again.'));
       setBusy(false);
     }
   };
@@ -441,10 +505,10 @@ function SignOutDialog({ onCancel, onConfirm }: { readonly onCancel: () => void;
       }}
     >
       <h2 id={titleId} className="confirm__title">
-        Sign out of Post-It?
+        {title}
       </h2>
       <p id={bodyId} className="confirm__body">
-        Post-It will forget your key on this computer. To sign in again you'll need the key your manager gave you.
+        {body}
       </p>
       {error ? (
         <Notice tone="danger" live>
@@ -453,12 +517,154 @@ function SignOutDialog({ onCancel, onConfirm }: { readonly onCancel: () => void;
       ) : null}
       <div className="confirm__actions">
         <Button ref={stayRef} onClick={cancel} disabled={busy}>
-          Stay signed in
+          {cancelLabel}
         </Button>
         <Button variant="primary" busy={busy} onClick={() => void confirm()}>
-          {busy ? 'Signing out…' : 'Sign out'}
+          {busy && busyLabel ? busyLabel : confirmLabel}
         </Button>
       </div>
     </dialog>
+  );
+}
+
+// ------------------------------------------------------------------ the manager's screens
+
+/** Where Assign opens: whose queue, which day. Tracker links here with both. */
+export function assignPath(intern: string | null, date: string): string {
+  const params = new URLSearchParams();
+  if (intern) params.set('intern', intern);
+  params.set('date', date);
+  return `${paths.assign}?${params.toString()}`;
+}
+
+/** The posts and assignments a manager screen needs, as one loading state and one sentence. */
+function useManagerRows() {
+  const posts = usePosts({ pollMs: 120_000 });
+  const assignments = useAssignments({ pollMs: 120_000 });
+  const properties = useDirectoryList();
+  return {
+    posts,
+    assignments,
+    properties: properties ?? [],
+    loading: posts.data === null || assignments.data === null || properties === null,
+    refreshing: posts.loading || assignments.loading,
+    error: posts.error ?? assignments.error,
+  };
+}
+
+/**
+ * Whose queues can be built. The web app doesn't list the team to the app
+ * yet, so this is everyone the tracker mentions (queues and posts), less the
+ * person signed in. TODO(server): a team action, then filter to interns.
+ */
+function useInterns(rows: ReturnType<typeof useManagerRows>, me: User): readonly string[] {
+  const { posts, assignments } = rows;
+  return useMemo(
+    () => peopleIn(assignments.data ?? [], posts.data ?? []).filter((name) => !samePerson(name, me.name)),
+    [assignments.data, posts.data, me.name],
+  );
+}
+
+function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolean) => void }) {
+  const app = useApp();
+  const me = useUser();
+  const [params, setParams] = useSearchParams();
+  const rows = useManagerRows();
+  const interns = useInterns(rows, me);
+  const today = app.today();
+
+  const asked = params.get('date') ?? '';
+  const date = isDate(asked) ? asked : addDays(today, 1);
+  const intern = params.get('intern') || interns[0] || null;
+
+  // Gone from the screen: nothing left unsaved to guard.
+  useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
+
+  const set = (changes: { intern?: string; date?: string }) => {
+    const next = new URLSearchParams(params);
+    if (changes.intern !== undefined) next.set('intern', changes.intern);
+    else if (intern) next.set('intern', intern);
+    next.set('date', changes.date ?? date);
+    setParams(next, { replace: true });
+  };
+
+  const { tracker, directory } = app;
+  const onSave = useCallback(
+    (save: QueueSave) => tracker.saveQueue(save.date, save.assignedTo, save.items),
+    [tracker],
+  );
+
+  return (
+    <AssignScreen
+      interns={interns}
+      intern={intern}
+      date={date}
+      today={today}
+      properties={rows.properties}
+      posts={rows.posts.data ?? []}
+      assignments={rows.assignments.data ?? []}
+      settings={app.settings}
+      onInternChange={(name) => set({ intern: name })}
+      onDateChange={(day) => set({ date: day })}
+      onSave={onSave}
+      onDirtyChange={onDirtyChange}
+      loading={rows.loading}
+      error={rows.error}
+      search={directory.search}
+    />
+  );
+}
+
+function TrackerRoute() {
+  const app = useApp();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const rows = useManagerRows();
+  const today = app.today();
+  const asked = params.get('date') ?? '';
+  const date = isDate(asked) ? asked : today;
+  const loadedAt = rows.posts.loadedAt;
+  const { platform } = app;
+
+  return (
+    <TrackerScreen
+      date={date}
+      today={today}
+      posts={rows.posts.data ?? []}
+      assignments={rows.assignments.data ?? []}
+      properties={rows.properties}
+      settings={app.settings}
+      onDateChange={(day) => setParams(day === today ? {} : { date: day }, { replace: true })}
+      onRefresh={() => {
+        rows.posts.reload();
+        rows.assignments.reload();
+      }}
+      refreshing={rows.refreshing}
+      loading={rows.loading}
+      error={rows.error}
+      updatedAt={loadedAt === null ? null : manilaTime(loadedAt)}
+      onOpenLink={(url) => void platform.open(url)}
+      onOpenProperty={(id) => navigate(paths.property(id), { state: { section: 'tracker' } satisfies FromList })}
+      onAssign={(intern, day) => navigate(assignPath(intern, day))}
+    />
+  );
+}
+
+function SettingsRoute() {
+  const app = useApp();
+  const notify = useNotify();
+  const { platform } = app;
+  return (
+    <SettingsScreen
+      settings={app.settings}
+      // The web app doesn't send the team to the app yet.
+      team={null}
+      onCopy={(text) => {
+        platform.copyText(text).then(
+          () => notify('Copied.', 'ok'),
+          () => notify("Couldn't copy. Select the text and copy it instead.", 'warn'),
+        );
+      }}
+    />
   );
 }

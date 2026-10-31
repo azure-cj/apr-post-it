@@ -195,3 +195,66 @@ describe('the shell', () => {
     expect(screen.getByRole('main')).toBeTruthy();
   });
 });
+
+describe("the manager's screens", () => {
+  const QUEUED = {
+    ok: true,
+    assignments: [
+      { date: '2026-11-01', assignedTo: intern.name, property: 'BGC Uptown Office 18F, 240 sqm', status: 'To post', propertyId: '1BgcUptown' },
+    ],
+  };
+
+  it('are all reachable by an admin, from the nav', async () => {
+    renderApp({ platform: fakeServer({ assignments: QUEUED }), user: admin, path: '/tracker' });
+    expect(heading()).toBe('Tracker');
+    await userEvent.click(screen.getByRole('link', { name: 'Assign' }));
+    expect(heading()).toBe('Assign');
+    await userEvent.click(screen.getByRole('link', { name: 'Settings' }));
+    expect(heading()).toBe('Settings');
+    // The web app doesn't send the team yet, and the screen says so.
+    expect(screen.getByText("The team isn't shown here yet")).toBeTruthy();
+  });
+
+  it.each(['/tracker', '/assign', '/settings'])('send an intern who asks for %s back to their queue', (path) => {
+    renderApp({ platform: fakeServer(), user: intern, path });
+    expect(heading()).toBe('My queue');
+  });
+
+  it("save a queue through the tracker, as the intern's on the day shown", async () => {
+    const platform = fakeServer({ assignments: QUEUED, saveQueue: { ok: true, saved: 2 } });
+    renderApp({ platform, user: manager, path: '/assign' });
+    // Opens on tomorrow, on the first intern the tracker knows.
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search the library' }), 'Kapitolyo');
+    await userEvent.click(await screen.findByRole('button', { name: /^Add Kapitolyo/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save queue' }));
+
+    await waitFor(() => expect(platform.posts.map((p) => p.action)).toContain('saveQueue'));
+    const save = platform.posts.find((p) => p.action === 'saveQueue')!.body as Record<string, unknown>;
+    expect(save['date']).toBe('2026-11-01');
+    expect(save['assignedTo']).toBe(intern.name);
+    expect(JSON.stringify(save['items'])).toContain('Kapitolyo Ground Floor Retail, Pasig');
+  });
+
+  it('ask before leaving Assign with unsaved changes, and staying keeps them', async () => {
+    renderApp({ platform: fakeServer({ assignments: QUEUED }), user: manager, path: '/assign' });
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search the library' }), 'Kapitolyo');
+    await userEvent.click(await screen.findByRole('button', { name: /^Add Kapitolyo/ }));
+
+    await userEvent.click(screen.getByRole('link', { name: 'Tracker' }));
+    const dialog = screen.getByRole('dialog', { name: 'Leave without saving?' });
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Keep editing' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Keep editing' }));
+    expect(heading()).toBe('Assign');
+    expect(screen.getByRole('button', { name: 'Save queue' })).toBeTruthy();
+
+    // The brand link asks too; leaving drops the changes.
+    await userEvent.click(screen.getByRole('link', { name: /APG Post-It/ }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Leave without saving' }));
+    expect(heading()).toBe('Tracker');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Nothing unsaved any more: moving on asks nothing.
+    await userEvent.click(screen.getByRole('link', { name: 'Find' }));
+    expect(heading()).toBe('Find a property');
+  });
+
+});

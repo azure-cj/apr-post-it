@@ -284,6 +284,7 @@ function readDetail(raw: unknown): PropertyDetail | null {
     live: row['live'] === true,
     photos,
     folder: asText(row['folder']),
+    ...(typeof row['withheld'] === 'boolean' ? { withheld: row['withheld'] } : {}),
   };
   // Absent for an intern: the server never sent it (D1). Not hidden here — not here at all.
   const internal = row['internalText'];

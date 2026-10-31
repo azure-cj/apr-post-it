@@ -22,7 +22,10 @@ import type { CheckResult } from './types';
 
 const SPACE = String.raw`\t-\r\x85\p{Z}`;
 const S = `[${SPACE}]`;
-const BMP = String.raw`(?=[\0-\u{FFFF}])`;
+// Not (?=[\0-\u{FFFF}]): Node 22's V8 compiles "(?:(?=[\0-\u{FFFF}])\p{Nd})+/"
+// differently from how it interprets it, so "50/50 split" matched on a first
+// call and not after. This form gives the same answer in both.
+const BMP = String.raw`(?![\u{10000}-\u{10FFFF}])`;
 const D = String.raw`(?:${BMP}\p{Nd})`;
 
 // .NET's word characters for \b, the two zero-width joiners included.
@@ -47,14 +50,28 @@ const PRICE_LINE = new RegExp(
 );
 
 // PH mobiles (0917 000 0000, +63 917 000 0000) and landlines like (02) 8123 4567.
+// Dots are separators too ("0917.123.4567"), which the C# missed.
 const CONTACT_NUMBER = new RegExp(
-  String.raw`(?<!${D})(?:(?:\+?63|0)${S}?9${D}{2}[${SPACE}\-]?${D}{3}[${SPACE}\-]?${D}{4}` +
-    String.raw`|\(${D}{2,4}\)${S}?${D}{3,4}[${SPACE}\-]?${D}{4})(?!${D})`,
+  String.raw`(?<!${D})(?:(?:\+?63|0)${S}?9${D}{2}[${SPACE}\-.]?${D}{3}[${SPACE}\-.]?${D}{4}` +
+    String.raw`|\(${D}{2,4}\)${S}?${D}{3,4}[${SPACE}\-.]?${D}{4})(?!${D})`,
   'gu',
 );
 
-// Under the i flag JS also lets ſ (long s) stand for s, which .NET does not.
-// Listings are not written in long s, and the difference errs towards blocking.
+// A share of the price: "3%", "2.5 percent", "three per cent".
+const PERCENT =
+  String.raw`(?:${D}+(?:\.${D}+)?|${WORD_START}(?:one|two|three|four|five|six|seven|eight|nine|ten|half))` +
+  String.raw`${S}*(?:%|percent${WORD_END}|per${S}+cent${WORD_END})`;
+
+// Who a share goes to. A share "to" or "for" a person in the deal is commission
+// however it is worded; a share of anything else ("3 percent discount", "10% down
+// payment") is not, so the recipient has to be named.
+const RECIPIENT =
+  String.raw`(?:(?:the|any|all|our)${S}+)?(?:(?:co-?)?(?:agents?|brokers?)|referr(?:ers?|ing${S}+(?:agents?|brokers?))` +
+  String.raw`|whoever${S}+(?:closes|sells|brings)|closing${S}+(?:agents?|brokers?))${WORD_END}`;
+
+// The C# patterns first, in their order, then what it missed. Under the i flag
+// JS also lets ſ (long s) stand for s, which .NET does not; the check runs on an
+// NFKC copy anyway, which folds ſ to s.
 const COMMISSION_WORDING = new RegExp(
   [
     String.raw`${WORD_START}commissions?${WORD_END}`,
@@ -66,6 +83,14 @@ const COMMISSION_WORDING = new RegExp(
     String.raw`${D}+(?:\.${D}+)?${S}*%${S}*to${S}+(?:the${S}+)?agents?${WORD_END}`,
     String.raw`${WORD_START}finder['’]?s?${S}+fees?${WORD_END}`,
     String.raw`${WORD_START}rebates?${WORD_END}`,
+    String.raw`${PERCENT}${S}*(?:to|for)${S}+${RECIPIENT}`,
+    String.raw`${PERCENT}${S}*(?:sharing|split)${WORD_END}`,
+    String.raw`${WORD_START}co[-${SPACE}]?brok(?:e|ers?|ing)${WORD_END}`,
+    String.raw`${WORD_START}brokers?['’]?s?${S}+(?:fees?|share|cut)${WORD_END}`,
+    String.raw`${WORD_START}sharing${S}*(?:of${S}+)?${D}+${S}*/${S}*${D}+`,
+    String.raw`${D}+${S}*/${S}*${D}+${S}*(?:sharing|split)${WORD_END}`,
+    String.raw`${WORD_START}split${S}+(?:with|among|between)${S}+${RECIPIENT}`,
+    String.raw`${WORD_START}[ck]omis[iy]on${WORD_END}`,
   ].join('|'),
   'iu',
 );
@@ -121,10 +146,28 @@ function checkContacts(text: string): CheckResult {
 
 function checkCommission(text: string): CheckResult {
   const name = 'No commission wording';
-  const hit = COMMISSION_WORDING.exec(text);
-  return hit
-    ? { name, status: 'fail', detail: `Found "${trim(hit[0])}" — remove it before posting` }
-    : { name, status: 'pass', detail: 'Clean' };
+  const { folded, origin } = foldCompatibility(text);
+  const hit = COMMISSION_WORDING.exec(folded);
+  if (!hit) return { name, status: 'pass', detail: 'Clean' };
+  const quoted = text.slice(origin[hit.index], origin[hit.index + hit[0].length]);
+  return { name, status: 'fail', detail: `Found "${trim(quoted)}" — remove it before posting` };
+}
+
+// "𝗖𝗼𝗺𝗺𝗶𝘀𝘀𝗶𝗼𝗻" and "ｃｏｍｍｉｓｓｉｏｎ" are commission to a reader, so the
+// pattern is matched against an NFKC copy, folded one character at a time so
+// that every position in it maps back to the original, which is what is quoted.
+function foldCompatibility(text: string): { folded: string; origin: number[] } {
+  let folded = '';
+  const origin: number[] = [];
+  let at = 0;
+  for (const char of text) {
+    const piece = char.normalize('NFKC');
+    for (let i = 0; i < piece.length; i++) origin.push(at);
+    folded += piece;
+    at += char.length;
+  }
+  origin.push(at);
+  return { folded, origin };
 }
 
 // .NET's Trim(), by the same whitespace as S. A loop, because /\s+$/ backtracks
