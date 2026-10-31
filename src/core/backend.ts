@@ -31,7 +31,12 @@ export type Action =
   | 'logPost'
   | 'addLink'
   | 'saveQueue'
-  | 'setStatus';
+  | 'setStatus'
+  | 'addPerson'
+  | 'setActive'
+  | 'newKey'
+  | 'saveQueues'
+  | 'indexCheck';
 
 /** Where the web app is, and who is asking. Blank, null or missing means "not set". */
 export interface BackendConfig {
@@ -103,6 +108,22 @@ export type BackendErrorCode =
   | 'notfound'
   | 'outdated'
   | 'incomplete'
+  | 'link-required'
+  | 'bad-link'
+  | 'bad-status'
+  | 'duplicate'
+  | 'self'
+  | 'unknown-person'
+  | 'bad-intern'
+  | 'bad-queues'
+  | 'bad-date'
+  | 'bad-role'
+  | 'bad-active'
+  | 'bad-accounts'
+  | 'name-required'
+  // The listing checker's index (indexCheck): not a failure of ours, nothing to fix here.
+  | 'checker-off'
+  | 'checker-unavailable'
   | 'server';
 
 /** A failed call. The message is the sentence to show; `code` says which way it failed. */
@@ -174,6 +195,11 @@ const DOING: Readonly<Record<Action, string>> = {
   addLink: 'add the link',
   saveQueue: 'save the queue',
   setStatus: 'update the queue',
+  addPerson: 'add that person',
+  setActive: 'change who is active',
+  newKey: 'make a new key',
+  saveQueues: 'save the queues',
+  indexCheck: 'compare the directory with the checker',
 };
 
 /** Completes "Google sent … in a form Post-It could not read". */
@@ -188,10 +214,24 @@ const WHAT: Readonly<Record<Action, string>> = {
   addLink: 'its answer',
   saveQueue: 'its answer',
   setStatus: 'its answer',
+  addPerson: 'the new person',
+  setActive: 'that person',
+  newKey: 'the new key',
+  saveQueues: 'its answer',
+  indexCheck: 'the comparison',
 };
 
 /** Calls that change the sheet. When one times out it may still have gone through. */
-const WRITES: ReadonlySet<Action> = new Set<Action>(['logPost', 'addLink', 'saveQueue', 'setStatus']);
+const WRITES: ReadonlySet<Action> = new Set<Action>([
+  'logPost',
+  'addLink',
+  'saveQueue',
+  'setStatus',
+  'addPerson',
+  'setActive',
+  'newKey',
+  'saveQueues',
+]);
 
 const TIMED_OUT = Symbol('timed out');
 
@@ -353,6 +393,38 @@ function refusal(reply: Reply, action: Action): BackendError {
     case 'notfound':
       return new BackendError('notfound', action,
         theirs(`Google could not find what it needed to ${DOING[action]}. Reload and try again.`));
+    // Ours, not the server's wording: short, and the same as the app's own checks (links.ts).
+    case 'link-required':
+      return new BackendError('link-required', action, "Paste the post's link.");
+    case 'bad-link':
+      return new BackendError('bad-link', action, "That isn't a Facebook link.");
+    case 'bad-status':
+      return new BackendError('bad-status', action, 'Choose Posted or Pending.');
+    case 'duplicate':
+      return new BackendError('duplicate', action, 'Someone on the team already has that name.');
+    case 'self':
+      return new BackendError('self', action, "You can't deactivate yourself.");
+    // The server's sentence names the person or the item; ours is the fallback.
+    case 'unknown-person':
+      return new BackendError('unknown-person', action, theirs("That person isn't active on the team."));
+    case 'bad-intern':
+      return new BackendError('bad-intern', action, theirs("That person isn't an active intern."));
+    case 'bad-queues':
+      return new BackendError('bad-queues', action, theirs("The queues couldn't be read. Check them and save again."));
+    case 'bad-accounts':
+      return new BackendError('bad-accounts', action, theirs("The FB accounts couldn't be read. Check them and try again."));
+    case 'bad-date':
+      return new BackendError('bad-date', action, 'Pick a valid date.');
+    case 'bad-role':
+      return new BackendError('bad-role', action, 'Choose Intern or Admin.');
+    case 'bad-active':
+      return new BackendError('bad-active', action, 'Choose active or not.');
+    case 'name-required':
+      return new BackendError('name-required', action, "Type the person's name.");
+    case 'checker-off':
+      return new BackendError('checker-off', action, 'The listings check is turned off.');
+    case 'checker-unavailable':
+      return new BackendError('checker-unavailable', action, "The listing checker can't be reached right now. Try again later.");
   }
 
   // Code.gs throws these as plain text, with no message of their own.

@@ -252,9 +252,9 @@ describe('keys', () => {
 
     expect(w.project.post({ action: 'ping', key: 'setup-key' })).toMatchObject({ ok: false, error: 'unauthorized' });
     // The first person in is the admin who assigns the postings (D14).
-    expect(w.project.post({ action: 'ping', key })).toMatchObject({ ok: true, name: 'Jan Dela Cruz', role: 'Admin' });
+    expect(w.project.post({ action: 'ping', key })).toMatchObject({ ok: true, name: 'Your Name', role: 'Admin' });
     // Written as text: a key, a name or a flag is never evaluated (D7).
-    expect(fresh.sheet('Team').row(2)).toEqual(['Jan Dela Cruz', '', 'Admin', key, '', 'TRUE']);
+    expect(fresh.sheet('Team').row(2)).toEqual(['Your Name', '', 'Admin', key, '', 'TRUE']);
     expect(fresh.sheet('Team').formats(2)).toEqual(['@', '@', '@', '@', '@', '@']);
   });
 });

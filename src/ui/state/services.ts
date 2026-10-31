@@ -81,6 +81,16 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
     void assignments.refresh();
   };
 
+  /** A change to the Team tab: the team is read again whichever way it ended. */
+  async function teamWrite<T>(write: () => Promise<T>): Promise<T> {
+    try {
+      return await write();
+    } finally {
+      team.invalidate();
+      void team.refresh();
+    }
+  }
+
   async function writing<T>(write: () => Promise<T>): Promise<T> {
     try {
       return await write();
@@ -98,6 +108,11 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
     updatePost: (original, edited) => writing(() => raw.updatePost(original, edited)),
     saveQueue: (date, assignedTo, items) => writing(() => raw.saveQueue(date, assignedTo, items)),
     setStatus: (item, status) => writing(() => raw.setStatus(item, status)),
+    saveQueues: (date, queues) => writing(() => raw.saveQueues(date, queues)),
+    addPerson: (input) => teamWrite(() => raw.addPerson(input)),
+    setActive: (name, active) => teamWrite(() => raw.setActive(name, active)),
+    newKey: (name) => teamWrite(() => raw.newKey(name)),
+    indexCheck: () => raw.indexCheck(),
   };
 
   const directoryStatus = createStore<DirectoryStatus>(IDLE);

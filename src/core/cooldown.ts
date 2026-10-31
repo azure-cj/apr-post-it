@@ -61,7 +61,7 @@ export function isDueForRepost(
 
 /**
  * The latest date among the property's Posted and Pending rows: a post still
- * waiting for its link starts the cooldown too, or a second intern could post the
+ * waiting for the group admin's approval starts the cooldown too, or a second intern could post the
  * same listing in the meantime.
  *
  * A row is the property's when the folder ids agree, if both have one, so a renamed

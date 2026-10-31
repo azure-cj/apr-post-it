@@ -31,60 +31,94 @@ const POSTS = {
 };
 
 describe('My queue', () => {
-  it("lists today's items in the manager's order, with the pending one pinned on top, and counts them", async () => {
+  it('puts the next one up on top, then each row with its name, category and status', async () => {
     renderApp({ platform: fakeServer({ assignments: QUEUE, posts: POSTS }), path: '/queue' });
 
-    await screen.findByText('Seaside Residences 2BR, Pasay');
-    const names = Array.from(document.querySelectorAll('.queue__list > li .queue-item__name')).map((n) => n.textContent);
-    expect(names).toEqual([
+    const nextUp = await screen.findByRole('region', { name: 'Next up' });
+    expect(nextUp.textContent).toContain('Verdant Hills Lot 12, Tagaytay');
+    expect(nextUp.textContent).toContain('Condo / house and lot');
+    // The next one is the one gold button; it opens from the queue.
+    const open = within(nextUp).getByRole('link', { name: /Verdant Hills Lot 12, Tagaytay.*next to post/ });
+    expect(open.querySelector('.button--primary')).toBeTruthy();
+    expect(document.querySelectorAll('.button--primary')).toHaveLength(1);
+
+    // The rest: pending first, then what is left, then what is done. Tomorrow's item isn't today's work.
+    const rows = Array.from(document.querySelectorAll('.queue__list > li'));
+    expect(rows.map((r) => r.querySelector('.queue-item__name')?.textContent)).toEqual([
       'Seaside Residences 2BR, Pasay',
-      'Verdant Hills Lot 12, Tagaytay',
       'Valenzuela Warehouse 1,200 sqm',
       'Kapitolyo Ground Floor Retail, Pasig',
     ]);
-    // Tomorrow's item is not today's work.
+    expect(rows.map((r) => r.querySelector('.pill')?.textContent)).toEqual(['Pending', 'To post', 'Posted']);
+    expect(rows[1]!.textContent).toContain('Warehouse');
     expect(screen.queryByText('BGC Uptown Office 18F, 240 sqm')).toBeNull();
 
     const counts = screen.getByRole('list', { name: "Today's counts" }).textContent;
-    expect(counts).toContain('2to post');
-    expect(counts).toContain('1waiting for a link');
-    expect(counts).toContain('1posted');
-
-    // The next one to post is the one gold button; it opens from the queue.
-    const next = screen.getByRole('link', { name: /Verdant Hills Lot 12, Tagaytay.*next to post/ });
-    expect(next.querySelector('.button--primary')).toBeTruthy();
-    expect(document.querySelectorAll('.button--primary')).toHaveLength(1);
-    expect(screen.getByText('Logged at 11:02 from APG Main. Waiting for the group to approve it. Add the live link once it\'s up.')).toBeTruthy();
+    expect(counts).toContain('2 to post');
+    expect(counts).toContain('1 pending');
+    expect(counts).toContain('1 posted');
 
     // The count in the nav: what is left today.
     expect(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: /My queue/ }).textContent).toContain('3 left in your queue today');
   });
 
-  it('completes a pending post with its live link', async () => {
+  it('opens any row in one click', async () => {
+    renderApp({ platform: fakeServer({ assignments: QUEUE, posts: POSTS }), path: '/queue' });
+    await userEvent.click(await screen.findByRole('link', { name: 'Valenzuela Warehouse 1,200 sqm' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Verdant Hills Lot 12, Tagaytay' })).toBeTruthy();
+    expect(document.querySelector('.back-link')?.textContent).toBe('My queue');
+  });
+
+  it('marks a pending post posted in one click, its link already logged', async () => {
+    const withLink = {
+      ok: true,
+      posts: POSTS.posts.map((p) => (p.status === 'Pending' ? { ...p, postLink: 'https://www.facebook.com/groups/apgmain/posts/2/' } : p)),
+    };
+    const platform = fakeServer({ assignments: QUEUE, posts: withLink, setStatus: { ok: true } });
+    renderApp({ platform, path: '/queue' });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark Seaside Residences 2BR, Pasay posted' }));
+    await waitFor(() => expect(platform.posts.some((p) => p.action === 'setStatus')).toBe(true));
+    expect(platform.posts.find((p) => p.action === 'setStatus')?.body).toMatchObject({
+      propertyId: '1Seaside',
+      property: 'Seaside Residences 2BR, Pasay',
+      assignedTo: intern.name,
+      status: 'Posted',
+    });
+    expect(await screen.findByText('Marked posted: Seaside Residences 2BR, Pasay.')).toBeTruthy();
+    // The server marks the post itself Posted too: the posts are read again, not only the queue.
+    const after = (action: string) =>
+      platform.posts.slice(platform.posts.findIndex((p) => p.action === 'setStatus')).some((p) => p.action === action);
+    await waitFor(() => expect(after('posts')).toBe(true));
+    expect(after('assignments')).toBe(true);
+  });
+
+  it('asks an old pending post, logged without a link, for its link first', async () => {
     const platform = fakeServer({ assignments: QUEUE, posts: POSTS, addLink: { ok: true, row: 3 } });
     renderApp({ platform, path: '/queue' });
 
-    const field = await screen.findByLabelText('Live post link');
-    await userEvent.click(screen.getByRole('button', { name: 'Add link' }));
-    expect(await screen.findByText('Paste the link of the live post.')).toBeTruthy();
+    const field = await screen.findByLabelText('Post link');
+    await userEvent.type(field, 'https://www.example.com/1');
+    await userEvent.click(screen.getByRole('button', { name: 'Mark posted' }));
+    expect(await screen.findByText("That isn't a Facebook link.")).toBeTruthy();
+    expect(platform.posts.some((p) => p.action === 'addLink')).toBe(false);
 
+    await userEvent.clear(field);
     await userEvent.type(field, 'https://www.facebook.com/groups/apgmain/posts/2/');
-    await userEvent.click(screen.getByRole('button', { name: 'Add link' }));
-
-    await waitFor(() => expect(platform.posts.some((p) => p.action === 'addLink')).toBe(true));
-    expect(platform.posts.find((p) => p.action === 'addLink')?.body).toMatchObject({
-      propertyId: '1Seaside',
-      property: 'Seaside Residences 2BR, Pasay',
-      postLink: 'https://www.facebook.com/groups/apgmain/posts/2/',
-    });
-    expect(await screen.findByText('Link added. Seaside Residences 2BR, Pasay is marked posted.')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Mark posted' }));
+    await waitFor(() =>
+      expect(platform.posts.find((p) => p.action === 'addLink')?.body).toMatchObject({
+        propertyId: '1Seaside',
+        postLink: 'https://www.facebook.com/groups/apgmain/posts/2/',
+      }),
+    );
   });
 
   it('opens a listing from the queue, and the listing knows it came from there', async () => {
     renderApp({ platform: fakeServer({ assignments: QUEUE, posts: POSTS }), path: '/queue' });
     await userEvent.click(await screen.findByRole('link', { name: /Verdant Hills Lot 12, Tagaytay/ }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Verdant Hills Lot 12, Tagaytay' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'My queue' })).toBeTruthy();
+    expect(document.querySelector('.back-link')?.textContent).toBe('My queue');
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(within(nav).getByRole('link', { name: /My queue/ }).getAttribute('aria-current')).toBe('page');
   });

@@ -33,10 +33,6 @@
   color: var(--text-muted);
 }
 
-.settings__built-in {
-  margin-top: var(--space-6);
-}
-
 /* ---- rules ---------------------------------------------------------------- */
 
 .settings__rules {
@@ -61,6 +57,11 @@
 
 .settings__rule dd {
   margin: 0;
+}
+
+.settings__rule + .settings__rule {
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--border-soft);
 }
 
 .settings__value {
@@ -125,49 +126,143 @@
 .settings__table td.settings__name {
   color: var(--text);
   font-weight: var(--weight-heading);
+  white-space: nowrap;
 }
 
 .settings__muted {
   color: var(--text-muted);
 }
 
-/* ---- adding someone ---------------------------------------------------------- */
+/* ---- team actions ------------------------------------------------------------ */
 
-.settings__steps {
-  display: grid;
-  gap: var(--space-5);
-  margin: 0;
-  padding-inline-start: 1.4em;
-  color: var(--text);
-}
-
-.settings__steps li::marker {
+.settings__row--off td {
   color: var(--text-muted);
-  font-family: var(--heading-font);
-  font-weight: var(--weight-heading);
 }
 
-.settings__code {
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-sm);
-  background: var(--inset);
-  color: var(--text);
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 0.94em;
+.settings__row--off td.settings__name {
+  color: var(--text-label);
 }
 
-.settings__menu {
-  color: var(--text);
+.settings__you {
+  margin-inline-start: var(--space-4);
+  color: var(--text-muted);
+  font-family: var(--body-font);
+  font-weight: 400;
+  font-size: var(--text-caption);
+}
+
+.settings__table td.settings__row-actions {
+  padding-inline-end: 0;
+  text-align: end;
   white-space: nowrap;
 }
 
-.settings__subhead {
-  margin-top: var(--space-12);
-  font-size: var(--text-body);
-  line-height: var(--lh-body);
+.settings__row-actions .button + .button {
+  margin-inline-start: var(--space-2);
 }
 
-.settings__text {
-  margin-top: var(--space-3);
+.settings__form {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.settings__once {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--warn-text);
+}
+
+/* ---- listings check -------------------------------------------------------------- */
+
+.check {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.check__counts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  margin: 0 0 var(--space-4);
+}
+
+.check__counts div {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-row);
+  background: var(--inset);
+}
+
+.check__counts dt {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.check__counts dd {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+  font-weight: var(--weight-heading);
+}
+
+.check__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-sm);
   color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+summary.check__row {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+summary.check__row span:first-child {
+  margin-inline-end: auto;
+}
+
+summary.check__row:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--space-1);
+}
+
+.check__row--none {
+  color: var(--text-muted);
+}
+
+.check__list {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 220px;
+  margin: var(--space-2) 0 var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  overflow-y: auto;
+  border-radius: var(--radius-row);
+  background: var(--inset);
+  list-style: none;
+  color: var(--text-label);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.check__sub {
+  display: block;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.check__when {
+  margin-top: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
 }

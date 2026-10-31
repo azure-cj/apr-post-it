@@ -128,6 +128,45 @@ export function directoryRow(listing: Listing): (string | number)[] {
   ];
 }
 
+/** The listing checker's published Index CSV, in its own column order (CONTRACT-v3). */
+export const CHECKER_HEADERS = [
+  'Folder name', 'City', 'Size (sqm)', 'Building / street', 'Category', 'Deal type', 'Status', 'Group folder',
+  'Created', 'Modified', 'Link', 'Keywords', 'Folder ID', 'Indexed at', 'Path',
+];
+
+export interface CheckerRow {
+  readonly id: string;
+  readonly name: string;
+  readonly city?: string;
+  readonly size?: string;
+  readonly dealType?: string;
+  readonly status?: string;
+  readonly path?: string;
+}
+
+/** The checker's Index as its published CSV: every field quoted where it must be. */
+export function checkerCsv(rows: readonly CheckerRow[], headers: readonly string[] = CHECKER_HEADERS): string {
+  const quote = (v: string): string => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const cells = (r: CheckerRow): Record<string, string> => ({
+    'Folder name': r.name,
+    City: r.city ?? '',
+    'Size (sqm)': r.size ?? '',
+    'Building / street': '',
+    Category: 'CONDO',
+    'Deal type': r.dealType ?? '',
+    Status: r.status ?? 'Available',
+    'Group folder': '',
+    Created: '2026-01-05',
+    Modified: '2026-02-01',
+    Link: `https://drive.google.com/drive/folders/${r.id}`,
+    Keywords: '',
+    'Folder ID': r.id,
+    'Indexed at': '2026-03-09 03:00',
+    Path: r.path ?? `LISTINGS / ${r.name}`,
+  });
+  return [headers.map(quote).join(','), ...rows.map((r) => headers.map((h) => quote(cells(r)[h] ?? '')).join(','))].join('\r\n') + '\r\n';
+}
+
 export interface App {
   readonly backend: Backend;
   readonly tracker: Tracker;
@@ -145,10 +184,14 @@ export interface World {
   readonly directoryTab: Tab;
   /** One request, with this person's key. */
   call(person: Person, action: string, fields?: Readonly<Record<string, unknown>>): Reply;
-  /** Logs a post of `listing` as `person`, the way the app sends it. */
+  /** Logs a post of `listing` as `person`, the way the app sends it: Posted, with a link, unless `fields` say otherwise. */
   logPost(person: Person, listing: Listing, fields?: Readonly<Record<string, unknown>>): Reply;
   /** The app's own client, signed in as `person` and talking to this server. */
   app(person: Person): App;
+  /** CONFIG.CHECKER_INDEX_CSV_URL as the script has it. */
+  readonly checkerUrl: string;
+  /** Publishes the checker's Index at checkerUrl. */
+  publishChecker(rows: readonly CheckerRow[]): void;
 }
 
 export interface WorldOptions extends ProjectOptions {
@@ -206,8 +249,13 @@ export function createWorld(options: WorldOptions = {}): World {
         propertyId: listing.id,
         fbAccount: 'APG Main',
         postLink: 'https://www.facebook.com/groups/apg/posts/1/',
+        status: 'Posted',
         ...fields,
       }),
+    checkerUrl: project.evaluate('CONFIG.CHECKER_INDEX_CSV_URL') as string,
+    publishChecker(rows) {
+      project.web.respond(project.evaluate('CONFIG.CHECKER_INDEX_CSV_URL') as string, checkerCsv(rows));
+    },
     app(person) {
       const backend = createBackend({
         post: async (_url, body) => project.postText(body),

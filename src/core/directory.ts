@@ -20,7 +20,7 @@
  */
 
 import { asList, asRecord, asText, unreadableReply, type Backend } from './backend';
-import { UserFacingError, type Photo, type Property, type PropertyDetail } from './types';
+import { UserFacingError, type Availability, type Photo, type Property, type PropertyDetail } from './types';
 
 /** Somewhere to keep the list between launches. Platform's readLocal / writeLocal fit. */
 export interface LocalStore {
@@ -246,7 +246,32 @@ function readProperty(raw: unknown): Property | null {
     subCategory: asText(row['subCategory']),
     photoCount: wholeNumber(row['photoCount']),
     hasIssues: row['hasIssues'] === true,
+    ...(typeof row['issues'] === 'string' ? { issues: row['issues'] } : {}),
+    // The checker's fields: each one only when it was sent, and sent as something readable.
+    ...optionalText('city', row['city']),
+    ...optionalText('size', row['size']),
+    ...optionalText('dealType', row['dealType']),
+    ...optionalAvailability(row['availability']),
+    ...(typeof row['inChecker'] === 'boolean' ? { inChecker: row['inChecker'] } : {}),
   };
+}
+
+function optionalText<K extends 'city' | 'size' | 'dealType'>(name: K, value: unknown): { [P in K]?: string } {
+  if (typeof value !== 'string' && typeof value !== 'number') return {};
+  const text = asText(value).trim();
+  return { [name]: text } as { [P in K]?: string };
+}
+
+function optionalAvailability(value: unknown): { availability?: Availability } {
+  if (typeof value !== 'string') return {};
+  switch (value.trim().toLowerCase()) {
+    case 'available':
+      return { availability: 'Available' };
+    case 'sold':
+      return { availability: 'Sold' };
+    default:
+      return { availability: '' };
+  }
 }
 
 function readProperties(rows: readonly unknown[]): Property[] {
@@ -277,6 +302,12 @@ function readDetail(raw: unknown): PropertyDetail | null {
     // The reply carries no count of its own: the photos are what can be downloaded.
     photoCount: photos.length,
     hasIssues: issues.trim() !== '',
+    // The checker's fields, joined as for the list: each only when sent.
+    ...optionalText('city', row['city']),
+    ...optionalText('size', row['size']),
+    ...optionalText('dealType', row['dealType']),
+    ...optionalAvailability(row['availability']),
+    ...(typeof row['inChecker'] === 'boolean' ? { inChecker: row['inChecker'] } : {}),
     publicText: asText(row['publicText']),
     hasInternal: row['hasInternal'] === true,
     cutAt: asText(row['cutAt']),

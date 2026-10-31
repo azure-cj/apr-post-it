@@ -63,9 +63,9 @@ export interface TrackerScreenProps {
 export const LIST_LIMIT = 6;
 
 /**
- * The day at a glance, for a manager: what went out, what's waiting for its
- * link, who's done, what's due for a repost or has never been posted, and
- * which documents need fixing. Every number is shown, zero included.
+ * The day at a glance, for a manager: what went out, what's waiting for the
+ * group admin's approval, who's done, what's due for a repost or has never
+ * been posted, and which documents need fixing. Every number is shown, zero included.
  */
 export function TrackerScreen({
   date,
@@ -115,10 +115,6 @@ export function TrackerScreen({
           <h1 className="page-header__title" tabIndex={-1}>
             Tracker
           </h1>
-          <p className="page-header__description">
-            The day at a glance: what went out, what&rsquo;s waiting for its link, who&rsquo;s done, and what to post
-            next.
-          </p>
         </div>
         <div className="tracker__day">
           <DayPicker date={date} today={today} onChange={onDateChange} label="Day shown" quick={['today']} />
@@ -157,7 +153,7 @@ export function TrackerScreen({
         <>
           <dl className="tracker-stats">
             <Stat label={isToday ? 'Posted today' : `Posted ${day}`} value={summary.postedToday} />
-            <Stat label="Pending" value={summary.pending} note="Waiting for a post link" />
+            <Stat label="Pending" value={summary.pending} note="Waiting for group approval" />
             <Stat
               label="Interns done"
               value={summary.internsDone}
@@ -172,7 +168,7 @@ export function TrackerScreen({
             <Card
               className="tracker__posts"
               title={isToday ? 'Posts today' : `Posts on ${day}`}
-              description="Newest first. A pending post gets its link once the group admin approves it."
+              description="Newest first."
             >
               <PostsTable posts={summary.posts} day={isToday ? 'today' : `on ${day}`} onOpenLink={onOpenLink} />
             </Card>
@@ -225,7 +221,7 @@ export function TrackerScreen({
             <div className="tracker__lists">
               <Card
                 title="Due for repost"
-                description={`Not posted for ${repostDueDays} days or more, longest first.`}
+                description={`${repostDueDays}+ days since last post`}
               >
                 <ShowSome
                   items={summary.dueForRepost}
@@ -242,7 +238,7 @@ export function TrackerScreen({
                   )}
                 />
               </Card>
-              <Card title="Never posted" description="By name. A listing in someone's queue says whose.">
+              <Card title="Never posted">
                 <ShowSome
                   items={summary.neverPosted}
                   limit={LIST_LIMIT}
@@ -262,10 +258,10 @@ export function TrackerScreen({
             <Card
               className="tracker__health"
               title="Doc health"
-              description="From the directory's Issues column, rebuilt every night. Worst first."
+              description="Worst first."
             >
               {health.listings === 0 ? (
-                <p className="tracker__quiet">The directory has no problems to report.</p>
+                <p className="tracker__quiet">No problems.</p>
               ) : (
                 <>
                   <p className="health__summary">
@@ -324,7 +320,7 @@ function PostsTable({ posts, day, onOpenLink }: PostsTableProps) {
                     {post.status}
                   </Pill>
                   {post.postLink.trim() === '' ? (
-                    <span className="tracker__muted">No link yet</span>
+                    <span className="tracker__muted">No link</span>
                   ) : onOpenLink ? (
                     <Button
                       variant="link"
@@ -459,11 +455,11 @@ const issueLabel: Record<IssueKind, string> = {
 
 const issueAdvice: Record<IssueKind, string> = {
   noSeparator:
-    "Copy is blocked: nothing marks where the public text ends, so none of it is confirmed safe to post. Add a separator line above the owner's details.",
-  noDocument: 'The folder has no posting document, so there is nothing to post. Add one.',
-  wordFile: "The posting document is a Word file, which the directory can't read. Open it in Drive and save it as a Google Doc.",
-  other: 'The directory couldn\'t read these the usual way. Open each one to see what it says.',
-  noPhotos: 'There is nothing to upload with the post. Add photos to the folder.',
+    "Copy is blocked. Add a separator line above the owner's details.",
+  noDocument: 'No posting document in the folder. Add one.',
+  wordFile: 'Word file. Save it as a Google Doc.',
+  other: 'Open each one to see what the directory found.',
+  noPhotos: 'Add photos to the folder.',
 };
 
 const issueAlso: Record<IssueKind, string> = {
@@ -475,7 +471,7 @@ const issueAlso: Record<IssueKind, string> = {
 };
 
 const UNEXPLAINED =
-  "The list says something is wrong with these but not what. Open one to see what the directory found.";
+  'Open one to see what the directory found.';
 
 function HealthGroupView({
   group,

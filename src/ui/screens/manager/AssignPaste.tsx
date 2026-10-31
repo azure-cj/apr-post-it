@@ -71,7 +71,7 @@ export function PastePanel({
           onChange={(event) => onText(event.target.value)}
         />
         <p className="field__hint" id={hintId}>
-          One listing per line. Numbers and bullets are fine, and small typos are caught.
+          Numbers, bullets and small typos are fine.
         </p>
       </div>
       <div className="assign-paste__run">

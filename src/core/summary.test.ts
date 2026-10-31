@@ -267,7 +267,7 @@ describe('summarizeDay — the tracker screen (TrackerViewModelTests)', () => {
     expect(d.neverPosted.length).toBe(5);
   });
 
-  it("lists the day's rows newest first, pending ones without a link", () => {
+  it("lists the day's rows newest first, an old pending one without a link", () => {
     const [posted, pending] = day(TODAY).posts;
     expect(posted?.title).toBe('Antipolo Ridge Lot 18');
     expect(posted?.postedBy).toBe(MIKA);
@@ -615,7 +615,7 @@ describe('the team, for the Interns screen', () => {
     expect(activeInterns([])).toEqual([]);
   });
 
-  it("counts each intern's queue on the day and their posts waiting for a link", () => {
+  it("counts each intern's queue on the day and their posts waiting for approval", () => {
     const assignments = [
       ...queue(JAN, TODAY, ['A', 'Posted'], ['B', 'Posted'], ['C', 'Pending'], ['D', 'To post'], ['E', 'To post']),
       ...queue(MIKA, TOMORROW, ['F', 'To post']),

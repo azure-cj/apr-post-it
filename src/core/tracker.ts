@@ -17,8 +17,11 @@
  */
 
 import { asList, asRecord, asText, unreadableReply, type Backend } from './backend';
+import { postLinkProblem } from './links';
 import { parseRole, readAccounts } from './session';
 import {
+  type IndexCheck,
+  type Role,
   type TeamMember,
   UserFacingError,
   type Assignment,
@@ -39,8 +42,10 @@ export interface LogPostInput {
   readonly propertyName: string;
   /** The Facebook account it went out on. The server refuses one that is not yours. */
   readonly fbAccount: string;
-  /** The live post's link. Blank logs the post as Pending. */
-  readonly postLink?: string | undefined;
+  /** The post's link: required, an https link on Facebook (links.ts). */
+  readonly postLink: string;
+  /** Posted: live. Pending: posted in a group, waiting for the group admin's approval. */
+  readonly status: PostStatus;
   /** The Type column — the C# app wrote the property's category. Blank: the server writes "Group post". */
   readonly type?: string | undefined;
   /** A manager logging for an intern, by their name exactly as the tracker has it. The server ignores it from an intern. */
@@ -54,6 +59,21 @@ export interface QueueItemInput {
   readonly propertyId?: string | undefined;
   /** Default "To post". */
   readonly status?: AssignmentStatus | undefined;
+}
+
+/** One intern's queue for `saveQueues`. */
+export interface QueueInput {
+  readonly assignedTo: string;
+  readonly items: readonly QueueItemInput[];
+}
+
+/** A new Team row. */
+export interface AddPersonInput {
+  readonly name: string;
+  readonly role: Role;
+  /** Facebook accounts they may post from. Empty or missing means any. */
+  readonly fbAccounts?: readonly string[] | undefined;
+  readonly email?: string | undefined;
 }
 
 export interface Tracker {
@@ -88,8 +108,34 @@ export interface Tracker {
   /** Replaces one person's queue for one date with `items`, in that order. Resolves with how many were saved. */
   saveQueue(date: string, assignedTo: string, items: readonly QueueItemInput[]): Promise<number>;
 
-  /** Moves one queue item to `status`. */
+  /**
+   * Moves one queue item to `status`. With Posted, the server also marks the
+   * assignee's newest Pending post of that listing Posted, so read the posts
+   * again afterwards.
+   */
   setStatus(item: Assignment, status: AssignmentStatus): Promise<Assignment>;
+
+  /**
+   * Replaces several interns' queues for one date at once, under one lock. A
+   * planner's Map fits as it is. An intern given no items has their queue for
+   * that date emptied. Resolves with how many rows were saved.
+   */
+  saveQueues(
+    date: string,
+    queues: ReadonlyMap<string, readonly QueueItemInput[]> | readonly QueueInput[],
+  ): Promise<number>;
+
+  /** Adds a person to the Team tab (Admin). The key comes back once: show it, then forget it. */
+  addPerson(input: AddPersonInput): Promise<{ readonly person: TeamMember; readonly key: string }>;
+
+  /** Revokes or restores someone (Admin). You cannot deactivate yourself. */
+  setActive(name: string, active: boolean): Promise<TeamMember>;
+
+  /** A new key for someone (Admin). Their old key stops working at once. */
+  newKey(name: string): Promise<string>;
+
+  /** How the Directory sheet and the listing checker's index disagree (Admin). */
+  indexCheck(): Promise<IndexCheck>;
 }
 
 const ONLY_THE_LINK =
@@ -162,7 +208,12 @@ export function createTracker(deps: TrackerDeps): Tracker {
       // The server checks the account against your list as typed in the Team tab, trimmed.
       const fbAccount = input.fbAccount.trim();
       if (!fbAccount) throw new UserFacingError('Type the FB account name.');
-      const postLink = (input.postLink ?? '').trim();
+      const linkProblem = postLinkProblem(input.postLink);
+      if (linkProblem) throw new UserFacingError(linkProblem);
+      const postLink = input.postLink.trim();
+      if (input.status !== 'Posted' && input.status !== 'Pending') {
+        throw new UserFacingError('Choose Posted or Pending.');
+      }
       const type = (input.type ?? '').trim();
       const postedBy = input.postedBy ?? '';
 
@@ -172,12 +223,13 @@ export function createTracker(deps: TrackerDeps): Tracker {
         propertyId: input.propertyId,
         fbAccount,
         postLink,
+        status: input.status,
         type: type || undefined,
         postedBy: postedBy.trim() ? postedBy : undefined,
       });
 
       const said = asText(reply['status']).trim();
-      const status: PostStatus = said === 'Pending' || said === 'Posted' ? said : postLink ? 'Posted' : 'Pending';
+      const status: PostStatus = said === 'Pending' || said === 'Posted' ? said : input.status;
       return {
         date: readSheetDate(reply['date']),
         time: readSheetTime(reply['time']),
@@ -251,7 +303,120 @@ export function createTracker(deps: TrackerDeps): Tracker {
       });
       return { ...item, status };
     },
+
+    async saveQueues(date, queues): Promise<number> {
+      if (!date || readSheetDate(date) !== date) throw new UserFacingError('Pick a date for the queues.');
+      const list: readonly QueueInput[] = isQueueMap(queues)
+        ? [...queues].map(([assignedTo, items]) => ({ assignedTo, items }))
+        : queues;
+      if (list.length === 0) return 0;
+      const seen = new Set<string>();
+      for (const queue of list) {
+        if (!queue.assignedTo.trim()) throw new UserFacingError('Every queue needs someone to post it.');
+        if (seen.has(queue.assignedTo)) {
+          throw new UserFacingError(`${queue.assignedTo} has two queues. Merge them and save again.`);
+        }
+        seen.add(queue.assignedTo);
+        if (queue.items.some((item) => !item.propertyName.trim())) {
+          throw new UserFacingError('Every queue item needs a property. Remove the empty one and save again.');
+        }
+      }
+      const reply = await backend.call('saveQueues', {
+        date,
+        queues: list.map((queue) => ({
+          assignedTo: queue.assignedTo,
+          items: queue.items.map((item) => ({
+            propertyName: item.propertyName,
+            status: item.status ?? 'To post',
+            ...(item.propertyId?.trim() ? { propertyId: item.propertyId } : {}),
+          })),
+        })),
+      });
+      const saved = reply['saved'];
+      return typeof saved === 'number' && Number.isFinite(saved)
+        ? saved
+        : list.reduce((sum, queue) => sum + queue.items.length, 0);
+    },
+
+    async addPerson(input: AddPersonInput): Promise<{ readonly person: TeamMember; readonly key: string }> {
+      const name = input.name.trim();
+      if (!name) throw new UserFacingError("Type the person's name.");
+      if (input.role !== 'Intern' && input.role !== 'Admin') throw new UserFacingError('Choose Intern or Admin.');
+      const fbAccounts = readAccounts(input.fbAccounts ?? []);
+      const email = (input.email ?? '').trim();
+      const reply = await backend.call('addPerson', {
+        name,
+        role: input.role,
+        fbAccounts: fbAccounts.length > 0 ? fbAccounts : undefined,
+        email: email || undefined,
+      });
+      const row = asRecord(reply['person']);
+      const person = row ? readTeamMember(row) : null;
+      const key = asText(reply['key']).trim();
+      if (!person || !key) throw unreadableReply('addPerson');
+      return { person, key };
+    },
+
+    async setActive(name: string, active: boolean): Promise<TeamMember> {
+      // Sent exactly as the Team tab has it: the server matches the name.
+      if (!name.trim()) throw new UserFacingError('Choose who to change.');
+      const reply = await backend.call('setActive', { name, active });
+      const row = asRecord(reply['person']);
+      const person = row ? readTeamMember(row) : null;
+      if (!person) throw unreadableReply('setActive');
+      return person;
+    },
+
+    async newKey(name: string): Promise<string> {
+      if (!name.trim()) throw new UserFacingError('Choose who needs a new key.');
+      const reply = await backend.call('newKey', { name });
+      const key = asText(reply['key']).trim();
+      if (!key) throw unreadableReply('newKey');
+      return key;
+    },
+
+    async indexCheck(): Promise<IndexCheck> {
+      const reply = await backend.call('indexCheck');
+      const directoryOnly = asList(reply['directoryOnly']);
+      const checkerOnly = asList(reply['checkerOnly']);
+      const sold = asList(reply['sold']);
+      if (!directoryOnly || !checkerOnly || !sold) throw unreadableReply('indexCheck');
+      return {
+        checkedAt: asText(reply['checkedAt']),
+        directoryCount: count(reply['directoryCount']),
+        checkerCount: count(reply['checkerCount']),
+        directoryOnly: readNamed(directoryOnly).map(({ id, name }) => ({ id, name })),
+        checkerOnly: readNamed(checkerOnly),
+        sold: readNamed(sold).map(({ id, name }) => ({ id, name })),
+      };
+    },
   };
+}
+
+function isQueueMap(
+  queues: ReadonlyMap<string, readonly QueueItemInput[]> | readonly QueueInput[],
+): queues is ReadonlyMap<string, readonly QueueItemInput[]> {
+  return !Array.isArray(queues);
+}
+
+/** A count from the reply: a whole number of zero or more, else 0. */
+function count(value: unknown): number {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/** `{id, name, path}` rows; a row with neither an id nor a name is left out. */
+function readNamed(rows: readonly unknown[]): { id: string; name: string; path: string }[] {
+  const out: { id: string; name: string; path: string }[] = [];
+  for (const raw of rows) {
+    const row = asRecord(raw);
+    if (!row) continue;
+    const id = asText(row['id']);
+    const name = asText(row['name']);
+    if (!id.trim() && !name.trim()) continue;
+    out.push({ id, name, path: asText(row['path']) });
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ mapping

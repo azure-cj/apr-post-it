@@ -45,7 +45,7 @@ const post = (who: string, title: string, status: string, date: string, time: st
   propertyId: '',
 });
 
-/** Jan posted twice today, one still waiting for its link. Mika last posted on Thursday. */
+/** Jan posted twice today, one still waiting for approval. Mika last posted on Thursday. */
 const POSTS = {
   ok: true,
   posts: [
@@ -170,9 +170,7 @@ describe('the Interns screen', () => {
   it('says how to add the first intern when the team has none', async () => {
     renderApp({ platform: server({ team: { ok: true, team: [TEAM.team[1]] } }), user: admin, path: '/interns' });
     expect(await screen.findByRole('heading', { name: 'No interns yet' })).toBeTruthy();
-    expect(screen.getByText(/Add them on the Team tab with/).textContent).toBe(
-      'Add them on the Team tab with ADD_PERSON in Apps Script.',
-    );
+    expect(screen.getByText('Add them in Settings → Team.')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
   });
 

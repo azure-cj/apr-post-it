@@ -42,9 +42,9 @@ describe('the sidebar', () => {
     window.innerWidth = 1024;
   });
 
-  it('gives an admin Tracker, Assign, Interns, Find and Settings, and no list of people', async () => {
+  it('gives an admin Tracker, Assign, Interns, Records, Find and Settings, and no list of people', async () => {
     renderApp({ platform: server(), user: admin, path: '/tracker' });
-    expect(navNames()).toEqual(['Tracker', 'Assign', 'Interns', 'Find', 'Settings']);
+    expect(navNames()).toEqual(['Tracker', 'Assign', 'Interns', 'Records', 'Find', 'Settings']);
     const interns = screen.getByRole('link', { name: 'Interns' });
     expect(interns.getAttribute('href')).toBe('#/interns');
     expect(interns.querySelector('svg')).not.toBeNull();

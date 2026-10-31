@@ -1,5 +1,6 @@
-/* A listing. The main column follows the job in order: copy the text, save
-   the photos, log the post. The side pane answers "may I post this?". */
+/* A listing. The main column follows the job in order: copy the text, then
+   log the post right under it. The side pane answers "may I post this?" and
+   holds the photos. */
 
 .property > .back-link {
   margin-bottom: var(--space-6);
@@ -9,17 +10,28 @@
   margin-bottom: var(--space-10);
 }
 
-.property__folder {
+.property__category {
   display: inline-flex;
   align-items: center;
   gap: var(--space-4);
+  color: var(--text-label);
+}
+
+/* Small facts after the category, each set off by a middle dot. */
+.property__fact::before {
+  content: "·";
+  margin-inline-end: var(--space-6);
+  color: var(--text-muted);
+}
+
+.property__sold {
+  margin-bottom: var(--space-12);
 }
 
 /* ---- the public text: one clearly bounded box ---------------------------- */
 
 .post-text,
-.photos,
-.next-step {
+.photos {
   display: grid;
   gap: var(--space-8);
   min-width: 0;
@@ -87,7 +99,7 @@
   overflow-wrap: anywhere;
   /* Bounded, so a long document never pushes the checks and photos out of
      reach; it scrolls inside, and takes focus so the keyboard can scroll it. */
-  max-height: min(26rem, 55vh);
+  max-height: min(22rem, 42vh);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -202,7 +214,21 @@
   overflow-wrap: anywhere;
 }
 
-/* ---- photos ------------------------------------------------------------- */
+/* ---- photos: in the side pane, real thumbnails that open large --------- */
+
+.photos {
+  gap: var(--space-6);
+  padding: var(--space-8);
+}
+
+.photos__head {
+  align-items: center;
+}
+
+.photos__count {
+  color: var(--text-muted);
+  font-weight: var(--weight-label);
+}
 
 .photos__actions {
   display: flex;
@@ -212,8 +238,8 @@
 
 .photos__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -221,13 +247,37 @@
 
 .photos__item {
   aspect-ratio: 4 / 3;
+  min-width: 0;
+}
+
+.photos__open {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
   overflow: hidden;
   border: var(--border-width) solid var(--border);
   border-radius: var(--radius-chip);
   background: var(--surface-raised);
+  cursor: zoom-in;
+}
+
+.photos__open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--inset-edge);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.photos__open:hover::after {
+  opacity: 1;
 }
 
 .photos__img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -237,24 +287,11 @@
   display: grid;
   place-items: center;
   height: 100%;
-  padding: var(--space-4);
+  padding: var(--space-2);
   color: var(--text-muted);
   font-size: var(--text-caption);
   line-height: var(--lh-caption);
   text-align: center;
-}
-
-/* ---- the next step ------------------------------------------------------ */
-
-.next-step {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  padding-block: var(--space-10);
-}
-
-.next-step__title {
-  font-family: var(--heading-font);
-  font-weight: var(--weight-heading);
 }
 
 .keys {
@@ -262,16 +299,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-}
-
-@container shell (width < 900px) {
-  .next-step {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .next-step .button {
-    justify-self: start;
-  }
 }
 
 /* ---- the side pane ---------------------------------------------------------- */

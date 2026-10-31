@@ -778,3 +778,76 @@ describe('search speed', () => {
     expect(directory.search('verdant hills blk 3 lot 7').every((p) => /verdant hills/i.test(p.name))).toBe(true);
   });
 });
+
+describe("the checker's fields (contract v3)", () => {
+  it('are read when sent, and absent when not', async () => {
+    const { post } = scripted({
+      ok: true,
+      properties: [
+        { id: 'A', name: 'Alpha', city: ' Makati ', size: 120, dealType: 'Sale', availability: 'SOLD', inChecker: true },
+        { id: 'B', name: 'Bravo', availability: 'Available', inChecker: false },
+        { id: 'C', name: 'Charlie', availability: '', city: null, size: {}, inChecker: 'yes' },
+        { id: 'D', name: 'Delta', availability: 'gone' },
+        { id: 'E', name: 'Echo' },
+      ],
+    });
+    const list = await directoryOver(post).list();
+    const [a, b, c, d, e] = list;
+
+    expect(a).toMatchObject({ city: 'Makati', size: '120', dealType: 'Sale', availability: 'Sold', inChecker: true });
+    expect(b).toMatchObject({ availability: 'Available', inChecker: false });
+    expect(c!.availability).toBe('');
+    expect(c).not.toHaveProperty('city');
+    expect(c).not.toHaveProperty('size');
+    expect(c).not.toHaveProperty('inChecker');
+    expect(d!.availability).toBe('');
+    for (const field of ['city', 'size', 'dealType', 'availability', 'inChecker']) expect(e).not.toHaveProperty(field);
+  });
+});
+
+describe('the Issues text on the list', () => {
+  it('is kept when sent, absent when not, and survives the copy on disk', async () => {
+    const store = memoryStore();
+    const reply = {
+      ok: true,
+      properties: [
+        { id: 'A', name: 'Alpha', hasIssues: true, issues: 'No separator line — the whole document is treated as postable. Check it.' },
+        { id: 'B', name: 'Bravo', hasIssues: false, issues: '' },
+        { id: 'C', name: 'Charlie', hasIssues: true },
+      ],
+    };
+    const first = await directoryOver(scripted(reply).post, { store }).list();
+    expect(first.map((p) => p.issues)).toEqual([
+      'No separator line — the whole document is treated as postable. Check it.',
+      '',
+      undefined,
+    ]);
+    expect(first[2]).not.toHaveProperty('issues');
+
+    const second = scripted(reply);
+    const relaunched = await directoryOver(second.post, { store }).list();
+    expect(second.sent).toHaveLength(0);
+    expect(relaunched.map((p) => p.issues)).toEqual(first.map((p) => p.issues));
+  });
+});
+
+describe("the checker's fields on one property", () => {
+  it('are read when sent, as on the list, and absent when not', async () => {
+    const { post } = scripted((body: Wire) =>
+      body['id'] === 'A'
+        ? { ok: true, property: { id: 'A', name: 'Alpha', city: ' Makati ', size: 120, dealType: 'Lease', availability: 'sold', inChecker: true } }
+        : { ok: true, property: { id: 'B', name: 'Bravo' } },
+    );
+    const directory = directoryOver(post);
+
+    expect(await directory.detail('A')).toMatchObject({
+      city: 'Makati',
+      size: '120',
+      dealType: 'Lease',
+      availability: 'Sold',
+      inChecker: true,
+    });
+    const b = await directory.detail('B');
+    for (const field of ['city', 'size', 'dealType', 'availability', 'inChecker']) expect(b).not.toHaveProperty(field);
+  });
+});

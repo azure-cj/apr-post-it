@@ -48,7 +48,7 @@ interface InternLine {
 
 /**
  * Everyone on the team who posts, in one place: the day's queue and how far
- * along it is, posts still waiting for a link, when each last posted, and the
+ * along it is, posts still waiting for approval, when each last posted, and the
  * FB accounts they may use. Revoked people are kept apart, folded away.
  */
 export function InternsScreen({
@@ -108,9 +108,6 @@ export function InternsScreen({
           <h1 className="page-header__title" tabIndex={-1}>
             Interns
           </h1>
-          <p className="page-header__description">
-            Each intern&rsquo;s queue, posts waiting for a link, and when they last posted.
-          </p>
         </div>
         <div className="interns__day">
           <DayPicker date={date} today={today} onChange={onDateChange} label="Day shown" quick={['today', 'tomorrow']} />
@@ -148,7 +145,7 @@ export function InternsScreen({
       ) : team === null ? null : nobody ? (
         <Card>
           <EmptyState title="No interns yet">
-            Add them on the Team tab with <code className="interns__code">ADD_PERSON</code> in Apps Script.
+            Add them in Settings → Team.
           </EmptyState>
         </Card>
       ) : (
@@ -161,13 +158,13 @@ export function InternsScreen({
               of={withQueue.length}
               note={withQueue.length === 0 ? `No queues for ${day}` : undefined}
             />
-            <Stat label="With pending posts" value={withPending} note="Waiting for a post link" />
+            <Stat label="With pending posts" value={withPending} note="Waiting for group approval" />
             <Stat label={isToday ? 'No queue today' : `No queue ${day}`} value={lines.length - withQueue.length} />
           </dl>
 
           <Card
             title="Active interns"
-            description={`Queues for ${isToday ? 'today' : day}. Pending counts every post still waiting for its link.`}
+            description={`Queues for ${isToday ? 'today' : day}`}
             actions={
               <SearchBox
                 className="interns__search"
@@ -179,7 +176,7 @@ export function InternsScreen({
             }
           >
             {lines.length === 0 ? (
-              <p className="interns__quiet">Nobody on the team is active. Revoked people are listed below.</p>
+              <p className="interns__quiet">No active interns.</p>
             ) : shownLines.length === 0 ? (
               <p className="interns__quiet">No active intern&rsquo;s name matches &ldquo;{query.trim()}&rdquo;.</p>
             ) : (
@@ -317,7 +314,7 @@ function Revoked({ people, total, query }: { readonly people: readonly TeamMembe
     <Card
       className="interns__revoked"
       title="Revoked"
-      description="Their keys no longer work. Set Active to TRUE on their Team row to let someone back in."
+      description="Turn them on in Settings → Team."
       actions={
         <Button size="small" aria-expanded={open} aria-controls={open ? listId : undefined} onClick={() => setOpen((o) => !o)}>
           {open ? 'Hide revoked' : `Show revoked (${total})`}

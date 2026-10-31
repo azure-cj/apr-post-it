@@ -18,8 +18,8 @@ import type { Assignment, AssignmentStatus, PostLogEntry, Property, Role, Settin
 
 /**
  * A listing as the directory list gives it, with its Issues text when the
- * list carries it. Code.gs sends only `hasIssues` today; doc health and the
- * "can't be posted" warnings read `issues` when it is there.
+ * list carries it (Code.gs sends it with every row). Doc health, the planner
+ * and the "can't be posted" warnings read `issues` when it is there.
  */
 export type DirectoryRow = Property & { readonly issues?: string | undefined };
 
@@ -153,7 +153,7 @@ function historyOf(posts: readonly PostLogEntry[]): History {
   const byNameWithoutId = new Map<string, Latest>();
   const all = new Map<string, Latest>();
   posts.forEach((post, order) => {
-    // Both a live post and one waiting for its link start the cooldown.
+    // Both a live post and one waiting for approval start the cooldown.
     if (post.status !== 'Posted' && post.status !== 'Pending') return;
     if (dayOf(post.date) === undefined) return;
     const entry: Latest = { post, order };
@@ -241,7 +241,7 @@ export interface InternProgress {
   readonly posted: number;
   readonly pending: number;
   readonly toPost: number;
-  /** Had a queue, and nothing in it is left to post or waiting for a link. */
+  /** Had a queue, and nothing in it is left to post or waiting for approval. */
   readonly done: boolean;
 }
 
@@ -261,7 +261,7 @@ export interface DaySummary {
   readonly date: string;
   /** Posts dated that day that are live. */
   readonly postedToday: number;
-  /** Every post waiting for its link, whatever its date: they wait for the group admin. */
+  /** Every post waiting for the group admin's approval, whatever its date. */
   readonly pending: number;
   /** People with a queue that day who have finished it. */
   readonly internsDone: number;
@@ -824,14 +824,14 @@ export function activeInterns(team: readonly Pick<TeamMember, 'name' | 'role' | 
   return names.sort((a, b) => byName.compare(a, b));
 }
 
-/** One intern's day at a glance: their queue's progress and posts still waiting for a link. */
+/** One intern's day at a glance: their queue's progress and posts still waiting for approval. */
 export interface InternDay {
   readonly name: string;
   /** Items in their queue on the day. */
   readonly total: number;
   /** Of those, posted. */
   readonly posted: number;
-  /** Their posts waiting for a link, whatever the date: as the tracker counts pending. */
+  /** Their posts waiting for approval, whatever the date: as the tracker counts pending. */
   readonly pendingPosts: number;
 }
 

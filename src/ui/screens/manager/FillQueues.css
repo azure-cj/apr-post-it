@@ -1,0 +1,206 @@
+/* Fill queues: the settings in one row, who in a wrap of ticks, then the
+   preview as one line per intern that opens to show the list. */
+
+.fill__settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-8) var(--space-14);
+}
+
+.fill__per {
+  width: 128px;
+}
+
+.fill__field {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.fill__label {
+  padding: 0;
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+.fill__count,
+.fill__muted {
+  color: var(--text-muted);
+  font-family: var(--body-font);
+  font-weight: 400;
+}
+
+.fill__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 36px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.fill__check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--gold);
+}
+
+.fill__keep {
+  min-height: 44px;
+}
+
+.fill__who {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fill__who legend {
+  margin-bottom: var(--space-3);
+}
+
+.fill__interns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0 var(--space-8);
+}
+
+/* ---- the preview ----------------------------------------------------------- */
+
+.fill__plan {
+  display: grid;
+  gap: var(--space-6);
+  padding-top: var(--space-8);
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
+.fill__plan-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.fill__plan-title {
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+}
+
+.fill__queues {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fill__queue summary {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) 3ch;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-4) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  color: var(--text-label);
+  cursor: pointer;
+  list-style: none;
+}
+
+.fill__queue summary::-webkit-details-marker {
+  display: none;
+}
+
+.fill__queue summary:hover {
+  background: var(--row-hover);
+}
+
+.fill__queue summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--space-1) * -1);
+}
+
+.fill__queue summary .tabular {
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+  text-align: end;
+}
+
+.fill__name {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How full the queue is against "per intern": green, never gold. */
+.fill__bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+}
+
+.fill__bar span {
+  display: block;
+  height: 100%;
+  background: var(--ok-strong);
+  transform-origin: left center;
+}
+
+.fill__list {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 var(--space-6);
+  padding: var(--space-4) var(--space-8) var(--space-4) calc(var(--space-8) + 2ch);
+  border-radius: var(--radius-row);
+  background: var(--inset);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.fill__list::marker,
+.fill__list li::marker {
+  color: var(--text-muted);
+}
+
+p.fill__list {
+  padding-inline-start: var(--space-8);
+}
+
+.fill__skipped {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.fill__skipped ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fill__skipped li {
+  display: inline-flex;
+  gap: var(--space-4);
+  padding: var(--space-1) var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+  color: var(--neutral-text);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.fill__skipped li .tabular {
+  color: var(--text);
+}

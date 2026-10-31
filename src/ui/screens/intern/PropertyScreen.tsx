@@ -1,11 +1,19 @@
-import { useCallback, useEffect, useId, useRef, useState, type ClipboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type ClipboardEvent } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { BackendError } from '@/core/backend';
 import { runChecks } from '@/core/checks';
 import { cooldown, lastPostedOn } from '@/core/cooldown';
 import { normalize } from '@/core/matcher';
-import { canManage, type CheckResult, type CooldownState, type PostLogEntry, type PropertyDetail } from '@/core/types';
-import { Button, Card, CategoryDot, CheckList, Icon, Notice, Pill, categoryKind } from '../../components';
+import {
+  canManage,
+  type CheckResult,
+  type CooldownState,
+  type Photo,
+  type PostLogEntry,
+  type Property,
+  type PropertyDetail,
+} from '@/core/types';
+import { Button, Card, CategoryDot, CheckList, Icon, Notice, Pill, categoryKind, categoryLabel } from '../../components';
 import {
   manilaTime,
   paths,
@@ -25,12 +33,14 @@ import {
   daysAgo,
   daysBetween,
   firstName,
-  folderLine,
+  folderName,
   folderOf,
   friendlyFolder,
   longDate,
   shortDate,
 } from './format';
+import { LogStep } from './LogStep';
+import { PhotoViewer } from './PhotoViewer';
 import { BackLink, Key, Waiting } from './shared';
 import './PropertyScreen.css';
 
@@ -45,6 +55,7 @@ const backLabels: Record<NavKey, string> = {
   tracker: 'Tracker',
   assign: 'Assign',
   interns: 'Interns',
+  records: 'Records',
   settings: 'Settings',
 };
 
@@ -54,6 +65,7 @@ const backPaths: Record<NavKey, string> = {
   tracker: paths.tracker,
   assign: paths.assign,
   interns: paths.interns,
+  records: paths.records,
   settings: paths.settings,
 };
 
@@ -61,13 +73,17 @@ const backPaths: Record<NavKey, string> = {
 const SHORTCUTS = { copy: 'KeyC', photos: 'KeyP', log: 'KeyL' } as const;
 
 /**
- * One listing: its public text in a bounded box with the screen's one gold
- * button, Copy; the pre-post checks, any one of which blocks Copy; the
- * photos; and the cooldown. An intern never has the internal section here,
- * and a document nobody has separated shows none of its text.
+ * One listing, the whole job on one screen: its public text with Copy, the
+ * pre-post checks (any failure blocks Copy), the photos, the cooldown, and
+ * the log step under the text. Keyed by the listing, so opening the next one
+ * starts clean.
  */
 export function PropertyScreen() {
   const { id = '' } = useParams();
+  return <PropertyPage key={id} id={id} />;
+}
+
+function PropertyPage({ id }: { readonly id: string }) {
   const location = useLocation();
   const navigate = useNavigate();
   const app = useApp();
@@ -103,12 +119,16 @@ export function PropertyScreen() {
   const posts = usePosts();
   const detail = load.status === 'ready' ? load.detail : null;
   const name = detail?.name ?? summary?.name ?? '';
+  const known: Property | undefined = detail ?? summary;
 
   useEffect(() => {
     document.title = `${name || 'Property'} · APG Post-It`;
   }, [name]);
 
   // ---- what may be copied ----------------------------------------------------
+
+  // Sold, by the listing checker: neither copied nor logged.
+  const sold = isSold(detail) || isSold(summary);
 
   // An intern is never sent the text of a document nobody has separated (D13).
   // The server says so with its `withheld` flag; when a reply has no flag, it
@@ -121,7 +141,7 @@ export function PropertyScreen() {
   const mine = posts.data && name ? postsOf(posts.data, { id, name }) : [];
   const cool: CooldownState | null = posts.data && name ? cooldown(lastPostedOn(posts.data, { id, name }), app.today(), app.settings) : null;
 
-  const gate = copyGate({ detail, withheld, noDocument, checks, cool, manager, checkingCooldown: posts.data === null && posts.loading });
+  const gate = copyGate({ detail, sold, withheld, noDocument, checks, cool, manager, checkingCooldown: posts.data === null && posts.loading });
   const canCopy = gate.kind === 'ready';
 
   // ---- actions ---------------------------------------------------------------
@@ -152,6 +172,7 @@ export function PropertyScreen() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const photosRef = useRef<HTMLButtonElement>(null);
   const photos = detail?.photos ?? [];
+  const [viewing, setViewing] = useState<number | null>(null);
 
   const downloadAll = async () => {
     if (!detail || saving || photos.length === 0) return;
@@ -195,19 +216,18 @@ export function PropertyScreen() {
     }
   };
 
-  const logPost = useCallback(() => navigate(paths.logPost(id), { state: location.state }), [navigate, id, location.state]);
-  const logRef = useRef<HTMLButtonElement>(null);
+  const linkRef = useRef<HTMLInputElement>(null);
 
-  // Alt+C copies, Alt+P downloads the photos, Alt+L logs the post: the day's
-  // path without the mouse. Through the buttons, so a blocked one stays blocked.
+  // Alt+C copies, Alt+P downloads the photos, Alt+L goes to the post link:
+  // the day's path without the mouse. Through the controls, so a blocked one stays blocked.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      const target =
-        event.code === SHORTCUTS.copy ? copyRef : event.code === SHORTCUTS.photos ? photosRef : event.code === SHORTCUTS.log ? logRef : null;
-      if (!target) return;
+      if (event.code === SHORTCUTS.copy) copyRef.current?.click();
+      else if (event.code === SHORTCUTS.photos) photosRef.current?.click();
+      else if (event.code === SHORTCUTS.log) linkRef.current?.focus();
+      else return;
       event.preventDefault();
-      target.current?.click();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -250,7 +270,7 @@ export function PropertyScreen() {
     );
   }
 
-  const category = detail ?? summary;
+  const wholeDocument = detail !== null && !detail.hasInternal && manager;
 
   return (
     <div className="page property">
@@ -258,38 +278,31 @@ export function PropertyScreen() {
 
       <header className="page-header property__header">
         <h1 className="page-header__title" tabIndex={-1}>
-          {name || 'Opening the listing…'}
+          {name || 'Opening…'}
         </h1>
-        {category ? (
-          <p className="meta-row">
-            <span className="property__folder">
-              <CategoryDot kind={categoryKind(category.category)} />
-              {folderLine(category)}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>{category.photoCount === 0 ? 'No photos' : count(category.photoCount, 'photo', 'photos')}</span>
-          </p>
-        ) : null}
+        {known ? <Facts property={known} checker={summary} /> : null}
       </header>
+
+      {sold ? (
+        <Notice tone="danger" title="Sold" className="property__sold">
+          Don’t post or log this listing.
+        </Notice>
+      ) : null}
 
       <div className="two-pane">
         <div className="two-pane__main">
-          {/* ---- the public text: the one bounded box, the one gold button ---- */}
+          {/* ---- the public text: the one bounded box ---- */}
           <section className={`post-text${canCopy ? ' post-text--ready' : ''}`} aria-labelledby={textTitleId}>
             <div className="post-text__head">
               <div className="post-text__heading">
                 <h2 id={textTitleId} className="section-title">
-                  {detail && !detail.hasInternal && manager ? 'Whole document' : 'Public text'}
+                  {wholeDocument ? 'Whole document' : 'Posting text'}
                 </h2>
-                <p className="meta">
-                  {detail && !detail.hasInternal && manager
-                    ? 'Not separated: owner and commission details may be in here.'
-                    : 'Only this part is ever copied.'}
-                </p>
+                {wholeDocument ? <p className="meta">Not separated: may hold owner and commission details.</p> : null}
               </div>
               <Button
                 ref={copyRef}
-                variant="primary"
+                variant={copiedAt ? 'ghost' : 'primary'}
                 className="post-text__copy"
                 disabled={!canCopy}
                 busy={copying}
@@ -333,86 +346,85 @@ export function PropertyScreen() {
 
           {manager && detail?.hasInternal ? <InternalSection detail={detail} /> : null}
 
-          {/* ---- photos ---- */}
-          <section className="photos" aria-labelledby={photosTitleId}>
-            <div className="photos__head">
-              <div className="post-text__heading">
-                <h2 id={photosTitleId} className="section-title">
-                  Photos
-                </h2>
-                <p className="meta">
-                  {detail === null
-                    ? 'Reading the folder…'
-                    : photos.length === 0
-                      ? 'None in the folder.'
-                      : savedFolder
-                        ? `Saved to ${friendlyFolder(savedFolder)}`
-                        : `${count(photos.length, 'photo', 'photos')} in the folder. Saved to Downloads\\APG Post-It.`}
-                </p>
-              </div>
-              <div className="photos__actions">
-                {app.platform.hasFileSystem ? (
-                  <Button
-                    ref={photosRef}
-                    busy={saving}
-                    disabled={detail === null || photos.length === 0}
-                    aria-keyshortcuts="Alt+P"
-                    onClick={() => void downloadAll()}
-                  >
-                    {saving ? `Downloading ${count(photos.length, 'photo', 'photos')}…` : savedFolder ? 'Download again' : 'Download all'}
-                  </Button>
-                ) : null}
-                {savedFolder ? <Button onClick={() => void openFolder()}>Open folder</Button> : null}
-                {manager && detail?.folder ? (
-                  <Button variant="quiet" onClick={() => void openInDrive()}>
-                    Open in Drive
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-            {!app.platform.hasFileSystem && detail !== null && photos.length > 0 ? (
-              <Notice tone="info">Saving photos works in the desktop app, not in a browser.</Notice>
-            ) : null}
-            {photoError ? (
-              <Notice tone="danger" live>
-                {photoError}
-              </Notice>
-            ) : null}
-            {photos.length > 0 ? (
-              <ul className="photos__grid">
-                {photos.map((photo, i) => (
-                  <li key={photo.id} className="photos__item">
-                    <Thumb src={photo.thumb} alt={`Photo ${i + 1} of ${photos.length}`} />
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </section>
-
-          {/* ---- the next step ---- */}
-          <section className="next-step" aria-label="After posting">
-            <div>
-              <p className="next-step__title">Posted it on Facebook?</p>
-              <p className="meta">Log it with the FB account and the post link. The rest is filled in for you.</p>
-            </div>
-            <Button ref={logRef} aria-keyshortcuts="Alt+L" onClick={logPost}>
-              Log this post
-            </Button>
-          </section>
+          {/* ---- after posting ---- */}
+          <LogStep
+            ref={linkRef}
+            property={known ?? null}
+            blocked={sold}
+            primary={copiedAt !== null}
+            section={section}
+          />
 
           <p className="keys meta">
-            <Key>Alt</Key>+<Key>C</Key> copies · <Key>Alt</Key>+<Key>P</Key> downloads the photos · <Key>Alt</Key>+<Key>L</Key> logs the post
+            <Key>Alt</Key>+<Key>C</Key> copy · <Key>Alt</Key>+<Key>P</Key> save photos · <Key>Alt</Key>+<Key>L</Key> post link
           </p>
         </div>
 
         <aside className="two-pane__side" aria-label="Before you post">
           <Verdict gate={gate} cool={cool} manager={manager} />
 
+          {/* ---- photos ---- */}
+          <section className="photos" aria-labelledby={photosTitleId}>
+            <div className="photos__head">
+              <h2 id={photosTitleId} className="section-title">
+                Photos{photos.length > 0 ? <span className="photos__count tabular"> {photos.length}</span> : null}
+              </h2>
+              <div className="photos__actions">
+                {app.platform.hasFileSystem ? (
+                  <Button
+                    ref={photosRef}
+                    size="small"
+                    busy={saving}
+                    disabled={detail === null || photos.length === 0}
+                    aria-keyshortcuts="Alt+P"
+                    onClick={() => void downloadAll()}
+                  >
+                    {saving ? 'Downloading…' : savedFolder ? 'Download again' : 'Download all'}
+                  </Button>
+                ) : null}
+                {savedFolder ? (
+                  <Button size="small" onClick={() => void openFolder()}>
+                    Open folder
+                  </Button>
+                ) : null}
+                {manager && detail?.folder ? (
+                  <Button size="small" variant="quiet" onClick={() => void openInDrive()}>
+                    Open in Drive
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            {savedFolder ? <p className="meta">Saved to {friendlyFolder(savedFolder)}</p> : null}
+            {!app.platform.hasFileSystem && detail !== null && photos.length > 0 ? (
+              <p className="meta">Saving photos works in the desktop app only.</p>
+            ) : null}
+            {photoError ? (
+              <Notice tone="danger" live>
+                {photoError}
+              </Notice>
+            ) : null}
+            {detail === null ? (
+              <Waiting>Reading the folder…</Waiting>
+            ) : photos.length === 0 ? (
+              <p className="meta">No photos in the folder.</p>
+            ) : (
+              <ul className="photos__grid">
+                {photos.map((photo, i) => (
+                  <li key={photo.id} className="photos__item">
+                    <button type="button" className="photos__open" aria-label={`Photo ${i + 1} of ${photos.length}, view large`} onClick={() => setViewing(i)}>
+                      <Thumb photo={photo} label={`Photo ${i + 1}`} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <Card title="Pre-post checks" headingLevel={2} padding="tight">
             {detail === null ? (
               <Waiting>Waiting for the document…</Waiting>
             ) : withheld ? (
-              <p className="meta">The checks run once an admin has separated the document.</p>
+              <p className="meta">Run once the document is separated.</p>
             ) : (
               <CheckList checks={checks} label="Pre-post checks" />
             )}
@@ -443,7 +455,46 @@ export function PropertyScreen() {
           ) : null}
         </aside>
       </div>
+
+      {viewing !== null ? (
+        <PhotoViewer photos={photos} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)} />
+      ) : null}
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ the header
+
+/** "Sold" from the listing checker, whatever its case. */
+function isSold(p: Property | null | undefined): boolean {
+  return p?.availability === 'Sold';
+}
+
+/**
+ * Category, city, size, sale or lease: what the listing is, at a glance. Each
+ * only when known. The checker's fields come with the detail; the list's row
+ * stands in while it loads, or for a server that does not send them yet.
+ */
+function Facts({ property, checker }: { readonly property: Property; readonly checker: Property | undefined }) {
+  const size = (property.size ?? checker?.size ?? '').trim();
+  const deal = (property.dealType ?? checker?.dealType ?? '').trim() || property.listingType;
+  const facts = [
+    (property.city ?? checker?.city ?? '').trim(),
+    size && /^[\d.,\s]+$/.test(size) ? `${size} sqm` : size,
+    folderName(deal),
+  ].filter((f) => f !== '');
+  return (
+    <p className="meta-row property__facts">
+      <span className="property__category">
+        <CategoryDot kind={categoryKind(property.category)} />
+        {categoryLabel(property.category)}
+      </span>
+      {facts.map((fact) => (
+        <span key={fact} className="property__fact">
+          {fact}
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -453,15 +504,16 @@ export function PropertyScreen() {
 type CopyGate =
   | { readonly kind: 'ready' }
   | { readonly kind: 'waiting'; readonly text: string }
-  | { readonly kind: 'blocked'; readonly cause: 'no-document' | 'withheld' | 'check' | 'empty' | 'cooldown'; readonly text: string };
+  | { readonly kind: 'blocked'; readonly cause: 'sold' | 'no-document' | 'withheld' | 'check' | 'empty' | 'cooldown'; readonly text: string };
 
 /**
- * Every failed check blocks Copy; so do a withheld or missing document, an
- * empty text, and a cooldown this screen can see. It waits, too, until it
+ * Every failed check blocks Copy; so do a sold listing, a withheld or missing
+ * document, an empty text, and a cooldown this screen can see. It waits, too, until it
  * knows when the listing was last posted.
  */
 function copyGate(input: {
   detail: PropertyDetail | null;
+  sold: boolean;
   withheld: boolean;
   noDocument: boolean;
   checks: readonly CheckResult[];
@@ -470,6 +522,7 @@ function copyGate(input: {
   checkingCooldown: boolean;
 }): CopyGate {
   const { detail, withheld, noDocument, checks, cool, manager } = input;
+  if (input.sold) return { kind: 'blocked', cause: 'sold', text: 'Copy is blocked: this listing is sold.' };
   if (!detail) return { kind: 'waiting', text: 'Reading the document…' };
   if (noDocument) {
     return { kind: 'blocked', cause: 'no-document', text: 'Copy is blocked: this listing has no posting document yet.' };
@@ -542,13 +595,11 @@ function PostText({
     // None of the text: not hidden, absent (D13).
     return noDocument ? (
       <Notice tone="warn" title="There's no posting document yet" className="post-text__withheld">
-        This listing's folder has no document to post from, so there is nothing to copy. Tell your admin it's
-        &ldquo;{detail.name}&rdquo;.
+        Tell your admin.
       </Notice>
     ) : (
       <Notice tone="danger" title="There's nothing safe to show yet" className="post-text__withheld">
-        Nobody has separated this document. An admin has to add a separator above the owner's details before any of
-        it can be shown or copied. Tell your admin it's &ldquo;{detail.name}&rdquo;.
+        An admin has to add a separator above the owner's details. Tell your admin.
       </Notice>
     );
   }
@@ -565,8 +616,7 @@ function PostText({
     <>
       {!detail.hasInternal && manager ? (
         <Notice tone="danger" title="Nobody has separated this document yet">
-          You see all of it because you're an admin; interns see none of it. Add a separator above the owner's details
-          in the document, and Copy works once it's re-read.
+          Interns see none of it. Add a separator above the owner's details.
         </Notice>
       ) : null}
       <div
@@ -579,11 +629,7 @@ function PostText({
       >
         {detail.publicText}
       </div>
-      <p className="meta post-text__source">
-        {detail.live
-          ? 'Read from the document just now.'
-          : "The document couldn't be read, so this is the directory's copy from its last rebuild."}
-      </p>
+      {detail.live ? null : <p className="meta post-text__source">From the directory’s last rebuild: the document didn’t open.</p>}
     </>
   );
 }
@@ -596,7 +642,7 @@ function InternalSection({ detail }: { readonly detail: PropertyDetail }) {
         <Icon name="warn" className="internal__icon" />
         <span className="internal__label">
           <span className="internal__title">Internal section: never posted, never copied</span>
-          <span className="meta">Owner details and commission. Shown to admins only.</span>
+          <span className="meta">Admins only.</span>
         </span>
         <span className="internal__toggle" aria-hidden="true">
           <span className="internal__show">Show</span>
@@ -624,25 +670,21 @@ function Verdict({
   readonly manager: boolean;
 }) {
   const [tone, word, line] = ((): readonly ['ok' | 'danger' | 'neutral', string, string] => {
-    if (gate.kind === 'ready') return ['ok', 'Ready to post', 'Copy the text, download the photos, then post it.'];
+    if (gate.kind === 'ready') return ['ok', 'Ready to post', 'Copy, post, then log the link.'];
     if (gate.kind === 'waiting') return ['neutral', 'Checking…', gate.text];
     switch (gate.cause) {
+      case 'sold':
+        return ['danger', 'Sold', 'Not to be posted.'];
       case 'no-document':
-        return ['danger', 'No document', 'There is nothing to post from yet.'];
+        return ['danger', 'No document', 'Nothing to post from yet.'];
       case 'withheld':
-        return ['danger', 'Not separated', 'Nothing can be copied until an admin adds a separator.'];
+        return ['danger', 'Not separated', 'An admin must add a separator first.'];
       case 'cooldown':
-        return ['danger', 'In cooldown', cool?.nextAllowed ? `It can be posted again on ${longDate(cool.nextAllowed)}.` : 'It was posted too recently.'];
+        return ['danger', 'In cooldown', cool?.nextAllowed ? `Next allowed ${longDate(cool.nextAllowed)}.` : 'Posted too recently.'];
       case 'empty':
         return ['danger', 'Nothing to post', 'The document has no public text.'];
       case 'check':
-        return [
-          'danger',
-          'Copy is blocked',
-          manager
-            ? 'The document needs fixing first. The failed check says what to change.'
-            : 'Ask your admin to fix the document. The failed check says what is wrong.',
-        ];
+        return ['danger', 'Copy is blocked', manager ? 'Fix the document. See the failed check.' : 'Ask your admin to fix the document.'];
     }
   })();
   return (
@@ -685,7 +727,7 @@ function CooldownLines({
           </Button>
         }
       >
-        {error ?? 'The posts did not load.'} The server checks the cooldown again when you log the post.
+        {error ?? 'The posts did not load.'} The server still checks when you log.
       </Notice>
     );
   }
@@ -726,24 +768,22 @@ function CooldownLines({
         </ul>
       ) : null}
 
-      {!manager ? (
-        <p className="meta">You see your own posts only. When you log a post, the server checks everyone's.</p>
-      ) : null}
+      {!manager ? <p className="meta">Your posts only. The server checks everyone's.</p> : null}
     </div>
   );
 }
 
-/** A photo's thumbnail, or a plain tile when there is none or it won't load. */
-function Thumb({ src, alt }: { readonly src: string; readonly alt: string }) {
+/** A photo's thumbnail, or a plain numbered tile when there is none or it won't load. */
+function Thumb({ photo, label }: { readonly photo: Photo; readonly label: string }) {
   const [failed, setFailed] = useState(false);
-  if (!src || failed) {
+  if (!photo.thumb || failed) {
     return (
-      <span className="photos__tile" role="img" aria-label={alt}>
-        {alt}
+      <span className="photos__tile" aria-hidden="true">
+        {label}
       </span>
     );
   }
-  return <img className="photos__img" src={src} alt={alt} loading="lazy" decoding="async" onError={() => setFailed(true)} />;
+  return <img className="photos__img" src={photo.thumb} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />;
 }
 
 /** This listing's posts, newest first: by folder id where both have one, else by name, as the cooldown matches them. */

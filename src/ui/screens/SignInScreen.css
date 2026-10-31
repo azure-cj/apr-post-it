@@ -22,11 +22,6 @@
   line-height: var(--lh-heading);
 }
 
-.sign-in__intro {
-  margin-top: var(--space-4);
-  color: var(--text-muted);
-}
-
 .sign-in__form {
   display: grid;
   gap: var(--space-10);
@@ -40,11 +35,28 @@
   margin-top: var(--space-2);
 }
 
-.sign-in__footer {
+.sign-in__where {
   margin-top: var(--space-10);
   padding-top: var(--space-8);
   border-top: var(--border-width) solid var(--border-soft);
   color: var(--text-muted);
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
+}
+
+.sign-in__where summary {
+  justify-self: start;
+  width: fit-content;
+  border-radius: var(--radius-sm);
+  color: var(--text-label);
+  cursor: pointer;
+}
+
+.sign-in__where summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.sign-in__where p {
+  margin-top: var(--space-4);
 }

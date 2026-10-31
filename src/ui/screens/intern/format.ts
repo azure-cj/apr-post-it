@@ -75,26 +75,6 @@ export function folderLine(p: Pick<Property, 'category' | 'subCategory' | 'listi
     .join(' · ');
 }
 
-const FACEBOOK_HOSTS = new Set([
-  'facebook.com',
-  'www.facebook.com',
-  'm.facebook.com',
-  'web.facebook.com',
-  'mbasic.facebook.com',
-  'fb.com',
-  'fb.me',
-]);
-
-/** A link to a post on Facebook: http(s), on one of Facebook's own addresses. */
-export function isFacebookLink(link: string): boolean {
-  try {
-    const url = new URL(link.trim());
-    return (url.protocol === 'https:' || url.protocol === 'http:') && FACEBOOK_HOSTS.has(url.hostname.toLowerCase());
-  } catch {
-    return false;
-  }
-}
-
 /** The folder a saved file is in: "C:\…\APG Post-It\Verdant Hills\photo 1.jpg" → "C:\…\APG Post-It\Verdant Hills". */
 export function folderOf(path: string): string {
   const cut = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));

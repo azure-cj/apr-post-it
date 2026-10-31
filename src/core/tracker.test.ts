@@ -64,6 +64,7 @@ function logInput(over: Partial<LogPostInput> = {}): LogPostInput {
     propertyName: 'Casa Amara',
     fbAccount: 'APG Homes',
     postLink: 'https://www.facebook.com/groups/x/posts/1/',
+    status: 'Posted',
     ...over,
   };
 }
@@ -335,7 +336,7 @@ describe('the team', () => {
 describe('logging a post', () => {
   it('takes the server\'s date and name, not the client\'s', async () => {
     const { post } = scripted({ ok: true, status: 'Pending', date: '2026-03-09', postedBy: 'Jan Dela Cruz' });
-    const saved = await trackerOver(post).logPost(logInput({ postLink: '', postedBy: 'Somebody Else' }));
+    const saved = await trackerOver(post).logPost(logInput({ status: 'Pending', postedBy: 'Somebody Else' }));
 
     expect(saved.date).toBe('2026-03-09');
     expect(saved.status).toBe('Pending');
@@ -351,6 +352,7 @@ describe('logging a post', () => {
       propertyId: '1AbC',
       fbAccount: 'APG Homes',
       postLink: 'https://www.facebook.com/groups/x/posts/1/',
+      status: 'Posted',
       type: 'CONDO / HOUSE AND LOT',
       action: 'logPost',
       key: 'testkey',
@@ -389,11 +391,11 @@ describe('logging a post', () => {
   it('never fills in a time or a name the server did not send', async () => {
     // Code.gs's logPost reply carries no time today: blank, not this PC's clock.
     const { post } = scripted({ ok: true, date: '2026-03-09' });
-    const saved = await trackerOver(post).logPost(logInput({ postLink: '', postedBy: 'Jan Dela Cruz' }));
+    const saved = await trackerOver(post).logPost(logInput({ status: 'Pending', postedBy: 'Jan Dela Cruz' }));
 
     expect(saved.time).toBe('');
     expect(saved.postedBy).toBe('');
-    expect(saved.status).toBe('Pending'); // no link, and the server did not say otherwise
+    expect(saved.status).toBe('Pending'); // what was asked, since the server did not say otherwise
   });
 
   it('without a property is refused before asking', async () => {
@@ -672,5 +674,159 @@ describe('reading the sheet', () => {
     ['', ''],
   ])('reads the time %j as %j', (raw, time) => {
     expect(readSheetTime(raw)).toBe(time);
+  });
+});
+
+// ------------------------------------------------------------------ contract v3
+
+describe('logging a post (v3)', () => {
+  it('needs a Facebook link, and says so before asking', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const tracker = trackerOver(post);
+
+    const blank = await refusal(tracker.logPost(logInput({ postLink: '  ' })));
+    const other = await refusal(tracker.logPost(logInput({ postLink: 'https://instagram.com/p/1' })));
+
+    expect(blank.message).toBe("Paste the post's link.");
+    expect(other.message).toBe("That isn't a Facebook link.");
+    expect(sent).toHaveLength(0);
+  });
+
+  it('sends the status and the trimmed link', async () => {
+    const { post, sent } = scripted({ ok: true, date: '2026-03-09', postedBy: 'Jan' });
+    const saved = await trackerOver(post).logPost(logInput({ status: 'Pending', postLink: ' https://fb.me/x ' }));
+
+    expect(sent[0]!.body['status']).toBe('Pending');
+    expect(sent[0]!.body['postLink']).toBe('https://fb.me/x');
+    expect(saved.status).toBe('Pending');
+  });
+
+  it.each([
+    ['link-required', "Paste the post's link."],
+    ['bad-link', "That isn't a Facebook link."],
+    ['bad-status', 'Choose Posted or Pending.'],
+  ])('reads the server refusing with %s', async (error, message) => {
+    const { post } = scripted({ ok: false, error, message: 'postLink is required (https facebook.com …)' });
+    const refused = await refusal(trackerOver(post).logPost(logInput()));
+    expect(refused.message).toBe(message);
+  });
+});
+
+describe('saving several queues', () => {
+  it('sends every queue in one request and returns what was saved', async () => {
+    const { post, sent } = scripted({ ok: true, saved: 3 });
+    const queues = new Map([
+      ['Jan', [{ propertyName: 'Casa Amara', propertyId: '1AbC' }, { propertyName: 'Lot 9' }]],
+      ['Bea', [{ propertyName: 'Lot 10', status: 'Posted' as const }]],
+    ]);
+    const saved = await trackerOver(post).saveQueues('2026-04-02', queues);
+
+    expect(saved).toBe(3);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body).toEqual({
+      date: '2026-04-02',
+      queues: [
+        {
+          assignedTo: 'Jan',
+          items: [
+            { propertyName: 'Casa Amara', propertyId: '1AbC', status: 'To post' },
+            { propertyName: 'Lot 9', status: 'To post' },
+          ],
+        },
+        { assignedTo: 'Bea', items: [{ propertyName: 'Lot 10', status: 'Posted' }] },
+      ],
+      action: 'saveQueues',
+      key: 'testkey',
+    });
+  });
+
+  it('accepts a list, counts the items when the reply does not, and sends nothing for none', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const tracker = trackerOver(post);
+    expect(await tracker.saveQueues('2026-04-02', [{ assignedTo: 'Jan', items: [{ propertyName: 'A' }, { propertyName: 'B' }] }])).toBe(2);
+    expect(await tracker.saveQueues('2026-04-02', [])).toBe(0);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('refuses a bad date, a nameless queue or an empty item before asking', async () => {
+    const { post, sent } = scripted({ ok: true });
+    const tracker = trackerOver(post);
+    await refusal(tracker.saveQueues('4/2/2026', [{ assignedTo: 'Jan', items: [] }]));
+    await refusal(tracker.saveQueues('2026-04-02', [{ assignedTo: ' ', items: [] }]));
+    await refusal(tracker.saveQueues('2026-04-02', [{ assignedTo: 'Jan', items: [{ propertyName: '' }] }]));
+    await refusal(tracker.saveQueues('2026-04-02', [{ assignedTo: 'Jan', items: [] }, { assignedTo: 'Jan', items: [] }]));
+    expect(sent).toHaveLength(0);
+  });
+});
+
+describe('managing the team', () => {
+  it('adds a person and returns their key once', async () => {
+    const { post, sent } = scripted({
+      ok: true,
+      person: { name: 'Mia Santos', role: 'Intern', fbAccounts: ['APG Homes'], email: '', active: true },
+      key: 'k-123',
+    });
+    const added = await trackerOver(post).addPerson({ name: ' Mia Santos ', role: 'Intern', fbAccounts: [' APG Homes ', ''] });
+
+    expect(added).toEqual({
+      person: { name: 'Mia Santos', role: 'Intern', fbAccounts: ['APG Homes'], email: '', active: true },
+      key: 'k-123',
+    });
+    expect(sent[0]!.body).toEqual({ name: 'Mia Santos', role: 'Intern', fbAccounts: ['APG Homes'], action: 'addPerson', key: 'testkey' });
+  });
+
+  it('cannot read a new person without their key', async () => {
+    const { post } = scripted({ ok: true, person: { name: 'Mia', role: 'Intern' } });
+    const error = await refusal(trackerOver(post).addPerson({ name: 'Mia', role: 'Intern' }));
+    expect(error.message).toMatch(/could not read/);
+  });
+
+  it('says plainly that the name is taken, or that you cannot deactivate yourself', async () => {
+    const dup = scripted({ ok: false, error: 'duplicate' });
+    expect((await refusal(trackerOver(dup.post).addPerson({ name: 'Mia', role: 'Intern' }))).message)
+      .toBe('Someone on the team already has that name.');
+    const self = scripted({ ok: false, error: 'self' });
+    expect((await refusal(trackerOver(self.post).setActive('Me', false))).message).toBe("You can't deactivate yourself.");
+  });
+
+  it('sets someone inactive and reads the row back', async () => {
+    const { post, sent } = scripted({ ok: true, person: { name: 'Mia', role: 'Intern', active: false } });
+    const person = await trackerOver(post).setActive('Mia', false);
+    expect(person.active).toBe(false);
+    expect(sent[0]!.body).toMatchObject({ name: 'Mia', active: false });
+  });
+
+  it('makes a new key', async () => {
+    const { post } = scripted({ ok: true, key: ' k-9 ' });
+    expect(await trackerOver(post).newKey('Mia')).toBe('k-9');
+    const empty = scripted({ ok: true });
+    await refusal(trackerOver(empty.post).newKey('Mia'));
+  });
+});
+
+describe('the index check', () => {
+  it('reads the reply, dropping rows it cannot use', async () => {
+    const { post } = scripted({
+      ok: true,
+      checkedAt: '2026-10-31 09:00',
+      directoryCount: 1474,
+      checkerCount: '1470',
+      directoryOnly: [{ id: 'A', name: 'Lot 1' }, null, {}],
+      checkerOnly: [{ id: 'B', name: 'Lot 2', path: 'CONDO / Lot 2' }],
+      sold: [{ id: 'C', name: 'Lot 3', extra: 1 }],
+    });
+    expect(await trackerOver(post).indexCheck()).toEqual({
+      checkedAt: '2026-10-31 09:00',
+      directoryCount: 1474,
+      checkerCount: 1470,
+      directoryOnly: [{ id: 'A', name: 'Lot 1' }],
+      checkerOnly: [{ id: 'B', name: 'Lot 2', path: 'CONDO / Lot 2' }],
+      sold: [{ id: 'C', name: 'Lot 3' }],
+    });
+  });
+
+  it('refuses a reply without its lists', async () => {
+    const { post } = scripted({ ok: true, directoryOnly: [] });
+    await refusal(trackerOver(post).indexCheck());
   });
 });

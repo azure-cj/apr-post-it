@@ -535,3 +535,12 @@
   gap: var(--space-4);
   margin-inline-start: auto;
 }
+
+/* The heading, and Fill queues at the far end of its row. */
+.page-header.assign__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}

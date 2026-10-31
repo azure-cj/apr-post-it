@@ -22,7 +22,8 @@ export type IconName =
   | 'interns'
   | 'settings'
   | 'sidebar'
-  | 'refresh';
+  | 'refresh'
+  | 'records';
 
 const paths: Record<IconName, ReactElement> = {
   search: (
@@ -111,6 +112,14 @@ const paths: Record<IconName, ReactElement> = {
     <>
       <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
       <path d="M9.5 4.5v15" />
+    </>
+  ),
+  records: (
+    <>
+      <rect x="4.5" y="3.5" width="15" height="17" rx="2" />
+      <path d="M8 8h8" />
+      <path d="M8 12h8" />
+      <path d="M8 16h5" />
     </>
   ),
   refresh: (

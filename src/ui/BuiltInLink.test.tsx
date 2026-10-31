@@ -48,7 +48,6 @@ describe('with a link built into this version', () => {
     const platform = launch({ replies: { ping: PING_INTERN } });
     const key = await screen.findByLabelText('Your key');
     expect(screen.queryByLabelText('Web app link')).toBeNull();
-    expect(screen.getByText('Paste your own key. Your admin sends it to you.')).toBeTruthy();
     expect(document.activeElement).toBe(key);
 
     await userEvent.type(key, '9b2c-41fe');
@@ -111,7 +110,6 @@ describe('with no link built in', () => {
     const platform = launch({ replies: { ping: PING_INTERN } });
     await userEvent.type(await screen.findByLabelText('Web app link'), EXEC);
     await userEvent.type(screen.getByLabelText('Your key'), 'key-1');
-    expect(screen.getByText('Paste the web app link and your own key. Your admin sends you both.')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'My queue' })).toBeTruthy();
     expect(platform.posts[0]).toMatchObject({ url: EXEC, action: 'ping' });

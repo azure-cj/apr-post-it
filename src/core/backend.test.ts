@@ -325,6 +325,34 @@ describe('a refusal from the server', () => {
     expect(error.message).toBe('The tracker is locked for the audit.');
   });
 
+  it.each([
+    ['bad-date', 'saveQueues', 'The date must be a day written yyyy-MM-dd.', 'Pick a valid date.'],
+    ['bad-role', 'addPerson', 'The role must be Admin or Intern.', 'Choose Intern or Admin.'],
+    ['bad-active', 'setActive', 'Say whether the person is active: true or false.', 'Choose active or not.'],
+    ['name-required', 'addPerson', "Type the person's name.", "Type the person's name."],
+    ['checker-off', 'indexCheck', "The checker's index is switched off (CONFIG.CHECKER_INDEX_CSV_URL).", 'The listings check is turned off.'],
+    ['checker-unavailable', 'indexCheck', "The checker's index could not be read. Try again later.", "The listing checker can't be reached right now. Try again later."],
+  ] as const)('for %s, says a short sentence of its own', async (code, action, theirs, ours) => {
+    const { post } = scripted({ ok: false, error: code, message: theirs });
+    const error = await failure(backendOver(post).call(action), code);
+
+    expect(error.message).toBe(ours);
+  });
+
+  it.each([
+    ['unknown-person', 'logPost', 'There is nobody active called Bea on the team.', "That person isn't active on the team."],
+    ['bad-intern', 'saveQueues', 'Bea is not an active intern on the Team tab.', "That person isn't an active intern."],
+    ['bad-queues', 'saveQueues', "Item 2 of Jan's queue has no property.", "The queues couldn't be read. Check them and save again."],
+    ['bad-accounts', 'addPerson', 'FB accounts must be a list of names.', "The FB accounts couldn't be read. Check them and try again."],
+    ['notfound', 'newKey', 'There is nobody called Bea on the team.', 'Google could not find what it needed to make a new key. Reload and try again.'],
+  ] as const)('for %s, keeps the server\'s sentence, which names who or what, with a fallback', async (code, action, theirs, fallback) => {
+    const said = await failure(backendOver(scripted({ ok: false, error: code, message: theirs }).post).call(action), code);
+    expect(said.message).toBe(theirs);
+
+    const bare = await failure(backendOver(scripted({ ok: false, error: code }).post).call(action), code);
+    expect(bare.message).toBe(fallback);
+  });
+
   it('for a refusal with no reason at all, still names what failed', async () => {
     const { post } = scripted({ ok: false });
     const error = await failure(backendOver(post).call('assignments'), 'server');

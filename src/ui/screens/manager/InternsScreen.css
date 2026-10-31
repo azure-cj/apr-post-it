@@ -45,15 +45,6 @@
   color: var(--text-muted);
 }
 
-.interns__code {
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-sm);
-  background: var(--inset);
-  color: var(--text);
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 0.94em;
-}
-
 /* The search sits in the card's heading row, and takes the row below it
    when the heading needs the width. */
 .interns__search {

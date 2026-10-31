@@ -1,8 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { postLinkProblem } from '@/core/links';
 import { normalize } from '@/core/matcher';
-import type { Assignment, PostLogEntry, Property } from '@/core/types';
-import { Button, CategoryDot, EmptyState, Icon, Notice, Pill, TextInput, categoryKind } from '../../components';
+import type { Assignment, AssignmentStatus, PostLogEntry, Property } from '@/core/types';
+import { Button, CategoryDot, EmptyState, Notice, Pill, TextInput, categoryKind, categoryLabel } from '../../components';
 import {
   manilaTime,
   paths,
@@ -15,7 +16,7 @@ import {
   useUser,
   type FromList,
 } from '../../state';
-import { count, folderLine, isFacebookLink, longDate, shortDate } from './format';
+import { longDate } from './format';
 import { Waiting } from './shared';
 import './QueueScreen.css';
 
@@ -25,14 +26,16 @@ interface Item {
   readonly assignment: Assignment;
   /** The listing in the directory, when it is still there. */
   readonly property: Property | undefined;
-  /** Today's post of it by you: the pending one waiting for its link, or the live one. */
+  /** Today's post of it by you: the pending one, or the live one. */
   readonly post: PostLogEntry | undefined;
 }
 
+const STATUS_WORD: Record<AssignmentStatus, string> = { 'To post': 'To post', Pending: 'Pending', Posted: 'Posted' };
+const STATUS_TONE = { 'To post': 'neutral', Pending: 'warn', Posted: 'ok' } as const;
+
 /**
- * Today's queue, in the order the manager set, worked top to bottom. A post
- * waiting for the group's approval stays pinned on top until its live link is
- * added here; the next one to post carries the screen's one gold button.
+ * Today's queue, in the order the admin set. The next one to post sits on top
+ * with the screen's one gold button; every row opens its listing in one click.
  */
 export function QueueScreen() {
   const app = useApp();
@@ -54,7 +57,7 @@ export function QueueScreen() {
         byName.get(normalize(assignment.propertyName));
       return { assignment, property, post: latestPostOf(todays, assignment) };
     });
-    // Pending pinned on top, then what is left to post, then what is done: each in the manager's order.
+    // Pending first (one click once approved), then what is left, then what is done: each in the admin's order.
     const rank = { Pending: 0, 'To post': 1, Posted: 2 } as const;
     return rows
       .map((row, index) => ({ row, index }))
@@ -65,7 +68,8 @@ export function QueueScreen() {
   const toPost = items.filter((i) => i.assignment.status === 'To post');
   const pending = items.filter((i) => i.assignment.status === 'Pending');
   const posted = items.filter((i) => i.assignment.status === 'Posted');
-  const next = toPost[0];
+  const next = toPost.find((i) => openable(i, list !== null));
+  const rest = items.filter((i) => i !== next);
 
   const reload = () => {
     queue.reload();
@@ -81,7 +85,7 @@ export function QueueScreen() {
           </h1>
           <div className="queue__freshness">
             {queue.loading ? (
-              <Waiting>{queue.data ? 'Checking for changes…' : "Loading today's queue…"}</Waiting>
+              <Waiting>{queue.data ? 'Checking…' : 'Loading…'}</Waiting>
             ) : queue.loadedAt !== null ? (
               <>
                 <span className="meta">Updated {manilaTime(queue.loadedAt)}</span>
@@ -92,7 +96,22 @@ export function QueueScreen() {
             ) : null}
           </div>
         </div>
-        <p className="page-header__description">{longDate(today)}. In the order your admin set.</p>
+        <div className="queue__sub">
+          <span className="meta">{longDate(today)}</span>
+          {items.length > 0 ? (
+            <ul className="queue__counts" aria-label="Today's counts">
+              <li>
+                <span className="tabular">{toPost.length}</span> to post
+              </li>
+              <li className="queue__count--pending">
+                <span className="tabular">{pending.length}</span> pending
+              </li>
+              <li className="queue__count--posted">
+                <span className="tabular">{posted.length}</span> posted
+              </li>
+            </ul>
+          ) : null}
+        </div>
       </header>
 
       {queue.data === null ? (
@@ -113,248 +132,216 @@ export function QueueScreen() {
           <Waiting className="queue__loading">Loading today's queue…</Waiting>
         )
       ) : items.length === 0 ? (
-        <EmptyState
-          title="Nothing in your queue today"
-          action={<Button onClick={() => navigate(paths.find)}>Find a property</Button>}
-        >
-          Your admin hasn't assigned anything for {shortDate(today)}. You can still find a listing and post it.
+        <EmptyState title="Nothing in your queue today" action={<Button onClick={() => navigate(paths.find)}>Find a property</Button>}>
+          You can still find a listing and post it.
         </EmptyState>
       ) : (
         <div className="queue__body">
           {queue.error && !queue.loading ? (
-            <Notice tone="warn" title="This may be out of date">
+            <Notice tone="warn" title="May be out of date">
               {queue.error}
             </Notice>
           ) : null}
+          {posts.error && !posts.data ? <Notice tone="warn">{posts.error}</Notice> : null}
 
-          <ul className="queue__stats" aria-label="Today's counts">
-            <li className="stat">
-              <span className="stat__value">{toPost.length}</span>
-              <span className="stat__label">to post</span>
-            </li>
-            <li className="stat stat--pending">
-              <span className="stat__value">{pending.length}</span>
-              <span className="stat__label">waiting for a link</span>
-            </li>
-            <li className="stat stat--posted">
-              <span className="stat__value">{posted.length}</span>
-              <span className="stat__label">posted</span>
-            </li>
-          </ul>
-
-          {toPost.length === 0 && pending.length === 0 ? (
-            <Notice tone="ok" title="Your queue is done">
-              All {count(items.length, 'listing', 'listings')} for today {items.length === 1 ? 'is' : 'are'} posted.
+          {next ? (
+            <NextUp item={next} />
+          ) : toPost.length === 0 && pending.length === 0 ? (
+            <Notice tone="ok" title="Queue done">
+              All {items.length} posted.
             </Notice>
           ) : null}
 
-          {posts.error && !posts.data ? (
-            <Notice tone="warn">
-              {posts.error} The times and accounts of today's posts aren't shown until they load.
-            </Notice>
+          {rest.length > 0 ? (
+            <ol className="queue__list" aria-label={next ? 'The rest of today' : 'Today'}>
+              {rest.map((item) => (
+                <Row
+                  key={`${item.assignment.propertyId || item.assignment.propertyName}-${item.assignment.status}`}
+                  item={item}
+                  listLoaded={list !== null}
+                  onChanged={reload}
+                />
+              ))}
+            </ol>
           ) : null}
-
-          <ol className="queue__list">
-            {items.map((item) => {
-              const { status } = item.assignment;
-              const key = `${item.assignment.propertyId || item.assignment.propertyName}-${status}`;
-              if (status === 'Pending') return <PendingRow key={key} item={item} onDone={reload} />;
-              if (status === 'Posted') return <PostedRow key={key} item={item} />;
-              return (
-                <ToPostRow key={key} item={item} number={toPost.indexOf(item) + 1} next={item === next} listLoaded={list !== null} />
-              );
-            })}
-          </ol>
         </div>
       )}
     </div>
   );
 }
 
-/** Waiting for the group to approve it: add the live link here once it is up. */
-function PendingRow({ item, onDone }: { readonly item: Item; readonly onDone: () => void }) {
-  const app = useApp();
-  const user = useUser();
-  const notify = useNotify();
-  const [link, setLink] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const { assignment, post } = item;
+/** The listing's folder id, when it can be opened. */
+function idOf(item: Item): string {
+  return item.property?.id ?? item.assignment.propertyId;
+}
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+/** Opened by its folder id; until the list arrives, the queue's own id stands in. */
+function openable(item: Item, listLoaded: boolean): boolean {
+  return idOf(item) !== '' && !(listLoaded && !item.property);
+}
+
+/** The next one to post: the whole card opens it, and it carries the screen's one gold button. */
+function NextUp({ item }: { readonly item: Item }) {
+  const { assignment, property } = item;
+  return (
+    <section className="next-up" aria-label="Next up">
+      <Link className="next-up__open" to={paths.property(idOf(item))} state={FROM_QUEUE}>
+        <span className="next-up__main">
+          <span className="next-up__label">Next up</span>
+          <span className="next-up__name">{property?.name ?? assignment.propertyName}</span>
+          {property ? <Category property={property} /> : null}
+        </span>
+        <span className="button button--primary queue__go" aria-hidden="true">
+          <span className="button__label">Open</span>
+        </span>
+        <span className="visually-hidden">, next to post</span>
+      </Link>
+    </section>
+  );
+}
+
+/** One queue item: name, category, status. The name's link covers the row, so one click opens it. */
+function Row({ item, listLoaded, onChanged }: { readonly item: Item; readonly listLoaded: boolean; readonly onChanged: () => void }) {
+  const { assignment, property, post } = item;
+  const { status } = assignment;
+  const canOpen = openable(item, listLoaded);
+  const name = property?.name ?? assignment.propertyName;
+
+  return (
+    <li className={`queue-item queue-item--${status === 'To post' ? 'to-post' : status.toLowerCase()}${canOpen ? ' queue-item--link' : ''}`}>
+      <div className="queue-item__main">
+        {canOpen ? (
+          <Link className="queue-item__name queue-item__stretch" to={paths.property(idOf(item))} state={FROM_QUEUE}>
+            {name}
+          </Link>
+        ) : (
+          <span className="queue-item__name">{name}</span>
+        )}
+        {property ? (
+          <Category property={property} />
+        ) : listLoaded ? (
+          <span className="meta">Not in the property list. Tell your admin.</span>
+        ) : null}
+      </div>
+      <div className="queue-item__end">
+        <Pill tone={STATUS_TONE[status]} dot>
+          {STATUS_WORD[status]}
+        </Pill>
+        {status === 'Pending' ? <PendingActions item={item} onChanged={onChanged} /> : null}
+        {status === 'Posted' && post?.postLink ? <ViewPost link={post.postLink} /> : null}
+      </div>
+    </li>
+  );
+}
+
+function Category({ property }: { readonly property: Property }) {
+  return (
+    <span className="queue-item__category">
+      <CategoryDot kind={categoryKind(property.category)} />
+      {categoryLabel(property.category)}
+    </span>
+  );
+}
+
+/**
+ * Approved by the group admin: one click marks it posted, since its link was
+ * logged with it. An old pending row logged without a link asks for it first.
+ */
+function PendingActions({ item, onChanged }: { readonly item: Item; readonly onChanged: () => void }) {
+  const app = useApp();
+  const notify = useNotify();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [link, setLink] = useState('');
+  const { assignment, post } = item;
+  const needsLink = post !== undefined && !post.postLink.trim();
+
+  const markPosted = async () => {
     if (busy) return;
-    const live = link.trim();
-    if (!live) return setError('Paste the link of the live post.');
-    if (!isFacebookLink(live)) return setError("That isn't a Facebook link. Copy the link from the date under the post.");
     setBusy(true);
     setError(null);
     try {
-      // The post logged as pending; or, if its row is not in sight, one that
-      // names the listing, so the server finds the row itself.
-      const pendingPost: PostLogEntry = post ?? {
-        date: assignment.date,
-        time: '',
-        type: '',
-        title: assignment.propertyName,
-        status: 'Pending',
-        fbAccount: '',
-        postLink: '',
-        postedBy: user.name,
-        propertyId: assignment.propertyId,
-      };
-      await app.tracker.addLink(pendingPost, live);
-      notify(`Link added. ${assignment.propertyName} is marked posted.`);
-      onDone();
+      await app.tracker.setStatus(assignment, 'Posted');
+      notify(`Marked posted: ${assignment.propertyName}.`);
+      onChanged();
     } catch (err) {
       setError(sentenceOf(err));
       setBusy(false);
     }
   };
 
-  return (
-    <li className="queue-item queue-item--pending">
-      <span className="queue-item__mark queue-item__mark--pending" aria-hidden="true">
-        <Icon name="warn" size={18} />
-      </span>
-      <div className="queue-item__main">
-        <div className="queue-item__title-row">
-          <Name item={item} />
-          <Pill tone="warn" dot>
-            Pending
-          </Pill>
-        </div>
-        <p className="meta">
-          {post ? `Logged ${post.time ? `at ${post.time} ` : ''}from ${post.fbAccount || 'an FB account'}. ` : ''}
-          Waiting for the group to approve it. Add the live link once it's up.
-        </p>
-        <form className="queue-item__form" onSubmit={(e) => void submit(e)} noValidate>
-          <TextInput
-            label="Live post link"
-            type="url"
-            inputMode="url"
-            placeholder="https://www.facebook.com/groups/…/posts/…"
-            autoComplete="off"
-            spellCheck={false}
-            value={link}
-            readOnly={busy}
-            error={error ?? undefined}
-            onChange={(event) => {
-              setLink(event.target.value);
-              if (error) setError(null);
-            }}
-          />
-          <Button type="submit" busy={busy}>
-            {busy ? 'Adding…' : 'Add link'}
-          </Button>
-        </form>
-      </div>
-    </li>
-  );
-}
+  const addLink = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (busy || !post) return;
+    const live = link.trim();
+    const problem = live ? postLinkProblem(live) : 'Paste the post link.';
+    if (problem) return setError(problem);
+    setBusy(true);
+    setError(null);
+    try {
+      await app.tracker.addLink(post, live);
+      notify(`Marked posted: ${assignment.propertyName}.`);
+      onChanged();
+    } catch (err) {
+      setError(sentenceOf(err));
+      setBusy(false);
+    }
+  };
 
-/** Still to post: the whole row opens the listing. The next one is the screen's one gold button. */
-function ToPostRow({
-  item,
-  number,
-  next,
-  listLoaded,
-}: {
-  readonly item: Item;
-  readonly number: number;
-  readonly next: boolean;
-  readonly listLoaded: boolean;
-}) {
-  const { assignment, property } = item;
-  // Opened by its folder id; until the list arrives, the queue's own name stands in.
-  const id = property?.id ?? assignment.propertyId;
-  if (!id || (listLoaded && !property)) {
+  if (needsLink) {
     return (
-      <li className="queue-item queue-item--missing">
-        <span className="queue-item__mark tabular" aria-hidden="true">
-          {number}
-        </span>
-        <div className="queue-item__main">
-          <span className="queue-item__name">{assignment.propertyName}</span>
-          <p className="meta">This listing isn't in the property list any more. Tell your admin.</p>
-        </div>
-      </li>
+      <form className="queue-item__form" onSubmit={(e) => void addLink(e)} noValidate>
+        <TextInput
+          label="Post link"
+          type="url"
+          inputMode="url"
+          placeholder="https://www.facebook.com/…"
+          autoComplete="off"
+          spellCheck={false}
+          value={link}
+          readOnly={busy}
+          error={error ?? undefined}
+          onChange={(event) => {
+            setLink(event.target.value);
+            if (error) setError(null);
+          }}
+        />
+        <Button type="submit" size="small" busy={busy}>
+          {busy ? 'Saving…' : 'Mark posted'}
+        </Button>
+      </form>
     );
   }
+
   return (
-    <li className="queue-item queue-item--to-post">
-      <Link className="queue-item__open" to={paths.property(id)} state={FROM_QUEUE}>
-        <span className="queue-item__mark tabular" aria-hidden="true">
-          {number}
-        </span>
-        <span className="queue-item__main">
-          <span className="queue-item__name">{property?.name ?? assignment.propertyName}</span>
-          {property ? (
-            <span className="queue-item__folder">
-              <CategoryDot kind={categoryKind(property.category)} />
-              {folderLine(property)}
-            </span>
-          ) : null}
-        </span>
-        <span className={`button ${next ? 'button--primary' : 'button--ghost'} button--small queue-item__go`} aria-hidden="true">
-          <span className="button__label">{next ? 'Open next' : 'Open'}</span>
-        </span>
-        <span className="visually-hidden">{next ? ', next to post' : ', to post'}</span>
-      </Link>
-    </li>
+    <>
+      {post?.postLink ? <ViewPost link={post.postLink} /> : null}
+      <Button size="small" busy={busy} onClick={() => void markPosted()} aria-label={`Mark ${assignment.propertyName} posted`}>
+        {busy ? 'Saving…' : 'Mark posted'}
+      </Button>
+      {error ? (
+        <p className="queue-item__error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </>
   );
 }
 
-/** Done today: when, from which account, and the live post. */
-function PostedRow({ item }: { readonly item: Item }) {
+function ViewPost({ link }: { readonly link: string }) {
   const app = useApp();
   const notify = useNotify();
-  const { assignment, property, post } = item;
   const view = async () => {
-    if (!post?.postLink) return;
     try {
-      await app.platform.open(post.postLink);
+      await app.platform.open(link);
     } catch (err) {
       notify(sentenceOf(err), 'danger');
     }
   };
   return (
-    <li className="queue-item queue-item--posted">
-      <span className="queue-item__mark queue-item__mark--posted" aria-hidden="true">
-        <Icon name="check" size={18} />
-      </span>
-      <div className="queue-item__main">
-        <div className="queue-item__title-row">
-          {property ? (
-            <Link className="queue-item__name queue-item__name--link" to={paths.property(property.id)} state={FROM_QUEUE}>
-              {property.name}
-            </Link>
-          ) : (
-            <span className="queue-item__name">{assignment.propertyName}</span>
-          )}
-          <Pill tone="ok" dot>
-            Posted
-          </Pill>
-        </div>
-        <p className="meta">{post ? `Posted ${post.time ? `at ${post.time} ` : ''}from ${post.fbAccount || 'an FB account'}.` : 'Posted today.'}</p>
-      </div>
-      {post?.postLink ? (
-        <Button size="small" variant="quiet" className="queue-item__view" onClick={() => void view()}>
-          View post
-        </Button>
-      ) : null}
-    </li>
-  );
-}
-
-function Name({ item }: { readonly item: Item }) {
-  const { property, assignment } = item;
-  return property ? (
-    <Link className="queue-item__name queue-item__name--link" to={paths.property(property.id)} state={FROM_QUEUE}>
-      {property.name}
-    </Link>
-  ) : (
-    <span className="queue-item__name">{assignment.propertyName}</span>
+    <Button size="small" variant="quiet" onClick={() => void view()}>
+      View post
+    </Button>
   );
 }
 

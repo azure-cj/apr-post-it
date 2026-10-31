@@ -1,0 +1,74 @@
+/* The log step: a short form under the text it follows. */
+.log-step {
+  display: grid;
+  gap: var(--space-8);
+  min-width: 0;
+  padding: var(--space-12);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--card-bg) padding-box,
+    var(--card-edge) border-box;
+}
+
+.log-step__form {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.log-step__fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(0, 3fr);
+  align-items: start;
+  gap: var(--space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.log-step__select select {
+  padding-inline-end: 40px;
+  cursor: pointer;
+}
+
+.log-step__select svg {
+  position: absolute;
+  inset-inline-end: var(--space-7);
+  color: var(--text-label);
+  pointer-events: none;
+}
+
+.log-step__select select:disabled + svg {
+  color: var(--text-muted);
+}
+
+.log-step__select option {
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+.log-step__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+.log-step__actions .button {
+  min-width: 132px;
+}
+
+.log-step__next {
+  margin-top: var(--space-2);
+}
+
+.log-step__next strong {
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+}
+
+@container shell (width < 900px) {
+  .log-step__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

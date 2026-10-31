@@ -74,7 +74,13 @@ describe('the shared reads', () => {
   it('read the queue again after every write, so the count in the nav follows', async () => {
     const platform = fakeServer({ logPost: { ok: true, status: 'Posted', date: '2026-10-31', postedBy: intern.name } });
     const services = createServices(platform, () => parseSettings(JSON.stringify({ scriptUrl: EXEC })), () => NOW);
-    await services.tracker.logPost({ propertyId: CLEAN.id, propertyName: CLEAN.name, fbAccount: 'APG Main' });
+    await services.tracker.logPost({
+      propertyId: CLEAN.id,
+      propertyName: CLEAN.name,
+      fbAccount: 'APG Main',
+      postLink: 'https://www.facebook.com/groups/123/posts/456',
+      status: 'Posted',
+    });
     await waitFor(() => expect(platform.posts.map((p) => p.action)).toEqual(['logPost', 'assignments']));
   });
 });

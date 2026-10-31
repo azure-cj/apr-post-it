@@ -184,13 +184,39 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   choice is remembered, and windows under 1000px start collapsed. Width animates only on
   a toggle.
 - **The Interns screen** (`/interns`, Admin only) is laid out like the Tracker: the
-  heading and a one-line description, the day picker and Refresh on the right; a row of
+  heading, the day picker and Refresh on the right; a row of
   number tiles (active interns, done, with pending posts, no queue); then one card with a
   name search and a table of active interns (initials, name, the day's queue as
   "2 of 5 posted" over a green bar, pending posts as a warn pill, last post, the FB
   accounts they may use or "Any", and Open queue / Plan tomorrow as links). Revoked
   people sit in a folded "Revoked" card below it. The Tracker's Interns card links to it
   with "See all interns".
+- **Sign-in** is one card: a two-segment "Sign in as" control (Intern / Admin, the picked
+  segment gold, the last choice remembered on this computer), the key field, Cancel and
+  Sign in, and a folded "Where do I get a key?". The choice only states intent: after
+  `ping`, a key for the other role does not sign in ("This key is for an Intern."), the
+  key stays in the field and nothing is kept.
+- **Settings** (Admin): the Team card in the main column (name, role, FB accounts,
+  Active, and per row New key / Turn off or Turn on as quiet buttons; your own row says
+  "You" and has none), with Add person in its header. Every change asks first in a
+  dialog whose focus starts on Cancel; a new key is shown once in a monospace well with
+  Copy and "You won't see this again." The side pane holds a compact Listings check
+  (two count tiles, then Only in Directory / Only in checker / Sold as folded lists),
+  the Rules and the web app link.
+- **Assign** keeps the per-intern builder; **Fill queues** in its header opens a wide
+  dialog: per intern, date, keep existing queue, the active interns as ticks, then
+  Preview (one line per intern with a green fill bar against "per intern", opening to
+  the list; how many short; the skipped reasons as neutral pills) and Save all, the
+  dialog's one gold button.
+- **Records** (`/records`, Admin; nav between Interns and Find): the range as chips
+  (Today, 7 days, 30 days) in the header; Posts per day as hand-built CSS bars (posted
+  green, pending amber, never gold) beside a compact day table that says the same in
+  words; then Posts: a search (property, intern or link), Export CSV, and a table of
+  time, property, posted by, FB account, status and Open. A property opens its whole
+  history in a dialog. Export downloads a file in a browser and copies the CSV on the
+  desktop.
+- **Wording on admin screens:** a heading and no description line unless it says
+  something the screen doesn't; labels over sentences.
 - **A slim title bar runs across the content column**: the drag region, with minimize,
   maximize/restore and close at the top-right. Close turns danger red on hover and always
   asks first. Breakpoints measure the content column, so screens fit either sidebar width.
@@ -234,8 +260,9 @@ only, not in the production build) shows each in every variant with the product'
 | **CheckList** | `checks: CheckResult[]`, `label` | Order kept, so a check is always in the same place. Pass, warn, fail each have an icon shape and a word for screen readers; a fail line is tinted so it is found first |
 
 The shell (`src/ui/App.tsx`) holds the routes: Sign in, Find, Property, Log a post, My
-queue, Assign, Tracker, Interns, Settings. Nav by role, per `docs/ROLES.md`: an intern
-gets My queue and Find; an admin Tracker, Assign, Interns, Find and Settings (D14).
+queue, Assign, Tracker, Interns, Records, Settings. Nav by role, per `docs/ROLES.md`: an
+intern gets My queue and Find; an admin Tracker, Assign, Interns, Records, Find and
+Settings (D14).
 
 Sign-in asks only for the key when a web app link is built into the build
 (`src/config.ts`); with none built in it asks for the link too. The

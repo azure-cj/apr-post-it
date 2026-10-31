@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import type { Role } from '@/core/types';
 import { Button, Card, Notice, TextInput } from '../components';
+import { Segmented } from './manager/Segmented';
 import './SignInScreen.css';
 
 export interface SignInScreenProps {
-  /** Called with the trimmed link and key once both are filled in. */
-  readonly onSubmit: (url: string, key: string) => void;
+  /** Called with the trimmed link and key once both are filled in, and the role chosen. */
+  readonly onSubmit: (url: string, key: string, role: Role) => void;
   /**
    * Cancel was pressed: stop the sign-in that is running, if any, and forget
    * the error. The screen clears its own fields.
@@ -21,18 +23,41 @@ export interface SignInScreenProps {
    * only the key is asked for and this link is the one sent.
    */
   readonly builtInUrl?: string | undefined;
+  /** Intern or Admin: what the person says they are. The server still decides. Default Intern. */
+  readonly role?: Role | undefined;
+  /** The person picked the other role. Without it the screen keeps the choice itself. */
+  readonly onRoleChange?: ((role: Role) => void) | undefined;
 }
+
+const ROLES: readonly Role[] = ['Intern', 'Admin'];
+
+const WHERE_FROM: Record<Role, string> = {
+  Intern: 'Ask your admin.',
+  Admin: 'Your admin key comes from ADD_PERSON in Apps Script (first time only), or Settings → Team.',
+};
 
 /**
  * Sign in with your own key, and the web app link when this version has none
- * built in. The server, not the app, says who you are and what you may do.
+ * built in. The role picked here only states intent: the server, not the app,
+ * says who you are, and a key for the other role doesn't sign in.
  */
-export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '', builtInUrl = '' }: SignInScreenProps) {
+export function SignInScreen({
+  onSubmit,
+  onCancel,
+  busy,
+  error,
+  initialUrl = '',
+  builtInUrl = '',
+  role: roleProp,
+  onRoleChange,
+}: SignInScreenProps) {
   const builtIn = builtInUrl.trim();
   const [url, setUrl] = useState(initialUrl);
   const [key, setKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [missing, setMissing] = useState({ url: false, key: false });
+  const [ownRole, setOwnRole] = useState<Role>(roleProp ?? 'Intern');
+  const role = roleProp ?? ownRole;
   const urlRef = useRef<HTMLInputElement>(null);
   const keyRef = useRef<HTMLInputElement>(null);
 
@@ -42,6 +67,11 @@ export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '',
   useEffect(() => {
     (arrivedWithUrl.current ? keyRef : urlRef).current?.focus();
   }, []);
+
+  const pickRole = (next: Role) => {
+    setOwnRole(next);
+    onRoleChange?.(next);
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -58,7 +88,7 @@ export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '',
       keyRef.current?.focus();
       return;
     }
-    onSubmit(cleanUrl, cleanKey);
+    onSubmit(cleanUrl, cleanKey, role);
   };
 
   // Something to stop or clear. With nothing, Cancel stays where it is but can't be pressed.
@@ -78,13 +108,10 @@ export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '',
         <h1 className="sign-in__title" tabIndex={-1}>
           Sign in
         </h1>
-        <p className="sign-in__intro">
-          {builtIn
-            ? 'Paste your own key. Your admin sends it to you.'
-            : 'Paste the web app link and your own key. Your admin sends you both.'}
-        </p>
 
         <form className="sign-in__form" onSubmit={submit} noValidate aria-busy={busy || undefined}>
+          <Segmented label="Sign in as" options={ROLES} value={role} onChange={pickRole} disabled={busy} />
+
           {builtIn ? null : (
             <TextInput
               ref={urlRef}
@@ -114,7 +141,7 @@ export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '',
             value={key}
             readOnly={busy}
             error={missing.key ? 'Paste your key.' : undefined}
-            hint="Your key is your identity: every post you log is saved under your name. Don't share it."
+            hint="Your key is your identity. Don't share it."
             end={
               <Button
                 variant="quiet"
@@ -147,7 +174,10 @@ export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '',
           ) : null}
         </form>
 
-        <p className="sign-in__footer">No key yet? Ask your admin to add you to the team.</p>
+        <details className="sign-in__where">
+          <summary>Where do I get a key?</summary>
+          <p>{WHERE_FROM[role]}</p>
+        </details>
       </Card>
     </div>
   );

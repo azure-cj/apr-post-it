@@ -9,7 +9,7 @@
  *
  * Every service Code.gs touches is faked — SpreadsheetApp (fake-sheets.ts),
  * LockService, CacheService, Utilities, ContentService, DocumentApp, DriveApp,
- * Session and Logger — and each keeps the real one's rules wherever Code.gs
+ * UrlFetchApp (FakeWeb), Session and Logger — and each keeps the real one's rules wherever Code.gs
  * could trip on them. A fake kinder than Google hides the bugs it is here to
  * find.
  *
@@ -504,6 +504,111 @@ export class FakeDrive {
   });
 }
 
+// ------------------------------------------------------------------ UrlFetchApp
+
+interface WebAnswer {
+  readonly code: number;
+  readonly body: string;
+}
+
+/**
+ * The web as UrlFetchApp sees it: a URL answers with what a test registered,
+ * or fails to connect, which throws whatever muteHttpExceptions says (it only
+ * mutes an HTTP status, never a failed connection). Every fetch is recorded.
+ */
+export class FakeWeb {
+  readonly #answers = new Map<string, WebAnswer | { readonly fail: string }>();
+  /** Every URL fetched, oldest first. */
+  readonly fetched: string[] = [];
+
+  /** `url` answers `code` with `body`. */
+  respond(url: string, body: string, code = 200): this {
+    this.#answers.set(url, { code, body });
+    return this;
+  }
+
+  /** Fetching `url` throws, as an unreachable host does. */
+  fail(url: string, message = 'Exception: Address unavailable: ' + url): this {
+    this.#answers.set(url, { fail: message });
+    return this;
+  }
+
+  readonly urlFetchApp = Object.freeze({
+    fetch: (url: unknown, params: unknown = {}): object => {
+      if (typeof url !== 'string') throw new Error("Exception: The parameters don't match the method signature for UrlFetchApp.fetch.");
+      if (!/^https?:\/\//i.test(url)) throw new Error(`Exception: Invalid argument: ${url}`);
+      this.fetched.push(url);
+      const answer = this.#answers.get(url) ?? { fail: `Exception: Address unavailable: ${url}` };
+      if ('fail' in answer) throw new Error(answer.fail);
+      const mute = !!(params && typeof params === 'object' && (params as Record<string, unknown>)['muteHttpExceptions']);
+      if (answer.code >= 400 && !mute) {
+        throw new Error(`Exception: Request failed for ${url} returned code ${answer.code}. Truncated server response: ${answer.body.slice(0, 50)}`);
+      }
+      return {
+        getResponseCode: () => answer.code,
+        getContentText: (_charset?: unknown) => answer.body,
+        getHeaders: () => ({ 'Content-Type': 'text/csv' }),
+      };
+    },
+  });
+}
+
+/**
+ * Utilities.parseCsv: RFC 4180, as Apps Script reads it. Quoted fields may
+ * hold the delimiter, a doubled quote and line breaks; \r\n and \n both end a
+ * row; a final line break does not make an empty last row.
+ */
+export function parseCsv(csv: unknown, delimiter: unknown = ','): string[][] {
+  if (typeof csv !== 'string') throw new Error("Exception: The parameters don't match the method signature for Utilities.parseCsv.");
+  const sep = typeof delimiter === 'string' && delimiter.length === 1 ? delimiter : ',';
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+  let i = 0;
+  const endRow = (): void => {
+    row.push(field);
+    rows.push(row);
+    row = [];
+    field = '';
+  };
+  while (i < csv.length) {
+    const ch = csv.charAt(i);
+    if (quoted) {
+      if (ch === '"') {
+        if (csv.charAt(i + 1) === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        quoted = false;
+      } else {
+        field += ch;
+      }
+      i++;
+    } else if (ch === '"' && field === '') {
+      quoted = true;
+      i++;
+    } else if (ch === sep) {
+      row.push(field);
+      field = '';
+      i++;
+    } else if (ch === '\r' && csv.charAt(i + 1) === '\n') {
+      endRow();
+      i += 2;
+    } else if (ch === '\n' || ch === '\r') {
+      endRow();
+      i++;
+    } else {
+      field += ch;
+      i++;
+    }
+  }
+  if (quoted) throw new Error('Exception: Could not parse text.');
+  if (field !== '' || row.length) endRow();
+  return rows;
+}
+
 // ------------------------------------------------------------------ the project
 
 export interface ProjectOptions {
@@ -521,6 +626,8 @@ export type Interleave = (what: string, depth: number) => void;
 export interface Project {
   readonly sheets: SheetsWorld;
   readonly drive: FakeDrive;
+  /** What UrlFetchApp reaches. */
+  readonly web: FakeWeb;
   readonly clock: Clock;
   readonly cache: { clear(): void };
   /** Everything Logger.log and console wrote, oldest first. */
@@ -632,6 +739,7 @@ export function loadProject(options: ProjectOptions = {}): Project {
     },
   });
   const drive = new FakeDrive();
+  const web = new FakeWeb();
   const cache = new FakeCache(() => clock.now());
 
   const format = (args: readonly unknown[]): string => {
@@ -651,6 +759,7 @@ export function loadProject(options: ProjectOptions = {}): Project {
     SpreadsheetApp: sheets.app,
     DocumentApp: drive.documentApp,
     DriveApp: drive.driveApp,
+    UrlFetchApp: web.urlFetchApp,
     LockService: Object.freeze({ getScriptLock: () => new FakeLock(lockState, executions) }),
     CacheService: Object.freeze({ getScriptCache: () => cache }),
     ContentService: Object.freeze({
@@ -660,6 +769,7 @@ export function loadProject(options: ProjectOptions = {}): Project {
     Utilities: Object.freeze({
       formatDate,
       getUuid: () => randomUUID(),
+      parseCsv,
     }),
     Session: Object.freeze({
       // A web app that executes as its owner, opened by anyone: nobody is signed in.
@@ -731,6 +841,7 @@ export function loadProject(options: ProjectOptions = {}): Project {
   return {
     sheets,
     drive,
+    web,
     clock,
     cache,
     logs,

@@ -6,9 +6,15 @@
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { CLEAN, fakeServer, intern, manager, propertyReply, renderApp, TODAY } from '../../state/testing';
+import { CLEAN, fakeServer, intern, manager, PROPERTIES, propertyReply, renderApp, TODAY } from '../../state/testing';
 
 const PATH = `/property/${CLEAN.id}`;
+
+/** The list's reply, with the checker's fields added to CLEAN's row. */
+const listWith = (changes: Readonly<Record<string, unknown>>) => ({
+  ...PROPERTIES,
+  properties: PROPERTIES.properties.map((p) => (p.id === CLEAN.id ? { ...p, ...changes } : p)),
+});
 
 const copyButton = () => screen.getByRole('button', { name: 'Copy' }) as HTMLButtonElement;
 
@@ -194,7 +200,100 @@ describe('the internal section', () => {
   });
 });
 
+describe('the header', () => {
+  it('shows the category, and the city, size and deal when the checker has them', async () => {
+    const platform = fakeServer({ properties: listWith({ city: 'Tagaytay', size: '320', dealType: 'For sale' }) });
+    renderApp({ platform, path: PATH });
+    await settled();
+    await waitFor(() => expect(document.querySelector('.property__facts')!.textContent).toContain('Tagaytay'));
+    const facts = document.querySelector('.property__facts')!.textContent;
+    expect(facts).toContain('Condo / house and lot');
+    expect(facts).toContain('Tagaytay');
+    expect(facts).toContain('320 sqm');
+    expect(facts).toContain('For sale');
+  });
+
+  it("prefers the detail's checker fields to the list row's", async () => {
+    const platform = fakeServer({
+      properties: listWith({ city: 'Old City', size: '100' }),
+      property: propertyReply({ city: 'Tagaytay', size: '320', dealType: 'Lease', availability: 'Available', inChecker: true }),
+    });
+    renderApp({ platform, path: PATH });
+    await settled();
+    await waitFor(() => expect(document.querySelector('.property__facts')!.textContent).toContain('Tagaytay'));
+    const facts = document.querySelector('.property__facts')!.textContent;
+    expect(facts).toContain('320 sqm');
+    expect(facts).not.toContain('Old City');
+  });
+});
+
+describe('a sold listing', () => {
+  it('is blocked when only the detail says Sold', async () => {
+    const platform = fakeServer({ property: propertyReply({ availability: 'Sold', inChecker: true }) });
+    renderApp({ platform, path: PATH });
+    await waitFor(() => expect(reason()).toBe('Copy is blocked: this listing is sold.'));
+    expect(copyButton().disabled).toBe(true);
+  });
+
+  it('says Sold, and blocks both Copy and the log step', async () => {
+    const platform = fakeServer({ properties: listWith({ availability: 'Sold' }) });
+    renderApp({ platform, path: PATH });
+    await waitFor(() => expect(reason()).toBe('Copy is blocked: this listing is sold.'));
+
+    expect(document.querySelector('.property__sold')?.textContent).toContain('Sold');
+    expect(screen.getByText('Sold', { selector: '.verdict__word' })).toBeTruthy();
+    expect(copyButton().disabled).toBe(true);
+    await userEvent.keyboard('{Alt>}c{/Alt}');
+    expect(platform.copied).toEqual([]);
+
+    // The log step is there but off: no link can be typed, nothing can be saved.
+    const link = screen.getByLabelText('Post link') as HTMLInputElement;
+    expect(link.closest('fieldset')?.disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Posted' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Pending approval' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(platform.posts.some((p) => p.action === 'logPost')).toBe(false);
+  });
+});
+
 describe('photos', () => {
+  const thumb = (id: string) => `https://drive.google.com/thumbnail?id=${id}&sz=w640`;
+  const withThumbs = propertyReply({
+    photos: ['ph1', 'ph2', 'ph3'].map((id, i) => ({
+      id,
+      name: `photo ${i + 1}`,
+      url: `https://drive.google.com/uc?export=download&id=${id}`,
+      thumb: thumb(id),
+    })),
+  });
+
+  it('shows real thumbnails that open large, and the arrow keys move through them', async () => {
+    renderApp({ platform: fakeServer({ property: withThumbs }), path: PATH });
+    await settled();
+
+    const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('.photos__img'));
+    expect(imgs.map((i) => i.getAttribute('src'))).toEqual([thumb('ph1'), thumb('ph2'), thumb('ph3')]);
+
+    const second = screen.getByRole('button', { name: 'Photo 2 of 3, view large' });
+    await userEvent.click(second);
+    const viewer = screen.getByRole('dialog', { name: 'Photo 2 of 3' });
+    const large = () => viewer.querySelector('img')!.getAttribute('src');
+    expect(large()).toBe('https://drive.google.com/thumbnail?id=ph2&sz=w1600');
+
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('dialog', { name: 'Photo 3 of 3' })).toBeTruthy();
+    expect(large()).toContain('id=ph3');
+    await userEvent.keyboard('{ArrowRight}'); // round to the first
+    expect(screen.getByRole('dialog', { name: 'Photo 1 of 3' })).toBeTruthy();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('dialog', { name: 'Photo 3 of 3' })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Previous photo' }));
+    expect(screen.getByRole('dialog', { name: 'Photo 2 of 3' })).toBeTruthy();
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(second);
+  });
+
   it('downloads them all, then offers to open the folder they went to', async () => {
     const platform = fakeServer();
     renderApp({ platform, path: PATH });
@@ -223,7 +322,7 @@ describe('the cooldown', () => {
     });
     renderApp({ platform, path: PATH });
     expect(await screen.findByText('Last posted 3 Oct, 28 days ago. Outside the 7-day cooldown.')).toBeTruthy();
-    expect(screen.getByText(/You see your own posts only/)).toBeTruthy();
+    expect(screen.getByText(/Your posts only/)).toBeTruthy();
     expect(TODAY).toBe('2026-10-31');
   });
 });

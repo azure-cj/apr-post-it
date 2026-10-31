@@ -205,7 +205,7 @@ describe('the shell', () => {
     for (const user of [manager, admin]) {
       const { unmount } = renderApp({ platform: fakeServer(), user });
       expect(heading()).toBe('Tracker');
-      expect(navNames()).toEqual(['Tracker', 'Assign', 'Interns', 'Find', 'Settings']);
+      expect(navNames()).toEqual(['Tracker', 'Assign', 'Interns', 'Records', 'Find', 'Settings']);
       unmount();
     }
   });

@@ -208,7 +208,7 @@ describe('AssignScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: /Discard and open Thu 29 Oct/ }));
     // Today, Jan has no queue.
     expect(queueNames()).toEqual([]);
-    expect(screen.getByText(/Nothing in Jan.s queue for Thu 29 Oct yet/)).toBeTruthy();
+    expect(screen.getByText('Nothing queued for Thu 29 Oct yet.')).toBeTruthy();
   });
 
   it('tells the shell when there are unsaved changes, so it can guard leaving', async () => {

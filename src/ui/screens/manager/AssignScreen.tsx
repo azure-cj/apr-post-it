@@ -20,6 +20,7 @@ import { UserFacingError, type Assignment, type PostLogEntry, type Property } fr
 import { PastePanel, type Matched } from './AssignPaste';
 import { SearchPanel } from './AssignSearch';
 import { DayPicker } from './DayPicker';
+import { FillQueues, type FillQueuesProps } from './FillQueues';
 import { QueueRow } from './QueueRow';
 import './AssignScreen.css';
 
@@ -64,6 +65,10 @@ export interface AssignScreenProps {
   readonly error?: string | null | undefined;
   /** The directory's own search (Directory.search), so results match Find. Default: the same rule over `properties`. */
   readonly search?: ((query: string) => readonly Property[]) | undefined;
+  /** Saves many queues at once (tracker.saveQueues). With it, the header offers Fill queues. */
+  readonly onSaveQueues?: FillQueuesProps['onSave'] | undefined;
+  /** Fill queues saved: what to say. */
+  readonly onQueuesSaved?: ((note: string) => void) | undefined;
 }
 
 type Mode = 'search' | 'paste';
@@ -117,7 +122,10 @@ export function AssignScreen({
   loading = false,
   error,
   search,
+  onSaveQueues,
+  onQueuesSaved,
 }: AssignScreenProps) {
+  const [filling, setFilling] = useState(false);
   const { cooldownDays, repostDueDays } = settings;
   const rules = useMemo<AssignRules | null>(
     () =>
@@ -486,15 +494,33 @@ export function AssignScreen({
 
   return (
     <div className="page assign">
-      <header className="page-header">
+      <header className="page-header assign__header">
         <h1 className="page-header__title" tabIndex={-1}>
           Assign
         </h1>
-        <p className="page-header__description">
-          Build each intern&rsquo;s queue for a day. A listing in its cooldown, or already in someone else&rsquo;s
-          queue that day, can&rsquo;t be added.
-        </p>
+        {onSaveQueues ? (
+          <Button icon={<Icon name="assign" size={18} />} onClick={() => setFilling(true)} disabled={loading && properties.length === 0}>
+            Fill queues
+          </Button>
+        ) : null}
       </header>
+
+      {filling && onSaveQueues ? (
+        <FillQueues
+          interns={interns}
+          properties={properties}
+          posts={posts}
+          assignments={assignments}
+          rules={{ cooldownDays, repostDueDays }}
+          today={today}
+          onSave={onSaveQueues}
+          onSaved={(note) => {
+            setFilling(false);
+            onQueuesSaved?.(note);
+          }}
+          onClose={() => setFilling(false)}
+        />
+      ) : null}
 
       {error ? (
         <Notice tone="danger" live className="assign__notice">
@@ -504,10 +530,7 @@ export function AssignScreen({
 
       {people.length === 0 ? (
         <Card>
-          <EmptyState title="Nobody to assign yet">
-            Interns are added on the Team tab of the private admin sheet. Once someone is there, you can build their
-            queue here.
-          </EmptyState>
+          <EmptyState title="No interns yet">Add them in Settings → Team.</EmptyState>
         </Card>
       ) : (
         <>
@@ -626,7 +649,7 @@ export function AssignScreen({
               padding="tight"
               title={intern === null ? 'Queue' : `${first}'s queue`}
               description={
-                intern === null ? 'Choose an intern.' : `${day} · ${plural(entries.length, 'listing', 'listings')}, in posting order`
+                intern === null ? undefined : `${day} · ${plural(entries.length, 'listing', 'listings')}`
               }
             >
               {intern === null ? (
@@ -638,7 +661,7 @@ export function AssignScreen({
                 </div>
               ) : entries.length === 0 ? (
                 <p className="assign__quiet assign__empty" ref={emptyRef} tabIndex={-1}>
-                  Nothing in {first}&rsquo;s queue for {day} yet. Search the library or paste a list to add listings.
+                  Nothing queued for {day} yet.
                 </p>
               ) : (
                 <ol className="assign-queue" aria-label={`${first}'s queue, in posting order`}>
@@ -670,8 +693,7 @@ export function AssignScreen({
               )}
               {intern !== null ? (
                 <p className="assign__hint">
-                  {first} works this list top to bottom on {day}. To reorder, drag a handle or use the arrows (Alt+Up,
-                  Alt+Down).
+                  Top to bottom. Drag or Alt+Up/Down to reorder.
                 </p>
               ) : null}
             </Card>

@@ -68,7 +68,7 @@ describe('TrackerScreen', () => {
 });
 
 describe('SettingsScreen', () => {
-  it('shows the rules and a read-only team, and says keys live in the private admin sheet', async () => {
+  it('shows the rules, the team with who is off, and copies the link', async () => {
     const onCopy = vi.fn();
     render(
       <SettingsScreen
@@ -80,8 +80,10 @@ describe('SettingsScreen', () => {
         onCopy={onCopy}
       />,
     );
-    expect(screen.getByText(/private admin sheet, which only the admin can open/)).toBeTruthy();
-    expect(screen.getByText('Revoked')).toBeTruthy();
+    expect(screen.getByText('Off')).toBeTruthy();
+    expect(screen.getByText('7 days')).toBeTruthy();
+    // No team actions without the callbacks.
+    expect(screen.queryByRole('button', { name: 'Add person' })).toBeNull();
     expect(screen.queryByRole('textbox', { name: /cooldown/i })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Copy the web app link' }));
     expect(onCopy).toHaveBeenCalledWith('https://script.google.com/macros/s/abc/exec');

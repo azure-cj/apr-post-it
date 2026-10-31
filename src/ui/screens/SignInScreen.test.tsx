@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createFakePlatform } from '@/platform/fake';
+import { renderApp } from '../state/testing';
 import { SignInScreen } from './SignInScreen';
+import { SIGN_IN_ROLE_KEY } from './SignInScreen.role';
 
 const description = (input: HTMLElement) =>
   (input.getAttribute('aria-describedby') ?? '')
@@ -35,14 +38,14 @@ describe('SignInScreen', () => {
     await userEvent.type(screen.getByLabelText('Web app link'), '  https://script.google.com/macros/s/x/exec ');
     await userEvent.type(screen.getByLabelText('Your key'), ' 9b2c-41fe ');
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(onSubmit).toHaveBeenCalledWith('https://script.google.com/macros/s/x/exec', '9b2c-41fe');
+    expect(onSubmit).toHaveBeenCalledWith('https://script.google.com/macros/s/x/exec', '9b2c-41fe', 'Intern');
   });
 
   it('signs in on Enter', async () => {
     const onSubmit = vi.fn();
     render(<SignInScreen onSubmit={onSubmit} busy={false} initialUrl="https://x" />);
     await userEvent.type(screen.getByLabelText('Your key'), 'abc{Enter}');
-    expect(onSubmit).toHaveBeenCalledWith('https://x', 'abc');
+    expect(onSubmit).toHaveBeenCalledWith('https://x', 'abc', 'Intern');
   });
 
   it('says what is missing instead of sending, and goes to the first gap', async () => {
@@ -145,7 +148,50 @@ describe('SignInScreen', () => {
       expect(screen.queryByLabelText('Web app link')).toBeNull();
       expect(document.activeElement).toBe(screen.getByLabelText('Your key'));
       await userEvent.type(screen.getByLabelText('Your key'), ' abc {Enter}');
-      expect(onSubmit).toHaveBeenCalledWith(BUILT_IN, 'abc');
+      expect(onSubmit).toHaveBeenCalledWith(BUILT_IN, 'abc', 'Intern');
     });
+  });
+
+  describe('Intern or Admin', () => {
+    it('starts on Intern, sends the role picked, and says where each key comes from', async () => {
+      const onSubmit = vi.fn();
+      render(<SignInScreen onSubmit={onSubmit} busy={false} initialUrl="https://x" />);
+      expect((screen.getByRole('radio', { name: 'Intern' }) as HTMLInputElement).checked).toBe(true);
+      expect(screen.getByText('Ask your admin.')).toBeTruthy();
+
+      await userEvent.click(screen.getByRole('radio', { name: 'Admin' }));
+      expect(screen.getByText(/ADD_PERSON in Apps Script \(first time only\), or Settings → Team/)).toBeTruthy();
+      await userEvent.type(screen.getByLabelText('Your key'), 'abc{Enter}');
+      expect(onSubmit).toHaveBeenCalledWith('https://x', 'abc', 'Admin');
+    });
+  });
+});
+
+describe('signing in as the wrong role', () => {
+  const EXEC = 'https://script.google.com/macros/s/AKfy-test/exec';
+
+  it('does not sign in, says whose key it is, keeps the key in the field and keeps nothing', async () => {
+    const platform = createFakePlatform({
+      key: null,
+      local: { [SIGN_IN_ROLE_KEY]: 'Admin', 'postit.settings': JSON.stringify({ scriptUrl: EXEC }) },
+      replies: { ping: { ok: true, name: 'Jan Dela Cruz', role: 'Intern', fbAccounts: [] } },
+    });
+    renderApp({ platform, user: null, path: '/sign-in' });
+    const admin = (await screen.findByRole('radio', { name: 'Admin' })) as HTMLInputElement;
+    // The last choice, read back from this computer.
+    await waitFor(() => expect(admin.checked).toBe(true));
+    const key = screen.getByLabelText('Your key') as HTMLInputElement;
+    await userEvent.type(key, 'intern-key{Enter}');
+
+    expect((await screen.findByRole('alert')).textContent).toContain('This key is for an Intern.');
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeTruthy();
+    expect(key.value).toBe('intern-key');
+    expect(await platform.readKey()).toBeNull();
+
+    // Picking Intern then signs in, and is remembered.
+    await userEvent.click(screen.getByRole('radio', { name: 'Intern' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'My queue' })).toBeTruthy();
+    expect(await platform.readLocal(SIGN_IN_ROLE_KEY)).toBe('Intern');
   });
 });

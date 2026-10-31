@@ -24,7 +24,7 @@ import {
 } from 'react';
 import { createBackend } from '@/core/backend';
 import { signIn as askWhoThisIs } from '@/core/session';
-import type { PropertyDetail, User } from '@/core/types';
+import { UserFacingError, type PropertyDetail, type Role, type User } from '@/core/types';
 import type { Platform } from '@/platform';
 import { ToastRegion, useToasts, type ToastTone } from '../components';
 import { manilaDate } from './clock';
@@ -66,8 +66,11 @@ export interface AppState extends Omit<Services, 'openProperty' | 'forget'> {
    *
    * Aborting `signal` stops it: a reply that arrives afterwards signs nobody in
    * and keeps no key, and the promise rejects with the signal's reason.
+   *
+   * With `role`, a key the server says is for the other role signs nobody in
+   * and keeps nothing: it rejects with "This key is for an Intern." (or Admin).
    */
-  signIn(url: string, key: string, signal?: AbortSignal): Promise<User>;
+  signIn(url: string, key: string, signal?: AbortSignal, role?: Role): Promise<User>;
   /** After a failed resume: ask again with the kept key. */
   retrySignIn(): void;
   /** After a failed resume: go to the sign-in form instead. */
@@ -190,7 +193,7 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
   }, [user, services, clock]);
 
   const signIn = useCallback(
-    async (typed: string, key: string, signal?: AbortSignal): Promise<User> => {
+    async (typed: string, key: string, signal?: AbortSignal, role?: Role): Promise<User> => {
       signal?.throwIfAborted();
       const url = BUILT_IN_SCRIPT_URL || typed;
       // Asked with exactly what was typed, before anything is kept: a key the
@@ -199,6 +202,9 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
       const signedIn = await askWhoThisIs(probe);
       // Cancelled while the server was answering: the answer is dropped.
       signal?.throwIfAborted();
+      // The role picked only states intent; the server's answer decides, and
+      // a key for the other role is not kept.
+      if (role && signedIn.role !== role) throw new UserFacingError(`This key is for an ${signedIn.role}.`);
       await platform.writeKey(key);
       if (signal?.aborted) {
         // Cancelled while the key was being kept: take it back off this PC.

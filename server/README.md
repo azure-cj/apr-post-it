@@ -76,14 +76,14 @@ read rather than hundreds of Drive calls.
    * `POSTS_TAB` / `ASSIGNMENTS_TAB`: **must match the real tab names.**
    * `SHARED_KEY`: a long random string, used only until the Team tab has its first row.
    * `COOLDOWN_DAYS` and `TZ`: 7 days, on Manila's calendar.
+   * `CHECKER_INDEX_CSV_URL`: leave it as it is, the listing checker's published Index CSV
+     (below). `''` switches the join off.
 5. Check `CFG` at the top of `BuildDirectory.gs` (`ROOT_FOLDER_ID`, `SHEET_ID`), and run
    **`START`** to build the directory.
 6. Run **`SETUP`** from the editor and accept the permission prompt. It checks that
    `Separators.gs` is there, then counts the directory's listings, the tracker's rows and
    the team.
-7. For each person, edit the three values at the top of **`ADD_PERSON`** and press Run. The
-   key is printed in the execution log. Paste it into their copy of Post-It.
-   `SHARED_KEY` stops working the moment the Team tab has its first row.
+7. Get your first admin key (below).
 8. Deploy → New deployment → **Web app**. Execute as **Me**, access **Anyone**.
    Leave any earlier deployment running until the desktop app is proven.
    "Execute as Me" is the whole point: every Drive read happens as the library's owner,
@@ -91,6 +91,23 @@ read rather than hundreds of Drive calls.
 9. Check it: `<exec-url>?action=ping&key=<your key>` in a browser. It should name you
    and your role. That puts your key in the browser's history, so do it once, from your
    own machine. The app always sends the key in the request body.
+
+### Getting your first admin key
+
+1. Paste the files into the project (step 3).
+2. Set the sheet IDs in `CONFIG` (step 4).
+3. In the editor, open `ADD_PERSON`, put **your own name** in `name`, leave `role` as
+   `'Admin'`, and press **Run**, once.
+4. The key appears in **View → Executions** (the execution log), and on the Team tab of the
+   private admin sheet. Paste it into your copy of Post-It.
+5. After that, add everyone else from the app: **Settings → Team**. `SHARED_KEY` stops
+   working the moment the Team tab has its first row.
+
+### Updating the code later
+
+Paste the changed files, then update the deployment with **Manage deployments → Edit →
+New version** (keeps the link). A *new* deployment would get a new `/exec` URL, and every
+copy of the app would have to be told it.
 
 ## Actions
 
@@ -103,15 +120,20 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | Action | Who | What it does |
 |---|---|---|
 | `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`. |
-| `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`. One sheet read. |
-| `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. |
+| `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. |
+| `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. The checker's fields too, joined as for `properties`. |
 | `posts` | everyone | The Posts tab as rows, every value text. An intern gets only their own. |
 | `assignments` | everyone | The Assignments tab as rows, every value text. An intern gets only their own. |
-| `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` and `postedBy`. Refuses with `error: 'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the person's Team row. |
-| `addLink` | everyone | Turns a Pending row into Posted with its link: `notfound` when there is no such row. An intern can complete only their own. |
-| `setStatus` | everyone | Moves one queue item's status: `notfound` when no open item matches. An intern can move only their own. |
+| `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` and `postedBy`. `postLink` is required, an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com`, `fb.com` or `fb.me` (`error: 'link-required'` or `'bad-link'`), and so is `status`, `Posted` or `Pending` (`'bad-status'`); Pending means posted in a group and awaiting its admin's approval. Refuses with `'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the poster's Team row. An Admin may send `postedBy`: that person must be on the Team tab and active (`'unknown-person'`), and the account must be one of theirs. |
+| `addLink` | everyone | Turns a Pending row into Posted with its link: `notfound` when there is no such row. An intern can complete only their own. Kept for old rows logged without a link. |
+| `setStatus` | everyone | Moves one queue item's status: `notfound` when no open item matches. An intern can move only their own. With `Posted`, also marks the assignee's newest Pending post of that listing Posted (by id, else by name), keeping its link. |
 | `team` | Admin | The Team tab without keys: `name`, `role`, `email`, `fbAccounts` (a list) and `active` for each person, revoked people included. The Key column is never sent. |
+| `addPerson` | Admin | Adds `{ name, role: 'Intern' \| 'Admin', fbAccounts?, email? }` to the Team tab and replies `{ person, key }`. The key is shown this once. A name already on the tab, in any case, is `'duplicate'`; any other role is `'bad-role'`. |
+| `setActive` | Admin | `{ name, active }`: revokes or restores a person, replying `{ person }`. Nobody can deactivate themselves (`'self'`). |
+| `newKey` | Admin | `{ name }`: gives the person a new key, replying `{ key }`. The old one stops working at once. |
 | `saveQueue` | Admin | Replaces one person's queue for one date. |
+| `saveQueues` | Admin | `{ date, queues: [{ assignedTo, items: [{ propertyName, propertyId?, status? }] }] }`: replaces several interns' queues for one date, all or none, under one lock, replying `{ saved }`. Every `assignedTo` must be an active Intern on the Team tab (`'bad-intern'`). |
+| `indexCheck` | Admin | Compares the directory with the checker's index, read fresh: `checkedAt`, `directoryCount`, `checkerCount`, `directoryOnly` and `sold` (`{ id, name }`), and `checkerOnly` (`{ id, name, path }`). `'checker-off'` or `'checker-unavailable'` when it cannot. |
 
 Two things in a reply come from the key, never from the request:
 
@@ -120,6 +142,8 @@ Two things in a reply come from the key, never from the request:
   (`heading: Commission: 3%`), so an intern's `cutAt` is the kind of marker only (`heading`).
 * **`postedBy`** on a logged post is the caller's own name. An Admin may log on an
   intern's behalf by sending `postedBy`; from an intern it is ignored.
+* **A key** is in the reply of `addPerson` and `newKey` only. No other reply, `team` and
+  `setActive` included, ever carries one.
 
 ### `withheld`
 
@@ -130,6 +154,19 @@ selected and copied by hand. So an intern is not sent it at all (D13). Their rep
 empty. An Admin gets the whole document in `publicText`, with `withheld: false`,
 so they can add the separator. The same holds when the text comes from the directory's copy
 rather than the live document.
+
+## The listing checker's index
+
+The listing checker is another team's Apps Script, and Post-It never edits it, its sheet or
+its files. It publishes its Index as CSV (`CONFIG.CHECKER_INDEX_CSV_URL`), and `properties`
+reads that one URL with `UrlFetchApp`, parses it with `Utilities.parseCsv`, and joins it to
+the directory on **Folder ID** = `FolderId`: `City`, `Size (sqm)` (as text), `Deal type`,
+`Status` (as `availability`) and `inChecker`. The parsed index is cached for 10 minutes, in
+several cache entries because one holds at most 100 KB. If the fetch fails, or the URL is
+`''`, the properties go out unchanged, without those fields; the call never fails for it.
+`indexCheck` reads the CSV fresh and lists what one side has that the other does not, and
+which of our listings the checker marks Sold. The manifest's `script.external_request`
+scope is for this fetch.
 
 ## Your existing tracker is not reformatted
 
@@ -184,8 +221,9 @@ fails, the directory's copy is used, and `live: false` says so.
 * **Photos.** A `property` reply carries Drive download links for the listing's photos. The
   script does not change who can open them, and the app downloads them without a Google
   sign-in, so they must be viewable by anyone with the link.
-* **Revoking takes up to a minute.** Set Active to `FALSE` on the Team tab. The tab is
-  cached for 60 seconds, so a key already in use keeps working until then.
+* **Revoking by hand takes up to a minute.** From the app (Settings → Team), revoking or
+  issuing a new key takes effect at once. Setting Active to `FALSE` by hand on the Team tab
+  does not: the tab is cached for 60 seconds, so a key already in use keeps working until then.
 * **The directory is cached for a minute only while it is small.** CacheService holds at most
   100 KB per value, and a full library's directory is larger, so then every `properties` and
   `property` call reads the sheet.

@@ -39,6 +39,12 @@ const CONFIG = {
 
   COOLDOWN_DAYS: 7,
   TZ: 'Asia/Manila',
+
+  // The listing checker's published Index CSV (File > Share > Publish to web).
+  // That script and its sheet belong to another team: this one only READS the
+  // CSV, never writes anywhere near it. Its City, Size, Deal type and Status
+  // are joined onto the directory by Folder ID. '' turns the join off.
+  CHECKER_INDEX_CSV_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT_xOq-DEX-QXpSMfkkH8eEiwVkd1ylTKh6jhOxY4TfjrvnpLg-OqemlwcL6GLWlNXvjiWyTlZEymJU/pub?gid=90841346&single=true&output=csv',
 };
 
 // Where the postable text ends is decided in Separators.gs, which this project
@@ -84,13 +90,18 @@ function route(req) {
     switch (req.action) {
       case 'ping':        return json({ ok: true, name: me.name, role: me.role, fbAccounts: me.fbAccounts, time: now() });
       case 'properties':  return json({ ok: true, properties: listProperties() });
+      case 'indexCheck':  return json(indexCheck());
       case 'property':    return json({ ok: true, property: getProperty(req.id, me.canSeeInternal) });
       case 'posts':       return json({ ok: true, posts: mine(me, readRows(CONFIG.POSTS_TAB, POST_FIELDS), 'postedBy') });
       case 'assignments': return json({ ok: true, assignments: mine(me, readRows(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS), 'assignedTo') });
       case 'team':        return json({ ok: true, team: teamList() });
+      case 'addPerson':   return json(addPerson(req, me));
+      case 'setActive':   return json(setActive(req, me));
+      case 'newKey':      return json(newKey(req, me));
       case 'logPost':     return json(logPost(req, me));
       case 'addLink':     return json(addLink(req, me));
       case 'saveQueue':   return json(saveQueue(req, me));
+      case 'saveQueues':  return json(saveQueues(req, me));
       case 'setStatus':   return json(setStatus(req, me));
       default:            return json({ ok: false, error: 'unknown action: ' + req.action });
     }
@@ -164,15 +175,26 @@ function teamRows() {
 function teamList() {
   return teamRows()
     .filter(function (t) { return textOf_(t.Name).trim(); })
-    .map(function (t) {
-      return {
-        name: textOf_(t.Name),
-        role: roleOf_(t.Role),
-        email: textOf_(t.Email),
-        fbAccounts: textOf_(t['FB Accounts']).split(',').map(function (x) { return x.trim(); }).filter(String),
-        active: String(t.Active).toUpperCase() !== 'FALSE',
-      };
-    });
+    .map(personOf_);
+}
+
+/**
+ * One Team row as the app's TeamMember. Every reply that describes a person is
+ * built here, field by field, so the Key column cannot come along with it.
+ */
+function personOf_(t) {
+  return {
+    name: textOf_(t.Name),
+    role: roleOf_(t.Role),
+    email: textOf_(t.Email),
+    fbAccounts: accountsOf_(t['FB Accounts']),
+    active: String(t.Active).toUpperCase() !== 'FALSE',
+  };
+}
+
+/** "APG Main, APG Rentals" -> ['APG Main', 'APG Rentals']. */
+function accountsOf_(value) {
+  return textOf_(value).split(',').map(function (x) { return x.trim(); }).filter(String);
 }
 
 function allowed(role, action) {
@@ -186,16 +208,156 @@ function mine(me, rows, column) {
   return rows.filter(function (r) { return r[column] === me.name; });
 }
 
-/** Admin helper: add a person and hand back their key. */
+/**
+ * Editor helper (ADD_PERSON, the spreadsheet menu): add a person and hand back
+ * their key. The same checks as the addPerson action; a refusal is thrown.
+ */
 function addTeamMember(name, email, role, fbAccounts) {
-  var key = Utilities.getUuid().replace(/-/g, '');
+  var result = addPerson_({ name: name, email: email, role: role, fbAccounts: fbAccounts });
+  if (!result.ok) throw new Error(result.message);
+  return result.key;
+}
+
+// ---------------------------------------------------------------- the team, from the app
+//
+// addPerson, setActive and newKey: Admin only (PERMISSIONS). Each writes the
+// Team tab as text (D7), under the script lock, and clears the cached Team tab
+// at once, so a new key works and a revoked or replaced one stops on the next
+// call rather than a minute later. A key is in the reply of addPerson and
+// newKey only, and in no other reply of any action.
+
+/** A fresh key: 32 hex digits. */
+function newKey_() {
+  return Utilities.getUuid().replace(/-/g, '');
+}
+
+function addPerson(req, me) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
+  try {
+    return addPerson_(req);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** The work of addPerson, for the action and the editor alike. */
+function addPerson_(req) {
+  var name = textOf_(req.name).trim();
+  if (!name) return { ok: false, error: 'name-required', message: 'Type the person\'s name.' };
+
+  var role = textOf_(req.role).trim();
+  var canonical = ROLES.filter(function (r) { return r.toLowerCase() === role.toLowerCase(); })[0];
+  if (!canonical) return { ok: false, error: 'bad-role', message: 'The role must be Admin or Intern.' };
+
+  var accounts = req.fbAccounts;
+  if (accounts === undefined || accounts === null || accounts === '') accounts = [];
+  if (typeof accounts === 'string') accounts = accountsOf_(accounts);
+  if (!Array.isArray(accounts) || accounts.some(function (a) { return typeof a !== 'string'; })) {
+    return { ok: false, error: 'bad-accounts', message: 'The Facebook accounts must be a list of names.' };
+  }
+  accounts = accounts.map(function (a) { return a.trim(); }).filter(String);
+  if (accounts.some(function (a) { return a.indexOf(',') !== -1; })) {
+    return { ok: false, error: 'bad-accounts', message: 'A Facebook account name cannot contain a comma.' };
+  }
+
+  // Read fresh, not from the cache: a name added a moment ago must count.
+  var want = name.toLowerCase();
+  var taken = readSheet('Team', TEAM_HEADERS).some(function (t) { return textOf_(t.Name).trim().toLowerCase() === want; });
+  if (taken) return { ok: false, error: 'duplicate', message: 'There is already someone called ' + name + ' on the team.' };
+
+  var row = { Name: name, Email: textOf_(req.email).trim(), Role: canonical, Key: newKey_(),
+              'FB Accounts': accounts.join(', '), Active: 'TRUE' };
+  var sh = plainTab('Team', TEAM_HEADERS);
+  var col = teamColumns_(sh);
+  var out = new Array(Math.max(sh.getLastColumn(), TEAM_HEADERS.length)).fill('');
+  TEAM_HEADERS.forEach(function (h) { out[col[h]] = textOf_(row[h]); });
   // As text, like every row this script writes (D7): a key of digits would
   // otherwise come back a number, and a name beginning "=" would be a formula.
-  appendText_(plainTab('Team', TEAM_HEADERS),
-              [name, email || '', role || 'Intern', key, fbAccounts || '', 'TRUE'].map(textOf_),
-              [0, 1, 2, 3, 4, 5]);
+  appendText_(sh, out, TEAM_HEADERS.map(function (h) { return col[h]; }));
   CacheService.getScriptCache().remove('team');
-  return key;
+  return { ok: true, person: personOf_(row), key: row.Key };
+}
+
+function setActive(req, me) {
+  requireAll(req, ['name']);
+  var active = req.active;
+  if (active === 'true') active = true;
+  if (active === 'false') active = false;
+  if (active !== true && active !== false) {
+    return { ok: false, error: 'bad-active', message: 'Say whether the person is active: true or false.' };
+  }
+  if (!active && textOf_(req.name).trim().toLowerCase() === textOf_(me.name).trim().toLowerCase()) {
+    return { ok: false, error: 'self', message: 'You cannot deactivate yourself. Ask another admin.' };
+  }
+  return editTeamRow_(req.name, function (sh, r, col, row) {
+    row.Active = active ? 'TRUE' : 'FALSE';
+    setText_(sh.getRange(r, col.Active + 1), row.Active);
+    return { ok: true, person: personOf_(row) };
+  });
+}
+
+function newKey(req, me) {
+  requireAll(req, ['name']);
+  return editTeamRow_(req.name, function (sh, r, col, row) {
+    var key = newKey_();
+    setText_(sh.getRange(r, col.Key + 1), key);
+    return { ok: true, key: key };
+  });
+}
+
+/**
+ * Finds the person's one Team row by name, as case-insensitive as addPerson's
+ * duplicate check, and hands it to `edit` under the lock. The cached Team tab
+ * is cleared after the edit, so the change holds from the next call.
+ */
+function editTeamRow_(name, edit) {
+  var want = textOf_(name).trim().toLowerCase();
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
+  try {
+    var sh = plainTab('Team', TEAM_HEADERS);
+    var col = teamColumns_(sh);
+    var values = sh.getDataRange().getValues();
+    var found = [];
+    for (var r = 1; r < values.length; r++) {
+      if (textOf_(values[r][col.Name]).trim().toLowerCase() === want) found.push(r);
+    }
+    if (!found.length) return { ok: false, error: 'notfound', message: 'There is nobody called ' + textOf_(name).trim() + ' on the team.' };
+    if (found.length > 1) {
+      return { ok: false, error: 'duplicate', message: 'Two rows on the Team tab are called ' + textOf_(name).trim() + '. Fix the tab first.' };
+    }
+    var row = {};
+    TEAM_HEADERS.forEach(function (h) { row[h] = values[found[0]][col[h]]; });
+    var result = edit(sh, found[0] + 1, col, row);
+    CacheService.getScriptCache().remove('team');
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** The Team tab's header -> 0-based column. Every one of TEAM_HEADERS must be there. */
+function teamColumns_(sh) {
+  var header = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0]
+    .map(function (h) { return textOf_(h).trim(); });
+  var col = {}, missing = [];
+  TEAM_HEADERS.forEach(function (h) {
+    col[h] = header.indexOf(h);
+    if (col[h] === -1) missing.push(h);
+  });
+  if (missing.length) throw new Error('The Team tab has no column for: ' + missing.join(', ') + '.');
+  return col;
+}
+
+/** An active person on the Team tab, by name (case-insensitive), or null. */
+function activePerson_(name) {
+  var want = textOf_(name).trim().toLowerCase();
+  if (!want) return null;
+  var row = teamRows().filter(function (t) {
+    return textOf_(t.Name).trim().toLowerCase() === want && String(t.Active).toUpperCase() !== 'FALSE';
+  })[0];
+  return row ? personOf_(row) : null;
 }
 
 // ---------------------------------------------------------------- the directory
@@ -267,10 +429,16 @@ function idOf(propertyName) {
 
 // ---------------------------------------------------------------- properties
 
-/** The search list: small, no document text. */
+/**
+ * The search list: small, no document text. With the checker's index joined
+ * on, when it can be read: city, size, deal type and availability, and whether
+ * the checker knows the listing at all. When it cannot (switched off, or the
+ * fetch failed) the rows go out without those fields, and the call still works.
+ */
 function listProperties() {
+  var checker = checkerIndex_(false);
   return directoryRows().map(function (r) {
-    return {
+    var out = {
       id: r.id,
       name: r.name,
       category: r.category,
@@ -278,8 +446,173 @@ function listProperties() {
       subCategory: r.subCategory,
       photoCount: Number(r.photoCount) || 0,
       hasIssues: !!String(r.issues || '').trim(),
+      // As BuildDirectory.gs wrote it: the planner skips "No separator" and "No document".
+      issues: textOf_(r.issues),
     };
+    joinChecker_(out, checker, r.id);
+    return out;
   });
+}
+
+/**
+ * Adds the checker's fields for folder `id` to `out`: city, size, deal type,
+ * availability and inChecker. Nothing when the join is off or the index could
+ * not be read (`checker` null), so the fields are then absent.
+ */
+function joinChecker_(out, checker, id) {
+  if (!checker) return out;
+  var c = checker[textOf_(id).trim()];
+  out.city = c ? c.city : '';
+  out.size = c ? c.size : '';
+  out.dealType = c ? c.dealType : '';
+  out.availability = c ? availabilityOf_(c.status) : '';
+  out.inChecker = !!c;
+  return out;
+}
+
+// ---------------------------------------------------------------- the listing checker's index
+//
+// The checker is another team's Apps Script. Its Index is published as CSV,
+// and that published CSV is all this script touches: one read-only fetch,
+// never a write, never its sheet. Rows are joined to the directory on Folder ID.
+
+const CHECKER_COLUMNS = {
+  id:       'Folder ID',
+  name:     'Folder name',
+  city:     'City',
+  size:     'Size (sqm)',
+  dealType: 'Deal type',
+  status:   'Status',
+  path:     'Path',
+};
+const CHECKER_CACHE = 'checker';
+const CHECKER_CACHE_SECONDS = 600;
+// A cache value is capped at 100 KB. The JSON is made ASCII before it is cut,
+// so a chunk of this many characters is this many bytes.
+const CACHE_CHUNK_CHARS = 90000;
+
+/**
+ * Folder ID -> { name, city, size, dealType, status, path }, or null when the
+ * join is switched off or the CSV cannot be read. Cached for ten minutes;
+ * `fresh` skips the cache (and refills it).
+ */
+function checkerIndex_(fresh) {
+  var url = textOf_(CONFIG.CHECKER_INDEX_CSV_URL).trim();
+  if (!url) return null;
+
+  if (!fresh) {
+    var hit = getChunked_(CHECKER_CACHE);
+    if (hit) return hit;
+  }
+  var index = fetchCheckerIndex_(url);
+  if (index) putChunked_(CHECKER_CACHE, index, CHECKER_CACHE_SECONDS);
+  return index;
+}
+
+/** The published CSV, parsed. null on any failure: the join is a bonus, never a reason to fail. */
+function fetchCheckerIndex_(url) {
+  try {
+    var response = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+    if (response.getResponseCode() !== 200) return null;
+    var rows = Utilities.parseCsv(response.getContentText('UTF-8'));
+    if (!rows || rows.length < 1) return null;
+
+    var header = rows[0].map(function (h) { return textOf_(h).replace(/^\uFEFF/, '').trim().toLowerCase(); });
+    var col = {};
+    Object.keys(CHECKER_COLUMNS).forEach(function (f) { col[f] = header.indexOf(CHECKER_COLUMNS[f].toLowerCase()); });
+    // Without Folder ID there is nothing to join on: that is not the Index.
+    if (col.id === -1) return null;
+
+    var index = {};
+    rows.slice(1).forEach(function (r) {
+      var id = textOf_(r[col.id]).trim();
+      if (!id) return;
+      var entry = {};
+      Object.keys(CHECKER_COLUMNS).forEach(function (f) {
+        if (f !== 'id') entry[f] = col[f] === -1 ? '' : textOf_(r[col[f]]).trim();
+      });
+      index[id] = entry;
+    });
+    return index;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** The checker's Status as the app reads it: 'Available', 'Sold', or '' for anything else. */
+function availabilityOf_(status) {
+  var s = textOf_(status).trim().toLowerCase();
+  return s === 'available' ? 'Available' : s === 'sold' ? 'Sold' : '';
+}
+
+/** Stores a value too big for one cache entry in several. Best effort: a cache that refuses is skipped. */
+function putChunked_(key, value, seconds) {
+  try {
+    var text = JSON.stringify(value).replace(/[\u0080-\uffff]/g, function (ch) {
+      return '\\u' + ('000' + ch.charCodeAt(0).toString(16)).slice(-4);
+    });
+    var cache = CacheService.getScriptCache();
+    var count = Math.max(1, Math.ceil(text.length / CACHE_CHUNK_CHARS));
+    for (var i = 0; i < count; i++) {
+      cache.put(key + ':' + i, text.slice(i * CACHE_CHUNK_CHARS, (i + 1) * CACHE_CHUNK_CHARS), seconds);
+    }
+    // Last, so a reader that finds the count finds its chunks.
+    cache.put(key + ':n', String(count), seconds);
+  } catch (e) { /* not cached; read again next time */ }
+}
+
+/** The value putChunked_ stored, or null when any piece of it is gone. */
+function getChunked_(key) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var count = Number(cache.get(key + ':n'));
+    if (!(count > 0)) return null;
+    var text = '';
+    for (var i = 0; i < count; i++) {
+      var part = cache.get(key + ':' + i);
+      if (part === null) return null;
+      text += part;
+    }
+    return JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Admin: how the directory and the checker's index disagree. Read fresh, not
+ * from the cache, because this is the button somebody presses to find out now.
+ */
+function indexCheck() {
+  if (!textOf_(CONFIG.CHECKER_INDEX_CSV_URL).trim()) {
+    return { ok: false, error: 'checker-off', message: 'The checker\'s index is switched off (CONFIG.CHECKER_INDEX_CSV_URL).' };
+  }
+  var checker = checkerIndex_(true);
+  if (!checker) {
+    return { ok: false, error: 'checker-unavailable', message: 'The checker\'s index could not be read. Try again later.' };
+  }
+  var directory = directoryRows();
+  var ours = {};
+  var directoryOnly = [], sold = [];
+  directory.forEach(function (r) {
+    var id = textOf_(r.id).trim();
+    ours[id] = true;
+    var c = checker[id];
+    if (!c) directoryOnly.push({ id: id, name: r.name });
+    else if (availabilityOf_(c.status) === 'Sold') sold.push({ id: id, name: r.name });
+  });
+  var checkerOnly = Object.keys(checker)
+    .filter(function (id) { return !ours[id]; })
+    .map(function (id) { return { id: id, name: checker[id].name, path: checker[id].path }; });
+  return {
+    ok: true,
+    checkedAt: now(),
+    directoryCount: directory.length,
+    checkerCount: Object.keys(checker).length,
+    directoryOnly: directoryOnly,
+    checkerOnly: checkerOnly,
+    sold: sold,
+  };
 }
 
 /**
@@ -364,6 +697,8 @@ function getProperty(id, includeInternal) {
     photos: photos,
   };
   if (includeInternal) out.internalText = internalText;
+  // The same join as the list's, so the screen can rely on the detail alone.
+  joinChecker_(out, checkerIndex_(false), row.id);
   return out;
 }
 
@@ -425,13 +760,33 @@ function elementText(el, counters) {
 function logPost(req, me) {
   requireAll(req, ['property', 'propertyId', 'fbAccount']);
 
-  // Who the row is credited to comes from the key, not from the request, so an
-  // intern cannot log a post against somebody else's name. A manager may log on
-  // an intern's behalf.
-  var postedBy = (me.role !== 'Intern' && req.postedBy) ? req.postedBy : me.name;
+  // Every post is logged with its link, so the tracker can always be checked
+  // against Facebook. Pending means posted in a group, awaiting its admin.
+  var link = textOf_(req.postLink).trim();
+  var problem = postLinkProblem_(link);
+  if (problem) return problem;
+  var status = textOf_(req.status);
+  if (status !== 'Posted' && status !== 'Pending') {
+    return { ok: false, error: 'bad-status', message: 'Say whether the post is Posted or Pending.' };
+  }
 
-  if (me.fbAccounts.length && me.fbAccounts.indexOf(req.fbAccount) === -1) {
-    return { ok: false, error: 'forbidden', message: 'You are not assigned to ' + req.fbAccount + '.' };
+  // Who the row is credited to comes from the key, not from the request, so an
+  // intern cannot log a post against somebody else's name. An admin may log on
+  // someone's behalf, but only for a person who is on the Team tab and active,
+  // and only from one of that person's own accounts.
+  var poster = me;
+  if (me.role !== 'Intern' && textOf_(req.postedBy).trim()) {
+    poster = activePerson_(req.postedBy);
+    if (!poster) {
+      return { ok: false, error: 'unknown-person',
+               message: 'There is nobody active called ' + textOf_(req.postedBy).trim() + ' on the team.' };
+    }
+  }
+  var postedBy = poster.name;
+
+  if (poster.fbAccounts.length && poster.fbAccounts.indexOf(req.fbAccount) === -1) {
+    var who = poster === me ? 'You are' : poster.name + ' is';
+    return { ok: false, error: 'forbidden', message: who + ' not assigned to ' + req.fbAccount + '.' };
   }
 
   var lock = LockService.getScriptLock();
@@ -443,8 +798,6 @@ function logPost(req, me) {
     var guard = cooldownFor(req.propertyId, req.property, when);
     if (guard) return guard;
 
-    var link = String(req.postLink || '').trim();
-    var status = link ? 'Posted' : 'Pending';
     var date = Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd');
     var time = Utilities.formatDate(when, CONFIG.TZ, 'HH:mm');
 
@@ -473,8 +826,8 @@ function logPost(req, me) {
  * The app applies the same rule before it asks (src/core/cooldown.ts), and
  * the two must agree:
  *
- * - Every row counts, Pending as much as Posted: a post still waiting for its
- *   link must stop a second intern posting the same listing. The app reads any
+ * - Every row counts, Pending as much as Posted: a post still waiting for the
+ *   group admin's approval must stop a second intern posting the same listing. The app reads any
  *   status but Pending as Posted, so no row is left out there either.
  * - A row is the property's when the folder ids agree, if both have one, so a
  *   renamed folder keeps its history; otherwise when the names agree as the
@@ -509,6 +862,21 @@ function cooldownFor(propertyId, propertyName, when) {
     message: 'Posted ' + ago_(daysAgo) + ' (' + dayMonth_(last) + '). The cooldown is ' +
              days_(CONFIG.COOLDOWN_DAYS) + ' \u{2014} it can be posted again on ' + fullDate_(next) + '.',
   };
+}
+
+// A Facebook post's address: https, on one of Facebook's own hosts. The app
+// applies the same rule before it asks (src/core/links.ts).
+const FACEBOOK_HOSTS = ['facebook.com', 'www.facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.com', 'fb.me'];
+
+/** A refusal for a post link that is missing or not Facebook's, else null. */
+function postLinkProblem_(value) {
+  var text = textOf_(value).trim();
+  if (!text) return { ok: false, error: 'link-required', message: 'Paste the post\'s link.' };
+  var m = /^https:\/\/([^\/?#\s]+)(?:[\/?#][^\s]*)?$/i.exec(text);
+  if (!m || FACEBOOK_HOSTS.indexOf(m[1].toLowerCase()) === -1) {
+    return { ok: false, error: 'bad-link', message: 'That isn\'t a Facebook link.' };
+  }
+  return null;
 }
 
 /** Turn a Pending row into Posted once the live link exists. */
@@ -672,29 +1040,95 @@ function saveQueue(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    var sh = sheetFor(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
-    var values = sh.getDataRange().getValues();
-    var col = columnsIn_(values[0], ASSIGN_FIELDS, sh.getName());
-    var tz = zoneOf_(sh);
+    return { ok: true, saved: replaceQueues_(String(req.date), [{ assignedTo: String(req.assignedTo), items: items }]) };
+  } finally {
+    lock.releaseLock();
+  }
+}
 
-    // Replace this person's rows for this date, leave everyone else's alone.
-    for (var r = values.length - 1; r >= 1; r--) {
-      var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
-      if (a.date === String(req.date) && a.assignedTo === String(req.assignedTo)) sh.deleteRow(r + 1);
+/**
+ * Several interns' queues for one date, all or none: everything is checked
+ * before anything is written, and the writing is done under one hold of the
+ * lock, so nobody sees half a day's plan or saves into the middle of it.
+ */
+function saveQueues(req, me) {
+  requireAll(req, ['date']);
+  var date = textOf_(req.date).trim();
+  if (!TRACKER_DAY.test(date) || !calendarDay_(+date.slice(0, 4), +date.slice(5, 7), +date.slice(8, 10))) {
+    return { ok: false, error: 'bad-date', message: 'The date must be a day written yyyy-MM-dd.' };
+  }
+  var queues = req.queues;
+  if (typeof queues === 'string') {
+    try { queues = JSON.parse(queues); } catch (e) { queues = null; }
+  }
+  if (!Array.isArray(queues)) return { ok: false, error: 'bad-queues', message: 'Send the queues as a list.' };
+
+  var seen = {}, clean = [];
+  for (var q = 0; q < queues.length; q++) {
+    var queue = queues[q] || {};
+    var person = activePerson_(queue.assignedTo);
+    if (!person || person.role !== 'Intern') {
+      return { ok: false, error: 'bad-intern',
+               message: textOf_(queue.assignedTo).trim() + ' is not an active intern on the Team tab.' };
     }
-    items.forEach(function (it) {
+    if (seen[person.name]) {
+      return { ok: false, error: 'bad-queues', message: person.name + ' has two queues for ' + date + '. Send one.' };
+    }
+    seen[person.name] = true;
+    var items = queue.items || [];
+    if (!Array.isArray(items)) return { ok: false, error: 'bad-queues', message: person.name + '\'s items must be a list.' };
+    var named = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i] || {};
+      var property = textOf_(it.propertyName !== undefined ? it.propertyName : it.property).trim();
+      if (!property) {
+        return { ok: false, error: 'bad-queues', message: 'Item ' + (i + 1) + ' of ' + person.name + '\'s queue has no property.' };
+      }
+      named.push({ property: property, propertyId: textOf_(it.propertyId).trim(), status: textOf_(it.status).trim() });
+    }
+    clean.push({ assignedTo: person.name, items: named });
+  }
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
+  try {
+    return { ok: true, saved: replaceQueues_(date, clean) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Replaces each named person's Assignments rows for `date` with their items,
+ * and leaves everyone else's alone. The caller holds the lock. Returns the
+ * number of rows written.
+ */
+function replaceQueues_(date, queues) {
+  var sh = sheetFor(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
+  var values = sh.getDataRange().getValues();
+  var col = columnsIn_(values[0], ASSIGN_FIELDS, sh.getName());
+  var tz = zoneOf_(sh);
+  var named = {};
+  queues.forEach(function (q) { named[q.assignedTo] = true; });
+
+  for (var r = values.length - 1; r >= 1; r--) {
+    var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
+    if (a.date === date && Object.prototype.hasOwnProperty.call(named, a.assignedTo)) sh.deleteRow(r + 1);
+  }
+  var saved = 0;
+  queues.forEach(function (q) {
+    q.items.forEach(function (it) {
       appendRow(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS, {
-        date:       req.date,
-        assignedTo: req.assignedTo,
+        date:       date,
+        assignedTo: q.assignedTo,
         property:   it.property,
         status:     it.status || 'To post',
         propertyId: it.propertyId || idOf(it.property),
       });
+      saved++;
     });
-    return { ok: true, saved: items.length };
-  } finally {
-    lock.releaseLock();
-  }
+  });
+  return saved;
 }
 
 /** Set one queue item's status directly (the client's UpdateAssignmentAsync). */
@@ -706,7 +1140,8 @@ function setStatus(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    var row = setAssignmentStatus(req.propertyId || idOf(req.property), req.property, req.assignedTo, req.status);
+    var id = req.propertyId || idOf(req.property);
+    var row = setAssignmentStatus(id, req.property, req.assignedTo, req.status);
     if (!row) {
       return {
         ok: false,
@@ -715,10 +1150,46 @@ function setStatus(req, me) {
                  '. Reload the queue: it may have changed.',
       };
     }
+    // Approved in the group: the post itself is live now too, or Records and
+    // the Tracker would go on calling it Pending. Only the assignee's own post,
+    // which for an intern is checked above to be their own.
+    if (textOf_(req.status) === 'Posted') markPostPosted_(id, req.property, req.assignedTo);
     return { ok: true };
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Marks the person's newest Pending post of the property as Posted: by folder
+ * id when both have one, otherwise by name as the app normalises it. Only
+ * the newest, since an older Pending row is an earlier post the group admin
+ * never approved. Its link is kept. Returns its row number, or 0 when there is
+ * none (a queue item marked done by hand, with no post logged, is fine). The
+ * caller holds the lock.
+ */
+function markPostPosted_(propertyId, propertyName, postedBy) {
+  var sh = sheetFor(CONFIG.POSTS_TAB, POST_FIELDS);
+  var values = sh.getDataRange().getValues();
+  if (values.length < 2) return 0;
+  var col = columnsIn_(values[0], POST_FIELDS, sh.getName());
+  var tz = zoneOf_(sh);
+  var key = normalizeName_(propertyName) || null;   // a blank name finds no row by name
+  var who = textOf_(postedBy);
+
+  var best = 0, bestDay = '';
+  for (var r = values.length - 1; r >= 1; r--) {
+    var p = fieldsOf_(values[r], POST_FIELDS, col, tz);
+    if (!sameProperty_(p.propertyId, p.title, propertyId, key)) continue;
+    if (p.postedBy !== who) continue;
+    if (postStatus_(p.status) !== 'Pending') continue;
+    // Newest by date; on a tie, or a date nobody can read, the lower row.
+    var day = sheetDay_(p.date);
+    if (!best || day > bestDay) { best = r; bestDay = day; }
+  }
+  if (!best) return 0;
+  setText_(sh.getRange(best + 1, col.status + 1), 'Posted');
+  return best + 1;
 }
 
 /**
@@ -976,11 +1447,12 @@ function onOpen() {
 
 /**
  * Standalone setup, for when this script is not bound to a spreadsheet (so there
- * is no Post-It menu). Edit the three values, press Run, and read the key from
- * the execution log.
+ * is no Post-It menu). Run it once, with your own name and role Admin, to get
+ * the first admin key: it is printed in the execution log and written on the
+ * Team tab. Add everyone else from the app (Settings > Team).
  */
 function ADD_PERSON() {
-  var name       = 'Jan Dela Cruz';
+  var name       = 'Your Name';
   var role       = 'Admin';           // Admin (assigns postings) | Intern
   var fbAccounts = '';                // comma separated; blank = any
 
@@ -997,6 +1469,13 @@ function SETUP() {
   Logger.log('Directory: %s properties.', properties.length);
   Logger.log('Tracker tab "%s": %s rows.', CONFIG.POSTS_TAB, readRows(CONFIG.POSTS_TAB, POST_FIELDS).length);
   Logger.log('Team: %s people.', teamRows().length);
+  if (!textOf_(CONFIG.CHECKER_INDEX_CSV_URL).trim()) {
+    Logger.log('Checker index: switched off.');
+  } else {
+    var checker = checkerIndex_(true);
+    Logger.log(checker ? 'Checker index: %s listings.' : 'Checker index: could not be read%s.',
+               checker ? Object.keys(checker).length : '');
+  }
   if (!properties.length) {
     Logger.log('The directory is empty — run BuildDirectory.gs before using the app.');
   }

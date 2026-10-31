@@ -1,6 +1,6 @@
 /* The day's queue: one column, worked top to bottom. */
 .queue {
-  --queue-max: 920px;
+  --queue-max: 880px;
 }
 
 .queue .page-header,
@@ -20,6 +20,40 @@
   min-height: 36px;
 }
 
+.queue__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-12);
+}
+
+/* The day in three numbers, on one line. */
+.queue__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.queue__counts .tabular {
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+}
+
+.queue__count--pending .tabular {
+  color: var(--warn-text);
+}
+
+.queue__count--posted .tabular {
+  color: var(--ok-text);
+}
+
 .queue__body {
   display: grid;
   gap: var(--space-10);
@@ -29,68 +63,18 @@
   padding-block: var(--space-12);
 }
 
-/* ---- counts --------------------------------------------------------------- */
+/* ---- next up: the one card that says "this one now" ------------------------ */
 
-.queue__stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-6);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.stat--pending .stat__value {
-  color: var(--warn-text);
-}
-
-.stat--posted .stat__value {
-  color: var(--ok-text);
-}
-
-/* ---- the items -------------------------------------------------------------- */
-
-.queue__list {
-  display: grid;
-  gap: var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.queue-item,
-.queue-item__open {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-4) var(--space-8);
-}
-
-.queue-item {
-  position: relative;
-  min-height: 64px;
-  padding: var(--space-6) var(--space-8);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-row);
-  background: var(--surface);
-}
-
-/* A row that opens its listing is one link, edge to edge. */
-.queue-item--to-post {
-  display: block;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.queue-item__open {
+.next-up__open {
   position: relative;
   isolation: isolate;
-  min-height: 64px;
-  padding: var(--space-6) var(--space-8);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6) var(--space-12);
+  padding: var(--space-10) var(--space-12);
   border: var(--border-width) solid transparent;
-  border-radius: var(--radius-row);
+  border-radius: var(--radius-card);
   background:
     var(--card-bg) padding-box,
     var(--card-edge) border-box;
@@ -98,7 +82,85 @@
   text-decoration: none;
 }
 
-.queue-item__open::before {
+.next-up__open::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--row-hover);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.next-up__open:hover::before {
+  opacity: 1;
+}
+
+.next-up__main {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.next-up__label {
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+.next-up__name {
+  font-family: var(--heading-font);
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+  font-weight: var(--weight-heading);
+  overflow-wrap: anywhere;
+}
+
+/* Looks like a button; the whole card is the link. */
+.queue__go {
+  min-width: 112px;
+  pointer-events: none;
+}
+
+/* ---- the rows ------------------------------------------------------------- */
+
+.queue__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-row);
+  background: var(--surface);
+}
+
+.queue-item {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4) var(--space-10);
+  min-height: 60px;
+  padding: var(--space-5) var(--space-8);
+}
+
+.queue-item + .queue-item {
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
+.queue-item:first-child {
+  border-radius: var(--radius-row) var(--radius-row) 0 0;
+}
+
+.queue-item:last-child {
+  border-radius: 0 0 var(--radius-row) var(--radius-row);
+}
+
+.queue-item--link::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -109,88 +171,54 @@
   transition: opacity var(--dur-fast) var(--ease-out);
 }
 
-.queue-item__open:hover::before {
+.queue-item--link:hover::before {
   opacity: 1;
-}
-
-.queue-item__open:hover .button--ghost::before {
-  opacity: 1;
-}
-
-.queue-item--pending {
-  align-items: start;
-  border-color: var(--warn-edge);
-  background: var(--warn-bg);
-}
-
-.queue-item--posted,
-.queue-item--missing {
-  background: transparent;
-}
-
-.queue-item__mark {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: var(--border-width) solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  color: var(--text-label);
-  font-family: var(--heading-font);
-  font-size: var(--text-meta);
-  line-height: 1;
-  font-weight: var(--weight-heading);
-}
-
-.queue-item__mark--pending {
-  border-color: var(--warn-edge);
-  color: var(--warn-text);
-}
-
-.queue-item__mark--posted {
-  border-color: var(--ok-line);
-  color: var(--ok-strong);
 }
 
 .queue-item__main {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
   min-width: 0;
 }
 
-.queue-item__title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-6);
-}
-
 .queue-item__name {
+  justify-self: start;
+  color: var(--text);
   font-family: var(--heading-font);
   font-size: var(--text-name);
   line-height: var(--lh-name);
   font-weight: var(--weight-label);
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-
-.queue-item__name--link {
-  display: inline-block;
-  min-block-size: 24px; /* WCAG 2.5.8 */
-  border-radius: var(--radius-sm);
   text-decoration: none;
-}
-
-.queue-item__name--link:hover {
-  text-decoration-line: underline;
-  text-decoration-color: var(--border-strong);
+  overflow-wrap: anywhere;
 }
 
 .queue-item--posted .queue-item__name {
   color: var(--text-label);
 }
 
-.queue-item__folder {
+/* The name's link covers the whole row: one click anywhere opens it. */
+.queue-item__stretch {
+  border-radius: var(--radius-sm);
+}
+
+.queue-item__stretch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.queue-item__stretch:focus-visible {
+  outline: none;
+}
+
+.queue-item__stretch:focus-visible::after {
+  outline: var(--focus-ring);
+  outline-offset: -3px;
+  border-radius: var(--radius-row);
+}
+
+.queue-item__category {
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -199,17 +227,35 @@
   line-height: var(--lh-meta);
 }
 
-/* Looks like a button; the whole row is the link. */
-.queue-item__go {
-  pointer-events: none;
+/* Status and the row's own buttons, above the row's link. */
+.queue-item__end {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4) var(--space-6);
+}
+
+.queue-item__end .pill {
+  min-width: 88px;
+  justify-content: center;
+}
+
+.queue-item__error {
+  flex-basis: 100%;
+  color: var(--danger-text);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  text-align: end;
 }
 
 .queue-item__form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
   align-items: end;
-  gap: var(--space-6);
-  margin-top: var(--space-4);
+  gap: var(--space-4);
 }
 
 .queue-item__form .field__error {
@@ -217,27 +263,16 @@
 }
 
 @container shell (width < 900px) {
-  .queue__stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-4);
-  }
-
-  .queue-item,
-  .queue-item__open {
-    grid-template-columns: 32px minmax(0, 1fr);
-  }
-
-  .queue-item__go,
-  .queue-item__view {
-    grid-column: 2;
-    justify-self: start;
-  }
-
-  .queue-item__form {
+  .next-up__open,
+  .queue-item {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .queue-item__form .button {
+  .queue__go {
     justify-self: start;
+  }
+
+  .queue-item__end {
+    justify-content: flex-start;
   }
 }

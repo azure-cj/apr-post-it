@@ -26,10 +26,10 @@ function server(project: Project, fn: string, arg: string): unknown {
 }
 
 describe('what the cooldown counts (bug 3)', () => {
-  it('counts a Pending post: a second intern cannot post a listing still waiting for its link', () => {
+  it('counts a Pending post: a second intern cannot post a listing still waiting for approval', () => {
     const w = createWorld();
 
-    expect(w.logPost('jan', CASA, { postLink: '' })).toMatchObject({ ok: true, status: 'Pending' });
+    expect(w.logPost('jan', CASA, { status: 'Pending' })).toMatchObject({ ok: true, status: 'Pending' });
     expect(w.logPost('ana', CASA)).toMatchObject({
       ok: false,
       error: 'cooldown',
@@ -253,7 +253,7 @@ describe('the server and the app agree', () => {
 
   it('on a post the server itself logged on an earlier day', async () => {
     const w = createWorld({ now: '2026-03-04 21:15' });
-    w.logPost('jan', CASA, { postLink: '' });
+    w.logPost('jan', CASA, { status: 'Pending' });
     w.project.clock.set('2026-03-10 07:30');
 
     const rows = await w.app('maria').tracker.posts();

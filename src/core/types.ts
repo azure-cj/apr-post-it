@@ -43,7 +43,27 @@ export interface Property {
   readonly photoCount: number;
   /** The directory flagged something: no document, no photos, no separator. */
   readonly hasIssues: boolean;
+  /**
+   * The directory's Issues text, as BuildDirectory.gs wrote it ("No document ·
+   * No photos"). Absent from a server that does not send it yet.
+   */
+  readonly issues?: string;
+  // From the listing checker's Index CSV, joined on the folder id (CONTRACT-v3).
+  // All absent when the server has the join turned off.
+  /** "Makati", as the checker has it. */
+  readonly city?: string;
+  /** Size in sqm, as the checker's text: "120", "45.5". */
+  readonly size?: string;
+  /** The checker's Deal type: "Sale", "Lease". */
+  readonly dealType?: string;
+  /** The checker's Status. Blank when the checker has no row for this folder. */
+  readonly availability?: Availability;
+  /** True when the checker's index has this folder at all. */
+  readonly inChecker?: boolean;
 }
+
+/** A listing's Status in the checker's index. Blank: unknown. */
+export type Availability = 'Available' | 'Sold' | '';
 
 export interface Photo {
   readonly id: string;
@@ -148,4 +168,18 @@ export interface TeamMember {
   readonly email?: string | undefined;
   /** False once revoked on the Team tab. Missing means active. */
   readonly active?: boolean | undefined;
+}
+
+/** The `indexCheck` reply: how the Directory sheet and the checker's index disagree. */
+export interface IndexCheck {
+  /** When the server compared them, as it sent it. */
+  readonly checkedAt: string;
+  readonly directoryCount: number;
+  readonly checkerCount: number;
+  /** In the Directory, missing from the checker's index. */
+  readonly directoryOnly: readonly { readonly id: string; readonly name: string }[];
+  /** In the checker's index, missing from the Directory. */
+  readonly checkerOnly: readonly { readonly id: string; readonly name: string; readonly path: string }[];
+  /** In the Directory, and Sold in the checker. */
+  readonly sold: readonly { readonly id: string; readonly name: string }[];
 }

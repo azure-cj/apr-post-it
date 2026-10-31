@@ -1,0 +1,104 @@
+/* One photo, large, over everything. Near-black, so the photo is the only
+   thing lit. */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--viewer-bg);
+  animation: viewer-in var(--dur-enter) var(--ease-out);
+}
+
+@keyframes viewer-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.viewer__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-6) var(--space-8) var(--space-6) var(--space-12);
+}
+
+.viewer__count {
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+.viewer__stage {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  margin: 0;
+  padding: 0 88px var(--space-20);
+  pointer-events: none;
+}
+
+.viewer__img {
+  max-width: 100%;
+  /* The bar above and the gap below are taken out of the window's height. */
+  max-height: calc(100vh - 56px - var(--space-20));
+  border-radius: var(--radius-chip);
+  object-fit: contain;
+  pointer-events: auto;
+}
+
+.viewer__missing {
+  color: var(--text-muted);
+}
+
+.viewer__step {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-top: -28px;
+  border: var(--border-width) solid var(--button-edge);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  isolation: isolate;
+}
+
+.viewer__step::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.viewer__step:hover::before {
+  opacity: 1;
+}
+
+.viewer__step:active {
+  transform: scale(var(--press-scale));
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.viewer__step:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.viewer__step--prev {
+  left: var(--space-8);
+}
+
+.viewer__step--next {
+  right: var(--space-8);
+}

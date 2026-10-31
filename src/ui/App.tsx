@@ -15,7 +15,7 @@ import {
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { BUILT_IN_SCRIPT_URL } from '@/config';
 import { activeInterns, addDays, isDate, peopleIn, samePerson } from '@/core/summary';
-import { canManage, isAdmin, UserFacingError, type User } from '@/core/types';
+import { canManage, isAdmin, UserFacingError, type Role, type User } from '@/core/types';
 import {
   Button,
   Card,
@@ -28,8 +28,9 @@ import {
   type WindowControlsProps,
 } from './components';
 import { SignInScreen } from './screens/SignInScreen';
+import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
-import { AssignScreen, InternsScreen, SettingsScreen, TrackerScreen, type QueueSave } from './screens/manager';
+import { AssignScreen, InternsScreen, RecordsScreen, SettingsScreen, TrackerScreen, type QueueSave } from './screens/manager';
 import type { Platform } from '@/platform';
 import {
   manilaTime,
@@ -73,6 +74,7 @@ export function navFor(user: User): readonly NavDef[] {
       { key: 'tracker', label: 'Tracker', path: paths.tracker, icon: 'tracker' },
       { key: 'assign', label: 'Assign', path: paths.assign, icon: 'assign' },
       { key: 'interns', label: 'Interns', path: paths.interns, icon: 'interns' },
+      { key: 'records', label: 'Records', path: paths.records, icon: 'records' },
       { key: 'find', label: 'Find', path: paths.find, icon: 'search' },
       { key: 'settings', label: 'Settings', path: paths.settings, icon: 'settings' },
     ];
@@ -104,6 +106,7 @@ function titleFor(pathname: string): string | null {
     '/assign': 'Assign',
     '/tracker': 'Tracker',
     '/interns': 'Interns',
+    '/records': 'Records',
     '/settings': 'Settings',
     '/kit': 'UI kit',
   };
@@ -176,6 +179,7 @@ export function AppShell({ signInNote }: AppProps) {
     [platform],
   );
   const windowControls = useWindowControls(platform);
+  const [signInRole, setSignInRole] = useSignInRole(platform);
   const sidebar = useSidebarState(platform);
   const toggleSidebar = sidebar.toggle;
 
@@ -245,14 +249,14 @@ export function AppShell({ signInNote }: AppProps) {
   const { signIn } = app;
   const signingIn = useRef<AbortController | null>(null);
   const handleSignIn = useCallback(
-    async (url: string, key: string) => {
+    async (url: string, key: string, role?: Role) => {
       signingIn.current?.abort();
       const attempt = new AbortController();
       signingIn.current = attempt;
       setSignInError(null);
       setSignInBusy(true);
       try {
-        const signedIn = await signIn(url, key, attempt.signal);
+        const signedIn = await signIn(url, key, attempt.signal, role);
         if (attempt.signal.aborted) return;
         navigate(homeFor(signedIn), { replace: true });
       } catch (e) {
@@ -361,7 +365,9 @@ export function AppShell({ signInNote }: AppProps) {
                     ) : (
                       <>
                         <SignInScreen
-                          onSubmit={(url, key) => void handleSignIn(url, key)}
+                          onSubmit={(url, key, role) => void handleSignIn(url, key, role)}
+                          role={signInRole}
+                          onRoleChange={setSignInRole}
                           onCancel={cancelSignIn}
                           busy={signInBusy}
                           error={signInError}
@@ -380,6 +386,7 @@ export function AppShell({ signInNote }: AppProps) {
                 <Route path={paths.assign} element={guard(<AssignRoute onDirtyChange={setAssignDirty} />, canManage)} />
                 <Route path={paths.tracker} element={guard(<TrackerRoute />, canManage)} />
                 <Route path={paths.interns} element={guard(<InternsRoute />, canManage)} />
+                <Route path={paths.records} element={guard(<RecordsRoute />, canManage)} />
                 <Route path={paths.settings} element={guard(<SettingsRoute />, isAdmin)} />
                 {KitScreen ? (
                   <Route
@@ -779,6 +786,7 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
     (save: QueueSave) => tracker.saveQueue(save.date, save.assignedTo, save.items),
     [tracker],
   );
+  const notify = useNotify();
 
   return (
     <AssignScreen
@@ -797,6 +805,11 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
       loading={rows.loading}
       error={rows.error}
       search={directory.search}
+      onSaveQueues={(day, queues) => tracker.saveQueues(day, queues)}
+      onQueuesSaved={(note) => {
+        rows.assignments.reload();
+        notify(note, 'ok');
+      }}
     />
   );
 }
@@ -873,18 +886,57 @@ function InternsRoute() {
   );
 }
 
+function RecordsRoute() {
+  const app = useApp();
+  const notify = useNotify();
+  const posts = usePosts({ pollMs: 120_000 });
+  const { platform } = app;
+  return (
+    <RecordsScreen
+      posts={posts.data ?? []}
+      today={app.today()}
+      loading={posts.data === null}
+      error={posts.error}
+      onOpenLink={(url) => void platform.open(url)}
+      onExport={(csv, fileName) => {
+        // A browser downloads it; the desktop app has no save dialog, so it goes to the clipboard.
+        if (!platform.hasFileSystem) {
+          const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+          return;
+        }
+        platform.copyText(csv).then(
+          () => notify('CSV copied. Paste it into a spreadsheet.', 'ok'),
+          () => notify("Couldn't copy the CSV. Try again.", 'warn'),
+        );
+      }}
+    />
+  );
+}
+
 function SettingsRoute() {
   const app = useApp();
   const notify = useNotify();
   const { platform } = app;
   const team = useTeam({ maxAgeMs: 60_000 });
+  const me = useUser();
+  const { tracker } = app;
   return (
     <SettingsScreen
       settings={app.settings}
       builtInLink={BUILT_IN_SCRIPT_URL !== ''}
       team={team.data}
+      me={me.name}
       loading={team.loading}
       error={team.data ? null : team.error}
+      onAddPerson={(input) => tracker.addPerson(input)}
+      onSetActive={(name, active) => tracker.setActive(name, active)}
+      onNewKey={(name) => tracker.newKey(name)}
+      onIndexCheck={() => tracker.indexCheck()}
       onCopy={(text) => {
         platform.copyText(text).then(
           () => notify('Copied.', 'ok'),
