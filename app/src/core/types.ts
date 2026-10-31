@@ -138,3 +138,14 @@ export class UserFacingError extends Error {
     this.cause = cause;
   }
 }
+
+/** A row of the Team tab, as the app may see it: never the key. */
+export interface TeamMember {
+  readonly name: string;
+  readonly role: Role;
+  /** Facebook accounts they may post from. Empty or missing means any. */
+  readonly fbAccounts?: readonly string[] | undefined;
+  readonly email?: string | undefined;
+  /** False once revoked on the Team tab. Missing means active. */
+  readonly active?: boolean | undefined;
+}

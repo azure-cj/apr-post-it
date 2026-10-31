@@ -18,6 +18,7 @@
 
 import { asList, asRecord, asText, unreadableReply, type Backend } from './backend';
 import {
+  type TeamMember,
   UserFacingError,
   type Assignment,
   type AssignmentStatus,
@@ -57,6 +58,12 @@ export interface QueueItemInput {
 export interface Tracker {
   /** Every Posts row you may see, in sheet order (oldest first). An intern gets only their own. */
   posts(): Promise<readonly PostLogEntry[]>;
+
+  /**
+   * The Team tab, without keys: Admin only (server action `team`). Revoked
+   * people included, with `active: false`. TODO(agent A): implement + tests.
+   */
+  team(): Promise<readonly TeamMember[]>;
 
   /** Every Assignments row you may see, in sheet order: within a queue, that is posting order. */
   assignments(): Promise<readonly Assignment[]>;
@@ -110,6 +117,10 @@ export function createTracker(deps: TrackerDeps): Tracker {
   }
 
   return {
+    async team(): Promise<readonly TeamMember[]> {
+      throw new Error('team(): not implemented yet');
+    },
+
     async posts(): Promise<readonly PostLogEntry[]> {
       const reply = await backend.call('posts');
       const rows = asList(reply['posts']);

@@ -1,7 +1,7 @@
 import { createBackend, type Backend } from '@/core/backend';
 import { createDirectory, type Directory } from '@/core/directory';
 import { createTracker, type Tracker } from '@/core/tracker';
-import { canManage, type Assignment, type PostLogEntry, type PropertyDetail, type User } from '@/core/types';
+import { canManage, type Assignment, type PostLogEntry, type PropertyDetail, type TeamMember, type User } from '@/core/types';
 import type { Platform } from '@/platform';
 import { createRemote, sentenceOf, type RemoteResource } from './remote';
 import type { AppSettings } from './settings';
@@ -40,6 +40,8 @@ export interface Services {
   readonly posts: RemoteResource<readonly PostLogEntry[]>;
   /** The Assignments rows you may see. Shared for a few seconds. */
   readonly assignments: RemoteResource<readonly Assignment[]>;
+  /** The Team tab (Admin only): names, roles, FB accounts, active. Never keys. */
+  readonly team: RemoteResource<readonly TeamMember[]>;
   readonly find: Store<FindState>;
   /** Where each listing's photos were saved this session, by property id: for Open folder. */
   readonly savedFolders: Store<ReadonlyMap<string, string>>;
@@ -65,6 +67,7 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
 
   const posts = createRemote(() => raw.posts(), now);
   const assignments = createRemote(() => raw.assignments(), now);
+  const team = createRemote(() => raw.team(), now);
 
   /**
    * After a write, or an attempt at one: what was read before may no longer
@@ -88,6 +91,7 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
 
   const tracker: Tracker = {
     posts: () => raw.posts(),
+    team: () => raw.team(),
     assignments: () => raw.assignments(),
     logPost: (input) => writing(() => raw.logPost(input)),
     addLink: (post, link) => writing(() => raw.addLink(post, link)),
@@ -117,6 +121,7 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
     directoryStatus,
     posts,
     assignments,
+    team,
     find,
     savedFolders,
     refreshDirectory,

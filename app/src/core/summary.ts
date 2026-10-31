@@ -230,15 +230,8 @@ function holderOf(holders: Holders, property: Pick<Property, 'id' | 'name'>): As
 // ------------------------------------------------------------------ the day
 
 /** A person on the Team tab, as an admin may see them. Never the key. */
-export interface TeamMember {
-  readonly name: string;
-  readonly role: Role;
-  /** Facebook accounts they may post from. Empty or missing means any. */
-  readonly fbAccounts?: readonly string[] | undefined;
-  readonly email?: string | undefined;
-  /** False once revoked on the Team tab. Missing means active. */
-  readonly active?: boolean | undefined;
-}
+import type { TeamMember } from './types';
+export type { TeamMember };
 
 /** One person's queue on the day. */
 export interface InternProgress {
