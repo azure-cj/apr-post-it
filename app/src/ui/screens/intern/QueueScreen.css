@@ -1,0 +1,241 @@
+/* The day's queue: one column, worked top to bottom. */
+.queue {
+  --queue-max: 920px;
+}
+
+.queue .page-header,
+.queue__body,
+.queue__loading {
+  max-width: var(--queue-max);
+}
+
+.queue__title-row {
+  justify-content: space-between;
+}
+
+.queue__freshness {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 36px;
+}
+
+.queue__body {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.queue__loading {
+  padding-block: var(--space-12);
+}
+
+/* ---- counts --------------------------------------------------------------- */
+
+.queue__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stat--pending .stat__value {
+  color: var(--warn-text);
+}
+
+.stat--posted .stat__value {
+  color: var(--ok-text);
+}
+
+/* ---- the items -------------------------------------------------------------- */
+
+.queue__list {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue-item,
+.queue-item__open {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4) var(--space-8);
+}
+
+.queue-item {
+  position: relative;
+  min-height: 64px;
+  padding: var(--space-6) var(--space-8);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-row);
+  background: var(--surface);
+}
+
+/* A row that opens its listing is one link, edge to edge. */
+.queue-item--to-post {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.queue-item__open {
+  position: relative;
+  isolation: isolate;
+  min-height: 64px;
+  padding: var(--space-6) var(--space-8);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-row);
+  background:
+    var(--card-bg) padding-box,
+    var(--card-edge) border-box;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.queue-item__open::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.queue-item__open:hover::before {
+  opacity: 1;
+}
+
+.queue-item__open:hover .button--ghost::before {
+  opacity: 1;
+}
+
+.queue-item--pending {
+  align-items: start;
+  border-color: var(--warn-edge);
+  background: var(--warn-bg);
+}
+
+.queue-item--posted,
+.queue-item--missing {
+  background: transparent;
+}
+
+.queue-item__mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: 1;
+  font-weight: var(--weight-heading);
+}
+
+.queue-item__mark--pending {
+  border-color: var(--warn-edge);
+  color: var(--warn-text);
+}
+
+.queue-item__mark--posted {
+  border-color: var(--ok-line);
+  color: var(--ok-strong);
+}
+
+.queue-item__main {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.queue-item__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+}
+
+.queue-item__name {
+  font-family: var(--heading-font);
+  font-size: var(--text-name);
+  line-height: var(--lh-name);
+  font-weight: var(--weight-label);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.queue-item__name--link {
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+
+.queue-item__name--link:hover {
+  text-decoration-line: underline;
+  text-decoration-color: var(--border-strong);
+}
+
+.queue-item--posted .queue-item__name {
+  color: var(--text-label);
+}
+
+.queue-item__folder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+/* Looks like a button; the whole row is the link. */
+.queue-item__go {
+  pointer-events: none;
+}
+
+.queue-item__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+}
+
+.queue-item__form .field__error {
+  grid-column: 1 / -1;
+}
+
+@container shell (width < 900px) {
+  .queue__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+
+  .queue-item,
+  .queue-item__open {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .queue-item__go,
+  .queue-item__view {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .queue-item__form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .queue-item__form .button {
+    justify-self: start;
+  }
+}

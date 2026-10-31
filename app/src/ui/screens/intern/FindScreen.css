@@ -1,0 +1,178 @@
+/* Find: one column, as wide as a line can be read in one sweep. Name on
+   the left, what to know about it on the right. */
+.find {
+  --find-max: 920px;
+}
+
+.find .page-header,
+.find__controls,
+.find__results {
+  max-width: var(--find-max);
+}
+
+.find__title-row {
+  justify-content: space-between;
+}
+
+.find__freshness {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 36px;
+}
+
+.find__controls {
+  display: grid;
+  gap: var(--space-6);
+  margin-bottom: var(--space-12);
+}
+
+.find__hint {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.find__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.find__results {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.find__loading {
+  padding-block: var(--space-12);
+}
+
+.find__count {
+  padding-inline: var(--space-8);
+}
+
+.find__more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-8) 0;
+}
+
+/* ---- the results ---------------------------------------------------------- */
+
+.results {
+  margin: 0;
+  padding: var(--space-3);
+  list-style: none;
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--card-bg) padding-box,
+    var(--card-edge) border-box;
+}
+
+.results__item + .results__item {
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
+.result {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4) var(--space-10);
+  min-height: 64px;
+  padding: var(--space-5) var(--space-8);
+  border-radius: var(--radius-row);
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* Hover is a wash that fades in: only opacity animates. */
+.result::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.result:hover::before {
+  opacity: 1;
+}
+
+.result:focus-visible {
+  outline-offset: -2px;
+}
+
+.result:focus-visible::before {
+  opacity: 1;
+}
+
+.result__main {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.result__name {
+  font-family: var(--heading-font);
+  font-size: var(--text-name);
+  line-height: var(--lh-name);
+  font-weight: var(--weight-label);
+  overflow-wrap: anywhere;
+}
+
+.result__folder {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.result__side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4) var(--space-8);
+}
+
+.result__photos {
+  min-width: 7ch;
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.result__photos--none {
+  color: var(--text-muted);
+}
+
+/* Narrow: what to know about it goes under the name. */
+@container shell (width < 900px) {
+  .result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .result__side {
+    justify-content: flex-start;
+  }
+
+  .result__photos {
+    min-width: 0;
+    text-align: start;
+  }
+}

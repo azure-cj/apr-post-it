@@ -1,0 +1,131 @@
+/* Shared by the intern screens. Every value comes from tokens.css. The
+   breakpoints mirror --bp-compact and --bp-stack, measured on the shell
+   container, so 150% text size moves a screen to its narrower layout. */
+
+/* ---- a screen with a side pane ------------------------------------------ */
+
+.two-pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--pane-regular);
+  gap: var(--gap-regular);
+  align-items: start;
+}
+
+.two-pane__main,
+.two-pane__side {
+  display: grid;
+  align-content: start;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+@container shell (width < 1100px) {
+  .two-pane {
+    grid-template-columns: minmax(0, 1fr) var(--pane-compact);
+    gap: var(--gap-compact);
+  }
+}
+
+@container shell (width < 900px) {
+  .two-pane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- the way back -------------------------------------------------------- */
+
+.back-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-start: calc(var(--space-2) * -1);
+  padding-inline-end: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--text);
+  text-decoration-line: underline;
+  text-decoration-color: var(--border-strong);
+}
+
+/* ---- headings and quiet lines -------------------------------------------- */
+
+.section-title {
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+}
+
+.meta {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+/* A wait, in words, beside a small spinner. */
+.waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--text-muted);
+}
+
+/* A key to press. */
+.key {
+  display: inline-block;
+  min-width: 24px;
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-label);
+  font-family: var(--body-font);
+  font-size: var(--text-caption);
+  line-height: 20px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ---- numbers that are the information ------------------------------------ */
+
+.stat {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-row);
+  background: var(--surface);
+}
+
+.stat__value {
+  font-family: var(--heading-font);
+  font-size: var(--text-heading);
+  line-height: var(--lh-heading);
+  font-weight: var(--weight-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat__label {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}

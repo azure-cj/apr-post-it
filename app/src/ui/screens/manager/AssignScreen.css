@@ -1,0 +1,537 @@
+/* ---- who and when ---------------------------------------------------------- */
+
+.assign__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-8) var(--space-20);
+  margin-bottom: var(--space-12);
+}
+
+.assign__control {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.assign__label {
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+.assign__interns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.assign__notice {
+  margin-bottom: var(--space-12);
+}
+
+.assign__notice p + p {
+  margin-top: var(--space-2);
+}
+
+.assign__notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-4);
+}
+
+/* ---- two panes: adding on the left, the queue in the side pane ------------- */
+
+.assign__panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--pane-regular);
+  gap: var(--gap-regular);
+  align-items: start;
+}
+
+/* Mirrors --bp-compact and --bp-stack: container queries can't read tokens. */
+@container shell (width < 1100px) {
+  .assign__panes {
+    grid-template-columns: minmax(0, 1fr) var(--pane-compact);
+    gap: var(--gap-compact);
+  }
+}
+
+@container shell (width < 900px) {
+  .assign__panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Stacked, the queue comes first: it is what is being built. */
+  .assign__queue {
+    order: -1;
+  }
+}
+
+.assign__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.assign__waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-12) 0;
+  color: var(--text-muted);
+}
+
+.assign__quiet {
+  color: var(--text-muted);
+}
+
+.assign__empty {
+  padding: var(--space-6) var(--space-2);
+}
+
+.assign__empty:focus {
+  outline: none;
+}
+
+.assign__count {
+  min-height: var(--lh-caption);
+  margin: var(--space-6) 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.assign__hint {
+  margin-top: var(--space-8);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.assign-meta {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+/* An Add that has been done: still focusable, so focus doesn't drop, and it
+   says so in words and with a tick. */
+.button.assign-added {
+  border-color: var(--border-soft);
+  color: var(--ok-text);
+  cursor: default;
+}
+
+.button.assign-added::before {
+  opacity: 0;
+}
+
+.button.assign-added:active {
+  transform: none;
+}
+
+/* ---- search results ---------------------------------------------------------- */
+
+.assign-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assign-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-6) 0;
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+
+.assign-result:last-child {
+  border-bottom: 0;
+}
+
+.assign-result__name {
+  color: var(--text);
+  font-size: var(--text-name);
+  line-height: var(--lh-name);
+  font-weight: var(--weight-heading);
+  overflow-wrap: anywhere;
+}
+
+.assign-result--blocked .assign-result__name {
+  color: var(--text-label);
+}
+
+.assign-result__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+  margin-top: var(--space-2);
+}
+
+.assign-result__reason {
+  margin-top: var(--space-2);
+  color: var(--danger-text);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+/* ---- paste a list ------------------------------------------------------------ */
+
+.assign-paste {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.field__input.assign-paste__input {
+  height: auto;
+  min-height: 152px;
+  padding-block: var(--space-5);
+  resize: vertical;
+}
+
+.assign-paste__run {
+  display: flex;
+}
+
+.assign-matches {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.assign-matches__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-8);
+}
+
+.assign-matches__head .assign__count {
+  margin: 0;
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.assign-matches__note {
+  color: var(--ok-text);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.assign-matches__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assign-match {
+  --match-accent: var(--ok-strong);
+
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-6);
+  padding: var(--space-5) 0;
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+
+.assign-match:last-child {
+  border-bottom: 0;
+}
+
+.assign-match--warn {
+  --match-accent: var(--warn-text);
+}
+
+.assign-match--fail {
+  --match-accent: var(--danger-strong);
+}
+
+.assign-match__icon {
+  margin-top: 2px;
+  color: var(--match-accent);
+}
+
+.assign-match__body {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.assign-match__line {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.assign-match__name {
+  font-weight: var(--weight-heading);
+}
+
+.assign-match__detail {
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.assign-match__reason {
+  color: var(--danger-text);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.assign-match__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+}
+
+.assign-match__action {
+  align-self: center;
+}
+
+/* ---- the queue ----------------------------------------------------------------- */
+
+.assign-queue {
+  position: relative;
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A slot in a recessed well: something you can pick up and move. */
+.queue-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-3) var(--space-4) var(--space-1);
+  border: var(--border-width) solid var(--border-soft);
+  border-radius: var(--radius-row);
+  background: var(--inset);
+  animation: rise-in var(--dur-enter) var(--ease-out) both;
+}
+
+.queue-row--dragging {
+  opacity: 0.45;
+}
+
+/* Where a dragged row will land: a cream line between rows, never gold. */
+.queue-row--drop-before::before,
+.queue-row--drop-after::after {
+  content: "";
+  position: absolute;
+  inset-inline: var(--space-4);
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--text-label);
+  pointer-events: none;
+}
+
+.queue-row--drop-before::before {
+  top: calc(var(--space-3) * -1);
+}
+
+.queue-row--drop-after::after {
+  bottom: calc(var(--space-3) * -1);
+}
+
+.queue-row__handle {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  color: var(--placeholder);
+  cursor: grab;
+}
+
+.queue-row__handle:hover {
+  color: var(--text-muted);
+}
+
+.queue-row__handle:active {
+  cursor: grabbing;
+}
+
+.queue-row__number {
+  min-width: 1.5em;
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-heading);
+  text-align: center;
+}
+
+.queue-row__body {
+  min-width: 0;
+}
+
+.queue-row__name {
+  color: var(--text);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  font-weight: var(--weight-heading);
+  overflow-wrap: anywhere;
+}
+
+.queue-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-1);
+}
+
+/* In a narrow pane a category name wraps rather than running under the arrows. */
+.queue-row .category-tag {
+  white-space: normal;
+}
+
+/* A listing that can't go out as it is: warn, never blocking on its own. */
+.assign-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  color: var(--warn-text);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.assign-warning__icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* Up and down, stacked: two 24px targets in the height of the row. */
+.queue-row__move {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.queue-row__arrow,
+.queue-row__remove {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.queue-row__arrow {
+  width: 28px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+}
+
+.queue-row__remove {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-chip);
+}
+
+/* Hover is an overlay that fades in. */
+.queue-row__arrow::before,
+.queue-row__remove::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.queue-row__arrow:hover,
+.queue-row__remove:hover {
+  color: var(--text);
+}
+
+.queue-row__arrow:hover::before,
+.queue-row__remove:hover::before {
+  opacity: 1;
+}
+
+.queue-row__remove:hover {
+  color: var(--danger-text);
+}
+
+/* At the top or the bottom already: there, but plainly not doing anything. */
+.queue-row__arrow[aria-disabled="true"] {
+  color: var(--zero-text);
+  cursor: default;
+}
+
+.queue-row__arrow[aria-disabled="true"]::before {
+  opacity: 0;
+}
+
+.queue-row__kept {
+  width: 32px;
+}
+
+/* ---- the save bar: stays at the bottom of the window while the page scrolls -- */
+
+.assign-savebar {
+  position: sticky;
+  bottom: var(--space-6);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6) var(--space-12);
+  margin-top: var(--space-12);
+  padding: var(--space-5) var(--space-5) var(--space-5) var(--space-10);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(var(--surface-raised), var(--surface-raised)) padding-box,
+    var(--card-edge) border-box;
+}
+
+.assign-savebar__state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  color: var(--text-label);
+}
+
+.assign-savebar__icon {
+  flex: none;
+}
+
+.assign-savebar__icon--ok {
+  color: var(--ok-strong);
+}
+
+.assign-savebar__icon--warn {
+  color: var(--warn-text);
+}
+
+.assign-savebar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-inline-start: auto;
+}

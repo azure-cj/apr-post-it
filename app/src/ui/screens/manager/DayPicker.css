@@ -1,0 +1,42 @@
+.day-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-8);
+}
+
+.day-picker__stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Square, so the arrow sits in the middle and the target is 36 x 36. */
+.day-picker__step {
+  width: 36px;
+  padding: 0;
+  gap: 0;
+}
+
+.day-picker__step .button__icon {
+  margin: 0;
+}
+
+/* Wide enough for the longest date ("Wed 30 Sep 2026"), so the arrows
+   don't move as the day changes. */
+.day-picker__date {
+  min-width: 9.6em;
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  font-weight: var(--weight-heading);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.day-picker__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}

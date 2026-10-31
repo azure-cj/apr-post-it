@@ -3,36 +3,28 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useId,
+  useLayoutEffect,
   useRef,
   useState,
   type MouseEvent,
   type ReactElement,
 } from 'react';
-import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { canManage, isAdmin, UserFacingError, type User } from '@/core/types';
-import { Spinner, ToastRegion, TopBar, useToasts, type TopBarNavItem } from './components';
+import { Button, Card, Notice, Spinner, TopBar, type TopBarNavItem } from './components';
 import { PlaceholderScreen } from './screens/PlaceholderScreen';
 import { SignInScreen } from './screens/SignInScreen';
+import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
+import { paths, sectionOf, useApp, useStore, type NavKey } from './state';
 import './App.css';
 
-/** Every screen's path. Screens link with these, never with string literals. */
-export const paths = {
-  signIn: '/sign-in',
-  find: '/find',
-  property: (id: string) => `/property/${encodeURIComponent(id)}`,
-  logPost: (id: string) => `/property/${encodeURIComponent(id)}/log`,
-  queue: '/queue',
-  assign: '/assign',
-  tracker: '/tracker',
-  settings: '/settings',
-} as const;
+export { paths } from './state';
 
 /** Where a person lands after signing in: an intern's queue, a manager's tracker. */
 export function homeFor(user: User): string {
   return canManage(user) ? paths.tracker : paths.queue;
 }
-
-type NavKey = 'queue' | 'find' | 'tracker' | 'assign' | 'settings';
 
 interface NavDef {
   readonly key: NavKey;
@@ -68,16 +60,13 @@ const navKeys: readonly NavKey[] = ['queue', 'find', 'tracker', 'assign', 'setti
  */
 function navKeyFor(pathname: string, state: unknown): NavKey | null {
   const first = pathname.split('/')[1] ?? '';
-  if (first === 'property') {
-    const from = (state as { section?: unknown } | null)?.section;
-    return navKeys.includes(from as NavKey) ? (from as NavKey) : 'find';
-  }
+  if (first === 'property') return sectionOf(state);
   return navKeys.includes(first as NavKey) ? (first as NavKey) : null;
 }
 
-function titleFor(pathname: string): string {
-  if (/^\/property\/[^/]+\/log/.test(pathname)) return 'Log a post';
-  if (pathname.startsWith('/property/')) return 'Property';
+/** The window's name for a screen. A property and its log page name themselves after the listing. */
+function titleFor(pathname: string): string | null {
+  if (pathname.startsWith('/property/')) return null;
   const titles: Record<string, string> = {
     '/sign-in': 'Sign in',
     '/find': 'Find a property',
@@ -94,18 +83,8 @@ function titleFor(pathname: string): string {
 const KitScreen = import.meta.env.DEV ? lazy(() => import('./screens/KitScreen')) : null;
 
 export interface AppProps {
-  /**
-   * Asks the web app who a key belongs to. Wired to core/backend in step 2;
-   * until then, signing in says it isn't connected. A UserFacingError's
-   * message is shown as it is; anything else is a connection problem.
-   */
-  readonly signIn?: ((url: string, key: string) => Promise<User>) | undefined;
-  /** Signed in from the start, when the OS already holds a key. */
-  readonly initialUser?: User | null | undefined;
-  /** The web app link from last time. */
-  readonly initialUrl?: string | undefined;
-  /** After signing out: forget the key. */
-  readonly onSignOut?: (() => void) | undefined;
+  /** On the demo platform in a browser: the sign-in screen says which keys it answers to. */
+  readonly demo?: boolean | undefined;
 }
 
 /** React Router v7's behaviour, adopted now. Tests pass the same to their routers. */
@@ -114,6 +93,7 @@ export const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: tr
 /**
  * The window: the top bar, the screen, and toasts. A hash router, because a
  * desktop app has no server to answer a deep link: `#/queue` survives a reload.
+ * Needs an <AppStateProvider> above it.
  */
 export function App(props: AppProps) {
   return (
@@ -124,19 +104,22 @@ export function App(props: AppProps) {
 }
 
 /** The app inside whatever router the caller provides: tests use a MemoryRouter. */
-export function AppShell({ signIn, initialUser = null, initialUrl, onSignOut }: AppProps) {
-  const [user, setUser] = useState<User | null>(initialUser);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const toasts = useToasts();
+export function AppShell({ demo = false }: AppProps) {
+  const app = useApp();
+  const { session, user } = app;
+  const [signInBusy, setSignInBusy] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const lastPath = useRef(location.pathname);
+  const queueCount = useQueueCount(user);
 
   // Name the window after the screen.
   useEffect(() => {
-    document.title = `${titleFor(location.pathname)} · APG Post-It`;
+    const title = titleFor(location.pathname);
+    if (title) document.title = `${title} · APG Post-It`;
   }, [location.pathname]);
 
   // After moving to another screen: back to the top, and a screen reader
@@ -152,43 +135,43 @@ export function AppShell({ signIn, initialUser = null, initialUrl, onSignOut }: 
     (main.querySelector<HTMLElement>('h1[tabindex="-1"]') ?? main).focus({ preventScroll: true });
   }, [location.pathname]);
 
+  const { signIn } = app;
   const handleSignIn = useCallback(
     async (url: string, key: string) => {
-      setError(null);
-      if (!signIn) {
-        setError("Sign-in isn't connected to the web app yet. It arrives in step 2.");
-        return;
-      }
-      setBusy(true);
+      setSignInError(null);
+      setSignInBusy(true);
       try {
         const signedIn = await signIn(url, key);
-        setUser(signedIn);
         navigate(homeFor(signedIn), { replace: true });
       } catch (e) {
-        setError(
+        setSignInError(
           e instanceof UserFacingError
             ? e.message
             : "Couldn't reach the web app. Check the link and your connection, then try again.",
         );
       } finally {
-        setBusy(false);
+        setSignInBusy(false);
       }
     },
     [signIn, navigate],
   );
 
-  const handleSignOut = useCallback(() => {
-    setUser(null);
-    setError(null);
-    onSignOut?.();
+  const { signOut } = app;
+  const confirmSignOut = useCallback(async () => {
+    await signOut();
+    setConfirmingSignOut(false);
+    setSignInError(null);
     navigate(paths.signIn, { replace: true });
-  }, [navigate, onSignOut]);
+  }, [signOut, navigate]);
 
   const nav = user ? navFor(user) : [];
   const topBarNav: TopBarNavItem[] = nav.map((item) => ({
     key: item.key,
     label: item.label,
     href: `#${item.path}`,
+    ...(item.key === 'queue' && queueCount > 0
+      ? { count: queueCount, countLabel: `${queueCount} left in your queue today` }
+      : {}),
   }));
 
   const skipToContent = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -205,6 +188,8 @@ export function AppShell({ signIn, initialUser = null, initialUrl, onSignOut }: 
 
   const home = user ? <Navigate to={homeFor(user)} replace /> : <Navigate to={paths.signIn} replace />;
 
+  const settled = session.status === 'signed-in' || session.status === 'signed-out';
+
   return (
     <>
       <a className="skip-link" href="#main" onClick={skipToContent}>
@@ -220,122 +205,260 @@ export function AppShell({ signIn, initialUser = null, initialUrl, onSignOut }: 
             const target = nav.find((n) => n.key === key);
             if (target) navigate(target.path);
           }}
-          onSignOut={user ? handleSignOut : undefined}
+          onSignOut={user ? () => setConfirmingSignOut(true) : undefined}
         />
 
-        <main id="main" ref={mainRef} className="shell__main" tabIndex={-1}>
-          <Routes>
-            <Route
-              path={paths.signIn}
-              element={
-                user ? (
-                  <Navigate to={homeFor(user)} replace />
-                ) : (
-                  <SignInScreen onSubmit={handleSignIn} busy={busy} error={error} initialUrl={initialUrl} />
-                )
-              }
-            />
-            <Route
-              path={paths.find}
-              element={guard(
-                <PlaceholderScreen
-                  title="Find a property"
-                  description="Search every listing in the library by name, and narrow it by category. Open one to copy its public text and download its photos."
-                  step={3}
-                  arrives="Instant search over the cached directory, category filters, and the property page."
-                />,
-              )}
-            />
-            <Route path="/property/:id" element={guard(<PropertyPlaceholder />)} />
-            <Route path="/property/:id/log" element={guard(<LogPostPlaceholder />)} />
-            <Route
-              path={paths.queue}
-              element={guard(
-                <PlaceholderScreen
-                  title="My queue"
-                  description="Today's listings in the order your manager set. A pending post stays at the top until it has its live link."
-                  step={6}
-                  arrives="The day's queue, its counts, and adding the live link to a pending post."
-                />,
-              )}
-            />
-            <Route
-              path={paths.assign}
-              element={guard(
-                <PlaceholderScreen
-                  title="Assign"
-                  description="Build each intern's queue for the day: search and add, or paste a typed list. A listing in its cooldown, or already in someone's queue, can't be added."
-                  step={7}
-                  arrives="Building, reordering and saving a queue, with typo suggestions for pasted lists."
-                />,
-                canManage,
-              )}
-            />
-            <Route
-              path={paths.tracker}
-              element={guard(
-                <PlaceholderScreen
-                  title="Tracker"
-                  description="The day at a glance: posted today, pending, who's done, what's due for a repost and what has never been posted."
-                  step={7}
-                  arrives="The day's numbers for the whole team, and doc health from the directory."
-                />,
-                canManage,
-              )}
-            />
-            <Route
-              path={paths.settings}
-              element={guard(
-                <PlaceholderScreen
-                  title="Settings"
-                  description="The web app link, the cooldown, and the team with their keys."
-                  step={8}
-                  arrives="Settings, the team and their keys, and updates."
-                />,
-                isAdmin,
-              )}
-            />
-            {KitScreen ? (
+        <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
+          {session.status === 'starting' ? (
+            <Opening>Opening Post-It…</Opening>
+          ) : session.status === 'resuming' ? (
+            <Opening>Checking your key with the web app…</Opening>
+          ) : session.status === 'resume-failed' ? (
+            <ResumeFailed error={session.error} onRetry={app.retrySignIn} onSignIn={app.showSignIn} />
+          ) : (
+            <Routes>
               <Route
-                path="/kit"
+                path={paths.signIn}
                 element={
-                  <Suspense fallback={<Spinner label="Loading the UI kit" className="shell__loading" />}>
-                    <KitScreen />
-                  </Suspense>
+                  user ? (
+                    <Navigate to={homeFor(user)} replace />
+                  ) : (
+                    <>
+                      <SignInScreen
+                        onSubmit={(url, key) => void handleSignIn(url, key)}
+                        busy={signInBusy}
+                        error={signInError}
+                        initialUrl={app.settings.scriptUrl}
+                      />
+                      {demo ? <DemoNote /> : null}
+                    </>
+                  )
                 }
               />
-            ) : null}
-            <Route path="/" element={home} />
-            <Route path="*" element={home} />
-          </Routes>
+              <Route path={paths.find} element={guard(<FindScreen />)} />
+              <Route path="/property/:id" element={guard(<PropertyScreen />)} />
+              <Route path="/property/:id/log" element={guard(<LogPostScreen />)} />
+              <Route path={paths.queue} element={guard(<QueueScreen />)} />
+              <Route
+                path={paths.assign}
+                element={guard(
+                  <PlaceholderScreen
+                    title="Assign"
+                    description="Build each intern's queue for the day: search and add, or paste a typed list. A listing in its cooldown, or already in someone's queue, can't be added."
+                    step={7}
+                    arrives="Building, reordering and saving a queue, with typo suggestions for pasted lists."
+                  />,
+                  canManage,
+                )}
+              />
+              <Route
+                path={paths.tracker}
+                element={guard(
+                  <PlaceholderScreen
+                    title="Tracker"
+                    description="The day at a glance: posted today, pending, who's done, what's due for a repost and what has never been posted."
+                    step={7}
+                    arrives="The day's numbers for the whole team, and doc health from the directory."
+                  />,
+                  canManage,
+                )}
+              />
+              <Route
+                path={paths.settings}
+                element={guard(
+                  <PlaceholderScreen
+                    title="Settings"
+                    description="The web app link, the cooldown, and the team with their keys."
+                    step={8}
+                    arrives="Settings, the team and their keys, and updates."
+                  />,
+                  isAdmin,
+                )}
+              />
+              {KitScreen ? (
+                <Route
+                  path="/kit"
+                  element={
+                    <Suspense fallback={<Spinner label="Loading the UI kit" className="shell__loading" />}>
+                      <KitScreen />
+                    </Suspense>
+                  }
+                />
+              ) : null}
+              <Route path="/" element={home} />
+              <Route path="*" element={home} />
+            </Routes>
+          )}
         </main>
       </div>
 
-      <ToastRegion toasts={toasts.toasts} onDismiss={toasts.dismiss} />
+      {confirmingSignOut ? (
+        <SignOutDialog onCancel={() => setConfirmingSignOut(false)} onConfirm={confirmSignOut} />
+      ) : null}
     </>
   );
 }
 
-function PropertyPlaceholder() {
-  const { id = '' } = useParams();
+/**
+ * How much of an intern's queue is left today, for the count beside My queue.
+ * Read on sign-in and every two minutes; the queue screen reads it more often
+ * while it is up, and every save reads it again.
+ */
+function useQueueCount(user: User | null): number {
+  const app = useApp();
+  const { assignments } = app;
+  const snapshot = useStore(assignments.store);
+  const intern = user !== null && !canManage(user);
+
+  useEffect(() => {
+    if (!intern) return undefined;
+    void assignments.refresh(60_000);
+    const timer = setInterval(() => void assignments.refresh(), 120_000);
+    return () => clearInterval(timer);
+  }, [intern, assignments]);
+
+  if (!intern || !snapshot.data) return 0;
+  const today = app.today();
+  return snapshot.data.filter((a) => a.date === today && a.assignedTo === user.name && a.status !== 'Posted').length;
+}
+
+/** A wait before anything can be shown, said in words. */
+function Opening({ children }: { readonly children: string }) {
   return (
-    <PlaceholderScreen
-      title="Property"
-      description={`Listing ${id}: the public text with its one Copy button, the pre-post checks, and the photos.`}
-      step={3}
-      arrives="The public text, the checks that can block Copy, and the photo grid. Downloads follow in step 4."
-    />
+    <div className="opening">
+      <Spinner label={children} />
+      <p className="opening__text" aria-hidden="true">
+        {children}
+      </p>
+    </div>
   );
 }
 
-function LogPostPlaceholder() {
-  const { id = '' } = useParams();
+/** The kept key could not be checked: say why, and offer the two ways on. */
+function ResumeFailed({
+  error,
+  onRetry,
+  onSignIn,
+}: {
+  readonly error: string;
+  readonly onRetry: () => void;
+  readonly onSignIn: () => void;
+}) {
   return (
-    <PlaceholderScreen
-      title="Log a post"
-      description={`Listing ${id}: choose the FB account and paste the post link. The date, time, type and title are filled in for you.`}
-      step={5}
-      arrives="The two fields, the link check, and the cooldown's refusal with the next allowed date."
-    />
+    <div className="resume">
+      <Card className="resume__card">
+        <h1 className="resume__title" tabIndex={-1}>
+          Couldn't sign you in
+        </h1>
+        <Notice tone="danger" live className="resume__error">
+          {error}
+        </Notice>
+        <p className="resume__help">
+          Your key is still saved on this computer, so trying again needs nothing typed. Sign in again only if your
+          manager gave you a new key.
+        </p>
+        <div className="resume__actions">
+          <Button variant="primary" onClick={onRetry}>
+            Try again
+          </Button>
+          <Button onClick={onSignIn}>Sign in with a key</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function DemoNote() {
+  return (
+    <div className="demo-note">
+      <Notice tone="info" title="Demo data, in the browser">
+        Sign in with the key <code>intern</code>, <code>paolo</code> (an intern with no FB accounts listed),{' '}
+        <code>manager</code> or <code>admin</code>.
+      </Notice>
+    </div>
+  );
+}
+
+/**
+ * Sign out, asked first: it takes the key off this computer, and signing in
+ * again needs it pasted. Focus starts on staying, so Enter or Escape keeps you
+ * signed in.
+ */
+function SignOutDialog({ onCancel, onConfirm }: { readonly onCancel: () => void; readonly onConfirm: () => Promise<void> }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const stayRef = useRef<HTMLButtonElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const titleId = useId();
+  const bodyId = useId();
+
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return undefined;
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Modal where the WebView supports it (the rest of the window goes inert);
+    // simply open where it doesn't, as in tests.
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+    stayRef.current?.focus();
+    return () => {
+      if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+      // Back where you were, if it is still there.
+      if (before?.isConnected) before.focus();
+    };
+  }, []);
+
+  const confirm = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm();
+    } catch (err) {
+      setError(err instanceof UserFacingError ? err.message : "Post-It couldn't remove your key. Try again.");
+      setBusy(false);
+    }
+  };
+
+  const cancel = () => {
+    if (!busy) onCancel();
+  };
+
+  return (
+    <dialog
+      ref={ref}
+      className="confirm"
+      aria-labelledby={titleId}
+      aria-describedby={bodyId}
+      onCancel={(event) => {
+        event.preventDefault();
+        cancel();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          cancel();
+        }
+      }}
+    >
+      <h2 id={titleId} className="confirm__title">
+        Sign out of Post-It?
+      </h2>
+      <p id={bodyId} className="confirm__body">
+        Post-It will forget your key on this computer. To sign in again you'll need the key your manager gave you.
+      </p>
+      {error ? (
+        <Notice tone="danger" live>
+          {error}
+        </Notice>
+      ) : null}
+      <div className="confirm__actions">
+        <Button ref={stayRef} onClick={cancel} disabled={busy}>
+          Stay signed in
+        </Button>
+        <Button variant="primary" busy={busy} onClick={() => void confirm()}>
+          {busy ? 'Signing out…' : 'Sign out'}
+        </Button>
+      </div>
+    </dialog>
   );
 }

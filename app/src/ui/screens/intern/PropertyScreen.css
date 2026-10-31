@@ -1,0 +1,359 @@
+/* A listing. The main column follows the job in order: copy the text, save
+   the photos, log the post. The side pane answers "may I post this?". */
+
+.property > .back-link {
+  margin-bottom: var(--space-6);
+}
+
+.property__header {
+  margin-bottom: var(--space-10);
+}
+
+.property__folder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* ---- the public text: one clearly bounded box ---------------------------- */
+
+.post-text,
+.photos,
+.next-step {
+  display: grid;
+  gap: var(--space-8);
+  min-width: 0;
+  padding: var(--space-12);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--card-bg) padding-box,
+    var(--card-edge) border-box;
+}
+
+.post-text__head,
+.photos__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6) var(--space-10);
+}
+
+.post-text__heading {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.post-text__copy {
+  min-width: 132px;
+}
+
+.post-text__status {
+  min-height: var(--lh-body);
+}
+
+.post-text__status p {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.post-text__status svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.post-text__blocked {
+  color: var(--danger-text);
+}
+
+.post-text__ok,
+.post-text__done {
+  color: var(--ok-text);
+}
+
+/* The words themselves, in a recessed well. Its edge carries the state too:
+   green when it may be copied, red when it may not. */
+.post-text__body {
+  min-height: 120px;
+  padding: var(--space-10) var(--space-12);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-row);
+  background: var(--input-bg);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.post-text--ready .post-text__body {
+  border-color: var(--ok-line);
+}
+
+/* Blocked: not selectable either, so it can't be copied by hand. */
+.post-text__body--blocked {
+  border-color: var(--danger-line);
+  color: var(--text-label);
+  user-select: none;
+}
+
+.post-text__body--loading {
+  display: grid;
+  align-content: start;
+  gap: var(--space-6);
+}
+
+.post-text__line {
+  display: block;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--neutral-bg);
+}
+
+.post-text__line--short {
+  width: 55%;
+}
+
+.post-text__source,
+.post-text__empty {
+  margin-top: calc(var(--space-4) * -1);
+}
+
+/* ---- the internal section: managers only, folded under a warning ---------- */
+
+.internal {
+  border: var(--border-width) solid var(--warn-edge);
+  border-radius: var(--radius-row);
+  background: var(--warn-bg);
+}
+
+.internal__summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 56px;
+  padding: var(--space-5) var(--space-8);
+  border-radius: inherit;
+  cursor: pointer;
+  list-style: none;
+}
+
+.internal__summary::-webkit-details-marker {
+  display: none;
+}
+
+.internal__icon {
+  color: var(--warn-text);
+}
+
+.internal__label {
+  display: grid;
+  min-width: 0;
+}
+
+.internal__title {
+  color: var(--warn-text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+}
+
+.internal__toggle {
+  padding: var(--space-2) var(--space-6);
+  border: var(--border-width) solid var(--button-edge);
+  border-radius: var(--radius-chip);
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-heading);
+}
+
+.internal[open] .internal__show,
+.internal:not([open]) .internal__hide {
+  display: none;
+}
+
+.internal__body {
+  display: grid;
+  gap: var(--space-6);
+  padding: 0 var(--space-8) var(--space-8);
+}
+
+.internal__cut {
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+  color: var(--text);
+}
+
+.internal__text {
+  padding: var(--space-8) var(--space-10);
+  border-radius: var(--radius-row);
+  background: var(--inset);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- photos ------------------------------------------------------------- */
+
+.photos__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.photos__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photos__item {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-chip);
+  background: var(--surface-raised);
+}
+
+.photos__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photos__tile {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  text-align: center;
+}
+
+/* ---- the next step ------------------------------------------------------ */
+
+.next-step {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding-block: var(--space-10);
+}
+
+.next-step__title {
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@container shell (width < 900px) {
+  .next-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .next-step .button {
+    justify-self: start;
+  }
+}
+
+/* ---- the side pane ---------------------------------------------------------- */
+
+.verdict {
+  --verdict-bg: var(--neutral-bg);
+  --verdict-line: var(--border);
+  --verdict-text: var(--text);
+
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-12);
+  border: var(--border-width) solid var(--verdict-line);
+  border-radius: var(--radius-verdict);
+  background: var(--verdict-bg);
+}
+
+.verdict--ok {
+  --verdict-bg: var(--ok-bg);
+  --verdict-line: var(--ok-line);
+  --verdict-text: var(--ok-text);
+}
+
+.verdict--danger {
+  --verdict-bg: var(--danger-bg);
+  --verdict-line: var(--danger-line);
+  --verdict-text: var(--danger-text);
+}
+
+.verdict__word {
+  color: var(--verdict-text);
+  font-family: var(--heading-font);
+  font-size: var(--text-verdict);
+  line-height: var(--lh-verdict);
+  font-weight: var(--weight-heading);
+}
+
+.verdict__line {
+  color: var(--text-label);
+}
+
+.cooldown {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.cooldown__line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.cooldown__ok {
+  flex: none;
+  margin-top: 3px;
+  color: var(--ok-strong);
+}
+
+.cooldown__history {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cooldown__post {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+  padding-block: var(--space-4);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.cooldown__post + .cooldown__post {
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
+.cooldown__who {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.issues {
+  margin: 0;
+  padding-inline-start: var(--space-10);
+}

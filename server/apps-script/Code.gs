@@ -1,9 +1,14 @@
 /**
  * APG Post-It — Google Drive + Sheets backend.
  *
- * A single Apps Script web app that the Windows client talks to over HTTPS.
+ * A single Apps Script web app that the desktop app talks to over HTTPS.
  * The script runs as the owner, so interns never need Drive access and never
  * receive the internal section of a posting doc.
+ *
+ * It shares one Apps Script project with Separators.gs, which it requires, and
+ * BuildDirectory.gs. Apps Script gives every file in a project one global
+ * scope: a top-level name declared in two of them breaks the project or
+ * silently replaces the other. app/src/server-tests loads them the same way.
  *
  * Deploy: see README.md next to this file.
  */
@@ -112,7 +117,7 @@ function identify(key) {
 
   if (!team.length) {
     // Nothing set up yet: CONFIG.SHARED_KEY is a temporary admin key so you can
-    // reindex and add the first people. It stops working once Team has a row.
+    // add the first people. It stops working once Team has a row.
     return (CONFIG.SHARED_KEY && key === CONFIG.SHARED_KEY)
       ? { name: 'Setup', email: '', role: 'Admin', fbAccounts: [], canSeeInternal: true }
       : null;
@@ -125,7 +130,8 @@ function identify(key) {
 
   var role = ROLES.indexOf(row.Role) === -1 ? 'Intern' : row.Role;
   return {
-    name: row.Name,
+    // Text, as every tracker value is (readRows): Posted By is matched with ===.
+    name: textOf_(row.Name),
     email: row.Email,
     role: role,
     fbAccounts: String(row['FB Accounts'] || '').split(',').map(function (x) { return x.trim(); }).filter(String),
@@ -157,7 +163,11 @@ function mine(me, rows, column) {
 /** Admin helper: add a person and hand back their key. */
 function addTeamMember(name, email, role, fbAccounts) {
   var key = Utilities.getUuid().replace(/-/g, '');
-  plainTab('Team', TEAM_HEADERS).appendRow([name, email || '', role || 'Intern', key, fbAccounts || '', true]);
+  // As text, like every row this script writes (D7): a key of digits would
+  // otherwise come back a number, and a name beginning "=" would be a formula.
+  appendText_(plainTab('Team', TEAM_HEADERS),
+              [name, email || '', role || 'Intern', key, fbAccounts || '', 'TRUE'].map(textOf_),
+              [0, 1, 2, 3, 4, 5]);
   CacheService.getScriptCache().remove('team');
   return key;
 }
@@ -201,20 +211,14 @@ function directoryRows() {
   if (!sh) {
     throw new Error('No "' + CONFIG.DIRECTORY_TAB + '" tab. Run BuildDirectory.gs first.');
   }
-  if (sh.getLastRow() < 2) return [];
-
-  var col = columnsOf(sh, DIRECTORY_FIELDS);
   var values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
 
+  var col = columnsIn_(values[0], DIRECTORY_FIELDS, sh.getName());
+  var tz = zoneOf_(sh);
   var out = values.slice(1)
     .filter(function (r) { return r[col.id]; })
-    .map(function (r) {
-      var o = {};
-      Object.keys(DIRECTORY_FIELDS).forEach(function (f) {
-        o[f] = col[f] === -1 ? '' : r[col[f]];
-      });
-      return o;
-    });
+    .map(function (r) { return fieldsOf_(r, DIRECTORY_FIELDS, col, tz); });
 
   try { cache.put('dir', JSON.stringify(out), 60); } catch (e) { /* too big to cache */ }
   return out;
@@ -264,6 +268,10 @@ function listProperties() {
  * internal half is never put in the reply at all.
  */
 function getProperty(id, includeInternal) {
+  // First, and outside the try below: without the one splitter every live
+  // re-read would fail and quietly fall back to the sheet's copy.
+  requireSeparators_();
+
   var row = directoryRows().filter(function (r) { return r.id === id; })[0];
   if (!row) throw new Error('property not found: ' + id);
 
@@ -322,13 +330,23 @@ function getProperty(id, includeInternal) {
     // True when the text was withheld because nobody has separated it yet, so
     // the screen can say why it is empty rather than look broken.
     withheld: !separated && !includeInternal,
-    cutAt: cutAt,
+    // A heading's label quotes the heading ("heading: Commission: 3%"), which
+    // is the internal section's first line. An intern is told the kind only.
+    cutAt: includeInternal ? cutAt : cutAt.split(':')[0],
     issues: row.issues,
     live: live,
     photos: photos,
   };
   if (includeInternal) out.internalText = internalText;
   return out;
+}
+
+/** Separators.gs must be in this project: it is where the postable text ends (D13). */
+function requireSeparators_() {
+  if (typeof splitAtSeparator_ !== 'function') {
+    throw new Error('Separators.gs is missing from this Apps Script project. It decides where a ' +
+                    'listing\'s postable text ends: add it beside Code.gs and deploy again.');
+  }
 }
 
 function readDoc(fileId, mimeType) {
@@ -393,18 +411,22 @@ function logPost(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
   try {
-    var guard = cooldownFor(req.propertyId, req.property);
+    // One reading of the clock for the check and the row, so the two cannot
+    // fall either side of midnight.
+    var when = new Date();
+    var guard = cooldownFor(req.propertyId, req.property, when);
     if (guard) return guard;
 
     var link = String(req.postLink || '').trim();
     var status = link ? 'Posted' : 'Pending';
-    var when = new Date();
+    var date = Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd');
+    var time = Utilities.formatDate(when, CONFIG.TZ, 'HH:mm');
 
     appendRow(CONFIG.POSTS_TAB, POST_FIELDS, {
-      date:       Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd'),
+      date:       date,
       type:       req.type || 'Group post',
       title:      req.property,
-      time:       Utilities.formatDate(when, CONFIG.TZ, 'HH:mm'),
+      time:       time,
       status:     status,
       fbAccount:  req.fbAccount,
       postLink:   link,
@@ -412,34 +434,54 @@ function logPost(req, me) {
       propertyId: req.propertyId,
     });
     setAssignmentStatus(req.propertyId, req.property, postedBy, status);
-    return { ok: true, status: status, date: Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd'), postedBy: postedBy };
+    // The row as written. The app shows these, never its own clock or user.
+    return { ok: true, status: status, date: date, time: time, postedBy: postedBy };
   } finally {
     lock.releaseLock();
   }
 }
 
-/** Returns a refusal object when the property is inside its cooldown, else null. */
-function cooldownFor(propertyId, propertyName) {
-  var last = null;
+/**
+ * Returns a refusal object when the property is inside its cooldown, else null.
+ *
+ * The app applies the same rule before it asks (app/src/core/cooldown.ts), and
+ * the two must agree:
+ *
+ * - Every row counts, Pending as much as Posted: a post still waiting for its
+ *   link must stop a second intern posting the same listing. The app reads any
+ *   status but Pending as Posted, so no row is left out there either.
+ * - A row is the property's when the folder ids agree, if both have one, so a
+ *   renamed folder keeps its history; otherwise when the names agree as the
+ *   app's matcher normalises them.
+ * - Days are calendar days in Manila. Counting 24-hour spans from UTC midnight
+ *   refused until 08:00 on the day the app said posting was allowed again.
+ * - A date the app cannot read is skipped, as the app skips it.
+ */
+function cooldownFor(propertyId, propertyName, when) {
+  var key = normalizeName_(propertyName);
+  var latest = '';
   readRows(CONFIG.POSTS_TAB, POST_FIELDS).forEach(function (p) {
-    var same = p.propertyId ? p.propertyId === propertyId : p.title === propertyName;
-    if (!same || p.status !== 'Posted') return;
-    var d = new Date(p.date);
-    if (!isNaN(d) && (!last || d > last)) last = d;
+    if (!sameProperty_(p.propertyId, p.title, propertyId, key)) return;
+    var day = sheetDay_(p.date);
+    if (day && day > latest) latest = day;
   });
-  if (!last) return null;
+  if (!latest) return null;
 
-  var days = Math.floor((Date.now() - last.getTime()) / 86400000);
-  if (days >= CONFIG.COOLDOWN_DAYS) return null;
+  var last = dayNumber_(latest);
+  var today = dayNumber_(Utilities.formatDate(when || new Date(), CONFIG.TZ, 'yyyy-MM-dd'));
+  // A row dated after today, from a skewed clock, counts as posted today.
+  var daysAgo = Math.max(0, today - last);
+  if (daysAgo >= CONFIG.COOLDOWN_DAYS) return null;
 
-  var next = new Date(last.getTime() + CONFIG.COOLDOWN_DAYS * 86400000);
+  var next = last + CONFIG.COOLDOWN_DAYS;
   return {
     ok: false,
     error: 'cooldown',
-    lastPosted:  Utilities.formatDate(last, CONFIG.TZ, 'yyyy-MM-dd'),
-    nextAllowed: Utilities.formatDate(next, CONFIG.TZ, 'yyyy-MM-dd'),
-    message: 'Posted ' + days + ' day(s) ago. Next allowed ' +
-             Utilities.formatDate(next, CONFIG.TZ, 'MMM d') + '.',
+    lastPosted:  latest,
+    nextAllowed: isoDay_(next),
+    // The app's own sentence for the same refusal (cooldown.ts).
+    message: 'Posted ' + ago_(daysAgo) + ' (' + dayMonth_(last) + '). The cooldown is ' +
+             days_(CONFIG.COOLDOWN_DAYS) + ' \u{2014} it can be posted again on ' + fullDate_(next) + '.',
   };
 }
 
@@ -451,24 +493,25 @@ function addLink(req, me) {
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
     var sh = sheetFor(CONFIG.POSTS_TAB, POST_FIELDS);
-    var col = columnsOf(sh, POST_FIELDS);
     var values = sh.getDataRange().getValues();
+    var col = columnsIn_(values[0], POST_FIELDS, sh.getName());
+    var tz = zoneOf_(sh);
 
-    // Match on the folder id when the sheet carries one, otherwise on the name.
+    // By folder id when both the row and the request have one, otherwise by
+    // name: rows logged before the PropertyId column was added have no id.
     var name = req.property || nameOf(req.propertyId);
     var id = req.propertyId || idOf(name);
+    var key = normalizeName_(name) || null;   // a blank name finds no row by name
 
     for (var r = values.length - 1; r >= 1; r--) {
-      var isOurs = col.propertyId !== -1 && id
-        ? values[r][col.propertyId] === id
-        : String(values[r][col.title]).trim() === String(name).trim();
-      if (!isOurs) continue;
-      if (values[r][col.status] !== 'Pending') continue;
-      if (me.role === 'Intern' && values[r][col.postedBy] !== me.name) continue;  // not yours
+      var p = fieldsOf_(values[r], POST_FIELDS, col, tz);
+      if (!sameProperty_(p.propertyId, p.title, id, key)) continue;
+      if (postStatus_(p.status) !== 'Pending') continue;
+      if (me.role === 'Intern' && p.postedBy !== me.name) continue;  // not yours
 
-      sh.getRange(r + 1, col.status + 1).setValue('Posted');
-      sh.getRange(r + 1, col.postLink + 1).setValue(req.postLink);
-      setAssignmentStatus(id, name, values[r][col.postedBy], 'Posted');
+      setText_(sh.getRange(r + 1, col.status + 1), 'Posted');
+      setText_(sh.getRange(r + 1, col.postLink + 1), String(req.postLink).trim());
+      setAssignmentStatus(id, name, p.postedBy, 'Posted');
       return { ok: true, row: r + 1 };
     }
     return { ok: false, error: 'notfound', message: 'No pending post for that property.' };
@@ -476,6 +519,122 @@ function addLink(req, me) {
     lock.releaseLock();
   }
 }
+
+// ---------------------------------------------------------------- which property a row is
+//
+// The app decides these the same way (cooldown.ts, matcher.ts, tracker.ts),
+// and the tests in app/src/server-tests hold the two to agreeing.
+
+const NAME_ABBREVIATIONS = { blk: 'block', lt: 'lot', ph: 'phase', bldg: 'building' };
+
+/**
+ * Whether a tracker row is about the property: by folder id when both have
+ * one, so a renamed folder keeps its history; otherwise by name. `key` is the
+ * property's name already normalised.
+ */
+function sameProperty_(rowId, rowTitle, id, key) {
+  var a = textOf_(rowId).trim();
+  var b = textOf_(id).trim();
+  if (a && b) return a === b;
+  return normalizeName_(rowTitle) === key;
+}
+
+/**
+ * "Sunrise Homes Blk. 3, Lt 9" -> "sunrise homes block 3 lot 9": case, accents,
+ * punctuation and "&" do not matter, and the usual abbreviations are spelled
+ * out. matcher.ts's normalize, character for character.
+ */
+function normalizeName_(name) {
+  var text = textOf_(name).toLowerCase()
+    .normalize('NFD').replace(/(?=[\0-\u{FFFF}])\p{Mn}/gu, '').normalize('NFC')
+    .split('&').join(' and ')
+    .replace(/['\u{2019}]/gu, '');
+  return text
+    .replace(/[^\p{L}\p{Nd}]|[\u{10000}-\u{10FFFF}]/gu, ' ')
+    .split(' ')
+    .filter(function (token) { return token !== ''; })
+    .map(function (token) {
+      return Object.prototype.hasOwnProperty.call(NAME_ABBREVIATIONS, token) ? NAME_ABBREVIATIONS[token] : token;
+    })
+    .join(' ');
+}
+
+/** A Posts row's status as the app reads it (tracker.ts): Pending, or else Posted. */
+function postStatus_(value) {
+  return textOf_(value).trim().toLowerCase() === 'pending' ? 'Pending' : 'Posted';
+}
+
+// ---------------------------------------------------------------- the tracker's dates
+//
+// Read as the app reads them (tracker.ts readSheetDate): yyyy-MM-dd, an ISO
+// timestamp, or M/d/yyyy, which is what a date typed into a plain-text cell
+// stays as. Days are counted as whole calendar days, by Date.UTC, so no clock
+// but Manila's is involved.
+
+const TRACKER_DAY      = /^(\d{4})-(\d{2})-(\d{2})$/;
+const TRACKER_STAMP    = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/i;
+const TRACKER_US_DAY   = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[\sT,].*)?$/;
+const TRACKER_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const TRACKER_MONTHS   = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAY_MS = 86400000;
+
+/** A tracker date as yyyy-MM-dd, or '' when it is not one. */
+function sheetDay_(value) {
+  var text = textOf_(value).trim();
+
+  var m = TRACKER_DAY.exec(text);
+  if (m) return calendarDay_(+m[1], +m[2], +m[3]);
+
+  m = TRACKER_STAMP.exec(text);
+  if (m) {
+    var y = +m[1], mo = +m[2], d = +m[3], h = +m[4], mi = +m[5], s = +(m[6] || 0);
+    if (!calendarDay_(y, mo, d) || h > 23 || mi > 59 || s > 59) return '';
+    if (!m[7]) return calendarDay_(y, mo, d);   // no zone: the clock as written
+    var offset = 0;
+    if (m[7].toUpperCase() !== 'Z') {
+      var digits = m[7].replace(':', '');
+      offset = (digits.charAt(0) === '-' ? -1 : 1) * (Number(digits.slice(1, 3)) * 60 + Number(digits.slice(3, 5)));
+    }
+    var instant = new Date(Date.UTC(y, mo - 1, d, h, mi, s) - offset * 60000);
+    return Utilities.formatDate(instant, CONFIG.TZ, 'yyyy-MM-dd');
+  }
+
+  m = TRACKER_US_DAY.exec(text);
+  if (m) return calendarDay_(+m[3], +m[1], +m[2]);
+  return '';
+}
+
+/** yyyy-MM-dd for a real calendar day, '' for 2026-02-30 and friends. */
+function calendarDay_(year, month, day) {
+  if (year < 1000 || month < 1 || month > 12 || day < 1 || day > 31) return '';
+  var d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return '';
+  return year + '-' + pad2_(month) + '-' + pad2_(day);
+}
+
+/** Whole days since 1970 for a yyyy-MM-dd. */
+function dayNumber_(iso) {
+  return Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / DAY_MS;
+}
+
+function isoDay_(day) { return new Date(day * DAY_MS).toISOString().slice(0, 10); }
+
+/** "9 Mar" */
+function dayMonth_(day) {
+  var d = new Date(day * DAY_MS);
+  return d.getUTCDate() + ' ' + TRACKER_MONTHS[d.getUTCMonth()];
+}
+
+/** "Mon 9 Mar 2026" */
+function fullDate_(day) {
+  var d = new Date(day * DAY_MS);
+  return TRACKER_WEEKDAYS[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + TRACKER_MONTHS[d.getUTCMonth()] + ' ' +
+         d.getUTCFullYear();
+}
+
+function days_(n) { return n === 1 ? '1 day' : n + ' days'; }
+function ago_(n) { return n === 0 ? 'today' : days_(n) + ' ago'; }
+function pad2_(n) { return n < 10 ? '0' + n : String(n); }
 
 // ---------------------------------------------------------------- queues
 
@@ -488,14 +647,14 @@ function saveQueue(req, me) {
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
     var sh = sheetFor(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
-    var col = columnsOf(sh, ASSIGN_FIELDS);
     var values = sh.getDataRange().getValues();
+    var col = columnsIn_(values[0], ASSIGN_FIELDS, sh.getName());
+    var tz = zoneOf_(sh);
 
     // Replace this person's rows for this date, leave everyone else's alone.
     for (var r = values.length - 1; r >= 1; r--) {
-      var d = values[r][col.date];
-      var same = (d instanceof Date ? Utilities.formatDate(d, CONFIG.TZ, 'yyyy-MM-dd') : String(d));
-      if (same === String(req.date) && values[r][col.assignedTo] === req.assignedTo) sh.deleteRow(r + 1);
+      var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
+      if (a.date === String(req.date) && a.assignedTo === String(req.assignedTo)) sh.deleteRow(r + 1);
     }
     items.forEach(function (it) {
       appendRow(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS, {
@@ -521,28 +680,43 @@ function setStatus(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    setAssignmentStatus(req.propertyId || idOf(req.property), req.property, req.assignedTo, req.status);
+    var row = setAssignmentStatus(req.propertyId || idOf(req.property), req.property, req.assignedTo, req.status);
+    if (!row) {
+      return {
+        ok: false,
+        error: 'notfound',
+        message: 'There is no open queue item for ' + req.property + ' assigned to ' + req.assignedTo +
+                 '. Reload the queue: it may have changed.',
+      };
+    }
     return { ok: true };
   } finally {
     lock.releaseLock();
   }
 }
 
+/**
+ * Moves the person's open queue item for the property to `status`: the lowest
+ * such row, and never one already Posted. Returns its row number, or 0 when
+ * there is none.
+ */
 function setAssignmentStatus(propertyId, propertyName, assignedTo, status) {
   var sh = sheetFor(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
-  var col = columnsOf(sh, ASSIGN_FIELDS);
   var values = sh.getDataRange().getValues();
+  if (values.length < 2) return 0;
+  var col = columnsIn_(values[0], ASSIGN_FIELDS, sh.getName());
+  var tz = zoneOf_(sh);
+  var key = normalizeName_(propertyName) || null;   // a blank name finds no row by name
+
   for (var r = values.length - 1; r >= 1; r--) {
-    var isOurs = col.propertyId !== -1
-      ? values[r][col.propertyId] === propertyId
-      : String(values[r][col.property]).trim() === String(propertyName).trim();
-    if (isOurs &&
-        values[r][col.assignedTo] === assignedTo &&
-        values[r][col.status] !== 'Posted') {
-      sh.getRange(r + 1, col.status + 1).setValue(status);
-      return;
-    }
+    var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
+    if (!sameProperty_(a.propertyId, a.property, propertyId, key)) continue;
+    if (a.assignedTo !== textOf_(assignedTo)) continue;
+    if (a.status.trim().toLowerCase() === 'posted') continue;
+    setText_(sh.getRange(r + 1, col.status + 1), status);
+    return r + 1;
   }
+  return 0;
 }
 
 // ---------------------------------------------------------------- sheets
@@ -551,6 +725,14 @@ function setAssignmentStatus(propertyId, propertyName, assignedTo, status) {
 // a live business document. So nothing here writes by position: every field is
 // located by matching the header row against a list of accepted spellings. A
 // column the sheet does not have is simply skipped, unless it is required.
+//
+// The header row is read with the rows, never cached: a column moved in the
+// tracker must not send the next write into the wrong column.
+//
+// Everything written is written as plain text (D7). A value written to a cell
+// Sheets formats automatically is read as if it were typed: "14:30" becomes a
+// time, "1201" a number and "=..." a formula. Everything read comes back as
+// text, the way the app reads it.
 
 const POST_FIELDS = {
   date:       { headers: ['Date'], required: true },
@@ -572,10 +754,14 @@ const ASSIGN_FIELDS = {
   propertyId: { headers: ['PropertyId', 'Property Id', 'Folder Id'] },
 };
 
+// Sheets' day zero. A time of day is stored as a date on it.
+const SHEETS_DAY_ZERO = '1899-12-30';
+
 function book() {
-  return CONFIG.TRACKER_SHEET_ID
-    ? SpreadsheetApp.openById(CONFIG.TRACKER_SHEET_ID)
-    : SpreadsheetApp.getActiveSpreadsheet();
+  if (CONFIG.TRACKER_SHEET_ID) return SpreadsheetApp.openById(CONFIG.TRACKER_SHEET_ID);
+  var bound = SpreadsheetApp.getActiveSpreadsheet();
+  if (!bound) throw new Error('CONFIG.TRACKER_SHEET_ID is not set, and this script is not bound to the tracker.');
+  return bound;
 }
 
 /** Where the script's own tabs live — private, because Team holds the keys. */
@@ -598,19 +784,18 @@ function sheetFor(name, fields) {
 
 /** Logical field name -> 0-based column index, from the sheet's own header row. */
 function columnsOf(sh, fields) {
-  var cacheKey = 'cols:' + sh.getSheetId();
-  var cache = CacheService.getScriptCache();
-  var hit = cache.get(cacheKey);
-  if (hit) return JSON.parse(hit);
+  var header = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0];
+  return columnsIn_(header, fields, sh.getName());
+}
 
-  var header = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0]
-                 .map(function (h) { return String(h).trim().toLowerCase(); });
-
+/** The same, from a header row already read. */
+function columnsIn_(header, fields, tabName) {
+  var names = header.map(function (h) { return String(h).trim().toLowerCase(); });
   var col = {}, missing = [];
   Object.keys(fields).forEach(function (f) {
     var idx = -1;
     fields[f].headers.some(function (h) {
-      idx = header.indexOf(h.toLowerCase());
+      idx = names.indexOf(h.toLowerCase());
       return idx !== -1;
     });
     if (idx === -1 && fields[f].required) missing.push(fields[f].headers[0]);
@@ -618,40 +803,93 @@ function columnsOf(sh, fields) {
   });
 
   if (missing.length) {
-    throw new Error('Tab "' + sh.getName() + '" has no column for: ' + missing.join(', ') +
-                    '. Add it, or add an accepted spelling to POST_FIELDS/ASSIGN_FIELDS.');
+    throw new Error('Tab "' + tabName + '" has no column for: ' + missing.join(', ') +
+                    '. Add it, or add an accepted spelling to its field list in Code.gs.');
   }
-  try { cache.put(cacheKey, JSON.stringify(col), 300); } catch (e) { /* ignore */ }
   return col;
 }
 
-/** Rows as objects keyed by logical field name. */
+/** Rows as objects keyed by logical field name, every value text. */
 function readRows(name, fields) {
   var sh = sheetFor(name, fields);
-  if (sh.getLastRow() < 2) return [];
-  var col = columnsOf(sh, fields);
   var values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
+  var col = columnsIn_(values[0], fields, sh.getName());
+  var tz = zoneOf_(sh);
 
-  return values.slice(1).filter(function (r) { return r.join(''); }).map(function (r) {
-    var o = {};
-    Object.keys(fields).forEach(function (f) {
-      var v = col[f] === -1 ? '' : r[col[f]];
-      o[f] = v instanceof Date ? Utilities.formatDate(v, CONFIG.TZ, 'yyyy-MM-dd') : v;
-    });
-    return o;
+  return values.slice(1)
+    .filter(function (r) { return r.join(''); })
+    .map(function (r) { return fieldsOf_(r, fields, col, tz); });
+}
+
+/** One row of getValues() as an object keyed by logical field name. */
+function fieldsOf_(r, fields, col, tz) {
+  var o = {};
+  Object.keys(fields).forEach(function (f) {
+    o[f] = col[f] === -1 ? '' : cellText_(r[col[f]], tz, f);
   });
+  return o;
+}
+
+/**
+ * A cell as text. A folder named "1201", written before the cell was plain
+ * text, is a number to Sheets, and the app cannot match a number. A date is
+ * yyyy-MM-dd and a time HH:mm, on the sheet's own clock, which is the one it
+ * was typed on. A time of day is a date on Sheets' day zero: that is what
+ * "14:30" became in a cell that was not plain text, and read as a date it came
+ * back as "1899-12-30", the time lost.
+ */
+function cellText_(value, tz, field) {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return '';
+    var timeOfDay = field === 'time' || Utilities.formatDate(value, tz, 'yyyy-MM-dd') === SHEETS_DAY_ZERO;
+    return Utilities.formatDate(value, tz, timeOfDay ? 'HH:mm' : 'yyyy-MM-dd');
+  }
+  if (value === true || value === false) return value ? 'TRUE' : 'FALSE';
+  return String(value);
+}
+
+/** The time zone a sheet's dates were typed in. */
+function zoneOf_(sh) {
+  return sh.getParent().getSpreadsheetTimeZone() || CONFIG.TZ;
+}
+
+function textOf_(value) {
+  return value === null || value === undefined ? '' : String(value);
 }
 
 /** Append, placing each value in whichever column the sheet keeps it in. */
 function appendRow(name, fields, values) {
   var sh = sheetFor(name, fields);
   var col = columnsOf(sh, fields);
-  var width = Math.max(sh.getLastColumn(), 1);
-  var row = new Array(width).fill('');
+  var row = new Array(Math.max(sh.getLastColumn(), 1)).fill('');
+  var filled = [];
   Object.keys(values).forEach(function (f) {
-    if (col[f] !== undefined && col[f] !== -1) row[col[f]] = values[f];
+    if (col[f] === undefined || col[f] === -1) return;
+    row[col[f]] = textOf_(values[f]);
+    filled.push(col[f]);
   });
-  sh.appendRow(row);
+  appendText_(sh, row, filled);
+}
+
+/**
+ * Writes `row` below the last row, with the cells in `columns` (0-based) made
+ * plain text first. Only those: a column the script does not fill keeps
+ * whatever format the tracker gives it. Not appendRow(), which cannot format
+ * the row before it writes it.
+ */
+function appendText_(sh, row, columns) {
+  var r = sh.getLastRow() + 1;
+  if (r > sh.getMaxRows()) sh.insertRowAfter(sh.getMaxRows());
+  columns.forEach(function (c) { sh.getRange(r, c + 1).setNumberFormat('@'); });
+  sh.getRange(r, 1, 1, row.length).setValues([row]);
+}
+
+/** Writes one cell as plain text. */
+function setText_(range, value) {
+  range.setNumberFormat('@');
+  range.setValue(textOf_(value));
 }
 
 /** The Team tab, read plainly — this one is ours, so its columns are known. */
@@ -727,6 +965,8 @@ function ADD_PERSON() {
 
 /** Check that everything this script depends on is reachable. */
 function SETUP() {
+  requireSeparators_();
+  Logger.log('Separators.gs: present.');
   var properties = listProperties();
   Logger.log('Directory: %s properties.', properties.length);
   Logger.log('Tracker tab "%s": %s rows.', CONFIG.POSTS_TAB, readRows(CONFIG.POSTS_TAB, POST_FIELDS).length);
@@ -745,4 +985,3 @@ function promptAddTeamMember() {
   var key = addTeamMember(name, '', role, fb);
   ui.alert('Key for ' + name + ':\n\n' + key + '\n\nPaste it into their copy of Post-It. It is on the Team tab if you need it again.');
 }
-

@@ -1,0 +1,435 @@
+.tracker__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-8) var(--space-12);
+}
+
+.tracker__heading {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.tracker__day {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-8);
+}
+
+.tracker__updated {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.tracker__notice {
+  margin-bottom: var(--space-12);
+}
+
+.tracker__waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-24) 0;
+  color: var(--text-muted);
+}
+
+.tracker__quiet,
+.tracker__muted {
+  color: var(--text-muted);
+}
+
+/* A link that is a name in a list: reads as the name, acts as a link. */
+.button--link.tracker__open {
+  font-weight: var(--weight-heading);
+  text-align: start;
+  white-space: normal;
+}
+
+/* ---- the numbers --------------------------------------------------------- */
+
+.tracker-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  gap: var(--space-8);
+  margin: 0 0 var(--space-12);
+}
+
+.tracker-stat {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+}
+
+.tracker-stat dd {
+  margin: 0;
+}
+
+/* The number on top; the label first for anyone reading it out. */
+.tracker-stat__value {
+  order: -1;
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-verdict);
+  line-height: var(--lh-verdict);
+  font-weight: var(--weight-heading);
+}
+
+/* Zero is information too: shown plainly, in the muted colour that still
+   reads at 9:1, never in --zero-text (DESIGN.md §11.2). */
+.tracker-stat__value--zero {
+  color: var(--text-muted);
+}
+
+.tracker-stat__of {
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  font-weight: var(--weight-label);
+}
+
+.tracker-stat__label {
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.tracker-stat__note {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+/* ---- two panes: the main column and the side pane, twice ----------------- */
+
+.tracker__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--pane-regular);
+  gap: var(--gap-regular);
+  align-items: start;
+}
+
+.tracker__row + .tracker__row {
+  margin-top: var(--gap-regular);
+}
+
+.tracker__lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--space-12);
+  align-items: start;
+}
+
+@container shell (width < 1100px) {
+  .tracker__row {
+    grid-template-columns: minmax(0, 1fr) var(--pane-compact);
+    gap: var(--gap-compact);
+  }
+
+  .tracker__row + .tracker__row {
+    margin-top: var(--gap-compact);
+  }
+}
+
+@container shell (width < 900px) {
+  .tracker__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The day's table needs the width more than the pane does: below 1100 the
+   interns move under it, two to a row while there is room. */
+@container shell (width < 1100px) {
+  .tracker__row--day {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tracker__row--day .intern-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    column-gap: var(--space-20);
+  }
+}
+
+/* ---- the day's posts ------------------------------------------------------ */
+
+.tracker-table__wrap {
+  overflow-x: auto;
+}
+
+.tracker-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tracker-table th {
+  padding: 0 var(--space-6) var(--space-4) 0;
+  border-bottom: var(--border-width) solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-weight: var(--weight-label);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.tracker-table td {
+  padding: var(--space-5) var(--space-6) var(--space-5) 0;
+  border-bottom: var(--border-width) solid var(--border-soft);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  vertical-align: middle;
+}
+
+.tracker-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.tracker-table th:last-child,
+.tracker-table td:last-child {
+  padding-inline-end: 0;
+}
+
+.tracker-table__time {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.tracker-table td.tracker-table__listing {
+  color: var(--text);
+  font-weight: var(--weight-heading);
+}
+
+.tracker-table__who,
+.tracker-table__account {
+  display: block;
+}
+
+.tracker-table__account {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.tracker-table__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+  white-space: nowrap;
+}
+
+/* ---- interns -------------------------------------------------------------- */
+
+.intern-list {
+  display: grid;
+  gap: var(--space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.intern-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-6);
+}
+
+.intern-row__avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: 1;
+  font-weight: var(--weight-heading);
+}
+
+.intern-row__body {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.intern-row__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--space-4);
+}
+
+.intern-row__name {
+  color: var(--text);
+  font-weight: var(--weight-heading);
+}
+
+.intern-row__count {
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  white-space: nowrap;
+}
+
+/* Posted, then pending, on a neutral track. The words beside it carry the
+   meaning; the bar only shows the share at a glance. */
+.intern-row__bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+}
+
+.intern-row__posted {
+  background: var(--ok-strong);
+}
+
+.intern-row__pending {
+  background: var(--warn-text);
+}
+
+.intern-row__detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.intern-row__detail .button--link {
+  margin-inline-start: auto;
+}
+
+.tracker__plan {
+  margin-top: var(--space-10);
+  padding-top: var(--space-8);
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
+/* ---- due for repost, never posted, doc health ------------------------------- */
+
+.attention-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attention-item {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-5) 0;
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+
+.attention-item:first-child {
+  padding-top: 0;
+}
+
+.attention-item:last-child {
+  border-bottom: 0;
+}
+
+.attention-item__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.attention-item__name {
+  min-width: 0;
+  color: var(--text);
+  font-weight: var(--weight-heading);
+  overflow-wrap: anywhere;
+}
+
+/* Days since the last post, lined up on the right: the list is longest first. */
+.attention-item__days {
+  flex: none;
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.attention-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.attention-item__meta:empty {
+  display: none;
+}
+
+.tracker__more {
+  margin-top: var(--space-6);
+}
+
+.health__summary {
+  margin-bottom: var(--space-4);
+  color: var(--text-label);
+}
+
+.health-group {
+  padding: var(--space-8) 0;
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
+.health-group:last-child {
+  padding-bottom: 0;
+}
+
+.health-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.health-group__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+}
+
+.health-group__icon {
+  flex: none;
+}
+
+.health-group__icon--danger {
+  color: var(--danger-strong);
+}
+
+.health-group__icon--warn {
+  color: var(--warn-text);
+}
+
+.health-group__advice {
+  margin: var(--space-2) 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.health-group__list {
+  margin-top: var(--space-6);
+}

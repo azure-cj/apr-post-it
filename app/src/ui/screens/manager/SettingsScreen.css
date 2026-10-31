@@ -1,0 +1,169 @@
+/* The people in the main column; the setup they depend on in the side pane. */
+.settings__panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--pane-regular);
+  gap: var(--gap-regular);
+  align-items: start;
+}
+
+.settings__main,
+.settings__side {
+  display: grid;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+@container shell (width < 1100px) {
+  .settings__panes {
+    grid-template-columns: minmax(0, 1fr) var(--pane-compact);
+    gap: var(--gap-compact);
+  }
+}
+
+@container shell (width < 900px) {
+  .settings__panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.settings__waiting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  color: var(--text-muted);
+}
+
+/* ---- rules ---------------------------------------------------------------- */
+
+.settings__rules {
+  display: grid;
+  gap: var(--space-8);
+  margin: 0;
+}
+
+.settings__rule {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-8);
+}
+
+.settings__rule dt {
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+.settings__rule dd {
+  margin: 0;
+}
+
+.settings__value {
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+  text-align: end;
+}
+
+.settings__explain {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.settings__note {
+  margin-top: var(--space-10);
+  padding-top: var(--space-8);
+  border-top: var(--border-width) solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+/* ---- team ----------------------------------------------------------------- */
+
+.settings__table-wrap {
+  overflow-x: auto;
+}
+
+.settings__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.settings__table th {
+  padding: 0 var(--space-8) var(--space-4) 0;
+  border-bottom: var(--border-width) solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-weight: var(--weight-label);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.settings__table td {
+  padding: var(--space-5) var(--space-8) var(--space-5) 0;
+  border-bottom: var(--border-width) solid var(--border-soft);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  vertical-align: middle;
+}
+
+.settings__table tr:last-child td {
+  border-bottom: 0;
+}
+
+.settings__table td.settings__name {
+  color: var(--text);
+  font-weight: var(--weight-heading);
+}
+
+.settings__muted {
+  color: var(--text-muted);
+}
+
+/* ---- adding someone ---------------------------------------------------------- */
+
+.settings__steps {
+  display: grid;
+  gap: var(--space-5);
+  margin: 0;
+  padding-inline-start: 1.4em;
+  color: var(--text);
+}
+
+.settings__steps li::marker {
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+}
+
+.settings__code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--inset);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.94em;
+}
+
+.settings__menu {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.settings__subhead {
+  margin-top: var(--space-12);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+}
+
+.settings__text {
+  margin-top: var(--space-3);
+  color: var(--text-label);
+}

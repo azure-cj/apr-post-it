@@ -96,3 +96,96 @@
   max-width: 70ch;
   color: var(--text-muted);
 }
+
+/* ---- before a screen can be shown -------------------------------------- */
+
+/* Opening, or checking the kept key: said in words. It fades in a moment
+   late, so a quick start never flashes it. */
+.opening {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-24) var(--page-pad-regular);
+  color: var(--text-muted);
+  animation: rise-in var(--dur-enter) var(--ease-out) 300ms both;
+}
+
+.resume {
+  display: grid;
+  justify-items: center;
+  padding: clamp(var(--space-12), 8vh, var(--space-24) * 2) var(--page-pad-regular) var(--space-24);
+}
+
+.resume__card {
+  display: grid;
+  gap: var(--space-10);
+  width: min(100%, 520px);
+}
+
+.resume__title {
+  font-size: var(--text-heading);
+  line-height: var(--lh-heading);
+}
+
+.resume__help {
+  color: var(--text-muted);
+}
+
+.resume__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+/* Under the sign-in card, in the browser only. */
+.demo-note {
+  width: min(100% - var(--page-pad-regular) * 2, 460px);
+  margin: calc(var(--space-12) * -1) auto var(--space-24);
+}
+
+.demo-note code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.94em;
+}
+
+/* ---- asked first --------------------------------------------------------- */
+
+.confirm {
+  width: min(100% - var(--space-12) * 2, 440px);
+  padding: var(--space-12);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--card-bg) padding-box,
+    var(--card-edge) border-box;
+  color: var(--text);
+  animation: rise-in var(--dur-enter) var(--ease-out) both;
+}
+
+.confirm[open] {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.confirm::backdrop {
+  background: var(--viewer-bg);
+  opacity: 0.8;
+}
+
+.confirm__title {
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+}
+
+.confirm__body {
+  color: var(--text-label);
+}
+
+.confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+}
