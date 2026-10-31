@@ -33,6 +33,16 @@ import {
 } from './types';
 import { propertyType } from './records';
 
+/** What adding a person gives back. `warning` says something was not saved. */
+export interface AddPersonResult {
+  readonly person: TeamMember;
+  readonly key: string;
+  readonly warning?: string;
+}
+
+export const PROFILE_LINK_DROPPED =
+  "The profile link wasn't saved: the web app is an older version. Deploy a New version in Apps Script, then use Edit to add it.";
+
 export interface TrackerDeps {
   readonly backend: Pick<Backend, 'call'>;
 }
@@ -140,7 +150,7 @@ export interface Tracker {
   ): Promise<number>;
 
   /** Adds a person to the Team tab (Admin). The key comes back once: show it, then forget it. */
-  addPerson(input: AddPersonInput): Promise<{ readonly person: TeamMember; readonly key: string }>;
+  addPerson(input: AddPersonInput): Promise<AddPersonResult>;
 
   /** Revokes or restores someone (Admin). You cannot deactivate yourself. */
   setActive(name: string, active: boolean): Promise<TeamMember>;
@@ -358,7 +368,7 @@ export function createTracker(deps: TrackerDeps): Tracker {
         : list.reduce((sum, queue) => sum + queue.items.length, 0);
     },
 
-    async addPerson(input: AddPersonInput): Promise<{ readonly person: TeamMember; readonly key: string }> {
+    async addPerson(input: AddPersonInput): Promise<AddPersonResult> {
       const name = input.name.trim();
       if (!name) throw new UserFacingError("Type the person's name.");
       if (input.role !== 'Intern' && input.role !== 'Admin') throw new UserFacingError('Choose Intern or Admin.');
@@ -376,6 +386,11 @@ export function createTracker(deps: TrackerDeps): Tracker {
       const person = row ? readTeamMember(row) : null;
       const key = asText(reply['key']).trim();
       if (!person || !key) throw unreadableReply('addPerson');
+      // A web app older than the profile-link column saves the person but
+      // drops the link, and its reply has no fbProfileLink field at all.
+      if (fbProfileLink && row && !('fbProfileLink' in row)) {
+        return { person, key, warning: PROFILE_LINK_DROPPED };
+      }
       return { person, key };
     },
 

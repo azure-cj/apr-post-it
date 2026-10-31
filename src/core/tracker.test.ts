@@ -833,6 +833,16 @@ describe('managing the team', () => {
     expect(bad.sent).toHaveLength(0);
   });
 
+  it('warns when an older web app saves the person but drops the profile link', async () => {
+    const old = scripted({ ok: true, person: { name: 'Cyrus', role: 'Intern', fbAccounts: ['CYRUS ORBANO'] }, key: 'k-1' });
+    const added = await trackerOver(old.post).addPerson({ name: 'Cyrus', role: 'Intern', fbProfileLink: 'facebook.com/cyrus' });
+    expect(added.key).toBe('k-1');
+    expect(added.warning).toMatch(/New version/);
+
+    const current = scripted({ ok: true, person: { name: 'Cyrus', role: 'Intern', fbProfileLink: '' }, key: 'k-2' });
+    expect((await trackerOver(current.post).addPerson({ name: 'Cyrus', role: 'Intern' })).warning).toBeUndefined();
+  });
+
   it('updates only the fields given, and reads the person back', async () => {
     const { post, sent } = scripted((body: Wire) => ({
       ok: true,

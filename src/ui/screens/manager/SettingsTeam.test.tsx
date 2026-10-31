@@ -55,6 +55,8 @@ describe('Settings → Team', () => {
     });
     expect(within(shown).getByText('k-9f3a-77')).toBeTruthy();
     expect(within(shown).getByText(/You won’t see this again/)).toBeTruthy();
+    // This fake answers like an older web app: no fbProfileLink in the person.
+    expect(within(shown).getByText('Profile link not saved')).toBeTruthy();
     await userEvent.click(within(shown).getByRole('button', { name: 'Copy the key' }));
     await waitFor(() => expect(platform.copied).toEqual(['k-9f3a-77']));
 

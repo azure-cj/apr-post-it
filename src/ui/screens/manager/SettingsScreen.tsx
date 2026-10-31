@@ -24,7 +24,7 @@ export interface SettingsScreenProps {
   /** Why the team couldn't be read, as a sentence. */
   readonly error?: string | null | undefined;
   /** Adds someone. Resolves with their key, shown once. Without it, no Add person. */
-  readonly onAddPerson?: ((input: AddPersonInput) => Promise<{ readonly key: string }>) | undefined;
+  readonly onAddPerson?: ((input: AddPersonInput) => Promise<{ readonly key: string; readonly warning?: string }>) | undefined;
   /** Turns someone off or on. Without it, no row actions. */
   readonly onSetActive?: ((name: string, active: boolean) => Promise<unknown>) | undefined;
   /** Changes someone's FB broker name and profile link. Without it, no Edit. */
@@ -47,7 +47,7 @@ type Open =
   | { readonly kind: 'edit'; readonly member: TeamMember }
   | { readonly kind: 'newKey'; readonly name: string }
   | { readonly kind: 'active'; readonly name: string; readonly active: boolean }
-  | { readonly kind: 'key'; readonly name: string; readonly key: string; readonly added: boolean };
+  | { readonly kind: 'key'; readonly name: string; readonly key: string; readonly added: boolean; readonly warning?: string };
 
 /**
  * The team and how Post-It is set up. The admin adds people, makes new keys
@@ -165,8 +165,8 @@ export function SettingsScreen({
           team={team ?? []}
           onClose={close}
           onAdd={async (input) => {
-            const { key } = await onAddPerson(input);
-            setOpen({ kind: 'key', name: input.name, key, added: true });
+            const { key, warning } = await onAddPerson(input);
+            setOpen({ kind: 'key', name: input.name, key, added: true, ...(warning ? { warning } : {}) });
           }}
         />
       ) : null}
@@ -212,7 +212,7 @@ export function SettingsScreen({
       ) : null}
 
       {open?.kind === 'key' ? (
-        <KeyOnce name={open.name} keyText={open.key} added={open.added} onCopy={onCopy} onClose={close} />
+        <KeyOnce name={open.name} keyText={open.key} added={open.added} warning={open.warning} onCopy={onCopy} onClose={close} />
       ) : null}
     </div>
   );
@@ -381,12 +381,14 @@ function KeyOnce({
   name,
   keyText,
   added,
+  warning,
   onCopy,
   onClose,
 }: {
   readonly name: string;
   readonly keyText: string;
   readonly added: boolean;
+  readonly warning?: string | undefined;
   readonly onCopy?: ((text: string) => void) | undefined;
   readonly onClose: () => void;
 }) {
@@ -416,6 +418,11 @@ function KeyOnce({
         <Icon name="warn" size={18} />
         You won&rsquo;t see this again. Send it to {firstName(name)} privately.
       </p>
+      {warning ? (
+        <Notice tone="warn" title="Profile link not saved">
+          {warning}
+        </Notice>
+      ) : null}
     </Dialog>
   );
 }
