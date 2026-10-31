@@ -92,7 +92,7 @@ export function QueueScreen() {
             ) : null}
           </div>
         </div>
-        <p className="page-header__description">{longDate(today)}. In the order your manager set.</p>
+        <p className="page-header__description">{longDate(today)}. In the order your admin set.</p>
       </header>
 
       {queue.data === null ? (
@@ -117,7 +117,7 @@ export function QueueScreen() {
           title="Nothing in your queue today"
           action={<Button onClick={() => navigate(paths.find)}>Find a property</Button>}
         >
-          Your manager hasn't assigned anything for {shortDate(today)}. You can still find a listing and post it.
+          Your admin hasn't assigned anything for {shortDate(today)}. You can still find a listing and post it.
         </EmptyState>
       ) : (
         <div className="queue__body">
@@ -276,7 +276,7 @@ function ToPostRow({
         </span>
         <div className="queue-item__main">
           <span className="queue-item__name">{assignment.propertyName}</span>
-          <p className="meta">This listing isn't in the property list any more. Tell your manager.</p>
+          <p className="meta">This listing isn't in the property list any more. Tell your admin.</p>
         </div>
       </li>
     );

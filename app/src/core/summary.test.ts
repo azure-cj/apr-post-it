@@ -71,7 +71,7 @@ function queue(who: string, date: string, ...items: (readonly [string, Assignmen
 }
 
 const TEAM: readonly TeamMember[] = [
-  { name: 'Maria Santos', role: 'Manager' },
+  { name: 'Maria Santos', role: 'Admin' },
   { name: JAN, role: 'Intern' },
   { name: MIKA, role: 'Intern' },
 ];

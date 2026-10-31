@@ -34,6 +34,33 @@ export interface Platform {
 
   /** True on a machine where saving photos and Explorer work. */
   readonly hasFileSystem: boolean;
+
+  // ---- the window ---------------------------------------------------------
+  // The desktop window has no frame of its own (decorations: false), so the
+  // app draws minimize, maximize and close. In a browser there is no window
+  // to control: `hasWindowControls` is false and these do nothing.
+
+  /** True where the app draws the window's controls. */
+  readonly hasWindowControls: boolean;
+  minimize(): Promise<void>;
+  /** Maximize, or restore if it already is. */
+  toggleMaximize(): Promise<void>;
+  isMaximized(): Promise<boolean>;
+  /** Calls `handler` when the window is maximized or restored, however that happened. Returns a stop function. */
+  onMaximizedChange(handler: (maximized: boolean) => void): () => void;
+  /**
+   * Asks to close, the way Alt+F4 and the taskbar do, so it reaches
+   * `onCloseRequested` like they do.
+   */
+  requestClose(): Promise<void>;
+  /**
+   * Holds every request to close (the close button, Alt+F4, the taskbar) and
+   * calls `handler` instead. The window then closes only through `destroy()`.
+   * Returns a stop function.
+   */
+  onCloseRequested(handler: () => void): () => void;
+  /** Closes the window now, without asking again. */
+  destroy(): Promise<void>;
 }
 
 let current: Platform | null = null;

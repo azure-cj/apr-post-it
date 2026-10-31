@@ -22,7 +22,7 @@ export async function signIn(backend: Pick<Backend, 'call'>): Promise<User> {
   const name = asText(reply['name']);
   if (!name.trim()) {
     throw new UserFacingError(
-      'The server did not say who that key belongs to. Ask your manager to check the Team tab.',
+      'The server did not say who that key belongs to. Ask your admin to check the Team tab.',
     );
   }
   return { name, role: parseRole(reply['role']), fbAccounts: readAccounts(reply['fbAccounts']) };
@@ -32,9 +32,8 @@ export async function signIn(backend: Pick<Backend, 'call'>): Promise<User> {
 export function parseRole(value: unknown): Role {
   switch (typeof value === 'string' ? value.trim().toLowerCase() : '') {
     case 'admin':
+    case 'manager': // the old middle role, now part of Admin
       return 'Admin';
-    case 'manager':
-      return 'Manager';
     default:
       return 'Intern';
   }

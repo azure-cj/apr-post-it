@@ -125,7 +125,7 @@ describe('a document nobody has separated', () => {
     renderApp({ platform, path: PATH });
 
     expect(await screen.findByText("There's nothing safe to show yet")).toBeTruthy();
-    expect(screen.getByText(/A manager has to add a separator above the owner's details/)).toBeTruthy();
+    expect(screen.getByText(/An admin has to add a separator above the owner's details/)).toBeTruthy();
     expect(screen.queryByRole('document')).toBeNull();
     expect(copyButton().disabled).toBe(true);
     expect(reason()).toBe('Copy is blocked: nobody has separated this document yet.');

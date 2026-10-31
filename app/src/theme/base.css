@@ -208,3 +208,14 @@ main[tabindex="-1"]:focus {
     transition-delay: 0ms !important;
   }
 }
+
+/* A production build opened in a browser rather than the desktop app (main.tsx). */
+.outside-the-app {
+  max-width: 40ch;
+  margin: 20vh auto 0;
+  padding-inline: var(--space-8);
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  text-align: center;
+}

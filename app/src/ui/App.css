@@ -138,17 +138,6 @@
   gap: var(--space-6);
 }
 
-/* Under the sign-in card, in the browser only. */
-.demo-note {
-  width: min(100% - var(--page-pad-regular) * 2, 460px);
-  margin: calc(var(--space-12) * -1) auto var(--space-24);
-}
-
-.demo-note code {
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 0.94em;
-}
-
 /* ---- asked first --------------------------------------------------------- */
 
 .confirm {

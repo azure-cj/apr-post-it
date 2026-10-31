@@ -217,7 +217,7 @@ export default function KitScreen() {
               </div>
               <div className="kit__row kit__row--tight">
                 <Pill>Intern</Pill>
-                <Pill>Manager</Pill>
+                <Pill>Admin</Pill>
                 <Badge count={6} label="6 to post" />
                 <Badge count={12} tone="warn" label="12 pending" />
                 <Badge count={1474} tone="info" label="1,474 listings" />
@@ -240,7 +240,7 @@ export default function KitScreen() {
         <Card title="Notices">
           <div className="kit__stack">
             <Notice tone="danger" title="Copy is blocked">
-              This document has no separator, so none of its text is confirmed safe to post. Ask a manager to add one
+              This document has no separator, so none of its text is confirmed safe to post. Ask an admin to add one
               above the owner's details.
             </Notice>
             <Notice tone="danger" title="In cooldown: posted 2 days ago by Jan Dela Cruz">
@@ -285,7 +285,7 @@ export default function KitScreen() {
               title="Nothing in your queue today"
               action={<Button>Find a property</Button>}
             >
-              Your manager hasn't assigned anything for Fri 31 Oct. You can still find a listing and post it.
+              Your admin hasn't assigned anything for Fri 31 Oct. You can still find a listing and post it.
             </EmptyState>
             <div className="kit__row kit__row--center">
               <Spinner label="Loading listings" />

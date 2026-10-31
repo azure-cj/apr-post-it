@@ -5,6 +5,97 @@
   border-bottom: var(--border-width) solid var(--border-soft);
 }
 
+/* ---- the window's own controls (the desktop window has no frame) --------
+   They sit in the window's top-right corner, outside the centred content, so
+   the bar's content keeps the page's left edge and only gives up room on the
+   right when the corner would otherwise overlap it. */
+
+.topbar--framed {
+  --window-controls-width: calc(46px * 3);
+  container-type: inline-size;
+  container-name: topbar;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.topbar--framed .topbar__inner {
+  /* The inner is centred at --page-max: its right margin is whatever is left
+     over. Reserve the controls' width, less that margin, plus a gap. */
+  padding-inline-end: max(
+    var(--page-pad-regular),
+    calc(var(--window-controls-width) + var(--space-8) - max(0px, (100cqw - var(--page-max)) / 2))
+  );
+}
+
+.window-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+}
+
+.window-controls__button {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-label);
+  cursor: default;
+}
+
+.window-controls__button svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.window-controls__button--close svg {
+  shape-rendering: geometricPrecision;
+}
+
+/* Hover is an overlay that fades in (DESIGN.md §7). */
+.window-controls__button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.window-controls__button:hover::before,
+.window-controls__button:active::before {
+  opacity: 1;
+}
+
+.window-controls__button:hover {
+  color: var(--text);
+}
+
+/* Close turns red, as Windows' does: danger, never gold. */
+.window-controls__button--close::before {
+  background: var(--danger-strong);
+}
+
+.window-controls__button--close:hover,
+.window-controls__button--close:active {
+  color: var(--on-danger);
+}
+
+/* The ring sits inside: the button is flush with the window's edge. */
+.window-controls__button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -3px;
+}
+
 /* Lined up with the page below it: same max width, same padding. */
 .topbar__inner {
   position: relative;

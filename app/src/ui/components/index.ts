@@ -44,4 +44,6 @@ export {
   type TopBarNavItem,
   type TopBarProps,
   type TopBarUser,
+  WindowControls,
+  type WindowControlsProps,
 } from './TopBar';

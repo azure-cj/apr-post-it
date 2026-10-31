@@ -56,7 +56,7 @@ describe('signing in', () => {
     const manager = await signIn(backendOver(answering({ ok: true, name: 'Maria Santos', role: 'Manager', fbAccounts: [] }).post));
     const admin = await signIn(backendOver(answering({ ok: true, name: 'Setup', role: 'Admin', fbAccounts: [] }).post));
 
-    expect(manager.role).toBe('Manager');
+    expect(manager.role).toBe('Admin');
     expect(canManage(manager)).toBe(true);
     expect(admin.role).toBe('Admin');
     expect(canManage(admin)).toBe(true);
@@ -98,7 +98,7 @@ describe('signing in', () => {
   it('without a name in the answer says who to ask', async () => {
     const error = await refusal(signIn(backendOver(answering({ ok: true, name: '  ', role: 'Admin' }).post)));
 
-    expect(error.message).toBe('The server did not say who that key belongs to. Ask your manager to check the Team tab.');
+    expect(error.message).toBe('The server did not say who that key belongs to. Ask your admin to check the Team tab.');
   });
 
   it('with an unknown key says what to do about it', async () => {
@@ -108,13 +108,13 @@ describe('signing in', () => {
           answering({
             ok: false,
             error: 'unauthorized',
-            message: 'This copy of Post-It is not registered. Ask your manager for a key.',
+            message: 'This copy of Post-It is not registered. Ask your admin for a key.',
           }).post,
         ),
       ),
     );
 
-    expect(error.message).toBe('This copy of Post-It is not registered. Ask your manager for a key.');
+    expect(error.message).toBe('This copy of Post-It is not registered. Ask your admin for a key.');
   });
 
   it('with no key yet says so before asking', async () => {
@@ -137,8 +137,8 @@ describe('a role', () => {
     ['Admin', 'Admin'],
     ['admin', 'Admin'],
     [' ADMIN ', 'Admin'],
-    ['Manager', 'Manager'],
-    ['manager', 'Manager'],
+    ['Manager', 'Admin'],
+    ['manager', 'Admin'],
     ['Intern', 'Intern'],
     ['Managers', 'Intern'],
     ['', 'Intern'],

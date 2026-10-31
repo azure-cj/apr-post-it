@@ -19,7 +19,7 @@ export const TODAY = '2026-10-31';
 
 export const intern: User = { name: 'Jan Dela Cruz', role: 'Intern', fbAccounts: ['APG Main', 'APG Rentals South'] };
 export const internAnyAccount: User = { name: 'Paolo Reyes', role: 'Intern', fbAccounts: [] };
-export const manager: User = { name: 'Maria Santos', role: 'Manager', fbAccounts: [] };
+export const manager: User = { name: 'Maria Santos', role: 'Admin', fbAccounts: [] };
 export const admin: User = { name: 'Ana Reyes', role: 'Admin', fbAccounts: [] };
 
 /** A listing whose public text passes every check. */
@@ -71,10 +71,15 @@ export const PROPERTIES = {
 };
 
 /** A web app that answers every read, with nothing posted and nothing queued unless told otherwise. */
-export function fakeServer(replies: Readonly<Record<string, FakeReply>> = {}, key: string | null = 'test-key'): FakePlatform {
+export function fakeServer(
+  replies: Readonly<Record<string, FakeReply>> = {},
+  key: string | null = 'test-key',
+  { hasWindowControls = false }: { readonly hasWindowControls?: boolean } = {},
+): FakePlatform {
   return createFakePlatform({
     key,
     hasFileSystem: true,
+    hasWindowControls,
     replies: {
       properties: PROPERTIES,
       property: propertyReply(),

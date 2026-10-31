@@ -17,7 +17,7 @@ export interface TopBarNavItem {
 
 export interface TopBarUser {
   readonly name: string;
-  /** As shown: "Intern", "Manager", "Admin". */
+  /** As shown: "Intern" or "Admin". */
   readonly role: string;
 }
 
@@ -34,6 +34,21 @@ export interface TopBarProps {
   /** Where the brand word leads. */
   readonly brandHref?: string | undefined;
   readonly navLabel?: string | undefined;
+  /**
+   * The window's own minimize, maximize and close, drawn because the desktop
+   * window has no frame. Absent in a browser. With them the bar is also what
+   * the window is dragged by, and double-clicking it maximizes.
+   */
+  readonly windowControls?: WindowControlsProps | null | undefined;
+}
+
+export interface WindowControlsProps {
+  /** Shows Restore in place of Maximize. */
+  readonly maximized: boolean;
+  readonly onMinimize: () => void;
+  readonly onToggleMaximize: () => void;
+  /** Asks first: the app shows its confirmation. */
+  readonly onClose: () => void;
 }
 
 export type TopBarLayout = 'one-row' | 'two-rows';
@@ -107,6 +122,7 @@ export function TopBar({
   onSignOut,
   brandHref = '#/',
   navLabel = 'Main',
+  windowControls,
 }: TopBarProps) {
   const innerRef = useRef<HTMLDivElement>(null);
   const shape = `${nav.map((i) => i.key).join('|')}#${user ? 'user' : ''}#${onSignOut ? 'out' : ''}`;
@@ -138,9 +154,13 @@ export function TopBar({
     return () => observer.disconnect();
   }, [shape]);
 
+  // Tauri drags the window from an element carrying this attribute itself, not
+  // from its children, so the links and buttons inside stay clickable.
+  const drag = windowControls ? { 'data-tauri-drag-region': true } : {};
+
   return (
-    <header className="topbar">
-      <div ref={innerRef} className="topbar__inner">
+    <header className={windowControls ? 'topbar topbar--framed' : 'topbar'} {...drag}>
+      <div ref={innerRef} className="topbar__inner" {...drag}>
         <div className="topbar__room" aria-hidden="true" />
 
         <a className="topbar__brand" href={brandHref}>
@@ -148,8 +168,8 @@ export function TopBar({
         </a>
 
         {nav.length > 0 ? (
-          <nav className="topbar__nav" aria-label={navLabel}>
-            <ul className="topbar__list">
+          <nav className="topbar__nav" aria-label={navLabel} {...drag}>
+            <ul className="topbar__list" {...drag}>
               {nav.map((item) => (
                 <li key={item.key} className="topbar__item">
                   <a
@@ -188,6 +208,54 @@ export function TopBar({
           </div>
         ) : null}
       </div>
+
+      {windowControls ? <WindowControls {...windowControls} /> : null}
     </header>
+  );
+}
+
+/**
+ * Minimize, maximize or restore, and close, at the window's top-right corner
+ * as Windows draws them: 46 by 32, glyphs drawn in 10px. Close turns red on
+ * hover, as Windows' does, which is danger, not gold.
+ */
+export function WindowControls({ maximized, onMinimize, onToggleMaximize, onClose }: WindowControlsProps) {
+  return (
+    <div className="window-controls" role="group" aria-label="Window">
+      <button type="button" className="window-controls__button" aria-label="Minimize" title="Minimize" onClick={onMinimize}>
+        <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" focusable="false">
+          <path d="M0 5.5h10" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className="window-controls__button"
+        aria-label={maximized ? 'Restore' : 'Maximize'}
+        title={maximized ? 'Restore' : 'Maximize'}
+        onClick={onToggleMaximize}
+      >
+        {maximized ? (
+          <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" focusable="false">
+            <path d="M0.5 2.5h7v7h-7z" />
+            <path d="M2.5 2.5v-2h7v7h-2" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" focusable="false">
+            <path d="M0.5 0.5h9v9h-9z" />
+          </svg>
+        )}
+      </button>
+      <button
+        type="button"
+        className="window-controls__button window-controls__button--close"
+        aria-label="Close"
+        title="Close"
+        onClick={onClose}
+      >
+        <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true" focusable="false">
+          <path d="M0.5 0.5l9 9M9.5 0.5l-9 9" />
+        </svg>
+      </button>
+    </div>
   );
 }

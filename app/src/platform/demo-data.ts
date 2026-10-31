@@ -22,7 +22,7 @@ export const DEMO_URL = 'https://script.google.com/macros/s/AKfycbz-demo-post-it
 
 interface DemoPerson {
   readonly name: string;
-  readonly role: 'Intern' | 'Manager' | 'Admin';
+  readonly role: 'Intern' | 'Admin';
   readonly fbAccounts: readonly string[];
 }
 
@@ -31,7 +31,7 @@ export const DEMO_KEYS: Readonly<Record<string, DemoPerson>> = {
   intern: { name: 'Jan Dela Cruz', role: 'Intern', fbAccounts: ['APG Main', 'APG Rentals South'] },
   paolo: { name: 'Paolo Reyes', role: 'Intern', fbAccounts: [] },
   bea: { name: 'Bea Ramos', role: 'Intern', fbAccounts: ['APG Main', 'APG Rentals South'] },
-  manager: { name: 'Maria Santos', role: 'Manager', fbAccounts: [] },
+  manager: { name: 'Maria Santos', role: 'Admin', fbAccounts: [] },
   admin: { name: 'Ana Reyes', role: 'Admin', fbAccounts: [] },
 };
 
@@ -746,6 +746,8 @@ export interface DemoOptions {
   readonly now?: (() => number) | undefined;
   /** Answer at once instead of at Google's pace. Default false: the waits are part of the demo. */
   readonly instant?: boolean | undefined;
+  /** Draw the window's controls, which do nothing in a browser. Default false. */
+  readonly windowControls?: boolean | undefined;
 }
 
 type Body = Readonly<Record<string, unknown>>;
@@ -766,7 +768,7 @@ export function createDemoPlatform(options: DemoOptions = {}): FakePlatform {
   const unknownKey = {
     ok: false,
     error: 'unauthorized',
-    message: "That key isn't on the team. Check it was pasted whole, or ask your manager for yours.",
+    message: "That key isn't on the team. Check it was pasted whole, or ask your admin for yours.",
   };
 
   /** Answers as Code.gs's route() does: the key first, then the action. */
@@ -803,6 +805,7 @@ export function createDemoPlatform(options: DemoOptions = {}): FakePlatform {
 
   return createFakePlatform({
     hasFileSystem: true,
+    hasWindowControls: options.windowControls ?? false,
     key: options.signedInAs === undefined ? 'intern' : options.signedInAs,
     local,
     replies: {

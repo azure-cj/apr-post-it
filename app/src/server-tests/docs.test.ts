@@ -49,9 +49,10 @@ describe('the README\'s actions', () => {
     const permissions = loadProject().evaluate('PERMISSIONS') as Record<string, string[]>;
 
     for (const [action, who] of documentedActions()) {
+      // Two roles (D14): what an Intern may call, everyone may; the rest is the Admin's.
+      expect(Object.keys(permissions).sort()).toEqual(['Admin', 'Intern']);
       const intern = permissions['Intern']!.includes(action);
-      const manager = permissions['Manager']!.includes(action);
-      expect(who, action).toBe(intern ? 'everyone' : manager ? 'Manager, Admin' : 'Admin');
+      expect(who, action).toBe(intern ? 'everyone' : 'Admin');
     }
   });
 });

@@ -5,7 +5,7 @@
  * and with the plugins' versions pinned in package.json.
  */
 
-import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
+import { clearMocks, mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserFacingError } from '../core/types';
@@ -351,3 +351,96 @@ describe('readKey and writeKey', () => {
 it('has a file system', () => {
   expect(createTauriPlatform().hasFileSystem).toBe(true);
 });
+
+// ------------------------------------------------------------------ the window
+
+describe("the window's controls", () => {
+  /** Answers the window plugin, and keeps each event listener's callback id. */
+  function windowIpc(maximized: () => boolean = () => false) {
+    const listeners = new Map<string, number>();
+    ipc((cmd, args) => {
+      if (cmd === 'plugin:event|listen') {
+        listeners.set(args['event'] as string, args['handler'] as number);
+        return args['handler'];
+      }
+      if (cmd === 'plugin:window|is_maximized') return maximized();
+      return null;
+    });
+    mockWindows('main');
+    const fire = (event: string) => {
+      const id = listeners.get(event);
+      if (id === undefined) throw new Error(`Nothing listens for ${event}.`);
+      (window as unknown as { __TAURI_INTERNALS__: { runCallback(id: number, data: unknown): void } }).__TAURI_INTERNALS__.runCallback(id, {
+        event,
+        id: 1,
+        payload: event === 'tauri://resize' ? { width: 800, height: 600 } : null,
+      });
+    };
+    return { listeners, fire };
+  }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('are drawn by the app', () => {
+    expect(createTauriPlatform().hasWindowControls).toBe(true);
+  });
+
+  it.each([
+    ['minimize', 'plugin:window|minimize'],
+    ['toggleMaximize', 'plugin:window|toggle_maximize'],
+    ['requestClose', 'plugin:window|close'],
+    ['destroy', 'plugin:window|destroy'],
+  ] as const)('%s calls %s on the main window', async (method, cmd) => {
+    windowIpc();
+    await createTauriPlatform()[method]();
+    expect(commands()).toEqual([cmd]);
+    expect(argsOf(cmd)).toMatchObject({ label: 'main' });
+  });
+
+  it('read whether the window is maximized', async () => {
+    windowIpc(() => true);
+    await expect(createTauriPlatform().isMaximized()).resolves.toBe(true);
+  });
+
+  it('hold every request to close, and hand it to the app instead of closing', async () => {
+    const { fire } = windowIpc();
+    const asked = vi.fn();
+    createTauriPlatform().onCloseRequested(asked);
+    await settle();
+
+    fire('tauri://close-requested'); // the close button, Alt+F4 or the taskbar
+    await settle();
+
+    expect(asked).toHaveBeenCalledTimes(1);
+    // Held: Tauri would have destroyed the window after the listener otherwise.
+    expect(commands()).not.toContain('plugin:window|destroy');
+  });
+
+  it('stop listening when asked, even before listening has begun', async () => {
+    windowIpc();
+    const stop = createTauriPlatform().onCloseRequested(() => {});
+    stop();
+    await settle();
+    expect(commands()).toContain('plugin:event|unlisten');
+  });
+
+  it('say when the window is maximized or restored, once per change', async () => {
+    let maximized = false;
+    const { fire } = windowIpc(() => maximized);
+    const seen: boolean[] = [];
+    createTauriPlatform().onMaximizedChange((now) => seen.push(now));
+    await settle();
+
+    maximized = true;
+    fire('tauri://resize');
+    await settle();
+    fire('tauri://resize');
+    await settle();
+    maximized = false;
+    fire('tauri://resize');
+    await settle();
+
+    expect(seen).toEqual([true, false]);
+  });
+});
+

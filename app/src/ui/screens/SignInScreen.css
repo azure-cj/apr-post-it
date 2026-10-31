@@ -33,7 +33,10 @@
   margin-top: var(--space-12);
 }
 
-.sign-in__form > .button {
+.sign-in__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--space-6);
   margin-top: var(--space-2);
 }
 

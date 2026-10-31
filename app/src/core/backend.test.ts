@@ -78,7 +78,7 @@ describe('before any request', () => {
     const noUrl = await failure(createBackend({ post, getConfig: () => ({ url: null, key: 'k' }) }).call('ping'));
     const neither = await failure(createBackend({ post, getConfig: () => ({}) }).call('ping'));
 
-    expect(noKey.message).toBe('Post-It does not have your key yet. Add the key your manager gave you in Settings.');
+    expect(noKey.message).toBe('Post-It does not have your key yet. Add the key your admin gave you in Settings.');
     expect(noUrl.message).toBe('Post-It does not have the web app link yet. Add it in Settings.');
     expect(neither.message).toBe('Post-It is not connected yet. Add the web app link and your key in Settings.');
     expect(sent).toHaveLength(0);
@@ -223,18 +223,18 @@ describe('a refusal from the server', () => {
     const error = await failure(backendOver(post).call('posts'), 'unauthorized');
 
     expect(error.message).toContain('key');
-    expect(error.message).toBe('Your key was not recognised. Ask your manager for a new one.');
+    expect(error.message).toBe('Your key was not recognised. Ask your admin for a new one.');
   });
 
   it('for an unknown key, keeps the server\'s wording when it has some', async () => {
     const { post } = scripted({
       ok: false,
       error: 'unauthorized',
-      message: 'This copy of Post-It is not registered. Ask your manager for a key.',
+      message: 'This copy of Post-It is not registered. Ask your admin for a key.',
     });
     const error = await failure(backendOver(post).call('ping'), 'unauthorized');
 
-    expect(error.message).toBe('This copy of Post-It is not registered. Ask your manager for a key.');
+    expect(error.message).toBe('This copy of Post-It is not registered. Ask your admin for a key.');
   });
 
   it('for a forbidden action, keeps the server\'s wording', async () => {
@@ -284,7 +284,7 @@ describe('a refusal from the server', () => {
     const error = await failure(backendOver(post).call('setStatus'), 'outdated');
 
     expect(error.message).toBe(
-      'The web app is out of date and cannot update the queue. Ask your manager to deploy the latest version.',
+      'The web app is out of date and cannot update the queue. Ask your admin to deploy the latest version.',
     );
   });
 
@@ -294,7 +294,7 @@ describe('a refusal from the server', () => {
 
     expect(error.message).toBe(
       'Post-It sent an incomplete request (propertyId missing) and could not log the post. ' +
-        'This is a bug in Post-It: tell your manager.',
+        'This is a bug in Post-It: tell your admin.',
     );
   });
 
@@ -304,7 +304,7 @@ describe('a refusal from the server', () => {
 
     expect(error.message).toBe(
       'Google could not load the property list: No "Directory" tab. Run BuildDirectory.gs first. ' +
-        'If it keeps happening, show this to your manager.',
+        'If it keeps happening, show this to your admin.',
     );
   });
 
@@ -314,7 +314,7 @@ describe('a refusal from the server', () => {
 
     expect(error.message).toBe(
       'Google could not load the posts: Too many simultaneous invocations: Spreadsheets. ' +
-        'If it keeps happening, show this to your manager.',
+        'If it keeps happening, show this to your admin.',
     );
   });
 
@@ -329,7 +329,7 @@ describe('a refusal from the server', () => {
     const { post } = scripted({ ok: false });
     const error = await failure(backendOver(post).call('assignments'), 'server');
 
-    expect(error.message).toBe('Google refused to load the queues. Try again, and tell your manager if it keeps happening.');
+    expect(error.message).toBe('Google refused to load the queues. Try again, and tell your admin if it keeps happening.');
   });
 });
 
@@ -457,7 +457,7 @@ describe('a trip that fails', () => {
 
   it.each([
     [404, 'Google could not find the web app (error 404). Check the web app link in Settings.'],
-    [403, 'Google would not let Post-It in (error 403). Ask your manager to check the web app is deployed with access set to "Anyone".'],
+    [403, 'Google would not let Post-It in (error 403). Ask your admin to check the web app is deployed with access set to "Anyone".'],
     [503, 'Google is having trouble right now (error 503). Try again in a minute.'],
     [429, 'Google is having trouble right now (error 429). Try again in a minute.'],
     [400, 'Google answered with error 400. Check the web app link in Settings.'],
@@ -485,7 +485,7 @@ describe('a trip that fails', () => {
     const { post } = scripted(new Response('', { status: 302 }));
     const error = await failure(backendOver(post).call('posts'), 'http');
 
-    expect(error.message).toBe('Google redirected Post-It and it did not follow (error 302). This is a bug in Post-It: tell your manager.');
+    expect(error.message).toBe('Google redirected Post-It and it did not follow (error 302). This is a bug in Post-It: tell your admin.');
   });
 
   it('with a sentence the platform already wrote, passes it on untouched', async () => {

@@ -39,6 +39,16 @@
 
     "store:allow-load",
     "store:allow-get",
-    "store:allow-set"
+    "store:allow-set",
+
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
   ]
 }

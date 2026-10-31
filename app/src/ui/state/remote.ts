@@ -93,7 +93,7 @@ export function createRemote<T>(read: () => Promise<T>, now: () => number): Remo
 
 /** Said when something fails that should not have: a bug, not a refusal. */
 export const UNEXPECTED =
-  'Something went wrong that Post-It did not expect. Try again, and tell your manager if it keeps happening.';
+  'Something went wrong that Post-It did not expect. Try again, and tell your admin if it keeps happening.';
 
 /**
  * The sentence to show for a failure. A UserFacingError is shown exactly as

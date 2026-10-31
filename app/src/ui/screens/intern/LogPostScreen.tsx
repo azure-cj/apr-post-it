@@ -230,7 +230,7 @@ export function LogPostScreen() {
                       </label>
                     ))}
                   </div>
-                  <p className="field__hint">The FB accounts your manager set up for you. Only these can be logged.</p>
+                  <p className="field__hint">The FB accounts your admin set up for you. Only these can be logged.</p>
                 </fieldset>
               ) : (
                 <TextInput

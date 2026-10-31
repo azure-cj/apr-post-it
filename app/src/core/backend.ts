@@ -152,7 +152,7 @@ export function unreadableReply(action: Action, cause?: unknown): BackendError {
     'unexpected',
     action,
     `Google sent ${WHAT[action]} in a form Post-It could not read. ` +
-      'The web app may be out of date: ask your manager to check it.',
+      'The web app may be out of date: ask your admin to check it.',
     { cause },
   );
 }
@@ -238,7 +238,7 @@ export function createBackend(deps: BackendDeps): Backend {
     }
     if (!key) {
       throw new BackendError('not-configured', action,
-        'Post-It does not have your key yet. Add the key your manager gave you in Settings.');
+        'Post-It does not have your key yet. Add the key your admin gave you in Settings.');
     }
     if (!isAddress(url)) {
       throw new BackendError('bad-url', action,
@@ -333,7 +333,7 @@ function refusal(reply: Reply, action: Action): BackendError {
   switch (error) {
     case 'unauthorized':
       return new BackendError('unauthorized', action,
-        theirs('Your key was not recognised. Ask your manager for a new one.'));
+        theirs('Your key was not recognised. Ask your admin for a new one.'));
     case 'forbidden':
       return new BackendError('forbidden', action, theirs('Your account is not allowed to do that.'));
     case 'cooldown': {
@@ -359,13 +359,13 @@ function refusal(reply: Reply, action: Action): BackendError {
   }
   if (/^unknown action\b/i.test(error)) {
     return new BackendError('outdated', action,
-      `The web app is out of date and cannot ${DOING[action]}. Ask your manager to deploy the latest version.`);
+      `The web app is out of date and cannot ${DOING[action]}. Ask your admin to deploy the latest version.`);
   }
   const missing = /^missing:\s*(.+)$/i.exec(error);
   if (missing) {
     return new BackendError('incomplete', action,
       `Post-It sent an incomplete request (${missing[1]} missing) and could not ${DOING[action]}. ` +
-        'This is a bug in Post-It: tell your manager.');
+        'This is a bug in Post-It: tell your admin.');
   }
   if (message) return new BackendError('server', action, sentence(message));
   if (error) {
@@ -373,10 +373,10 @@ function refusal(reply: Reply, action: Action): BackendError {
     // or an Apps Script failure. Its own words are the useful part.
     return new BackendError('server', action,
       `Google could not ${DOING[action]}: ${sentence(error.replace(/^exception:\s*/i, ''))} ` +
-        'If it keeps happening, show this to your manager.');
+        'If it keeps happening, show this to your admin.');
   }
   return new BackendError('server', action,
-    `Google refused to ${DOING[action]}. Try again, and tell your manager if it keeps happening.`);
+    `Google refused to ${DOING[action]}. Try again, and tell your admin if it keeps happening.`);
 }
 
 /** Why the trip itself failed: no connection, too slow, an HTTP error, or not JSON. */
@@ -397,12 +397,12 @@ function failedTrip(err: unknown, action: Action): UserFacingError {
     if (status < 400) {
       // Apps Script always answers with a 302; whatever sent this did not follow it.
       message = `Google redirected Post-It and it did not follow (error ${status}). ` +
-        'This is a bug in Post-It: tell your manager.';
+        'This is a bug in Post-It: tell your admin.';
     } else if (status === 404) {
       message = 'Google could not find the web app (error 404). Check the web app link in Settings.';
     } else if (status === 401 || status === 403) {
       message = `Google would not let Post-It in (error ${status}). ` +
-        'Ask your manager to check the web app is deployed with access set to "Anyone".';
+        'Ask your admin to check the web app is deployed with access set to "Anyone".';
     } else if (status === 429 || status >= 500) {
       message = `Google is having trouble right now (error ${status}). Try again in a minute.`;
     } else {
@@ -421,7 +421,7 @@ function failedTrip(err: unknown, action: Action): UserFacingError {
 function signInPage(action: Action): BackendError {
   return new BackendError('sign-in-page', action,
     'Google sent a sign-in page instead of Post-It\'s data, so the web app is not open to Post-It. ' +
-      'Ask your manager to redeploy it with access set to "Anyone".');
+      'Ask your admin to redeploy it with access set to "Anyone".');
 }
 
 function empty(action: Action): BackendError {

@@ -22,7 +22,7 @@ export const DIRECTORY_ID = 'directory-sheet';
 export const PEOPLE = {
   jan: { name: 'Jan Dela Cruz', key: 'key-jan', role: 'Intern', fbAccounts: 'APG Main, APG Rentals', active: 'TRUE' },
   ana: { name: 'Ana Reyes', key: 'key-ana', role: 'Intern', fbAccounts: '', active: 'TRUE' },
-  maria: { name: 'Maria Santos', key: 'key-maria', role: 'Manager', fbAccounts: '', active: 'TRUE' },
+  maria: { name: 'Maria Santos', key: 'key-maria', role: 'Admin', fbAccounts: '', active: 'TRUE' },
   rico: { name: 'Rico Bautista', key: 'key-rico', role: 'Admin', fbAccounts: '', active: 'TRUE' },
   gone: { name: 'Former Intern', key: 'key-gone', role: 'Intern', fbAccounts: '', active: 'FALSE' },
 } as const;

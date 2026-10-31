@@ -52,7 +52,7 @@ read rather than hundreds of Drive calls.
   into its existing columns. Do not make a new one.
 * **A private admin sheet**: create this one, and share it with nobody. It holds the
   script's `Team` tab. `Team` lists everyone's key, so it cannot live in a sheet the team
-  can open: whoever reads a manager's key can act as that manager (D3).
+  can open: whoever reads an admin's key can act as that admin (D3).
 * **The directory**, written by `BuildDirectory.gs`.
 
 ## Set it up
@@ -103,20 +103,20 @@ parameters is answered the same way. Every reply is `{ ok: true, … }` or
 |---|---|---|
 | `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`. |
 | `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`. One sheet read. |
-| `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for a Manager or Admin only, `internalText`. |
+| `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. |
 | `posts` | everyone | The Posts tab as rows, every value text. An intern gets only their own. |
 | `assignments` | everyone | The Assignments tab as rows, every value text. An intern gets only their own. |
 | `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` and `postedBy`. Refuses with `error: 'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the person's Team row. |
 | `addLink` | everyone | Turns a Pending row into Posted with its link: `notfound` when there is no such row. An intern can complete only their own. |
 | `setStatus` | everyone | Moves one queue item's status: `notfound` when no open item matches. An intern can move only their own. |
-| `saveQueue` | Manager, Admin | Replaces one person's queue for one date. |
+| `saveQueue` | Admin | Replaces one person's queue for one date. |
 
 Two things in a reply come from the key, never from the request:
 
-* **`internalText`** is in a `property` reply only for a Manager or an Admin. For an intern
+* **`internalText`** is in a `property` reply only for an Admin. For an intern
   it is not empty, it is absent. A heading separator's label quotes its line
   (`heading: Commission: 3%`), so an intern's `cutAt` is the kind of marker only (`heading`).
-* **`postedBy`** on a logged post is the caller's own name. A Manager or Admin may log on an
+* **`postedBy`** on a logged post is the caller's own name. An Admin may log on an
   intern's behalf by sending `postedBy`; from an intern it is ignored.
 
 ### `withheld`
@@ -125,7 +125,7 @@ When nobody has separated a document, `Separators.gs` finds no marker, and none 
 is confirmed safe to post. Blocking the Copy button is not enough (D6): text on screen can be
 selected and copied by hand. So an intern is not sent it at all (D13). Their reply has
 `publicText: ''`, `hasInternal: false` and `withheld: true`, so the screen can say why it is
-empty. A Manager or Admin gets the whole document in `publicText`, with `withheld: false`,
+empty. An Admin gets the whole document in `publicText`, with `withheld: false`,
 so they can add the separator. The same holds when the text comes from the directory's copy
 rather than the live document.
 

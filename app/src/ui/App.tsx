@@ -10,14 +10,16 @@ import {
   useState,
   type MouseEvent,
   type ReactElement,
+  type ReactNode,
 } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { addDays, isDate, peopleIn, samePerson } from '@/core/summary';
 import { canManage, isAdmin, UserFacingError, type User } from '@/core/types';
-import { Button, Card, Notice, Spinner, TopBar, type TopBarNavItem } from './components';
+import { Button, Card, Notice, Spinner, TopBar, type TopBarNavItem, type WindowControlsProps } from './components';
 import { SignInScreen } from './screens/SignInScreen';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
 import { AssignScreen, SettingsScreen, TrackerScreen, type QueueSave } from './screens/manager';
+import type { Platform } from '@/platform';
 import {
   manilaTime,
   paths,
@@ -36,7 +38,7 @@ import './App.css';
 
 export { paths } from './state';
 
-/** Where a person lands after signing in: an intern's queue, a manager's tracker. */
+/** Where a person lands after signing in: an intern's queue, an admin's tracker. */
 export function homeFor(user: User): string {
   return canManage(user) ? paths.tracker : paths.queue;
 }
@@ -53,13 +55,12 @@ interface NavDef {
  */
 export function navFor(user: User): readonly NavDef[] {
   if (canManage(user)) {
-    const items: NavDef[] = [
+    return [
       { key: 'tracker', label: 'Tracker', path: paths.tracker },
       { key: 'assign', label: 'Assign', path: paths.assign },
       { key: 'find', label: 'Find', path: paths.find },
+      { key: 'settings', label: 'Settings', path: paths.settings },
     ];
-    if (isAdmin(user)) items.push({ key: 'settings', label: 'Settings', path: paths.settings });
-    return items;
   }
   return [
     { key: 'queue', label: 'My queue', path: paths.queue },
@@ -98,8 +99,8 @@ function titleFor(pathname: string): string | null {
 const KitScreen = import.meta.env.DEV ? lazy(() => import('./screens/KitScreen')) : null;
 
 export interface AppProps {
-  /** On the demo platform in a browser: the sign-in screen says which keys it answers to. */
-  readonly demo?: boolean | undefined;
+  /** Shown under the sign-in card. Development only: the browser's keys (src/ui/dev/DevKeysNote.tsx). */
+  readonly signInNote?: ReactNode;
 }
 
 /** React Router v7's behaviour, adopted now. Tests pass the same to their routers. */
@@ -119,7 +120,7 @@ export function App(props: AppProps) {
 }
 
 /** The app inside whatever router the caller provides: tests use a MemoryRouter. */
-export function AppShell({ demo = false }: AppProps) {
+export function AppShell({ signInNote }: AppProps) {
   const app = useApp();
   const { session, user } = app;
   const [signInBusy, setSignInBusy] = useState(false);
@@ -142,8 +143,27 @@ export function AppShell({ demo = false }: AppProps) {
     [assignDirty],
   );
 
+  // ---- closing the window asks first ------------------------------------------
+  // The close button, Alt+F4 and the taskbar all arrive here, held by the
+  // platform. One question, which also says when Assign has unsaved changes.
+  const { platform } = app;
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const closing = useRef(false);
+  useEffect(
+    () =>
+      platform.onCloseRequested(() => {
+        if (closing.current) return;
+        // This question replaces any other that is open.
+        setLeaving(null);
+        setConfirmingSignOut(false);
+        setConfirmingClose(true);
+      }),
+    [platform],
+  );
+  const windowControls = useWindowControls(platform);
+
   // Every in-app link (the brand, the nav, a link on the screen) goes through
-  // the question while there are unsaved changes; so does closing the window.
+  // the question while there are unsaved changes; so does reloading the page.
   useEffect(() => {
     if (!assignDirty) return undefined;
     const onClick = (event: globalThis.MouseEvent) => {
@@ -157,6 +177,7 @@ export function AppShell({ demo = false }: AppProps) {
       setLeaving(() => () => navigate(to));
     };
     const onUnload = (event: BeforeUnloadEvent) => {
+      if (closing.current) return; // already asked, by the close question
       event.preventDefault();
       event.returnValue = '';
     };
@@ -187,26 +208,45 @@ export function AppShell({ demo = false }: AppProps) {
     (main.querySelector<HTMLElement>('h1[tabindex="-1"]') ?? main).focus({ preventScroll: true });
   }, [location.pathname]);
 
+  // One sign-in at a time. Cancel aborts it, so a reply that arrives later
+  // signs nobody in and says nothing.
   const { signIn } = app;
+  const signingIn = useRef<AbortController | null>(null);
   const handleSignIn = useCallback(
     async (url: string, key: string) => {
+      signingIn.current?.abort();
+      const attempt = new AbortController();
+      signingIn.current = attempt;
       setSignInError(null);
       setSignInBusy(true);
       try {
-        const signedIn = await signIn(url, key);
+        const signedIn = await signIn(url, key, attempt.signal);
+        if (attempt.signal.aborted) return;
         navigate(homeFor(signedIn), { replace: true });
       } catch (e) {
+        if (attempt.signal.aborted) return;
         setSignInError(
           e instanceof UserFacingError
             ? e.message
             : "Couldn't reach the web app. Check the link and your connection, then try again.",
         );
       } finally {
-        setSignInBusy(false);
+        if (signingIn.current === attempt) {
+          signingIn.current = null;
+          setSignInBusy(false);
+        }
       }
     },
     [signIn, navigate],
   );
+  const cancelSignIn = useCallback(() => {
+    signingIn.current?.abort();
+    signingIn.current = null;
+    setSignInBusy(false);
+    setSignInError(null);
+  }, []);
+  // A sign-in still running when the window goes stops with it.
+  useEffect(() => () => signingIn.current?.abort(), []);
 
   const { signOut } = app;
   const confirmSignOut = useCallback(async () => {
@@ -258,6 +298,7 @@ export function AppShell({ demo = false }: AppProps) {
             if (target) requestLeave(() => navigate(target.path));
           }}
           onSignOut={user ? () => requestLeave(() => setConfirmingSignOut(true)) : undefined}
+          windowControls={windowControls}
         />
 
         <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
@@ -278,11 +319,12 @@ export function AppShell({ demo = false }: AppProps) {
                     <>
                       <SignInScreen
                         onSubmit={(url, key) => void handleSignIn(url, key)}
+                        onCancel={cancelSignIn}
                         busy={signInBusy}
                         error={signInError}
                         initialUrl={app.settings.scriptUrl}
                       />
-                      {demo ? <DemoNote /> : null}
+                      {signInNote ?? null}
                     </>
                   )
                 }
@@ -315,6 +357,31 @@ export function AppShell({ demo = false }: AppProps) {
         <SignOutDialog onCancel={() => setConfirmingSignOut(false)} onConfirm={confirmSignOut} />
       ) : null}
 
+      {confirmingClose ? (
+        <ConfirmDialog
+          title="Close APG Post-It?"
+          body={
+            assignDirty
+              ? "This queue has changes that aren't saved. Closing now loses them."
+              : "You'll stay signed in on this computer."
+          }
+          cancelLabel="Cancel"
+          confirmLabel="Close"
+          busyLabel="Closing…"
+          failure="Post-It couldn't close. Try again."
+          onCancel={() => setConfirmingClose(false)}
+          onConfirm={async () => {
+            closing.current = true;
+            try {
+              await platform.destroy();
+            } catch (err) {
+              closing.current = false;
+              throw err;
+            }
+          }}
+        />
+      ) : null}
+
       {leaving ? (
         <ConfirmDialog
           title="Leave without saving?"
@@ -331,6 +398,43 @@ export function AppShell({ demo = false }: AppProps) {
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * The window's minimize, maximize and close, where the platform has a window
+ * to control: null in a browser. Follows the window being maximized however
+ * that happened (a double-click on the bar, Win+Up, a snap).
+ */
+function useWindowControls(platform: Platform): WindowControlsProps | null {
+  const [maximized, setMaximized] = useState(false);
+  const shown = platform.hasWindowControls;
+
+  useEffect(() => {
+    if (!shown) return undefined;
+    let live = true;
+    platform.isMaximized().then(
+      (now) => live && setMaximized(now),
+      () => {},
+    );
+    const stop = platform.onMaximizedChange((now) => setMaximized(now));
+    return () => {
+      live = false;
+      stop();
+    };
+  }, [platform, shown]);
+
+  return useMemo(
+    () =>
+      shown
+        ? {
+            maximized,
+            onMinimize: () => void platform.minimize().catch(() => {}),
+            onToggleMaximize: () => void platform.toggleMaximize().catch(() => {}),
+            onClose: () => void platform.requestClose().catch(() => {}),
+          }
+        : null,
+    [platform, shown, maximized],
   );
 }
 
@@ -390,7 +494,7 @@ function ResumeFailed({
         </Notice>
         <p className="resume__help">
           Your key is still saved on this computer, so trying again needs nothing typed. Sign in again only if your
-          manager gave you a new key.
+          admin gave you a new key.
         </p>
         <div className="resume__actions">
           <Button variant="primary" onClick={onRetry}>
@@ -399,17 +503,6 @@ function ResumeFailed({
           <Button onClick={onSignIn}>Sign in with a key</Button>
         </div>
       </Card>
-    </div>
-  );
-}
-
-function DemoNote() {
-  return (
-    <div className="demo-note">
-      <Notice tone="info" title="Demo data, in the browser">
-        Sign in with the key <code>intern</code>, <code>paolo</code> (an intern with no FB accounts listed),{' '}
-        <code>manager</code> or <code>admin</code>.
-      </Notice>
     </div>
   );
 }
@@ -423,7 +516,7 @@ function SignOutDialog({ onCancel, onConfirm }: { readonly onCancel: () => void;
   return (
     <ConfirmDialog
       title="Sign out of Post-It?"
-      body="Post-It will forget your key on this computer. To sign in again you'll need the key your manager gave you."
+      body="Post-It will forget your key on this computer. To sign in again you'll need the key your admin gave you."
       cancelLabel="Stay signed in"
       confirmLabel="Sign out"
       busyLabel="Signing out…"

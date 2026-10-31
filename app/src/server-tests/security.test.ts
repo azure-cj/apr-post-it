@@ -36,7 +36,7 @@ describe('an intern\'s property reply carries nothing private (D1)', () => {
   it('whatever the request asks for: internal=true is not the client\'s to decide', () => {
     const w = createWorld();
     const byGet = w.project.get({ action: 'property', id: CASA.id, key: PEOPLE.jan.key, internal: 'true' });
-    const byPost = w.call('jan', 'property', { id: CASA.id, internal: true, includeInternal: true, role: 'Manager' });
+    const byPost = w.call('jan', 'property', { id: CASA.id, internal: true, includeInternal: true, role: 'Admin' });
 
     for (const reply of [byGet, byPost]) {
       expect(reply['property']).not.toHaveProperty('internalText');
@@ -121,7 +121,7 @@ describe('a role is the key\'s, never the request\'s (D2)', () => {
     w.assignments.type(['2026-03-09', 'Jan Dela Cruz', 'Casa Amara', 'To post', CASA.id]);
     const before = w.assignments.show();
 
-    expect(w.call('jan', 'saveQueue', { date: '2026-03-09', assignedTo: 'Jan Dela Cruz', items: [], role: 'Manager' })).toEqual({
+    expect(w.call('jan', 'saveQueue', { date: '2026-03-09', assignedTo: 'Jan Dela Cruz', items: [], role: 'Admin' })).toEqual({
       ok: false,
       error: 'forbidden',
       message: 'Your account cannot do that.',
@@ -129,7 +129,7 @@ describe('a role is the key\'s, never the request\'s (D2)', () => {
     expect(w.assignments.show()).toEqual(before);
   });
 
-  it('a manager can', () => {
+  it('an admin can', () => {
     const w = createWorld();
 
     expect(w.call('maria', 'saveQueue', { date: '2026-03-09', assignedTo: 'Jan Dela Cruz', items: [{ property: CASA.name }] })).toEqual({
@@ -145,7 +145,7 @@ describe('a role is the key\'s, never the request\'s (D2)', () => {
     expect(w.posts.row(2)[7]).toBe('Jan Dela Cruz');
   });
 
-  it('a manager may log a post for an intern, by name', () => {
+  it('an admin may log a post for an intern, by name', () => {
     const w = createWorld();
 
     expect(w.logPost('maria', CASA, { postedBy: 'Jan Dela Cruz' })).toMatchObject({ ok: true, postedBy: 'Jan Dela Cruz' });
@@ -181,6 +181,35 @@ describe('a role is the key\'s, never the request\'s (D2)', () => {
 
     expect(w.logPost('jan', CASA, { fbAccount: 'Someone Else\'s Page' })).toMatchObject({ ok: false, error: 'forbidden' });
     expect(w.posts.lastRow).toBe(1);
+  });
+});
+
+describe('two roles (D14)', () => {
+  it('treats a Team row that still says "Manager", the old middle role, as Admin', () => {
+    const w = createWorld();
+    w.team.type(['Old Manager', '', 'Manager', 'key-old-manager', '', 'TRUE']);
+    const call = (action: string, extra: Record<string, unknown> = {}) =>
+      w.project.post({ action, key: 'key-old-manager', ...extra });
+
+    expect(call('ping')).toMatchObject({ ok: true, name: 'Old Manager', role: 'Admin' });
+    expect(call('saveQueue', { date: '2026-03-09', assignedTo: 'Jan Dela Cruz', items: [{ property: CASA.name }] })).toEqual({
+      ok: true,
+      saved: 1,
+    });
+    expect(call('property', { id: CASA.id })['property']).toHaveProperty('internalText');
+  });
+
+  it('treats any other role, blank included, as Intern', () => {
+    const w = createWorld();
+    w.team.type(['Someone', '', 'Supervisor', 'key-someone', '', 'TRUE'], ['Nobody', '', '', 'key-nobody', '', 'TRUE']);
+
+    for (const key of ['key-someone', 'key-nobody']) {
+      expect(w.project.post({ action: 'ping', key })).toMatchObject({ ok: true, role: 'Intern' });
+      expect(w.project.post({ action: 'saveQueue', key, date: '2026-03-09', assignedTo: 'Jan Dela Cruz', items: [] })).toMatchObject({
+        ok: false,
+        error: 'forbidden',
+      });
+    }
   });
 });
 
@@ -222,9 +251,10 @@ describe('keys', () => {
     const key = w.project.run('ADD_PERSON') as string;
 
     expect(w.project.post({ action: 'ping', key: 'setup-key' })).toMatchObject({ ok: false, error: 'unauthorized' });
-    expect(w.project.post({ action: 'ping', key })).toMatchObject({ ok: true, name: 'Jan Dela Cruz', role: 'Intern' });
+    // The first person in is the admin who assigns the postings (D14).
+    expect(w.project.post({ action: 'ping', key })).toMatchObject({ ok: true, name: 'Jan Dela Cruz', role: 'Admin' });
     // Written as text: a key, a name or a flag is never evaluated (D7).
-    expect(fresh.sheet('Team').row(2)).toEqual(['Jan Dela Cruz', '', 'Intern', key, '', 'TRUE']);
+    expect(fresh.sheet('Team').row(2)).toEqual(['Jan Dela Cruz', '', 'Admin', key, '', 'TRUE']);
     expect(fresh.sheet('Team').formats(2)).toEqual(['@', '@', '@', '@', '@', '@']);
   });
 });

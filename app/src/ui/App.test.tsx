@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { createFakePlatform, type FakePlatformOptions } from '@/platform/fake';
@@ -67,12 +67,57 @@ describe('signing in', () => {
 
   it("keeps nothing, and shows the server's sentence, when the key is refused", async () => {
     const { platform } = launch({
-      replies: { ping: { ok: false, error: 'unauthorized', message: "That key isn't on the team. Ask your manager for yours." } },
+      replies: { ping: { ok: false, error: 'unauthorized', message: "That key isn't on the team. Ask your admin for yours." } },
     });
     await signIn();
     expect((await screen.findByRole('alert')).textContent).toContain("That key isn't on the team.");
     expect(heading()).toBe('Sign in');
     expect(await platform.readKey()).toBeNull();
+  });
+
+  it('Cancel stops a sign-in that is running: a late reply signs nobody in and keeps no key', async () => {
+    let answer: (reply: unknown) => void = () => undefined;
+    const { platform, app } = launch({ replies: { ping: () => new Promise((resolve) => (answer = resolve)) } });
+    await signIn('9b2c-41fe');
+    expect(await screen.findByRole('button', { name: 'Signing in…' })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+    expect((screen.getByLabelText('Web app link') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Your key') as HTMLInputElement).value).toBe('');
+
+    answer(PING_INTERN);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(heading()).toBe('Sign in');
+    expect(app().user).toBeNull();
+    expect(await platform.readKey()).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('Cancel clears the error a failed sign-in left, and a late failure says nothing', async () => {
+    let calls = 0;
+    let fail: (err: Error) => void = () => undefined;
+    launch({
+      replies: {
+        ping: () => {
+          calls++;
+          if (calls === 1) return { ok: false, error: 'unauthorized', message: "That key isn't on the team. Ask your admin for yours." };
+          return new Promise((_resolve, reject) => (fail = reject));
+        },
+      },
+    });
+    await signIn();
+    expect((await screen.findByRole('alert')).textContent).toContain("That key isn't on the team.");
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await signIn();
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    fail(new TypeError('Failed to fetch'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Sign in' }).getAttribute('aria-busy')).toBeNull();
   });
 
   it('signs in again on launch with the key the PC kept, saying what it is waiting for', async () => {
@@ -111,7 +156,7 @@ describe('signing out', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     const dialog = screen.getByRole('dialog', { name: 'Sign out of Post-It?' });
-    expect(dialog.textContent).toContain("Post-It will forget your key on this computer. To sign in again you'll need the key your manager gave you.");
+    expect(dialog.textContent).toContain("Post-It will forget your key on this computer. To sign in again you'll need the key your admin gave you.");
     // Focus starts on the safe choice.
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Stay signed in' }));
 
@@ -155,22 +200,24 @@ describe('signing out', () => {
 });
 
 describe('the shell', () => {
-  it('gives a manager the tracker and an admin Settings too', () => {
-    const { unmount } = renderApp({ platform: fakeServer(), user: manager });
-    expect(heading()).toBe('Tracker');
-    expect(navNames()).toEqual(['Tracker', 'Assign', 'Find']);
-    unmount();
-
-    renderApp({ platform: fakeServer(), user: admin });
-    expect(navNames()).toEqual(['Tracker', 'Assign', 'Find', 'Settings']);
+  it('gives every admin the tracker, Assign and Settings (D14)', () => {
+    // Maria's Team row once said Manager; that is Admin now, with everything an admin has.
+    for (const user of [manager, admin]) {
+      const { unmount } = renderApp({ platform: fakeServer(), user });
+      expect(heading()).toBe('Tracker');
+      expect(navNames()).toEqual(['Tracker', 'Assign', 'Find', 'Settings']);
+      unmount();
+    }
   });
 
-  it('keeps an intern out of the manager screens, and a manager out of Settings', async () => {
-    const { unmount } = renderApp({ platform: fakeServer(), user: intern, path: '/assign' });
-    expect(heading()).toBe('My queue');
-    unmount();
+  it("keeps an intern out of the admin's screens, and lets an admin into Settings", async () => {
+    for (const path of ['/assign', '/tracker', '/settings']) {
+      const { unmount } = renderApp({ platform: fakeServer(), user: intern, path });
+      expect(heading()).toBe('My queue');
+      unmount();
+    }
     renderApp({ platform: fakeServer(), user: manager, path: '/settings' });
-    expect(heading()).toBe('Tracker');
+    expect(heading()).toBe('Settings');
   });
 
   it('moves between screens from the nav, names the window, and starts at the heading', async () => {
@@ -258,3 +305,117 @@ describe("the manager's screens", () => {
   });
 
 });
+
+describe("the window's own controls", () => {
+  const windowed = (replies = {}) => fakeServer(replies, 'test-key', { hasWindowControls: true });
+  const controls = () => screen.queryByRole('group', { name: 'Window' });
+
+  it('are not drawn in a browser, where there is no window to control', () => {
+    renderApp({ platform: fakeServer(), user: null });
+    expect(controls()).toBeNull();
+    expect(document.querySelector('[data-tauri-drag-region]')).toBeNull();
+  });
+
+  it('are drawn on the sign-in screen too, and the bar is what the window is dragged by', async () => {
+    const platform = windowed();
+    launchWith(platform);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeTruthy();
+    const group = controls()!;
+    expect(within(group).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Minimize', 'Maximize', 'Close']);
+    expect(document.querySelector('header')!.hasAttribute('data-tauri-drag-region')).toBe(true);
+  });
+
+  it('minimize, and maximize then restore, following the window however it changed', async () => {
+    const platform = windowed();
+    renderApp({ platform, user: manager });
+    await userEvent.click(screen.getByRole('button', { name: 'Minimize' }));
+    expect(platform.window.minimized).toBe(true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Maximize' }));
+    expect(platform.window.maximized).toBe(true);
+    expect(await screen.findByRole('button', { name: 'Restore' })).toBeTruthy();
+
+    // Win+Down, a snap, or a double-click on the bar.
+    act(() => platform.setMaximizedFromOutside(false));
+    expect(screen.getByRole('button', { name: 'Maximize' })).toBeTruthy();
+  });
+
+  it('close asks first, starting on Cancel, and Cancel keeps the window open', async () => {
+    const platform = windowed();
+    renderApp({ platform, user: manager });
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Close APG Post-It?' });
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(platform.window.destroyed).toBe(false);
+  });
+
+  it('closes once confirmed', async () => {
+    const platform = windowed();
+    renderApp({ platform, user: manager });
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(platform.window.destroyed).toBe(true));
+  });
+
+  it('asks the same question for Alt+F4 and the taskbar, and Escape stays', async () => {
+    const platform = windowed();
+    renderApp({ platform, user: intern, path: '/queue' });
+    await screen.findByText('Nothing in your queue today');
+
+    act(() => platform.closeFromOutside());
+    expect(screen.getByRole('dialog', { name: 'Close APG Post-It?' })).toBeTruthy();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(platform.window.destroyed).toBe(false);
+
+    act(() => platform.closeFromOutside());
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(platform.window.destroyed).toBe(true));
+  });
+
+  it('with unsaved changes on Assign, asks once, saying they will be lost', async () => {
+    const platform = windowed({
+      assignments: {
+        ok: true,
+        assignments: [
+          { date: '2026-11-01', assignedTo: intern.name, property: 'BGC Uptown Office 18F, 240 sqm', status: 'To post', propertyId: '1BgcUptown' },
+        ],
+      },
+    });
+    renderApp({ platform, user: manager, path: '/assign' });
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search the library' }), 'Kapitolyo');
+    await userEvent.click(await screen.findByRole('button', { name: /^Add Kapitolyo/ }));
+
+    act(() => platform.closeFromOutside());
+    const dialogs = screen.getAllByRole('dialog');
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0]!.getAttribute('aria-labelledby')).toBeTruthy();
+    expect(within(dialogs[0]!).getByRole('heading').textContent).toBe('Close APG Post-It?');
+    expect(dialogs[0]!.textContent).toMatch(/changes that aren't saved\. Closing now loses them/);
+
+    // Even when the leave question was already open, there is one question.
+    await userEvent.click(within(dialogs[0]!).getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('link', { name: 'Tracker' }));
+    expect(screen.getByRole('dialog', { name: 'Leave without saving?' })).toBeTruthy();
+    act(() => platform.closeFromOutside());
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('dialog', { name: 'Close APG Post-It?' }).textContent).toMatch(/changes that aren't saved/);
+
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(platform.window.destroyed).toBe(true));
+  });
+});
+
+/** The window as it opens on a given platform, nobody signed in. */
+function launchWith(platform: ReturnType<typeof fakeServer>) {
+  render(
+    <AppStateProvider platform={platform} now={() => NOW}>
+      <MemoryRouter initialEntries={['/']} future={routerFuture}>
+        <AppShell />
+      </MemoryRouter>
+    </AppStateProvider>,
+  );
+}

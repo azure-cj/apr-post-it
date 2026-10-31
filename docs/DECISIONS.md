@@ -152,3 +152,21 @@ Two further rules came with it:
 - **The file is pure ASCII.** Literal characters inside its regexes broke two
   edits, and the file is pasted into the Apps Script editor, where an encoding
   slip would silently corrupt a rule. A test enforces it.
+
+### D14. Two roles: Admin and Intern (Oct 31, 2026)
+
+The owner's decision. The Admin is the person who assigns the postings; everyone else is an
+Intern. The old middle role, Manager, is merged into Admin: with a team this size the person
+who builds the queues is the person who owns the setup, and a third role only added a column
+to every permission check and a way for an admin to lose a screen by being tested for
+`'Manager'`.
+
+So every Admin gets Assign, Tracker and Settings. `PERMISSIONS` in `Code.gs` has two entries,
+and `roleOf_` reads a Team row that still says `Manager` as Admin, so nobody's row has to be
+retyped; the app's `parseRole` does the same with a reply. Anything else, blank included, is
+Intern: an unknown role gets the fewest rights, never the most. On screen, a person to ask is
+"your admin". The folder `ui/screens/manager` and `canManage` keep their names.
+
+The boundaries in `ROLES.md` are unchanged: the internal section still never reaches an
+Intern, and the role is still the key's, never the request's.
+

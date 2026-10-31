@@ -6,7 +6,8 @@
  * and later in a Cloud Function.
  */
 
-export type Role = 'Intern' | 'Manager' | 'Admin';
+/** Admin assigns the postings and sees everything; an Intern posts. */
+export type Role = 'Intern' | 'Admin';
 
 export interface User {
   readonly name: string;
@@ -19,7 +20,7 @@ export interface User {
  * Manager powers. Ask this rather than testing for 'Manager', or an admin
  * silently loses the screens they are meant to have.
  */
-export const canManage = (u: User): boolean => u.role === 'Manager' || u.role === 'Admin';
+export const canManage = (u: User): boolean => u.role === 'Admin';
 export const isAdmin = (u: User): boolean => u.role === 'Admin';
 
 /** First letters of the first two words: "Jan Dela Cruz" → "JD". */

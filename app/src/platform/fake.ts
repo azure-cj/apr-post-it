@@ -48,7 +48,7 @@ export type FakeReply =
   | readonly unknown[];
 
 /** Every method of the platform, by name. */
-export type FakeMethod = Exclude<keyof Platform, 'hasFileSystem'>;
+export type FakeMethod = Exclude<keyof Platform, 'hasFileSystem' | 'hasWindowControls'>;
 
 export interface FakePlatformOptions {
   /** What `post` answers, by the `action` in the request body. */
@@ -67,6 +67,18 @@ export interface FakePlatformOptions {
   readonly delayMs?: number;
   /** Default false: in a browser, nothing can be saved to disk or opened in Explorer. */
   readonly hasFileSystem?: boolean;
+  /** Default false: in a browser there is no window to minimize or close. True draws the controls anyway. */
+  readonly hasWindowControls?: boolean;
+}
+
+/** What has happened to the fake's window. */
+export interface FakeWindow {
+  readonly minimized: boolean;
+  readonly maximized: boolean;
+  /** Closed for good, by destroy(). */
+  readonly destroyed: boolean;
+  /** How many times something asked to close it. */
+  readonly closeRequests: number;
 }
 
 export interface FakePost {
@@ -95,6 +107,15 @@ export interface FakePlatform extends Platform {
   readonly saves: readonly FakeSave[];
   /** Changes what `post` answers for an action, from the next call on. */
   reply(action: string, reply: FakeReply): void;
+  /** The window, as the calls left it. */
+  readonly window: FakeWindow;
+  /**
+   * Closing from outside the app, as Alt+F4 or the taskbar do: held and handed
+   * to onCloseRequested, or the window closes when nobody is listening.
+   */
+  closeFromOutside(): void;
+  /** Maximizing or restoring from outside the app: Win+Up, a snap, a double-click. */
+  setMaximizedFromOutside(maximized: boolean): void;
 }
 
 /** Where the fake pretends the Downloads folder is. */
@@ -116,6 +137,22 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
 
   let key: string | null = options.key?.trim() || null;
   const files = new Set<string>(); // lower-cased: Windows compares names that way
+
+  const win = { minimized: false, maximized: false, destroyed: false, closeRequests: 0 };
+  const closeHandlers = new Set<() => void>();
+  const maximizedHandlers = new Set<(maximized: boolean) => void>();
+  const setMaximized = (maximized: boolean): void => {
+    if (win.maximized === maximized) return;
+    win.maximized = maximized;
+    for (const handler of [...maximizedHandlers]) handler(maximized);
+  };
+  const askToClose = (): void => {
+    if (win.destroyed) return;
+    win.closeRequests++;
+    // As Tauri does: with nobody listening, a request to close closes.
+    if (closeHandlers.size === 0) win.destroyed = true;
+    for (const handler of [...closeHandlers]) handler();
+  };
 
   const copied: string[] = [];
   const opened: string[] = [];
@@ -150,6 +187,46 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
 
     reply(action, reply) {
       replies.set(action, reply);
+    },
+
+    hasWindowControls: options.hasWindowControls ?? false,
+    window: win,
+    closeFromOutside: askToClose,
+    setMaximizedFromOutside: setMaximized,
+
+    async minimize() {
+      await begin('minimize');
+      win.minimized = true;
+    },
+
+    async toggleMaximize() {
+      await begin('toggleMaximize');
+      setMaximized(!win.maximized);
+    },
+
+    async isMaximized() {
+      await begin('isMaximized');
+      return win.maximized;
+    },
+
+    onMaximizedChange(handler) {
+      maximizedHandlers.add(handler);
+      return () => maximizedHandlers.delete(handler);
+    },
+
+    async requestClose() {
+      await begin('requestClose');
+      askToClose();
+    },
+
+    onCloseRequested(handler) {
+      closeHandlers.add(handler);
+      return () => closeHandlers.delete(handler);
+    },
+
+    async destroy() {
+      await begin('destroy');
+      win.destroyed = true;
     },
 
     async copyText(text) {

@@ -54,8 +54,11 @@ export interface AppState extends Omit<Services, 'openProperty' | 'forget'> {
   /**
    * Asks the server who `key` belongs to; then keeps the key (in the OS) and
    * the link, and signs that person in. Rejects with the server's sentence.
+   *
+   * Aborting `signal` stops it: a reply that arrives afterwards signs nobody in
+   * and keeps no key, and the promise rejects with the signal's reason.
    */
-  signIn(url: string, key: string): Promise<User>;
+  signIn(url: string, key: string, signal?: AbortSignal): Promise<User>;
   /** After a failed resume: ask again with the kept key. */
   retrySignIn(): void;
   /** After a failed resume: go to the sign-in form instead. */
@@ -177,12 +180,20 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
   }, [user, services, clock]);
 
   const signIn = useCallback(
-    async (url: string, key: string): Promise<User> => {
+    async (url: string, key: string, signal?: AbortSignal): Promise<User> => {
+      signal?.throwIfAborted();
       // Asked with exactly what was typed, before anything is kept: a key the
       // server does not know is never saved.
       const probe = createBackend({ post: platform.post, getConfig: () => ({ url, key }) });
       const signedIn = await askWhoThisIs(probe);
+      // Cancelled while the server was answering: the answer is dropped.
+      signal?.throwIfAborted();
       await platform.writeKey(key);
+      if (signal?.aborted) {
+        // Cancelled while the key was being kept: take it back off this PC.
+        await platform.writeKey('').catch(() => {});
+        signal.throwIfAborted();
+      }
       try {
         await saveSettings({ scriptUrl: url });
       } catch {

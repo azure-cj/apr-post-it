@@ -84,12 +84,55 @@ describe('SignInScreen', () => {
   });
 
   it('shows why the last attempt failed, as an alert', () => {
-    render(<SignInScreen onSubmit={() => {}} busy={false} error="That key isn't on the team. Ask your manager for yours." />);
+    render(<SignInScreen onSubmit={() => {}} busy={false} error="That key isn't on the team. Ask your admin for yours." />);
     expect(screen.getByRole('alert').textContent).toContain("That key isn't on the team.");
   });
 
   it('shows no error line when there is none', () => {
     render(<SignInScreen onSubmit={() => {}} busy={false} error={null} />);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  describe('Cancel', () => {
+    it('sits beside Sign in, and cannot be pressed while there is nothing to clear', () => {
+      render(<SignInScreen onSubmit={() => {}} busy={false} />);
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+      expect(cancel.hasAttribute('disabled')).toBe(true);
+      expect(cancel.getAttribute('type')).toBe('button');
+      expect(cancel.parentElement).toBe(screen.getByRole('button', { name: 'Sign in' }).parentElement);
+    });
+
+    it('clears both fields and any complaint, says so to the caller, and goes back to the link', async () => {
+      const onCancel = vi.fn();
+      const onSubmit = vi.fn();
+      render(<SignInScreen onSubmit={onSubmit} onCancel={onCancel} busy={false} initialUrl="https://x" />);
+      await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+      expect(screen.getByText('Paste your key.')).toBeTruthy();
+      await userEvent.type(screen.getByLabelText('Your key'), 'abc');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect((screen.getByLabelText('Web app link') as HTMLInputElement).value).toBe('');
+      expect((screen.getByLabelText('Your key') as HTMLInputElement).value).toBe('');
+      expect(screen.queryByText('Paste your key.')).toBeNull();
+      expect(document.activeElement).toBe(screen.getByLabelText('Web app link'));
+      expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true);
+    });
+
+    it('can be pressed while signing in, even with nothing typed', async () => {
+      const onCancel = vi.fn();
+      render(<SignInScreen onSubmit={() => {}} onCancel={onCancel} busy />);
+      const cancel = screen.getByRole('button', { name: 'Cancel' });
+      expect(cancel.hasAttribute('disabled')).toBe(false);
+      await userEvent.click(cancel);
+      expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('can be pressed to clear an error', () => {
+      render(<SignInScreen onSubmit={() => {}} busy={false} error="That key isn't on the team." />);
+      expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(false);
+    });
   });
 });

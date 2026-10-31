@@ -23,9 +23,9 @@ A **7-day cooldown** stops a listing being posted again too soon. It is checked 
 server, under a lock, so a refusal is final and arrives as a sentence with the next allowed
 date.
 
-Managers build each intern's **daily queue** and watch the **tracker**: posted today,
-pending, who's done, due for repost, never posted. An admin owns the setup: the web app
-link, the team and their keys, the rules.
+The admin builds each intern's **daily queue** and watches the **tracker**: posted today,
+pending, who's done, due for repost, never posted. The admin also owns the setup: the web
+app link, the team and their keys, the rules. There are two roles, Admin and Intern (D14).
 
 ## The library
 
@@ -50,8 +50,7 @@ visible queue of documents to fix.
 | Role | Does | Sees |
 |---|---|---|
 | **Intern** | Works a queue top to bottom. Searches when the queue is done. Logs posts as themself | Public text only. The internal section is absent from their replies, not hidden (D1) |
-| **Manager** | Assigns queues, watches the tracker, fixes logged rows, sweeps doc health | Everyone's rows and the internal section |
-| **Admin** | Settings: the web app link, cooldown, team, keys. Usually also a manager | Everything |
+| **Admin** | Assigns the postings: builds queues, watches the tracker, fixes logged rows, sweeps doc health. Owns Settings: the web app link, cooldown, team, keys | Everything |
 
 The scene: an office PC or laptop, Windows 10 or 11, often a 1366×768 screen, sometimes
 at 125–150% text size. Post-It sits beside a browser with Facebook open, and a global
@@ -65,7 +64,7 @@ Each person has their own **key** on a private Team tab (D2, D3). The key is the
 identity: the server resolves it to a name and a role before doing anything, and
 "Posted by" is taken from the key, so a post cannot be logged under someone else's name.
 Revoking someone is one cell. A leaked intern key grants intern rights only; a leaked
-manager key is as bad as a shared password. The app never keeps the key in the WebView:
+admin key is as bad as a shared password. The app never keeps the key in the WebView:
 the OS holds it.
 
 So sign-in is: paste the web app link and your key, and the server says who you are. The
@@ -102,7 +101,7 @@ gold brand word, the one gold button, the gold of what is selected and of keyboa
 - An intern works a whole queue without asking anyone what to do next.
 - Nothing private is ever posted. Copy is impossible when a check fails.
 - No listing is posted inside its cooldown, and the refusal explains itself.
-- A manager reads the day from the tracker in under a minute.
+- An admin reads the day from the tracker in under a minute.
 
 ## What it must never be
 

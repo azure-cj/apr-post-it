@@ -25,8 +25,8 @@ const CONFIG = {
   TRACKER_SHEET_ID: '',
 
   // A SEPARATE, PRIVATE spreadsheet for the Team tab, which holds everyone's
-  // key. It must not live in a sheet the team can open: anyone who can read a
-  // manager's key can act as that manager. Leave blank only if the tracker
+  // key. It must not live in a sheet the team can open: anyone who can read an
+  // admin's key can act as that admin. Leave blank only if the tracker
   // itself is private to you.
   ADMIN_SHEET_ID: '',
 
@@ -50,13 +50,13 @@ const PHOTO_MIME  = /^image\/(jpeg|png|webp|gif)$/;
 const DOC_NAME    = /\.(docx?|txt|md)$/i;
 
 const TEAM_HEADERS   = ['Name', 'Email', 'Role', 'Key', 'FB Accounts', 'Active'];
-const ROLES = ['Intern', 'Manager', 'Admin'];
+const ROLES = ['Intern', 'Admin'];
 
 // What each role may call. Admin may call anything.
+// Two roles. The Admin assigns the postings and sees everything; an Intern posts.
+// A Team row that still says "Manager" (the old middle role) counts as Admin.
 const PERMISSIONS = {
   Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink', 'setStatus'],
-  Manager: ['ping', 'properties', 'property', 'posts', 'assignments',
-            'logPost', 'addLink', 'saveQueue', 'setStatus'],
   Admin:   ['*'],
 };
 
@@ -77,7 +77,7 @@ function parseBody(e) {
 function route(req) {
   try {
     var me = identify(req.key);
-    if (!me) return json({ ok: false, error: 'unauthorized', message: 'This copy of Post-It is not registered. Ask your manager for a key.' });
+    if (!me) return json({ ok: false, error: 'unauthorized', message: 'This copy of Post-It is not registered. Ask your admin for a key.' });
     if (!allowed(me.role, req.action)) {
       return json({ ok: false, error: 'forbidden', message: 'Your account cannot do that.' });
     }
@@ -128,7 +128,7 @@ function identify(key) {
   })[0];
   if (!row) return null;
 
-  var role = ROLES.indexOf(row.Role) === -1 ? 'Intern' : row.Role;
+  var role = roleOf_(row.Role);
   return {
     // Text, as every tracker value is (readRows): Posted By is matched with ===.
     name: textOf_(row.Name),
@@ -137,6 +137,12 @@ function identify(key) {
     fbAccounts: String(row['FB Accounts'] || '').split(',').map(function (x) { return x.trim(); }).filter(String),
     canSeeInternal: role !== 'Intern',
   };
+}
+
+/** "Admin" or "Manager" (old name) is Admin; anything else, blank included, is Intern. */
+function roleOf_(value) {
+  var v = String(value || '').trim().toLowerCase();
+  return (v === 'admin' || v === 'manager') ? 'Admin' : 'Intern';
 }
 
 /** The Team tab, cached for a minute so a key check is not a sheet read. */
@@ -955,7 +961,7 @@ function onOpen() {
  */
 function ADD_PERSON() {
   var name       = 'Jan Dela Cruz';
-  var role       = 'Intern';          // Intern | Manager | Admin
+  var role       = 'Admin';           // Admin (assigns postings) | Intern
   var fbAccounts = '';                // comma separated; blank = any
 
   var key = addTeamMember(name, '', role, fbAccounts);
@@ -980,7 +986,7 @@ function promptAddTeamMember() {
   var ui = SpreadsheetApp.getUi();
   var name = ui.prompt('Full name').getResponseText();
   if (!name) return;
-  var role = ui.prompt('Role: Intern, Manager or Admin').getResponseText();
+  var role = ui.prompt('Role: Admin or Intern').getResponseText();
   var fb = ui.prompt('Facebook accounts they may post from (comma separated, blank = any)').getResponseText();
   var key = addTeamMember(name, '', role, fb);
   ui.alert('Key for ' + name + ':\n\n' + key + '\n\nPaste it into their copy of Post-It. It is on the Team tab if you need it again.');

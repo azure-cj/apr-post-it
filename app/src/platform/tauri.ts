@@ -11,6 +11,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { fetch } from '@tauri-apps/plugin-http';
 import { openPath, openUrl } from '@tauri-apps/plugin-opener';
@@ -136,6 +137,63 @@ export function createTauriPlatform(): Platform {
         throw fromRust(err, 'Could not save your key');
       }
     },
+
+    // The window. Each call is granted in capabilities/default.json.
+    hasWindowControls: true,
+
+    minimize: () => getCurrentWindow().minimize(),
+    toggleMaximize: () => getCurrentWindow().toggleMaximize(),
+    isMaximized: () => getCurrentWindow().isMaximized(),
+
+    onMaximizedChange(handler) {
+      // Tauri has no "maximized" event: a resize is when it can change.
+      const win = getCurrentWindow();
+      let last: boolean | null = null;
+      const check = () => {
+        win.isMaximized().then(
+          (now) => {
+            if (now !== last) {
+              last = now;
+              handler(now);
+            }
+          },
+          () => {},
+        );
+      };
+      return listening(win.onResized(check));
+    },
+
+    requestClose: () => getCurrentWindow().close(),
+
+    onCloseRequested(handler) {
+      return listening(
+        getCurrentWindow().onCloseRequested((event) => {
+          // Held, always: Tauri closes the window after the listener unless told not to.
+          event.preventDefault();
+          handler();
+        }),
+      );
+    },
+
+    destroy: () => getCurrentWindow().destroy(),
+  };
+}
+
+/** A stop function for a listener that is still being set up: stops it once it is. */
+function listening(started: Promise<() => void>): () => void {
+  let stopped = false;
+  let unlisten: (() => void) | null = null;
+  started.then(
+    (stop) => {
+      if (stopped) stop();
+      else unlisten = stop;
+    },
+    () => {},
+  );
+  return () => {
+    stopped = true;
+    unlisten?.();
+    unlisten = null;
   };
 }
 
@@ -183,7 +241,7 @@ function scopeRefusal(refused: string, requested: string): string {
   if (to?.hostname === 'accounts.google.com') {
     return (
       'Google asked for a sign-in instead of answering, so the web app is not open to Post-It. ' +
-      'Ask your manager to redeploy it with access set to "Anyone".'
+      'Ask your admin to redeploy it with access set to "Anyone".'
     );
   }
   const isTheLinkItself = !from || !to || (to.origin === from.origin && to.pathname === from.pathname);

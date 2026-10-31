@@ -410,7 +410,7 @@ export function PropertyScreen() {
             {detail === null ? (
               <Waiting>Waiting for the document…</Waiting>
             ) : withheld ? (
-              <p className="meta">The checks run once a manager has separated the document.</p>
+              <p className="meta">The checks run once an admin has separated the document.</p>
             ) : (
               <CheckList checks={checks} label="Pre-post checks" />
             )}
@@ -505,7 +505,7 @@ function failReason(check: CheckResult, manager: boolean): string {
     const what = quoted ? `“${quoted}”` : 'commission wording';
     return manager
       ? `the public text mentions ${what}. Move it below the separator in the document.`
-      : `the public text mentions ${what}. Ask your manager to remove it from the document.`;
+      : `the public text mentions ${what}. Ask your admin to remove it from the document.`;
   }
   if (check.name === 'Internal section hidden') {
     return "the document has no separator yet. Add one above the owner's details.";
@@ -540,13 +540,13 @@ function PostText({
     // None of the text: not hidden, absent (D13).
     return noDocument ? (
       <Notice tone="warn" title="There's no posting document yet" className="post-text__withheld">
-        This listing's folder has no document to post from, so there is nothing to copy. Tell your manager it's
+        This listing's folder has no document to post from, so there is nothing to copy. Tell your admin it's
         &ldquo;{detail.name}&rdquo;.
       </Notice>
     ) : (
       <Notice tone="danger" title="There's nothing safe to show yet" className="post-text__withheld">
-        Nobody has separated this document. A manager has to add a separator above the owner's details before any of
-        it can be shown or copied. Tell your manager it's &ldquo;{detail.name}&rdquo;.
+        Nobody has separated this document. An admin has to add a separator above the owner's details before any of
+        it can be shown or copied. Tell your admin it's &ldquo;{detail.name}&rdquo;.
       </Notice>
     );
   }
@@ -563,7 +563,7 @@ function PostText({
     <>
       {!detail.hasInternal && manager ? (
         <Notice tone="danger" title="Nobody has separated this document yet">
-          You see all of it because you're a manager; interns see none of it. Add a separator above the owner's details
+          You see all of it because you're an admin; interns see none of it. Add a separator above the owner's details
           in the document, and Copy works once it's re-read.
         </Notice>
       ) : null}
@@ -594,7 +594,7 @@ function InternalSection({ detail }: { readonly detail: PropertyDetail }) {
         <Icon name="warn" className="internal__icon" />
         <span className="internal__label">
           <span className="internal__title">Internal section: never posted, never copied</span>
-          <span className="meta">Owner details and commission. Shown to managers only.</span>
+          <span className="meta">Owner details and commission. Shown to admins only.</span>
         </span>
         <span className="internal__toggle" aria-hidden="true">
           <span className="internal__show">Show</span>
@@ -628,7 +628,7 @@ function Verdict({
       case 'no-document':
         return ['danger', 'No document', 'There is nothing to post from yet.'];
       case 'withheld':
-        return ['danger', 'Not separated', 'Nothing can be copied until a manager adds a separator.'];
+        return ['danger', 'Not separated', 'Nothing can be copied until an admin adds a separator.'];
       case 'cooldown':
         return ['danger', 'In cooldown', cool?.nextAllowed ? `It can be posted again on ${longDate(cool.nextAllowed)}.` : 'It was posted too recently.'];
       case 'empty':
@@ -639,7 +639,7 @@ function Verdict({
           'Copy is blocked',
           manager
             ? 'The document needs fixing first. The failed check says what to change.'
-            : 'Ask your manager to fix the document. The failed check says what is wrong.',
+            : 'Ask your admin to fix the document. The failed check says what is wrong.',
         ];
     }
   })();

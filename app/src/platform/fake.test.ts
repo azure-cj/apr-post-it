@@ -366,3 +366,43 @@ describe('delays', () => {
     expect(answered).toBe(true);
   });
 });
+
+describe("the fake's window", () => {
+  it('has no controls unless asked, as in a browser', () => {
+    expect(createFakePlatform().hasWindowControls).toBe(false);
+    expect(createFakePlatform({ hasWindowControls: true }).hasWindowControls).toBe(true);
+  });
+
+  it('minimizes, and maximizes and restores, telling whoever listens', async () => {
+    const fake = createFakePlatform();
+    const seen: boolean[] = [];
+    const stop = fake.onMaximizedChange((now) => seen.push(now));
+    await fake.minimize();
+    await fake.toggleMaximize();
+    await expect(fake.isMaximized()).resolves.toBe(true);
+    fake.setMaximizedFromOutside(false);
+    stop();
+    await fake.toggleMaximize();
+    expect(fake.window).toMatchObject({ minimized: true, maximized: true });
+    expect(seen).toEqual([true, false]);
+  });
+
+  it('holds a request to close while someone listens, and closes only on destroy', async () => {
+    const fake = createFakePlatform();
+    const asked = vi.fn();
+    const stop = fake.onCloseRequested(asked);
+    await fake.requestClose();
+    fake.closeFromOutside();
+    expect(asked).toHaveBeenCalledTimes(2);
+    expect(fake.window).toMatchObject({ destroyed: false, closeRequests: 2 });
+    await fake.destroy();
+    expect(fake.window.destroyed).toBe(true);
+    stop();
+  });
+
+  it('closes on a request when nobody listens, as Tauri does', async () => {
+    const fake = createFakePlatform();
+    await fake.requestClose();
+    expect(fake.window.destroyed).toBe(true);
+  });
+});

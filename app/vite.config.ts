@@ -42,7 +42,7 @@ export default defineConfig({
     // server/apps-script sits beside app/, outside Vite's root.
     fs: { allow: ['..'] },
   },
-  build: { target: 'es2022', sourcemap: true },
+  build: { target: 'es2022', sourcemap: false },
   test: {
     globals: true,
     environment: 'node',

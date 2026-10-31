@@ -220,12 +220,12 @@ only, not in the production build) shows each in every variant with the product'
 | **Toast**, **ToastRegion**, `useToasts` | `tone` ok, info, warn, danger | Bottom centre, at most three. 4s for ok/info, 8s for warn/danger, paused while hovered or focused. Rendered into `<body>`. A problem that needs action is a Notice, not a toast |
 | **Spinner** | `small` 16, `regular` 24; `label` | Turns at constant speed; with reduced motion it breathes instead |
 | **EmptyState** | `title`, body, `action`, `icon` | Says what is empty, why, and the one thing to do next |
-| **TopBar** | `nav`, `currentKey`, `user`, `onNavigate`, `onSignOut` | Brand word gold; the current item gets a gold mark and brighter text; measured layout |
+| **TopBar** | `nav`, `currentKey`, `user`, `onNavigate`, `onSignOut`, `windowControls` | Brand word gold; the current item gets a gold mark and brighter text; measured layout. On the desktop the window has no frame (`decorations: false`): the bar is the drag region (double-click maximizes) and carries minimize, maximize/restore and close at the top-right corner, 46×32 with inline SVG glyphs. Close turns danger red on hover, never gold, and always asks first |
 | **CheckList** | `checks: CheckResult[]`, `label` | Order kept, so a check is always in the same place. Pass, warn, fail each have an icon shape and a word for screen readers; a fail line is tinted so it is found first |
 
 The shell (`src/ui/App.tsx`) holds the routes: Sign in, Find, Property, Log a post, My
 queue, Assign, Tracker, Settings. Nav by role, per `docs/ROLES.md`: an intern gets My
-queue and Find; a manager Tracker, Assign and Find; an admin also Settings. The
+queue and Find; an admin Tracker, Assign, Find and Settings (D14). The
 `.page` and `.page-header` classes in `App.css` lay out a screen.
 
 ## 11. Known tensions in the copied tokens

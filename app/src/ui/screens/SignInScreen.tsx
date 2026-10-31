@@ -5,6 +5,11 @@ import './SignInScreen.css';
 export interface SignInScreenProps {
   /** Called with the trimmed link and key once both are filled in. */
   readonly onSubmit: (url: string, key: string) => void;
+  /**
+   * Cancel was pressed: stop the sign-in that is running, if any, and forget
+   * the error. The screen clears its own fields.
+   */
+  readonly onCancel?: (() => void) | undefined;
   /** Waiting for the server to say who the key belongs to. */
   readonly busy: boolean;
   /** Why the last attempt failed, as a sentence. Null or empty when it didn't. */
@@ -17,7 +22,7 @@ export interface SignInScreenProps {
  * Sign in with the web app link and your own key. The server, not the app,
  * says who you are and what you may do.
  */
-export function SignInScreen({ onSubmit, busy, error, initialUrl = '' }: SignInScreenProps) {
+export function SignInScreen({ onSubmit, onCancel, busy, error, initialUrl = '' }: SignInScreenProps) {
   const [url, setUrl] = useState(initialUrl);
   const [key, setKey] = useState('');
   const [showKey, setShowKey] = useState(false);
@@ -50,13 +55,24 @@ export function SignInScreen({ onSubmit, busy, error, initialUrl = '' }: SignInS
     onSubmit(cleanUrl, cleanKey);
   };
 
+  // Something to stop or clear. With nothing, Cancel stays where it is but can't be pressed.
+  const canCancel = busy || url !== '' || key !== '' || Boolean(error) || missing.url || missing.key;
+  const cancel = () => {
+    onCancel?.();
+    setUrl('');
+    setKey('');
+    setShowKey(false);
+    setMissing({ url: false, key: false });
+    urlRef.current?.focus();
+  };
+
   return (
     <div className="sign-in">
       <Card className="sign-in__card">
         <h1 className="sign-in__title" tabIndex={-1}>
           Sign in
         </h1>
-        <p className="sign-in__intro">Paste the web app link and your own key. Your manager sends you both.</p>
+        <p className="sign-in__intro">Paste the web app link and your own key. Your admin sends you both.</p>
 
         <form className="sign-in__form" onSubmit={submit} noValidate aria-busy={busy || undefined}>
           <TextInput
@@ -103,9 +119,14 @@ export function SignInScreen({ onSubmit, busy, error, initialUrl = '' }: SignInS
             }}
           />
 
-          <Button type="submit" variant="primary" block busy={busy}>
-            {busy ? 'Signing in…' : 'Sign in'}
-          </Button>
+          <div className="sign-in__actions">
+            <Button onClick={cancel} disabled={!canCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" busy={busy}>
+              {busy ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </div>
 
           {error ? (
             <Notice tone="danger" live className="sign-in__error">
@@ -114,7 +135,7 @@ export function SignInScreen({ onSubmit, busy, error, initialUrl = '' }: SignInS
           ) : null}
         </form>
 
-        <p className="sign-in__footer">No key yet? Ask your manager to add you to the team.</p>
+        <p className="sign-in__footer">No key yet? Ask your admin to add you to the team.</p>
       </Card>
     </div>
   );
