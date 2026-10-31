@@ -14,7 +14,7 @@ import { cooldown, daysLeft, isDueForRepost } from './cooldown';
 import { folderLine, normalizeForSearch } from './directory';
 import { matchName, normalize } from './matcher';
 import type { QueueItemInput } from './tracker';
-import type { Assignment, AssignmentStatus, PostLogEntry, Property, Role, Settings } from './types';
+import { queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry, type Property, type Role, type Settings } from './types';
 
 /**
  * A listing as the directory list gives it, with its Issues text when the
@@ -298,8 +298,10 @@ function progressOf(name: string, day: readonly Assignment[]): InternProgress {
   for (const row of day) {
     if (!samePerson(row.assignedTo, name)) continue;
     total++;
-    if (row.status === 'Posted') posted++;
-    else if (row.status === 'Pending') pending++;
+    // Anything else is Not Shared: "To post", in older rows, included.
+    const status = queueStatus(row.status);
+    if (status === 'Posted') posted++;
+    else if (status === 'Pending') pending++;
     else toPost++;
   }
   return { name, total, posted, pending, toPost, done: total > 0 && toPost === 0 && pending === 0 };
@@ -417,7 +419,7 @@ export interface PasteMatch {
 
 export interface QueueValidation {
   readonly ok: boolean;
-  /** What to save, in this order: a saved item keeps its status, a new one is To post. */
+  /** What to save, in this order: a saved item keeps its status, a new one is Not Shared. */
   readonly items: readonly QueueItemInput[];
   /** Why the queue can't be saved as it is, one sentence each. */
   readonly problems: readonly string[];
@@ -439,7 +441,7 @@ export interface AssignInput {
 export interface AssignRules {
   readonly intern: string;
   readonly date: string;
-  /** The saved queue as a draft starts: Pending first, then To post in sheet order, then Posted. */
+  /** The saved queue as a draft starts: Pending first, then Not Shared in sheet order, then Posted. */
   readonly saved: readonly QueueEntry[];
   /** The saved status of the listing with this key; undefined when it is not in the saved queue. */
   statusOf(key: string): AssignmentStatus | undefined;
@@ -494,7 +496,7 @@ export function keyOf(property: Pick<Property, 'id' | 'name'>): string {
   return property.id !== '' ? `id:${property.id}` : `name:${normalize(property.name)}`;
 }
 
-const STATUS_ORDER: readonly AssignmentStatus[] = ['Pending', 'To post', 'Posted'];
+const STATUS_ORDER: readonly AssignmentStatus[] = ['Pending', 'Not Shared', 'Posted'];
 
 /** What can go in one person's queue for one day, judged from the rows as read. */
 export function assignRules(input: AssignInput): AssignRules {
@@ -510,7 +512,7 @@ export function assignRules(input: AssignInput): AssignRules {
   const savedRows = new Map<string, Assignment>();
   for (const status of STATUS_ORDER) {
     for (const row of mine) {
-      if (row.status !== status) continue;
+      if (queueStatus(row.status) !== status) continue;
       const property = resolve(directory, row.propertyId, row.propertyName);
       const key = property
         ? keyOf(property)
@@ -578,7 +580,7 @@ export function assignRules(input: AssignInput): AssignRules {
       const kept = savedRows.get(entry.key);
       if (kept) {
         const id = entry.propertyId || kept.propertyId;
-        items.push({ propertyName: kept.propertyName, ...(id ? { propertyId: id } : {}), status: kept.status });
+        items.push({ propertyName: kept.propertyName, ...(id ? { propertyId: id } : {}), status: queueStatus(kept.status) });
         continue;
       }
 
@@ -592,7 +594,7 @@ export function assignRules(input: AssignInput): AssignRules {
         problems.push(`${property.name} can't go in this queue. ${verdict.reason}`);
         continue;
       }
-      items.push({ propertyName: property.name, propertyId: property.id, status: 'To post' });
+      items.push({ propertyName: property.name, propertyId: property.id, status: 'Not Shared' });
     }
     return { ok: problems.length === 0, items, problems };
   }
@@ -601,9 +603,13 @@ export function assignRules(input: AssignInput): AssignRules {
     intern,
     date,
     saved,
-    statusOf: (key) => savedRows.get(key)?.status,
+    statusOf: (key) => {
+      const row = savedRows.get(key);
+      return row ? queueStatus(row.status) : undefined;
+    },
     isStarted: (key) => {
-      const status = savedRows.get(key)?.status;
+      const row = savedRows.get(key);
+      const status = row ? queueStatus(row.status) : undefined;
       return status === 'Pending' || status === 'Posted';
     },
     check,

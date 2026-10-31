@@ -350,7 +350,7 @@ interface InternRowProps {
 
 function InternRow({ progress, day, onAssign }: InternRowProps) {
   const { name, total, posted, pending, toPost, done } = progress;
-  const left = [pending > 0 ? `${pending} pending` : null, toPost > 0 ? `${toPost} to post` : null].filter(Boolean);
+  const left = [pending > 0 ? `${pending} pending` : null, toPost > 0 ? `${toPost} not shared` : null].filter(Boolean);
   return (
     <li className="intern-row">
       <span className="intern-row__avatar" aria-hidden="true">

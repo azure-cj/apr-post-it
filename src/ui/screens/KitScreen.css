@@ -86,3 +86,40 @@
   position: relative;
   height: 100%;
 }
+
+/* Colour: the neutral ramp as swatches, the text greys as specimens. */
+.kit__swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: var(--space-8);
+  margin: 0 0 var(--space-10);
+  padding: 0;
+  list-style: none;
+}
+
+.kit__swatches:last-child {
+  margin-bottom: 0;
+}
+
+.kit__swatch {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.kit__chip,
+.kit__ink {
+  display: block;
+  height: 56px;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-row);
+}
+
+.kit__ink {
+  display: flex;
+  align-items: center;
+  padding-inline: var(--space-8);
+  background: var(--card-bg);
+  font-family: var(--heading-font);
+  font-size: var(--text-title);
+  font-weight: var(--weight-heading);
+}

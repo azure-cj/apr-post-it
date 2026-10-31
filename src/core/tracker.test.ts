@@ -75,7 +75,7 @@ function assignment(over: Partial<Assignment> = {}): Assignment {
     assignedTo: 'Jan Dela Cruz',
     propertyName: 'Casa Amara',
     propertyId: '1AbC',
-    status: 'To post',
+    status: 'Not Shared',
     ...over,
   };
 }
@@ -224,7 +224,9 @@ describe('the assignments', () => {
     const { post } = scripted({
       ok: true,
       assignments: [
+        // "To post" is the old word for Not Shared: the same thing.
         { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', property: 'Casa Amara', status: 'To post', propertyId: '1AbC' },
+        { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', property: 'Lot 3', status: ' not shared ' },
         { date: '2026-04-01T16:00:00.000Z', assignedTo: 'Jan Dela Cruz', property: 'Lot 9', status: 'pending' },
         { date: '2026-04-02', assignedTo: 'Bea Lim', property: 'Silang 40', status: 'POSTED' },
         { date: 'tomorrow', assignedTo: 'Bea Lim', property: 'Mabini', status: 'Draft' },
@@ -233,11 +235,12 @@ describe('the assignments', () => {
     const rows = await trackerOver(post).assignments();
 
     expect(rows).toEqual([
-      { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: '1AbC', status: 'To post' },
+      { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: '1AbC', status: 'Not Shared' },
+      { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 3', propertyId: '', status: 'Not Shared' },
       // Manila's midnight on Apr 2 is 16:00 on Apr 1 in UTC.
       { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 9', propertyId: '', status: 'Pending' },
       { date: '2026-04-02', assignedTo: 'Bea Lim', propertyName: 'Silang 40', propertyId: '', status: 'Posted' },
-      { date: '', assignedTo: 'Bea Lim', propertyName: 'Mabini', propertyId: '', status: 'To post' },
+      { date: '', assignedTo: 'Bea Lim', propertyName: 'Mabini', propertyId: '', status: 'Not Shared' },
     ]);
   });
 
@@ -378,7 +381,7 @@ describe('logging a post', () => {
     expect(saved).toEqual({
       date: '2026-03-09',
       time: '16:45',
-      type: 'Group post', // what Code.gs writes when no type is sent
+      type: '', // no type sent, and an older server replies with none
       title: 'Casa Amara',
       status: 'Posted',
       fbAccount: 'APG Homes',
@@ -386,6 +389,19 @@ describe('logging a post', () => {
       postedBy: 'Jan Dela Cruz',
       propertyId: '1AbC',
     });
+  });
+
+  it('takes the Property type the server wrote, else title cases the category it sent', async () => {
+    const fromServer = scripted({ ok: true, status: 'Posted', date: '2026-03-09', time: '10:23', type: 'Commercial Space', postedBy: 'Jan' });
+    expect((await trackerOver(fromServer.post).logPost(logInput({ type: 'WAREHOUSE' }))).type).toBe('Commercial Space');
+
+    const older = scripted({ ok: true, status: 'Posted', date: '2026-03-09', time: '10:23', postedBy: 'Jan' });
+    expect((await trackerOver(older.post).logPost(logInput({ type: 'CONDO / HOUSE AND LOT' }))).type).toBe('Condo / House and Lot');
+  });
+
+  it('reads the time the sheet writes, "10:23 AM", as HH:mm', async () => {
+    const { post } = scripted({ ok: true, status: 'Posted', date: '2026-03-09', time: '2:05 PM', postedBy: 'Jan' });
+    expect((await trackerOver(post).logPost(logInput())).time).toBe('14:05');
   });
 
   it('never fills in a time or a name the server did not send', async () => {
@@ -529,7 +545,7 @@ describe('saving a queue', () => {
     const { post, sent } = scripted({ ok: true, saved: 2 });
 
     const saved = await trackerOver(post).saveQueue('2026-04-02', 'Jan Dela Cruz', [
-      assignment({ propertyName: 'Casa Amara', propertyId: '', status: 'To post' }),
+      assignment({ propertyName: 'Casa Amara', propertyId: '', status: 'Not Shared' }),
       assignment({ propertyName: 'Lot 9', propertyId: '', status: 'Pending' }),
     ]);
 
@@ -538,12 +554,12 @@ describe('saving a queue', () => {
     expect(body['assignedTo']).toBe('Jan Dela Cruz');
     const items = body['items'] as Wire[];
     expect(items[0]!['property']).toBe('Casa Amara');
-    expect(items[0]!['status']).toBe('To post');
+    expect(items[0]!['status']).toBe('Not Shared');
     expect(items[1]!['status']).toBe('Pending');
     expect(saved).toBe(2);
   });
 
-  it('sends each item\'s folder id when it has one, and To post when it has no status', async () => {
+  it('sends each item\'s folder id when it has one, and Not Shared when it has no status', async () => {
     const { post, sent } = scripted({ ok: true, saved: 2 });
 
     await trackerOver(post).saveQueue('2026-04-02', 'Jan Dela Cruz', [
@@ -552,7 +568,7 @@ describe('saving a queue', () => {
     ]);
 
     expect(sent[0]!.body['items']).toEqual([
-      { property: 'Casa Amara', status: 'To post', propertyId: '1AbC' },
+      { property: 'Casa Amara', status: 'Not Shared', propertyId: '1AbC' },
       { property: 'Lot 9', status: 'Posted' },
     ]);
   });
@@ -729,8 +745,8 @@ describe('saving several queues', () => {
         {
           assignedTo: 'Jan',
           items: [
-            { propertyName: 'Casa Amara', propertyId: '1AbC', status: 'To post' },
-            { propertyName: 'Lot 9', status: 'To post' },
+            { propertyName: 'Casa Amara', propertyId: '1AbC', status: 'Not Shared' },
+            { propertyName: 'Lot 9', status: 'Not Shared' },
           ],
         },
         { assignedTo: 'Bea', items: [{ propertyName: 'Lot 10', status: 'Posted' }] },

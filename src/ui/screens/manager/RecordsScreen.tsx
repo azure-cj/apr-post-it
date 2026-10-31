@@ -10,7 +10,9 @@ import {
   Spinner,
 } from "../../components";
 import {
+  clockTime,
   dailyTotals,
+  postsCsv,
   postsForProperty,
   searchPosts,
   type DailyTotal,
@@ -314,23 +316,24 @@ function PostTable({
       <table className="records__table records__post-table">
         <thead>
           <tr>
-            <th scope="col">Time</th>
-            {showProperty ? <th scope="col">Property</th> : null}
+            {/* The interns' own sheet's columns, in its order, then Posted by. */}
+            {showDate ? <th scope="col">Date</th> : null}
+            <th scope="col">Property type</th>
+            {showProperty ? <th scope="col">Property title</th> : null}
+            <th scope="col">FB account name</th>
+            <th scope="col">Link</th>
+            <th scope="col">Time posted</th>
+            <th scope="col">Share posting</th>
             <th scope="col">Posted by</th>
-            <th scope="col">FB account</th>
-            <th scope="col">Status</th>
-            <th scope="col">
-              <span className="visually-hidden">Link</span>
-            </th>
           </tr>
         </thead>
         <tbody>
           {posts.map((post, i) => (
             <tr key={`${i}-${post.date}-${post.time}-${post.title}`}>
-              <td className="records__time tabular">
-                {showDate ? `${shortDate(post.date)}, ` : ""}
-                {post.time}
-              </td>
+              {showDate ? (
+                <td className="records__time tabular">{shortDate(post.date)}</td>
+              ) : null}
+              <td>{post.type}</td>
               {showProperty ? (
                 <th scope="row" className="records__property">
                   {onOpenProperty ? (
@@ -346,15 +349,7 @@ function PostTable({
                   )}
                 </th>
               ) : null}
-              <td>{post.postedBy}</td>
               <td>{post.fbAccount}</td>
-              <td>
-                {post.status === "Posted" ? (
-                  <Pill tone="ok">Posted</Pill>
-                ) : (
-                  <Pill tone="warn">Pending</Pill>
-                )}
-              </td>
               <td className="records__link">
                 {post.postLink && onOpenLink ? (
                   <Button
@@ -368,6 +363,15 @@ function PostTable({
                   <span className="records__zero">No link</span>
                 )}
               </td>
+              <td className="records__time tabular">{clockTime(post.time)}</td>
+              <td>
+                {post.status === "Posted" ? (
+                  <Pill tone="ok">Posted</Pill>
+                ) : (
+                  <Pill tone="warn">Pending</Pill>
+                )}
+              </td>
+              <td>{post.postedBy}</td>
             </tr>
           ))}
         </tbody>
@@ -411,38 +415,5 @@ function PropertyHistory({
   );
 }
 
-/** The posts as CSV, one row each, in the order given. Quoted where needed (RFC 4180), CRLF line ends. */
-export function postsCsv(posts: readonly PostLogEntry[]): string {
-  const head = [
-    "Date",
-    "Time",
-    "Property",
-    "Property ID",
-    "Posted by",
-    "FB account",
-    "Status",
-    "Type",
-    "Link",
-  ];
-  const cell = (value: string) => {
-    // A leading = + - @ would run as a formula in a spreadsheet.
-    const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
-    return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-  };
-  const rows = posts.map((p) =>
-    [
-      p.date,
-      p.time,
-      p.title,
-      p.propertyId,
-      p.postedBy,
-      p.fbAccount,
-      p.status,
-      p.type,
-      p.postLink,
-    ]
-      .map(cell)
-      .join(","),
-  );
-  return [head.join(","), ...rows].join("\r\n") + "\r\n";
-}
+/** The CSV is the interns' own sheet's columns and formats (core/records.ts). */
+export { postsCsv };

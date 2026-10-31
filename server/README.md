@@ -124,9 +124,9 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. The checker's fields too, joined as for `properties`. |
 | `posts` | everyone | The Posts tab as rows, every value text. An intern gets only their own. |
 | `assignments` | everyone | The Assignments tab as rows, every value text. An intern gets only their own. |
-| `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` and `postedBy`. `postLink` is required, an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com`, `fb.com` or `fb.me` (`error: 'link-required'` or `'bad-link'`), and so is `status`, `Posted` or `Pending` (`'bad-status'`); Pending means posted in a group and awaiting its admin's approval. Refuses with `'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the poster's Team row. An Admin may send `postedBy`: that person must be on the Team tab and active (`'unknown-person'`), and the account must be one of theirs. |
+| `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` (`HH:mm`), `type` (the Property type written) and `postedBy`. `postLink` is required, an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com`, `fb.com` or `fb.me` (`error: 'link-required'` or `'bad-link'`), and so is `status`, `Posted` or `Pending` (`'bad-status'`); Pending means posted in a group and awaiting its admin's approval. Refuses with `'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the poster's Team row. An Admin may send `postedBy`: that person must be on the Team tab and active (`'unknown-person'`), and the account must be one of theirs. |
 | `addLink` | everyone | Turns a Pending row into Posted with its link: `notfound` when there is no such row. An intern can complete only their own. Kept for old rows logged without a link. |
-| `setStatus` | everyone | Moves one queue item's status: `notfound` when no open item matches. An intern can move only their own. With `Posted`, also marks the assignee's newest Pending post of that listing Posted (by id, else by name), keeping its link. |
+| `setStatus` | everyone | Moves one queue item's status (`Not Shared`, `Pending` or `Posted`; an older app's `To post` is written `Not Shared`): `notfound` when no open item matches. An intern can move only their own. With `Posted`, also marks the assignee's newest Pending post of that listing Posted (by id, else by name), keeping its link. |
 | `team` | Admin | The Team tab without keys: `name`, `role`, `email`, `fbAccounts` (a list) and `active` for each person, revoked people included. The Key column is never sent. |
 | `addPerson` | Admin | Adds `{ name, role: 'Intern' \| 'Admin', fbAccounts?, email? }` to the Team tab and replies `{ person, key }`. The key is shown this once. A name already on the tab, in any case, is `'duplicate'`; any other role is `'bad-role'`. |
 | `setActive` | Admin | `{ name, active }`: revokes or restores a person, replying `{ person }`. Nobody can deactivate themselves (`'self'`). |
@@ -177,16 +177,60 @@ a *required* one that is missing raises a message naming it. The header row is r
 the rows, never cached, so a column moved in the sheet takes effect at once.
 
 **What the script writes is plain text** (D7). It formats each cell it fills as `@` before
-writing to it, so a date stays `2026-03-09`, a time stays `14:30`, a folder named `1201`
+writing to it, so a date stays `2026-03-09`, a time stays `10:23 AM`, a folder named `1201`
 stays text, and nothing beginning `=` or `+` is evaluated. Columns it does not fill keep
 their own format. Everything read comes back as text too: a date as `yyyy-MM-dd`, a time as
 `HH:mm`, a number as its digits. A time that an earlier version let Sheets turn into a time
 value reads back as `HH:mm`, not as `1899-12-30`.
 
-The one column worth adding is **PropertyId**. A row is matched to a listing by its folder id
-when both have one, so renaming a folder breaks nothing. A row without one, such as every row
-logged before the column was added, is matched by its title, with case, accents, punctuation
-and the usual abbreviations ignored, as the app matches names.
+### The Posts tab
+
+It records what the interns' own sheet, **POSTING TRACKER - INTERNS**, does, with its
+column names, words and formats, so it feels familiar. A tab the script creates gets these
+headers, in this order:
+
+1. **Date**: the day posted, written `yyyy-MM-dd` as text (`2026-10-26`). The interns'
+   sheet shows `10/26/26`; how the sheet *displays* a date is the sheet's business, not the
+   app's, so the script reads and writes ISO and leaves the display alone. A date typed by
+   hand as `10/26/2026` is still read.
+2. **Property type**: the listing's category from the Directory, found by folder id and
+   title cased as the owner writes it: `COMMERCIAL SPACE` → `Commercial Space`,
+   `CONDO / HOUSE AND LOT` → `Condo / House and Lot`. A category already in mixed case is
+   kept as it is. Only when the Directory has no row for the folder is the `type` the app
+   sent (the category it has) used instead, title cased the same way.
+3. **Property title**: the listing's name as written.
+4. **FB account name**: the Facebook account it was posted from.
+5. **Link**: the post's link.
+6. **Time posted**: Manila time, 12-hour, `10:23 AM`. Read back as `HH:mm` (`10:23`),
+   whether the cell says `10:23 AM`, `2:05pm` or `14:05`, which is the format the app uses.
+7. **Share posting**: `Posted` or `Pending` (posted in a group, awaiting its admin).
+8. **Posted by**: ours. Who it is credited to, from the key.
+9. **Property ID**: ours. The listing's folder id, for the records and the cooldown.
+
+The older spellings are still read, so an existing tab keeps working: `Type` / `Category`,
+`Title` / `Property` / `Property Name`, `FB Account` / `Account` / `Facebook Account` / `FB`,
+`Post Link` / `URL` / `Facebook Link`, `Time`, `Status`, `Intern` / `By`, and
+`PropertyId` / `Folder Id`. Headers match in any case.
+
+### The Assignments tab
+
+A tab the script creates gets `Date`, `Assigned To`, `Property`, `Status` and `PropertyId`
+(also read as `Assigned to` / `Intern`, `Title` / `Property Name`, `Property Id` /
+`Folder Id`). **Status** is one of:
+
+* **`Not Shared`**: assigned, not posted yet. The interns' own word for it. Rows written
+  before it say `To post`, which is read as the same thing everywhere (`setStatus`,
+  `logPost`, the app's queue, planner and summaries). New rows are always written
+  `Not Shared`.
+* **`Pending`**: posted in a group, awaiting its admin.
+* **`Posted`**: live. An item already Posted is never moved back.
+
+### Property ID
+
+The one column worth adding to an older tab is **Property ID**. A row is matched to a listing
+by its folder id when both have one, so renaming a folder breaks nothing. A row without one,
+such as every row logged before the column was added, is matched by its title, with case,
+accents, punctuation and the usual abbreviations ignored, as the app matches names.
 
 ## The cooldown
 

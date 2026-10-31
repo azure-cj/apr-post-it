@@ -100,10 +100,15 @@ export interface CheckResult {
 
 export type PostStatus = 'Posted' | 'Pending';
 
-/** A row of the Posts tab. */
+/**
+ * A row of the Posts tab. Its columns are the interns' own sheet's ("POSTING
+ * TRACKER - INTERNS"): Date, Property type, Property title, FB account name,
+ * Link, Time posted, Share posting; then Posted by and Property ID.
+ */
 export interface PostLogEntry {
   readonly date: string;      // yyyy-MM-dd
-  readonly time: string;      // HH:mm
+  readonly time: string;      // HH:mm (the sheet writes "10:23 AM"; the server gives it back as HH:mm)
+  /** Property type: the listing's category, title cased ("Commercial Space"). */
   readonly type: string;
   readonly title: string;
   readonly status: PostStatus;
@@ -113,7 +118,22 @@ export interface PostLogEntry {
   readonly propertyId: string;
 }
 
-export type AssignmentStatus = 'To post' | 'Pending' | 'Posted';
+/**
+ * A queue item's status. "Not Shared" is the interns' own word for a slot
+ * assigned but not posted yet; rows written before it say "To post", and
+ * are read as Not Shared (queueStatus).
+ */
+export type AssignmentStatus = 'Not Shared' | 'Pending' | 'Posted';
+
+export const NOT_SHARED = 'Not Shared' as const;
+
+/** A queue status as the sheet has it: Posted, Pending, or else Not Shared ("To post" included). */
+export function queueStatus(value: unknown): AssignmentStatus {
+  const s = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (s === 'posted') return 'Posted';
+  if (s === 'pending') return 'Pending';
+  return NOT_SHARED;
+}
 
 /** A row of the Assignments tab. Row order is posting order. */
 export interface Assignment {

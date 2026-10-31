@@ -130,3 +130,73 @@ export function searchPosts(posts: readonly PostLogEntry[], search: PostSearch):
   });
   return newestFirst(found);
 }
+
+// ------------------------------------------------------------------ the interns' own sheet
+//
+// The Posts tab records what the interns' "POSTING TRACKER - INTERNS" sheet
+// does, with its column names, words and formats, so it feels familiar.
+
+/** The Records columns and the CSV's, in the interns' sheet's order, then Posted by. */
+export const POST_COLUMNS = [
+  'Date',
+  'Property type',
+  'Property title',
+  'FB account name',
+  'Link',
+  'Time posted',
+  'Share posting',
+  'Posted by',
+] as const;
+
+// Lower case inside a title, as the owner writes "Condo / House and Lot".
+const SMALL_WORDS = new Set(['a', 'an', 'and', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with']);
+
+/**
+ * A listing's category as the Posts tab's Property type: "COMMERCIAL SPACE"
+ * → "Commercial Space", "CONDO / HOUSE AND LOT" → "Condo / House and Lot".
+ * Only text written all in one case is recased; mixed case was written with
+ * care and stays. Code.gs's propertyType_, character for character.
+ */
+export function propertyType(category: string): string {
+  const text = category.trim().replace(/\s+/g, ' ');
+  if (text !== text.toUpperCase() && text !== text.toLowerCase()) return text;
+  let index = 0;
+  return text.toLowerCase().replace(/[\p{L}\p{N}']+/gu, (word) => {
+    const first = index++ === 0;
+    if (!first && SMALL_WORDS.has(word)) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  });
+}
+
+/** "14:30" → "2:30 PM", "00:15" → "12:15 AM", as the interns' sheet writes a time. Anything else as it was. */
+export function clockTime(hhmm: string): string {
+  const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
+  if (!m) return hhmm;
+  const h = +m[1]!;
+  return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/** "2026-10-26" → "10/26/26", as the interns' sheet writes a date. Anything else as it was. */
+export function sheetDate(iso: string): string {
+  const m = ISO_DATE.exec(iso);
+  return m ? `${+m[2]!}/${+m[3]!}/${m[1]!.slice(2)}` : iso;
+}
+
+/**
+ * The posts as CSV, one row each, in the order given: the interns' sheet's
+ * columns (POST_COLUMNS), its date (M/D/YY) and time (h:mm AM/PM). Quoted
+ * where needed (RFC 4180), CRLF line ends.
+ */
+export function postsCsv(posts: readonly PostLogEntry[]): string {
+  const cell = (value: string) => {
+    // A leading = + - @ would run as a formula in a spreadsheet.
+    const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
+    return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  };
+  const rows = posts.map((p) =>
+    [sheetDate(p.date), p.type, p.title, p.fbAccount, p.postLink, clockTime(p.time), p.status, p.postedBy]
+      .map(cell)
+      .join(','),
+  );
+  return [POST_COLUMNS.join(','), ...rows].join('\r\n') + '\r\n';
+}

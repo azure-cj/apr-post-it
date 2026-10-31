@@ -24,7 +24,7 @@ import { cooldown } from './cooldown';
 import { normalize } from './matcher';
 import { readIssues, type DirectoryRow, type Rules } from './summary';
 import type { QueueItemInput } from './tracker';
-import type { Assignment, PostLogEntry } from './types';
+import { queueStatus, type Assignment, type PostLogEntry } from './types';
 
 export type SkipReason = 'sold' | 'noSeparator' | 'noDocument' | 'queued' | 'cooldown';
 
@@ -158,7 +158,8 @@ export function planQueues(input: PlanInput): Plan {
       list.push({
         propertyName: a.propertyName,
         ...(a.propertyId.trim() ? { propertyId: a.propertyId } : {}),
-        status: a.status,
+        // "To post", in older rows, is Not Shared.
+        status: queueStatus(a.status),
       });
     }
     queued.add(a.propertyId.trim(), a.propertyName, true);

@@ -82,7 +82,8 @@ describe('the log step', () => {
       fbAccount: 'APG Rentals South',
       postLink: LINK,
       status: 'Posted',
-      type: 'Condo / house and lot',
+      // The category as a fallback: the server writes the Property type from the Directory.
+      type: 'CONDO / HOUSE AND LOT',
     });
     // Nothing the server decides is sent.
     expect(logged(platform)[0]!.body).not.toHaveProperty('postedBy');

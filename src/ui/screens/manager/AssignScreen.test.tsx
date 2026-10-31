@@ -47,9 +47,9 @@ const POSTS: readonly PostLogEntry[] = [
 ];
 
 const ASSIGNMENTS: readonly Assignment[] = [
-  { date: TOMORROW, assignedTo: MIKA, propertyName: 'Seaside Residences 2BR', propertyId: 'f4', status: 'To post' },
-  { date: TOMORROW, assignedTo: JAN, propertyName: 'Verdant Hills Lot 12', propertyId: 'f1', status: 'To post' },
-  { date: TOMORROW, assignedTo: JAN, propertyName: 'Sta. Rosa Lot 22', propertyId: 'f5', status: 'To post' },
+  { date: TOMORROW, assignedTo: MIKA, propertyName: 'Seaside Residences 2BR', propertyId: 'f4', status: 'Not Shared' },
+  { date: TOMORROW, assignedTo: JAN, propertyName: 'Verdant Hills Lot 12', propertyId: 'f1', status: 'Not Shared' },
+  { date: TOMORROW, assignedTo: JAN, propertyName: 'Sta. Rosa Lot 22', propertyId: 'f5', status: 'Not Shared' },
 ];
 
 type Overrides = Partial<AssignScreenProps>;

@@ -23,8 +23,8 @@ Every call is a POST of `{ action, key, ... }`. Every reply is `{ ok, ... }`, or
 |---|---|---|---|
 | `ping` | all | — | `{ name, role, fbAccounts, time }` (unchanged) |
 | `properties` | all | — | rows, each with `issues` (the Directory's Issues text) and these extra optional fields: `city, size, dealType, availability ('Available'\|'Sold'\|'')`, `inChecker:boolean`. They come from the checker CSV, joined on Folder ID. `CONFIG.CHECKER_INDEX_CSV_URL` set to `''` turns the join off, and then the fields are absent. |
-| `logPost` | all | `{ property, propertyId, fbAccount, postLink, status: 'Posted'\|'Pending', type?, postedBy? (admin only) }` | `{ status, date, time, postedBy }`. **`postLink` is REQUIRED**: it must be an https link on facebook.com, fb.com, m.facebook.com or fb.me. Otherwise `error:'link-required'` or `'bad-link'`. `status` is required: `Pending` means posted in a group, waiting for the group admin's approval. |
-| `setStatus` | all (own rows) / admin | unchanged | unchanged (Pending → Posted). With `Posted`, the assignee's newest Pending Posts row for that listing becomes Posted too. |
+| `logPost` | all | `{ property, propertyId, fbAccount, postLink, status: 'Posted'\|'Pending', type?, postedBy? (admin only) }` | `{ status, date, time, type, postedBy }`. `date` is `yyyy-MM-dd`, `time` is `HH:mm`. `type` is the Property type written: the Directory's category for `propertyId`, title cased; the request's `type` (the app sends the listing's category) only when the Directory has no such row. The app no longer sends "Group post". **`postLink` is REQUIRED**: it must be an https link on facebook.com, fb.com, m.facebook.com or fb.me. Otherwise `error:'link-required'` or `'bad-link'`. `status` is required: `Pending` means posted in a group, waiting for the group admin's approval. |
+| `setStatus` | all (own rows) / admin | `status: 'Not Shared'\|'Pending'\|'Posted'` (`'To post'` is accepted and written `Not Shared`) | unchanged (Pending → Posted). With `Posted`, the assignee's newest Pending Posts row for that listing becomes Posted too. |
 | `property` | all | `{ id }` | the detail, with the same checker fields as `properties`, joined the same way. |
 | `addLink` | unchanged | | kept for old rows that have no link |
 | `team` | admin | — | unchanged |
@@ -34,7 +34,40 @@ Every call is a POST of `{ action, key, ... }`. Every reply is `{ ok, ... }`, or
 | `saveQueues` | admin | `{ date, queues:[{ assignedTo, items:[{ propertyName, propertyId?, status? }] }] }` | `{ saved: <number of rows> }`. Atomic under one lock. Replaces each named intern's queue for that date the same way `saveQueue` does. |
 | `indexCheck` | admin | — | `{ checkedAt, directoryCount, checkerCount, directoryOnly:[{id,name}], checkerOnly:[{id,name,path}], sold:[{id,name}] }` |
 
+## The tracker's columns and words
+
+The Posts tab records what the interns' own sheet, "POSTING TRACKER - INTERNS", does, with
+its column names, words and formats (server/README.md has the detail).
+
+- **Posts**, as a new tab gets them: `Date`, `Property type`, `Property title`,
+  `FB account name`, `Link`, `Time posted`, `Share posting`, `Posted by`, `Property ID`.
+  The older header names (`Title`, `Type`, `Time`, `Status`, `FB Account`, `Post Link`,
+  `PropertyId`, …) are still read, so an existing tab keeps working.
+  - `Date` is written and read as `yyyy-MM-dd` text. How the sheet displays it is not the
+    app's concern.
+  - `Time posted` is written `h:mm AM/PM` in Manila time (`10:23 AM`). The `posts` action
+    and the `logPost` reply give it as `HH:mm`, whichever way the cell was written, so
+    `PostLogEntry.time` stays `HH:mm`.
+  - `Property type` is the listing's category, title cased: `Warehouse`,
+    `Commercial Space`, `Condo / House and Lot`. Mixed case is kept as written.
+  - `Share posting` is `Posted` or `Pending`.
+- **Assignments** `Status`: `Not Shared` (assigned, not posted yet: the interns' word),
+  `Pending` or `Posted`. `To post`, in rows written before, is read as `Not Shared`
+  everywhere; new rows are written `Not Shared`. On screen it reads "Not shared".
+- `posts` row fields are unchanged: `date, type, title, time, status, fbAccount, postLink,
+  postedBy, propertyId`.
+
 ## Core (src/core)
+
+- `AssignmentStatus` is `'Not Shared' | 'Pending' | 'Posted'`; `queueStatus(value)`
+  (types.ts) reads any spelling, `To post` included. The planner and the summary helpers
+  read statuses through it.
+- `core/records.ts`: `propertyType(category)` (Code.gs's `propertyType_`, character for
+  character), `clockTime('14:30') → '2:30 PM'`, `sheetDate('2026-10-26') → '10/26/26'`,
+  `POST_COLUMNS`, and `postsCsv(posts)`: the Records CSV, in the interns' sheet's column
+  order (`Date, Property type, Property title, FB account name, Link, Time posted,
+  Share posting, Posted by`), date as M/D/YY and time as h:mm AM/PM. The Records table
+  shows the same columns in the same order.
 
 - `Property` (types.ts) gains these optional fields: `city, size, dealType, availability, issues`.
 - `LogPostInput.postLink` becomes required (a string), plus `status: 'Posted' | 'Pending'`.

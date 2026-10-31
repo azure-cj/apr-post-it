@@ -32,7 +32,7 @@ export const QueueRow = forwardRef<HTMLLIElement, QueueRowProps>(function QueueR
 ) {
   const status = rules?.statusOf(entry.key);
   const started = rules?.isStarted(entry.key) ?? false;
-  // A To-post item that has since become unpostable on this day: say so.
+  // A Not Shared item that has since become unpostable on this day: say so.
   const check = !started && entry.property && rules ? rules.check(entry.property) : null;
   const warning = check && !check.canAdd ? blockSentence(check, rules?.intern ?? null) : null;
   const first = index === 0;

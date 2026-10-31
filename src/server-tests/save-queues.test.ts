@@ -31,8 +31,8 @@ describe('saveQueues', () => {
     expect(w.assignments.show().slice(1)).toEqual([
       [DAY, 'Former Intern', 'Someone else\'s', 'To post', ''],
       ['2026-03-10', 'Jan Dela Cruz', 'Tomorrow', 'To post', ''],
-      [DAY, 'Jan Dela Cruz', 'Casa Amara', 'To post', CASA.id],
-      [DAY, 'Jan Dela Cruz', '1201', 'To post', TOWER.id],
+      [DAY, 'Jan Dela Cruz', 'Casa Amara', 'Not Shared', CASA.id],
+      [DAY, 'Jan Dela Cruz', '1201', 'Not Shared', TOWER.id],
       // As the Team tab spells the name, so the intern's own queue finds it.
       [DAY, 'Ana Reyes', 'Verdant Hills Lot 9', 'Pending', LOT_9.id],
     ]);
@@ -51,7 +51,7 @@ describe('saveQueues', () => {
     w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Jan Dela Cruz', items: [{ propertyName: CASA.name }] }] });
 
     expect(w.call('jan', 'assignments')['assignments']).toEqual([
-      { date: DAY, assignedTo: 'Jan Dela Cruz', property: 'Casa Amara', status: 'To post', propertyId: CASA.id },
+      { date: DAY, assignedTo: 'Jan Dela Cruz', property: 'Casa Amara', status: 'Not Shared', propertyId: CASA.id },
     ]);
   });
 
@@ -148,6 +148,6 @@ describe('saveQueues', () => {
       ok: true,
       saved: 1,
     });
-    expect(w.assignments.show().slice(1)).toEqual([[DAY, 'Jan Dela Cruz', '1201', 'To post', TOWER.id]]);
+    expect(w.assignments.show().slice(1)).toEqual([[DAY, 'Jan Dela Cruz', '1201', 'Not Shared', TOWER.id]]);
   });
 });

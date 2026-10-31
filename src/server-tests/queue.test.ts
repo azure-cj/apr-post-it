@@ -24,7 +24,7 @@ describe('setStatus (bug 4)', () => {
 
   it('reaches the app as notfound, in the server\'s words', async () => {
     const w = createWorld();
-    const item = { date: '2026-03-09', assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: '', status: 'To post' } as const;
+    const item = { date: '2026-03-09', assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: '', status: 'Not Shared' } as const;
 
     const failure = await w.app('jan').tracker.setStatus(item, 'Pending').catch((err: unknown) => err);
 
@@ -71,12 +71,13 @@ describe('setStatus (bug 4)', () => {
     });
   });
 
-  it('writes the status as text', () => {
+  it('writes the status as text, and only a word it knows: anything else is Not Shared', () => {
     const w = createWorld();
     w.assignments.type(['2026-03-09', 'Jan Dela Cruz', 'Casa Amara', 'To post', CASA.id]);
     w.call('maria', 'setStatus', { property: CASA.name, propertyId: CASA.id, assignedTo: 'Jan Dela Cruz', status: '=1+1' });
 
-    expect(w.assignments.row(2)[3]).toBe('=1+1');
+    expect(w.assignments.row(2)[3]).toBe('Not Shared');
+    expect(w.assignments.formats(2)[3]).toBe('@');
   });
 });
 
@@ -258,9 +259,9 @@ describe('saveQueue', () => {
     expect(w.assignments.show().slice(1)).toEqual([
       ['#date 2026-03-09', 'Ana Reyes', 'Ana\'s item', 'To post', ''],
       ['#date 2026-03-10', 'Jan Dela Cruz', 'Tomorrow\'s item', 'To post', ''],
-      ['2026-03-09', 'Jan Dela Cruz', 'Casa Amara', 'To post', CASA.id],
+      ['2026-03-09', 'Jan Dela Cruz', 'Casa Amara', 'Not Shared', CASA.id],
       // The id found in the directory by name; the name kept as text.
-      ['2026-03-09', 'Jan Dela Cruz', '1201', 'To post', TOWER.id],
+      ['2026-03-09', 'Jan Dela Cruz', '1201', 'Not Shared', TOWER.id],
     ]);
   });
 });

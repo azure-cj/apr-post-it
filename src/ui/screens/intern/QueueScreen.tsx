@@ -30,8 +30,9 @@ interface Item {
   readonly post: PostLogEntry | undefined;
 }
 
-const STATUS_WORD: Record<AssignmentStatus, string> = { 'To post': 'To post', Pending: 'Pending', Posted: 'Posted' };
-const STATUS_TONE = { 'To post': 'neutral', Pending: 'warn', Posted: 'ok' } as const;
+// The interns' own word for a slot not posted yet, in sentence case.
+const STATUS_WORD: Record<AssignmentStatus, string> = { 'Not Shared': 'Not shared', Pending: 'Pending', Posted: 'Posted' };
+const STATUS_TONE = { 'Not Shared': 'neutral', Pending: 'warn', Posted: 'ok' } as const;
 
 /**
  * Today's queue, in the order the admin set. The next one to post sits on top
@@ -58,14 +59,14 @@ export function QueueScreen() {
       return { assignment, property, post: latestPostOf(todays, assignment) };
     });
     // Pending first (one click once approved), then what is left, then what is done: each in the admin's order.
-    const rank = { Pending: 0, 'To post': 1, Posted: 2 } as const;
+    const rank = { Pending: 0, 'Not Shared': 1, Posted: 2 } as const;
     return rows
       .map((row, index) => ({ row, index }))
       .sort((a, b) => rank[a.row.assignment.status] - rank[b.row.assignment.status] || a.index - b.index)
       .map(({ row }) => row);
   }, [queue.data, posts.data, list, today, user.name, app.directory]);
 
-  const toPost = items.filter((i) => i.assignment.status === 'To post');
+  const toPost = items.filter((i) => i.assignment.status === 'Not Shared');
   const pending = items.filter((i) => i.assignment.status === 'Pending');
   const posted = items.filter((i) => i.assignment.status === 'Posted');
   const next = toPost.find((i) => openable(i, list !== null));
@@ -101,7 +102,7 @@ export function QueueScreen() {
           {items.length > 0 ? (
             <ul className="queue__counts" aria-label="Today's counts">
               <li>
-                <span className="tabular">{toPost.length}</span> to post
+                <span className="tabular">{toPost.length}</span> not shared
               </li>
               <li className="queue__count--pending">
                 <span className="tabular">{pending.length}</span> pending
@@ -208,7 +209,7 @@ function Row({ item, listLoaded, onChanged }: { readonly item: Item; readonly li
   const name = property?.name ?? assignment.propertyName;
 
   return (
-    <li className={`queue-item queue-item--${status === 'To post' ? 'to-post' : status.toLowerCase()}${canOpen ? ' queue-item--link' : ''}`}>
+    <li className={`queue-item queue-item--${status === 'Not Shared' ? 'to-post' : status.toLowerCase()}${canOpen ? ' queue-item--link' : ''}`}>
       <div className="queue-item__main">
         {canOpen ? (
           <Link className="queue-item__name queue-item__stretch" to={paths.property(idOf(item))} state={FROM_QUEUE}>

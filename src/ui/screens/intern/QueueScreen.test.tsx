@@ -14,7 +14,8 @@ const item = (property: string, propertyId: string, status: string, date = TODAY
 const QUEUE = {
   ok: true,
   assignments: [
-    item('Verdant Hills Lot 12, Tagaytay', '1VerdantHillsLot12', 'To post'),
+    // "Not Shared" is the interns' word; "To post", in older rows, is the same.
+    item('Verdant Hills Lot 12, Tagaytay', '1VerdantHillsLot12', 'Not Shared'),
     item('Kapitolyo Ground Floor Retail, Pasig', '1Kapitolyo', 'Posted'),
     item('Seaside Residences 2BR, Pasay', '1Seaside', 'Pending'),
     item('Valenzuela Warehouse 1,200 sqm', '1Valenzuela', 'To post'),
@@ -49,12 +50,12 @@ describe('My queue', () => {
       'Valenzuela Warehouse 1,200 sqm',
       'Kapitolyo Ground Floor Retail, Pasig',
     ]);
-    expect(rows.map((r) => r.querySelector('.pill')?.textContent)).toEqual(['Pending', 'To post', 'Posted']);
+    expect(rows.map((r) => r.querySelector('.pill')?.textContent)).toEqual(['Pending', 'Not shared', 'Posted']);
     expect(rows[1]!.textContent).toContain('Warehouse');
     expect(screen.queryByText('BGC Uptown Office 18F, 240 sqm')).toBeNull();
 
     const counts = screen.getByRole('list', { name: "Today's counts" }).textContent;
-    expect(counts).toContain('2 to post');
+    expect(counts).toContain('2 not shared');
     expect(counts).toContain('1 pending');
     expect(counts).toContain('1 posted');
 

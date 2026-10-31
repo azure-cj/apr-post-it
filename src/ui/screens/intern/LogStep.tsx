@@ -4,7 +4,7 @@ import { BackendError } from '@/core/backend';
 import { postLinkProblem } from '@/core/links';
 import { normalize } from '@/core/matcher';
 import { canManage, type Assignment, type PostStatus, type Property } from '@/core/types';
-import { Button, Notice, TextInput, categoryLabel } from '../../components';
+import { Button, Notice, TextInput } from '../../components';
 import {
   paths,
   sentenceOf,
@@ -76,7 +76,7 @@ export const LogStep = forwardRef<HTMLInputElement, {
     const isThis = (a: Assignment) =>
       a.propertyId && property.id ? a.propertyId === property.id : normalize(a.propertyName) === here;
     for (const a of queue.data ?? []) {
-      if (a.date !== today || a.assignedTo !== user.name || a.status !== 'To post' || isThis(a)) continue;
+      if (a.date !== today || a.assignedTo !== user.name || a.status !== 'Not Shared' || isThis(a)) continue;
       const id = a.propertyId || byName.get(normalize(a.propertyName))?.id;
       if (id) return { id };
     }
@@ -100,7 +100,8 @@ export const LogStep = forwardRef<HTMLInputElement, {
         fbAccount: chosen,
         postLink: link,
         status,
-        type: categoryLabel(property.category),
+        // A fallback: the server takes the Property type from the Directory.
+        type: property.category,
       });
       notify(status === 'Posted' ? `Saved as posted: ${property.name}.` : `Saved as pending: ${property.name}.`);
       if (next) navigate(paths.property(next.id), { state: FROM_QUEUE });

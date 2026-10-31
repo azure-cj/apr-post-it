@@ -39,6 +39,23 @@ const categories = [
   { name: 'WAREHOUSE', count: 223 },
 ] as const;
 
+/** The neutral ramp and the text greys, in the order they stack on screen. */
+const surfaces = [
+  { token: '--bg', value: '#121212', use: 'The page' },
+  { token: '--surface', value: '#1a1a1a', use: 'Sidebar, flat panels' },
+  { token: '--card-bg', value: '#1e1e1e → #1a1a1a', use: 'Cards, lit from above' },
+  { token: '--surface-raised', value: '#222222', use: 'Avatars, raised wells' },
+  { token: '--tip-bg', value: '#2a2a2a', use: 'Tooltips, toasts' },
+  { token: '--input-bg', value: '#0c0c0c', use: 'Inputs, recessed' },
+] as const;
+
+const inks = [
+  { token: '--text', value: '#e0e0e0', use: 'Body and headings' },
+  { token: '--text-label', value: '#cccccc', use: 'Labels, secondary controls' },
+  { token: '--text-muted', value: '#b0b0b0', use: 'Descriptions, hints' },
+  { token: '--placeholder', value: '#8c8c8c', use: 'Placeholders, disabled' },
+] as const;
+
 const checks: readonly CheckResult[] = [
   { name: 'Price present', status: 'pass', detail: '₱4.2M' },
   { name: 'Contact numbers present', status: 'warn', detail: 'No contact number found' },
@@ -67,7 +84,7 @@ export default function KitScreen() {
   const [query, setQuery] = useState('Verdant Hills');
   const [emptyQuery, setEmptyQuery] = useState('');
   const [picked, setPicked] = useState<readonly string[]>(['CONDO / HOUSE AND LOT']);
-  const [status, setStatus] = useState('To post');
+  const [status, setStatus] = useState('Not shared');
   const [internNavKey, setInternNavKey] = useState('queue');
   const [adminNavKey, setAdminNavKey] = useState('tracker');
   const [showKey, setShowKey] = useState(false);
@@ -90,6 +107,32 @@ export default function KitScreen() {
       </header>
 
       <div className="kit__sections">
+        <Card title="Colour" description="Charcoal black and neutral greys for OLED. Gold only for the brand word, the one primary button, what is selected and focus.">
+          <ul className="kit__swatches" aria-label="Surfaces">
+            {surfaces.map((s) => (
+              <li key={s.token} className="kit__swatch">
+                <span className="kit__chip" style={{ background: `var(${s.token})` }} aria-hidden="true" />
+                <code>{s.token}</code>
+                <span className="kit__caption">
+                  {s.value} · {s.use}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <ul className="kit__swatches" aria-label="Text">
+            {inks.map((s) => (
+              <li key={s.token} className="kit__swatch">
+                <span className="kit__ink" style={{ color: `var(${s.token})` }}>
+                  Aa
+                </span>
+                <code>{s.token}</code>
+                <span className="kit__caption">
+                  {s.value} · {s.use}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
         <Card title="Sidebar" description="The window's left edge. Collapses to a 64px rail where every icon keeps its name in a tooltip.">
           <div className="kit__row kit__row--top">
             <div className="kit-frame kit-frame--sidebar">
@@ -205,7 +248,7 @@ export default function KitScreen() {
                 ))}
               </div>
               <div className="kit__row kit__row--tight" role="group" aria-label="Status">
-                {['To post', 'Pending', 'Posted'].map((s) => (
+                {['Not shared', 'Pending', 'Posted'].map((s) => (
                   <Chip key={s} selected={status === s} onSelectedChange={() => setStatus(s)}>
                     {s}
                   </Chip>
@@ -219,7 +262,7 @@ export default function KitScreen() {
           <Card title="Pills, badges and categories">
             <div className="kit__stack">
               <div className="kit__row kit__row--tight">
-                <Pill tone="neutral">To post</Pill>
+                <Pill tone="neutral">Not shared</Pill>
                 <Pill tone="warn" dot>
                   Pending
                 </Pill>

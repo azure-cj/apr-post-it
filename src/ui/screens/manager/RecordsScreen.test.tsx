@@ -8,7 +8,7 @@ import { postsCsv, RecordsScreen } from './RecordsScreen';
 const post = (title: string, id: string, date: string, time: string, by: string, status: 'Posted' | 'Pending' = 'Posted'): PostLogEntry => ({
   date,
   time,
-  type: 'Group post',
+  type: 'Commercial Space',
   title,
   status,
   fbAccount: 'APG Main',
@@ -76,11 +76,38 @@ describe('RecordsScreen', () => {
     const [csv, name] = onExport.mock.calls[0]!;
     expect(name).toBe('posts 2026-10-31 to 2026-10-31.csv');
     expect((csv as string).split('\r\n')).toEqual([
-      'Date,Time,Property,Property ID,Posted by,FB account,Status,Type,Link',
-      '2026-10-31,09:05,"Seaside Residences 2BR, Pasay",1Seaside,Mika Reyes,APG Main,Posted,Group post,https://www.facebook.com/groups/x/posts/1Seaside0905/',
-      '2026-10-31,08:40,"BGC Uptown Office 18F, 240 sqm",1BgcUptown,Jan Dela Cruz,APG Main,Pending,Group post,https://www.facebook.com/groups/x/posts/1BgcUptown0840/',
+      // The interns' own sheet's columns, in its order, then Posted by; its date (M/D/YY) and time (h:mm AM/PM).
+      'Date,Property type,Property title,FB account name,Link,Time posted,Share posting,Posted by',
+      '10/31/26,Commercial Space,"Seaside Residences 2BR, Pasay",APG Main,https://www.facebook.com/groups/x/posts/1Seaside0905/,9:05 AM,Posted,Mika Reyes',
+      '10/31/26,Commercial Space,"BGC Uptown Office 18F, 240 sqm",APG Main,https://www.facebook.com/groups/x/posts/1BgcUptown0840/,8:40 AM,Pending,Jan Dela Cruz',
       '',
     ]);
+  });
+
+  it('writes the interns\' date and time formats in the CSV, afternoon and midnight included', () => {
+    const csv = postsCsv([
+      { ...POSTS[0]!, date: '2026-01-05', time: '00:07' },
+      { ...POSTS[0]!, date: '2026-12-25', time: '12:00' },
+      { ...POSTS[0]!, date: '2026-10-26', time: '22:23' },
+      { ...POSTS[0]!, date: '', time: '' },
+    ]);
+    const cells = csv.split('\r\n').slice(1, 5).map((line) => [line.split(',')[0], line.split(',').at(-3)]);
+    expect(cells).toEqual([
+      ['1/5/26', '12:07 AM'],
+      ['12/25/26', '12:00 PM'],
+      ['10/26/26', '10:23 PM'],
+      ['', ''],
+    ]);
+  });
+
+  it('shows the Posts table in the interns\' sheet\'s column order', () => {
+    render(<RecordsScreen posts={POSTS} today={TODAY} initialRange="today" />);
+    const results = screen.getByRole('region', { name: 'Posts' });
+    const head = within(results).getAllByRole('columnheader').map((h) => h.textContent);
+    expect(head).toEqual(['Date', 'Property type', 'Property title', 'FB account name', 'Link', 'Time posted', 'Share posting', 'Posted by']);
+    const first = within(results).getAllByRole('row')[1]!;
+    const cells = Array.from(first.querySelectorAll('td, th')).map((c) => c.textContent);
+    expect(cells).toEqual(['Sat 31 Oct', 'Commercial Space', 'Seaside Residences 2BR, Pasay', 'APG Main', 'No link', '9:05 AM', 'Posted', 'Mika Reyes']);
   });
 
   it('quotes CSV cells and defuses formulas', () => {
@@ -100,7 +127,7 @@ describe('the Records route', () => {
     expect(screen.getByRole('link', { name: 'Records' }).getAttribute('aria-current')).toBe('page');
     await screen.findByText('3 posts');
     await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
-    await waitFor(() => expect(platform.copied[0]).toMatch(/^Date,Time,Property/));
+    await waitFor(() => expect(platform.copied[0]).toMatch(/^Date,Property type,Property title,/));
     expect(await screen.findByText('CSV copied. Paste it into a spreadsheet.')).toBeTruthy();
   });
 

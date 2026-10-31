@@ -1,4 +1,4 @@
-import { dailyTotals, postsForProperty, searchPosts } from './records';
+import { clockTime, dailyTotals, POST_COLUMNS, postsCsv, postsForProperty, propertyType, searchPosts, sheetDate } from './records';
 import type { PostLogEntry } from './types';
 
 function post(over: Partial<PostLogEntry> = {}): PostLogEntry {
@@ -94,5 +94,41 @@ describe('searching posts', () => {
 
   it('returns everything for an empty search', () => {
     expect(searchPosts(posts, {})).toHaveLength(4);
+  });
+});
+
+describe('the interns\' own sheet', () => {
+  it('title cases a category as the Property type', () => {
+    expect(propertyType('WAREHOUSE')).toBe('Warehouse');
+    expect(propertyType('COMMERCIAL SPACE')).toBe('Commercial Space');
+    expect(propertyType('CONDO / HOUSE AND LOT')).toBe('Condo / House and Lot');
+    expect(propertyType('OFFICE SPACE')).toBe('Office Space');
+    expect(propertyType('lot')).toBe('Lot');
+    expect(propertyType('AND MORE')).toBe('And More'); // the first word is never small
+    expect(propertyType('Virtual Office for posting')).toBe('Virtual Office for posting');
+    expect(propertyType('  ')).toBe('');
+  });
+
+  it('writes a time as h:mm AM/PM, and leaves anything else alone', () => {
+    expect(['00:00', '00:15', '09:05', '11:59', '12:00', '13:30', '23:59', '', '9:5'].map(clockTime)).toEqual([
+      '12:00 AM', '12:15 AM', '9:05 AM', '11:59 AM', '12:00 PM', '1:30 PM', '11:59 PM', '', '9:5',
+    ]);
+  });
+
+  it('writes a date as M/D/YY, and leaves anything else alone', () => {
+    expect(['2026-10-26', '2026-01-05', '2030-12-31', '', '3/8/2026'].map(sheetDate)).toEqual([
+      '10/26/26', '1/5/26', '12/31/30', '', '3/8/2026',
+    ]);
+  });
+
+  it('exports the CSV in the sheet\'s column order and formats', () => {
+    expect(POST_COLUMNS).toEqual([
+      'Date', 'Property type', 'Property title', 'FB account name', 'Link', 'Time posted', 'Share posting', 'Posted by',
+    ]);
+    const csv = postsCsv([post({ date: '2026-10-26', time: '10:23', type: 'Warehouse', title: 'Pasig, 700 C. Raymundo Ave.', fbAccount: 'CYRUS ORBANO', postLink: 'https://www.facebook.com/share/p/1A7neALe5U/', postedBy: 'Jan' })]);
+    expect(csv).toBe(
+      'Date,Property type,Property title,FB account name,Link,Time posted,Share posting,Posted by\r\n' +
+        '10/26/26,Warehouse,"Pasig, 700 C. Raymundo Ave.",CYRUS ORBANO,https://www.facebook.com/share/p/1A7neALe5U/,10:23 AM,Posted,Jan\r\n',
+    );
   });
 });

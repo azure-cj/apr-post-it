@@ -28,7 +28,10 @@ import {
   type AssignmentStatus,
   type PostLogEntry,
   type PostStatus,
+  NOT_SHARED,
+  queueStatus,
 } from './types';
+import { propertyType } from './records';
 
 export interface TrackerDeps {
   readonly backend: Pick<Backend, 'call'>;
@@ -46,7 +49,10 @@ export interface LogPostInput {
   readonly postLink: string;
   /** Posted: live. Pending: posted in a group, waiting for the group admin's approval. */
   readonly status: PostStatus;
-  /** The Type column — the C# app wrote the property's category. Blank: the server writes "Group post". */
+  /**
+   * The listing's category, as a fallback: the server writes the Property type
+   * from the Directory's category, and uses this only when it has none.
+   */
   readonly type?: string | undefined;
   /** A manager logging for an intern, by their name exactly as the tracker has it. The server ignores it from an intern. */
   readonly postedBy?: string | undefined;
@@ -57,7 +63,7 @@ export interface QueueItemInput {
   readonly propertyName: string;
   /** Sent when known, so the row is matched by id rather than by name. */
   readonly propertyId?: string | undefined;
-  /** Default "To post". */
+  /** Default "Not Shared". */
   readonly status?: AssignmentStatus | undefined;
 }
 
@@ -233,8 +239,8 @@ export function createTracker(deps: TrackerDeps): Tracker {
       return {
         date: readSheetDate(reply['date']),
         time: readSheetTime(reply['time']),
-        // What Code.gs writes when no type is sent.
-        type: type || 'Group post',
+        // The Property type the server wrote; an older server sends none.
+        type: asText(reply['type']).trim() || propertyType(type),
         title: input.propertyName,
         status,
         fbAccount,
@@ -278,7 +284,7 @@ export function createTracker(deps: TrackerDeps): Tracker {
         assignedTo,
         items: items.map((item) => ({
           property: item.propertyName,
-          status: item.status ?? 'To post',
+          status: item.status ?? NOT_SHARED,
           ...(item.propertyId?.trim() ? { propertyId: item.propertyId } : {}),
         })),
       });
@@ -327,7 +333,7 @@ export function createTracker(deps: TrackerDeps): Tracker {
           assignedTo: queue.assignedTo,
           items: queue.items.map((item) => ({
             propertyName: item.propertyName,
-            status: item.status ?? 'To post',
+            status: item.status ?? NOT_SHARED,
             ...(item.propertyId?.trim() ? { propertyId: item.propertyId } : {}),
           })),
         })),
@@ -456,19 +462,9 @@ function readAssignment(row: Readonly<Record<string, unknown>>): Assignment {
     assignedTo: asText(row['assignedTo']),
     propertyName: asText(row['property']),
     propertyId: asText(row['propertyId']),
-    status: readAssignmentStatus(row['status']),
+    // "Not Shared", or "To post" in rows written before it: the same.
+    status: queueStatus(asText(row['status'])),
   };
-}
-
-function readAssignmentStatus(value: unknown): AssignmentStatus {
-  switch (asText(value).trim().toLowerCase()) {
-    case 'posted':
-      return 'Posted';
-    case 'pending':
-      return 'Pending';
-    default:
-      return 'To post';
-  }
 }
 
 // ------------------------------------------------------------------ the sheet's dates and times

@@ -30,7 +30,7 @@ export interface QueueSave {
   readonly date: string;
   /** Whose queue, exactly as the `intern` prop spelled it: the server matches names with ===. */
   readonly assignedTo: string;
-  /** In posting order. An item already saved keeps its status; a new one is To post. */
+  /** In posting order. An item already saved keeps its status; a new one is Not Shared. */
   readonly items: readonly QueueItemInput[];
 }
 

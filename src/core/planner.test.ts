@@ -34,7 +34,7 @@ function posted(propertyId: string, date: string, over: Partial<PostLogEntry> = 
 }
 
 function queuedFor(assignedTo: string, propertyId: string, over: Partial<Assignment> = {}): Assignment {
-  return { date: DATE, assignedTo, propertyName: `Listing ${propertyId}`, propertyId, status: 'To post', ...over };
+  return { date: DATE, assignedTo, propertyName: `Listing ${propertyId}`, propertyId, status: 'Not Shared', ...over };
 }
 
 function plan(over: Partial<PlanInput>) {
@@ -172,7 +172,7 @@ describe('planning queues', () => {
     const kept = plan({ properties, assignments, perIntern: 4, keepExisting: true });
     expect(kept.queues.get('Jan')).toEqual([
       { propertyName: 'Listing P5', propertyId: 'P5', status: 'Posted' },
-      { propertyName: 'Listing P7', propertyId: 'P7', status: 'To post' },
+      { propertyName: 'Listing P7', propertyId: 'P7', status: 'Not Shared' },
       { propertyName: 'Listing P0', propertyId: 'P0' },
       { propertyName: 'Listing P1', propertyId: 'P1' },
     ]);
@@ -180,6 +180,16 @@ describe('planning queues', () => {
     const replaced = plan({ properties, assignments, perIntern: 4, keepExisting: false });
     expect(ids(replaced.queues.get('Jan'))).toEqual(['P0', 'P1', 'P2', 'P3']);
     expect(replaced.skipped).toEqual([]);
+  });
+
+  it('keeps an older "To post" item as Not Shared, the same thing', () => {
+    const properties = [prop('P1'), prop('P2')];
+    const old = queuedFor('Jan', 'P1', { status: 'To post' as Assignment['status'] });
+    const kept = plan({ properties, assignments: [old], perIntern: 2, keepExisting: true });
+    expect(kept.queues.get('Jan')).toEqual([
+      { propertyName: 'Listing P1', propertyId: 'P1', status: 'Not Shared' },
+      { propertyName: 'Listing P2', propertyId: 'P2' },
+    ]);
   });
 
   it('gives an intern already at the target nothing more', () => {

@@ -18,7 +18,8 @@ reference of every component and variant is at `#/kit` in development.
    links, not icons, not borders, not counts.
 2. **Everything else is carried by the status colours**: ok (green), warn (amber), danger
    (red), info (blue), neutral.
-3. **Dark only.** There is no light theme and no theme switch.
+3. **Dark only, OLED black.** A `#121212` page and neutral greys; no warm tint except the
+   gold. There is no light theme and no theme switch.
 4. **No box-shadows.** Depth comes from the card's vertical gradient and its top-lit edge.
 5. **Montserrat** (500, 600, 700) for headings, labels and buttons. **Segoe UI** for body text.
 6. **Nothing under 14px.**
@@ -27,51 +28,94 @@ reference of every component and variant is at `#/kit` in development.
 
 ## 2. Colour
 
+Black and gold, the company's colours, tuned for OLED displays: a charcoal-black page,
+neutral greys that step up in light, and gold for exactly four jobs. **There is no warm or
+brown tint anywhere except the gold itself.** Every grey is neutral (R = G = B).
+
+### The palette
+
+| Role | Colour |
+|---|---|
+| Background | `#121212` charcoal black |
+| Primary text | `#E0E0E0` |
+| Secondary text | `#B0B0B0` |
+| Borders and dividers | `#444444` |
+| Neutral accent | `#888888` soft grey: icons, input edges, neutral dots |
+| Gold | `#E0B84A`, unchanged: brand word, the one primary button, selected, focus |
+
+### The rules
+
+1. **OLED black, not pure black.** The page is `#121212`: dark enough that an OLED panel
+   barely lights it, light enough that text doesn't smear against true-black pixels and the
+   cards above it still read. Only the photo viewer's scrim goes to pure black.
+2. **Light comes up in steps of neutral grey.** Page `#121212` → sidebar `#1A1A1A` → card
+   `#1E1E1E`→`#1A1A1A` → raised `#222222` → tooltip `#2A2A2A`. A card separates from the
+   page by its fill (1.12:1 at its top) and its top-lit edge together, never by the edge
+   alone. Inputs go the other way, to `#0C0C0C`, so they read as recessed.
+3. **Hover and pressed are white washes, not new colours.** `--row-hover` 3%,
+   `--neutral-bg` 6% (≈ `#282828` on a card), `--neutral-soft` 12% (≈ `#363636`). They fade in by opacity, so they work on any grey.
+4. **Gold does four jobs and nothing else** (§1). Gold on every grey in the ramp is at least
+   7.6:1; the focus ring needs 3:1.
+5. **`#888888` is for icons, edges, dots and placeholders, never small body text on a raised
+   surface.** On `#222222` it measures 4.49:1, just under AA, so the placeholder token is
+   lifted to `#8C8C8C` (4.73:1 on `#222222`, 5.82:1 on an input). Neither goes on
+   `--tip-bg`.
+6. **No raw colour outside `tokens.css`.** Components use tokens only.
+
 ### Surfaces
 
 | Token | Value | Use |
 |---|---|---|
-| `--bg` | `#0e0c08` | The page |
-| `--bg-glow` | gold at 10% | The soft glow at the top of the page, nowhere else |
-| `--surface` | `#17140e` | Flat panels |
-| `--surface-raised` | `#1e1a12` | Avatars, raised wells |
-| `--card-bg` | gradient `#1c1811` → `#16130d` | Cards: lighter at the top, as if lit from above |
-| `--input-bg` | `#0b0906` | Inputs: darker than the page, so they read as recessed |
-| `--tip-bg` | `#241f16` | Tooltips and toasts |
-| `--top-bar-bg` | `--bg` at 94% | The top bar |
-| `--viewer-bg` | near-black at 94% | Behind a full-size photo |
-| `--inset` / `--inset-edge` | black 25% / white 8% | A recessed well; the white edge doubles as the hover wash on gold |
+| `--bg` | `#121212` | The page. Flat: no glow, no gradient |
+| `--surface` | `#1a1a1a` | Flat panels: the sidebar, side wells |
+| `--card-bg` | gradient `#1e1e1e` → `#1a1a1a` | Cards: lighter at the top, as if lit from above |
+| `--surface-raised` | `#222222` | Avatars, raised wells |
+| `--tip-bg` | `#2a2a2a` | Tooltips, toasts, the skip link: the highest surface |
+| `--input-bg` | `#0c0c0c` | Inputs and text wells: darker than the page, so they read as recessed |
+| `--top-bar-bg` | `--bg` at 94% | The title bar |
+| `--viewer-bg` | black at 94% | Behind a full-size photo |
+| `--inset` / `--inset-edge` | black 30% / white 8% | A recessed well; the white edge doubles as the hover wash on gold |
 
 ### Text
 
-| Token | Value | On `--bg` | Use |
-|---|---|---|---|
-| `--text` | `#f3eee4` | 16.9:1 | Body and headings |
-| `--text-label` | `#d9d2c4` | 13:1 | Field labels, secondary controls |
-| `--text-muted` | `#b8af9c` | 9.0:1 | Descriptions, hints, metadata |
-| `--placeholder` | `#8a8170` | 5.2:1 (on `--input-bg`) | Placeholder text only |
-| `--zero-text` | `#5c5547` | **2.6:1** | A zero that should recede. Fails AA as text: see §11 |
+| Token | Value | On `--bg` | On a card | Use |
+|---|---|---|---|---|
+| `--text` | `#e0e0e0` | 14.2:1 | 12.6:1 | Body and headings |
+| `--text-label` | `#cccccc` | 11.7:1 | 10.4:1 | Field labels, secondary controls (a step between primary and secondary) |
+| `--text-muted` | `#b0b0b0` | 8.6:1 | 7.7:1 | Descriptions, hints, metadata |
+| `--placeholder` | `#8c8c8c` | 5.6:1 | 5.2:1 | Placeholder text and disabled button text only |
+| `--zero-text` | `#5c5c5c` | **2.8:1** | | A zero that should recede. Fails AA as text: see §11 |
 
-### Edges: cream at an alpha, never gold
+### Edges: neutral grey, never gold
 
-`--border-soft` 6%, `--border` 10%, `--button-edge` 18%, `--border-strong` 24%,
-`--pick-edge` 40%, `--outline-shape` 7%, `--row-hover` 3%. The card edge, `--card-edge`,
-is a gradient from 14% at the top to 6% at the bottom: the top-lit edge.
+| Token | Value | Use |
+|---|---|---|
+| `--border-soft` | `#2e2e2e` | Row dividers inside a card, the quietest line |
+| `--border` | `#444444` | Borders and dividers |
+| `--button-edge` | `#4d4d4d` | Ghost and quiet button edges |
+| `--border-strong` | `#5c5c5c` | Scrollbar thumbs, strong separators |
+| `--pick-edge` | `#888888` | Input edges: 4.9:1 on a card, 5.5:1 on the input's fill (WCAG 1.4.11) |
+| `--card-edge` | gradient `#444444` → `#333333` → `#2e2e2e` | The card's top-lit edge |
+| `--row-hover` / `--outline-shape` | white 3% / 7% | Row hover; outline shapes |
 
 ### Gold: four jobs
+
+Unchanged from the checker. Gold on the page is 9.9:1; on the highest grey (`#2a2a2a`) 7.6:1.
 
 | Token | Use |
 |---|---|
 | `--gold` `#e0b84a` | The brand word, the selected indicator, the focus ring |
-| `--gold-gradient` | The one primary button |
-| `--on-gold` `#1a1408` | Text on the primary button (5.9:1 on the darkest stop) |
-| `--gold-soft` | The wash behind a selected chip |
+| `--gold-gradient` | The one primary button (`#f6dc8a` → `#e0b84a` → `#b98a26`) |
+| `--on-gold` `#121212` | Text on the primary button: 6.0:1 on the darkest stop, 13.9:1 on the lightest |
+| `--gold-soft` | The wash behind a selected chip or segment (gold text on it: 7.3:1 on a card) |
 | `--gold-edge` | The edge of a selected chip; text selection |
 
 ### Status
 
 Each family has a background, a text colour, a strong colour for icons and dots, a soft
-wash, a line and an edge. Warn has only `-bg`, `-text` and `-edge`.
+wash, a line and an edge. Warn has only `-bg`, `-text` and `-edge`. Every `-bg` is the
+family's own hue at 12%, so on a neutral grey it reads as green, amber, red or blue, not
+brown. Status text on its own tint is at least 7.0:1; on a plain card at least 8.7:1.
 
 | Family | Text | Means |
 |---|---|---|
@@ -79,7 +123,7 @@ wash, a line and an edge. Warn has only `-bg`, `-text` and `-edge`.
 | warn | `#f5b77a` | Look again, pending |
 | danger | `#ff9d95` | Refused, failed, blocked, in cooldown |
 | info | `#a9cdef` | Neutral information; links |
-| neutral | `#c9c2b4` | To do, counts, roles |
+| neutral | `#cccccc` (dot `#888888`) | To do, counts, roles |
 
 ### Listing types: one hue per type, everywhere
 
@@ -89,7 +133,7 @@ wash, a line and an edge. Warn has only `-bg`, `-text` and `-edge`.
 | `--type-condo` | `#d95926` | Condo / house and lot |
 | `--type-office` | `#199e70` | Office space |
 | `--type-warehouse` | `#c98500` | Warehouse |
-| `--type-unsorted` | `#6f685a` | Anything else |
+| `--type-unsorted` | `#888888` | Anything else |
 
 **Type hues are only ever a dot.** Never text, never a background, never a border. Each
 of these hues sits close to a status hue or to gold (see §11), so the shape (a dot beside
@@ -280,15 +324,15 @@ Recorded so they are decided on purpose, with the checker, rather than drifted i
    more here than in the checker. The mitigation above (type hues only as a dot) works; a
    better fix is a warehouse hue away from gold, such as a violet `#9a7fe0` (6.0:1 on
    `--bg`, 44° from commercial), agreed with the checker.
-2. **`--zero-text` is 2.6:1 on `--bg`.** Fine for a decorative zero beside a label that
+2. **`--zero-text` is 2.8:1 on `--bg`.** Fine for a decorative zero beside a label that
    carries the meaning, not for a zero that is the information. Post-It's components
    don't use it; the tracker should show "0 posted" in `--text-muted`.
 3. **Naming.** tokens.css calls the four categories "listing types"; `core/types.ts` uses
    `listingType` for "For sale" / "For lease". On screen and in components, the four are
    **categories**; the token names stay as copied.
-4. **Input edges.** `--border-strong` around an input measures 2.06:1 against a card,
-   under WCAG 1.4.11's 3:1 for the edge that identifies a field. Inputs use `--pick-edge`
-   instead: 3.43:1 against the card, 3.82:1 against the input's own fill. Still cream at
-   an alpha, still never gold.
+4. **Input edges.** `--border` around an input measures 1.8:1 against a card, under
+   WCAG 1.4.11's 3:1 for the edge that identifies a field. Inputs use `--pick-edge`
+   (`#888888`) instead: 4.9:1 against the card, 5.5:1 against the input's own fill. Still
+   neutral grey, still never gold.
 5. **`--focus-radius` (14px) has no job in CSS.** An outline follows its element's radius,
    so this token, presumably for the checker's previous UI toolkit, is unused here.

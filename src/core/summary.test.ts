@@ -174,9 +174,9 @@ describe('summarizeDay — ported from TrackerServiceTests', () => {
       post('Casa Amara House & Lot', 3, { status: 'Pending', time: '15:00', by: BEA }),
     ];
     const assignments = [
-      ...queue(JAN, TODAY, ['Casa Amara House & Lot', 'Pending'], ['Verdant Hills Lot 3', 'Posted'], ['Seaside Residences 2BR', 'To post']),
+      ...queue(JAN, TODAY, ['Casa Amara House & Lot', 'Pending'], ['Verdant Hills Lot 3', 'Posted'], ['Seaside Residences 2BR', 'Not Shared']),
       ...queue(MIKA, TODAY, ['Antipolo Ridge Lot 18', 'Posted']),
-      ...queue(BEA, TOMORROW, ['Sta. Rosa Lot 22', 'To post']),
+      ...queue(BEA, TOMORROW, ['Sta. Rosa Lot 22', 'Not Shared']),
     ];
     const team = [...TEAM, { name: BEA, role: 'Intern' as const }, { name: 'Aaron Idle', role: 'Intern' as const }];
 
@@ -228,7 +228,7 @@ describe('summarizeDay — ported from TrackerServiceTests', () => {
     const d = summarizeDay({
       date: TODAY,
       posts: [],
-      assignments: queue('Paolo Santos', TODAY, ['A Lot', 'To post']),
+      assignments: queue('Paolo Santos', TODAY, ['A Lot', 'Not Shared']),
       properties: [property('A Lot')],
       team: [...TEAM, { name: 'Gone Intern', role: 'Intern', active: false }],
       settings: RULES,
@@ -253,7 +253,7 @@ describe('summarizeDay — the tracker screen (TrackerViewModelTests)', () => {
     post('Casa Amara House & Lot', 0, { status: 'Pending', time: '10:31' }),
   ];
   const assignments = [
-    ...queue(JAN, TODAY, ['Casa Amara House & Lot', 'Pending'], ['Verdant Hills Lot 3', 'Posted'], ['Seaside Residences 2BR', 'To post']),
+    ...queue(JAN, TODAY, ['Casa Amara House & Lot', 'Pending'], ['Verdant Hills Lot 3', 'Posted'], ['Seaside Residences 2BR', 'Not Shared']),
     ...queue(MIKA, TODAY, ['Antipolo Ridge Lot 18', 'Posted']),
   ];
   const team = [...TEAM, { name: BEA, role: 'Intern' as const }];
@@ -282,6 +282,12 @@ describe('summarizeDay — the tracker screen (TrackerViewModelTests)', () => {
     expect(jan).toEqual({ name: JAN, total: 3, posted: 1, pending: 1, toPost: 1, done: false });
     expect(mika).toEqual({ name: MIKA, total: 1, posted: 1, pending: 0, toPost: 0, done: true });
     expect(bea).toEqual({ name: BEA, total: 0, posted: 0, pending: 0, toPost: 0, done: false });
+  });
+
+  it('counts an older "To post" item as Not Shared, the same thing', () => {
+    const old = queue(BEA, TODAY, ['Sta. Rosa Lot 22', 'To post' as AssignmentStatus], ['Verdant Hills Lot 12', 'Not Shared']);
+    const bea = summarizeDay({ date: TODAY, posts, assignments: old, properties, team, settings: RULES }).interns.find((i) => i.name === BEA);
+    expect(bea).toEqual({ name: BEA, total: 2, posted: 0, pending: 0, toPost: 2, done: false });
   });
 
   it('lists what needs attention: never posted by name, then due longest first', () => {
@@ -336,11 +342,11 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
     const assignments = [
       ...queue(JAN, TODAY,
         ['Verdant Hills Lot 3', 'Posted'],
-        ['Seaside Residences 2BR', 'To post'],
+        ['Seaside Residences 2BR', 'Not Shared'],
         ['Casa Amara House & Lot', 'Pending'],
-        ['Verdant Hills Lot 12', 'To post'],
-        ['Folder Since Deleted', 'To post']),
-      ...queue(MIKA, TODAY, ['Verdant Hills Lot 7', 'To post']),
+        ['Verdant Hills Lot 12', 'Not Shared'],
+        ['Folder Since Deleted', 'Not Shared']),
+      ...queue(MIKA, TODAY, ['Verdant Hills Lot 7', 'Not Shared']),
     ];
 
     const r = rules('jan dela cruz', TODAY, assignments);
@@ -350,13 +356,13 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
     );
     expect(r.saved[0]?.property?.id).toBe('House & Lot/Casa Amara House & Lot');
     expect(r.saved[3]?.property).toBeUndefined(); // its folder has gone
-    expect(r.saved.map((e) => r.statusOf(e.key))).toEqual(['Pending', 'To post', 'To post', 'To post', 'Posted']);
+    expect(r.saved.map((e) => r.statusOf(e.key))).toEqual(['Pending', 'Not Shared', 'Not Shared', 'Not Shared', 'Posted']);
     expect(r.saved.map((e) => r.isStarted(e.key))).toEqual([true, false, false, false, true]);
     expect(rules(JAN, TOMORROW, assignments).saved).toEqual([]);
   });
 
   it('explains why a listing can or cannot be added', () => {
-    const r = rules(JAN, TODAY, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'To post']));
+    const r = rules(JAN, TODAY, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared']));
 
     const never = r.check(named('Casa Amara House & Lot'));
     expect(never).toMatchObject({ canAdd: true, due: true, reason: '' });
@@ -378,8 +384,8 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
     expect(taken).toMatchObject({ canAdd: false, block: 'otherQueue', holder: MIKA });
     expect(taken.reason).toBe("Already in Mika's queue for Thu 29 Oct.");
 
-    expect(rules(MIKA, TODAY, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'To post'])).check(named('Seaside Residences 2BR')).canAdd).toBe(true); // her own queue
-    expect(rules(JAN, TOMORROW, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'To post'])).check(named('Seaside Residences 2BR')).canAdd).toBe(true); // another day
+    expect(rules(MIKA, TODAY, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared'])).check(named('Seaside Residences 2BR')).canAdd).toBe(true); // her own queue
+    expect(rules(JAN, TOMORROW, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared'])).check(named('Seaside Residences 2BR')).canAdd).toBe(true); // another day
   });
 
   it("judges the cooldown against the queue's day, and says when it was posted against today", () => {
@@ -392,7 +398,7 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
   });
 
   it("names the other intern in full when they share a first name with this one's", () => {
-    const r = rules(JAN, TODAY, queue('Jan Reyes', TODAY, ['Seaside Residences 2BR', 'To post']));
+    const r = rules(JAN, TODAY, queue('Jan Reyes', TODAY, ['Seaside Residences 2BR', 'Not Shared']));
     expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Jan Reyes's queue for Thu 29 Oct.");
   });
 
@@ -429,10 +435,17 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
     expect(match?.kind).toBe('notFound');
   });
 
-  it('keeps saved statuses, adds new items as to post, and drops removed ones', () => {
+  it('reads an older "To post" item as Not Shared: kept, not started, and saved back as Not Shared', () => {
+    const r = rules(JAN, TODAY, queue(JAN, TODAY, ['Seaside Residences 2BR', 'To post' as AssignmentStatus], ['Verdant Hills Lot 12', 'Pending']));
+    expect(r.saved.map((e) => r.statusOf(e.key))).toEqual(['Pending', 'Not Shared']);
+    expect(r.isStarted(r.saved[1]!.key)).toBe(false);
+    expect(r.validate(r.saved).items.map((i) => i.status)).toEqual(['Pending', 'Not Shared']);
+  });
+
+  it('keeps saved statuses, adds new items as Not Shared, and drops removed ones', () => {
     const assignments = [
-      ...queue(MIKA, TODAY, ['Verdant Hills Lot 3', 'To post']),
-      ...queue(JAN, TODAY, ['Verdant Hills Lot 7', 'Posted'], ['Seaside Residences 2BR', 'To post']),
+      ...queue(MIKA, TODAY, ['Verdant Hills Lot 3', 'Not Shared']),
+      ...queue(JAN, TODAY, ['Verdant Hills Lot 7', 'Posted'], ['Seaside Residences 2BR', 'Not Shared']),
     ];
     const r = rules(JAN, TODAY, assignments);
 
@@ -443,13 +456,13 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
     expect(result.ok).toBe(true);
     expect(result.problems).toEqual([]);
     expect(result.items.map((i) => `${i.propertyName}:${i.status}`).join(',')).toBe(
-      'Casa Amara House & Lot:To post,Verdant Hills Lot 12:To post,Verdant Hills Lot 7:Posted',
+      'Casa Amara House & Lot:Not Shared,Verdant Hills Lot 12:Not Shared,Verdant Hills Lot 7:Posted',
     );
     expect(result.items[0]?.propertyId).toBe('House & Lot/Casa Amara House & Lot');
   });
 
   it("refuses unknown names, listings in their cooldown, and someone else's", () => {
-    const r = rules(JAN, TODAY, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'To post']));
+    const r = rules(JAN, TODAY, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared']));
 
     const unknown = r.validate(['Verdant Hills Lot 12', 'Nowhere Lot 1 '].map(r.entryNamed));
     expect(unknown.ok).toBe(false);
@@ -464,7 +477,7 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
   });
 
   it('saves the status the sheet has now, not the one the draft started with', () => {
-    const before = rules(JAN, TODAY, queue(JAN, TODAY, ['Verdant Hills Lot 12', 'To post']));
+    const before = rules(JAN, TODAY, queue(JAN, TODAY, ['Verdant Hills Lot 12', 'Not Shared']));
     const draft = [...before.saved];
     // Meanwhile Jan posts it: the sheet says Posted.
     const after = rules(JAN, TODAY, queue(JAN, TODAY, ['Verdant Hills Lot 12', 'Posted']), [...HISTORY, post('Verdant Hills Lot 12', 0)]);
@@ -474,7 +487,7 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
 
 describe('the draft — ported from AssignViewModelTests', () => {
   it("judges a candidate against the queue's day: tomorrow by default", () => {
-    const r = rules(JAN, TOMORROW, queue(MIKA, TOMORROW, ['Seaside Residences 2BR', 'To post']));
+    const r = rules(JAN, TOMORROW, queue(MIKA, TOMORROW, ['Seaside Residences 2BR', 'Not Shared']));
     expect(r.check(named('Verdant Hills Lot 7'))).toMatchObject({ canAdd: false, daysLeft: 4, nextAllowed: '2026-11-03' });
     expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Mika's queue for Fri 30 Oct.");
     expect(rules(JAN, '2026-10-31').check(named('Verdant Hills Lot 7')).daysLeft).toBe(3);
@@ -495,7 +508,7 @@ describe('the draft — ported from AssignViewModelTests', () => {
   });
 
   it('is dirty when the names or their order differ from the saved queue', () => {
-    const r = rules(JAN, TOMORROW, queue(JAN, TOMORROW, ['Seaside Residences 2BR', 'To post'], ['Verdant Hills Lot 12', 'To post']));
+    const r = rules(JAN, TOMORROW, queue(JAN, TOMORROW, ['Seaside Residences 2BR', 'Not Shared'], ['Verdant Hills Lot 12', 'Not Shared']));
     expect(sameQueue(r.saved, [...r.saved])).toBe(true);
     const swapped = moveEntry(r.saved, 0, 1);
     expect(sameQueue(r.saved, swapped)).toBe(false); // order counts
@@ -504,7 +517,7 @@ describe('the draft — ported from AssignViewModelTests', () => {
   });
 
   it('finds the same listing by its folder id however it was added', () => {
-    const r = rules(JAN, TOMORROW, queue(JAN, TOMORROW, ['seaside residences 2br', 'To post']));
+    const r = rules(JAN, TOMORROW, queue(JAN, TOMORROW, ['seaside residences 2br', 'Not Shared']));
     expect(r.saved[0]?.key).toBe(r.entryFor(named('Seaside Residences 2BR')).key);
     expect(r.entryNamed('Seaside Residences 2BR').key).toBe(r.saved[0]?.key);
   });
@@ -522,7 +535,7 @@ describe('pastedLines', () => {
 describe('peopleIn', () => {
   it('names everyone who has had a queue or logged a post, once each', () => {
     const names = peopleIn(
-      [...queue(MIKA, TODAY, ['A', 'To post']), ...queue('jan dela cruz', TOMORROW, ['B', 'To post'])],
+      [...queue(MIKA, TODAY, ['A', 'Not Shared']), ...queue('jan dela cruz', TOMORROW, ['B', 'Not Shared'])],
       [post('A', 1, { by: JAN }), post('B', 2, { by: BEA }), post('C', 3, { by: ' ' })],
     );
     expect(names).toEqual([BEA, 'jan dela cruz', MIKA]);
@@ -617,8 +630,8 @@ describe('the team, for the Interns screen', () => {
 
   it("counts each intern's queue on the day and their posts waiting for approval", () => {
     const assignments = [
-      ...queue(JAN, TODAY, ['A', 'Posted'], ['B', 'Posted'], ['C', 'Pending'], ['D', 'To post'], ['E', 'To post']),
-      ...queue(MIKA, TOMORROW, ['F', 'To post']),
+      ...queue(JAN, TODAY, ['A', 'Posted'], ['B', 'Posted'], ['C', 'Pending'], ['D', 'Not Shared'], ['E', 'Not Shared']),
+      ...queue(MIKA, TOMORROW, ['F', 'Not Shared']),
       ...queue('paolo reyes', TODAY, ['G', 'Posted']),
     ];
     const posts = [

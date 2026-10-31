@@ -7,60 +7,58 @@
  * the brand word, the one primary button on a screen, what is selected, and
  * keyboard focus. Everything else is carried by the status colours.
  *
- * Dark only. There is no light theme.
+ * Dark only, for OLED: a charcoal-black page (#121212) and neutral greys,
+ * with no warm tint anywhere but the gold. There is no light theme.
  */
 
 :root {
   color-scheme: dark;
 
-  /* ---- surfaces ---- */
-  --bg: #0e0c08;
-  --bg-glow: rgba(212, 166, 58, 0.1);
-  --surface: #17140e;
-  --surface-raised: #1e1a12;
-  --input-bg: #0b0906;
-  --card-bg: linear-gradient(180deg, #1c1811 0%, #16130d 100%);
-  --tip-bg: #241f16;
-  --top-bar-bg: rgba(14, 12, 8, 0.94);
-  --viewer-bg: rgba(5, 4, 2, 0.94);
-  --inset: rgba(0, 0, 0, 0.25);
+  /* ---- surfaces: neutral greys on an OLED charcoal. No warm tint. ----
+     Each step up is lighter, so a card separates from the page by its fill,
+     not only by its edge. */
+  --bg: #121212;
+  --surface: #1a1a1a;
+  --surface-raised: #222222;
+  --input-bg: #0c0c0c;
+  --card-bg: linear-gradient(180deg, #1e1e1e 0%, #1a1a1a 100%);
+  --tip-bg: #2a2a2a;
+  --top-bar-bg: rgba(18, 18, 18, 0.94);
+  --viewer-bg: rgba(0, 0, 0, 0.94);
+  --inset: rgba(0, 0, 0, 0.3);
   --inset-edge: rgba(255, 255, 255, 0.08);
 
   /* ---- text ---- */
-  --text: #f3eee4;
-  --text-label: #d9d2c4;
-  --text-muted: #b8af9c;
-  --placeholder: #8a8170;
-  --zero-text: #5c5547;
+  --text: #e0e0e0;
+  --text-label: #cccccc;
+  --text-muted: #b0b0b0;
+  --placeholder: #8c8c8c;
+  --zero-text: #5c5c5c;
 
-  /* ---- edges: cream at an alpha, never gold ---- */
-  --border-soft: rgba(243, 238, 228, 0.06);
-  --border: rgba(243, 238, 228, 0.1);
-  --button-edge: rgba(243, 238, 228, 0.18);
-  --border-strong: rgba(243, 238, 228, 0.24);
-  --pick-edge: rgba(243, 238, 228, 0.4);
-  --row-hover: rgba(243, 238, 228, 0.03);
-  --outline-shape: rgba(243, 238, 228, 0.07);
-  --card-edge: linear-gradient(
-    180deg,
-    rgba(243, 238, 228, 0.14) 0%,
-    rgba(243, 238, 228, 0.08) 25%,
-    rgba(243, 238, 228, 0.06) 100%
-  );
+  /* ---- edges: neutral grey, never gold ---- */
+  --border-soft: #2e2e2e;
+  --border: #444444;
+  --button-edge: #4d4d4d;
+  --border-strong: #5c5c5c;
+  --pick-edge: #888888;
+  --row-hover: rgba(255, 255, 255, 0.03);
+  --outline-shape: rgba(255, 255, 255, 0.07);
+  --card-edge: linear-gradient(180deg, #444444 0%, #333333 25%, #2e2e2e 100%);
 
   /* ---- gold: brand, the primary action, selection, focus ---- */
   --gold: #e0b84a;
   --gold-edge: rgba(224, 184, 74, 0.55);
   --gold-soft: rgba(224, 184, 74, 0.12);
-  --on-gold: #1a1408;
+  --on-gold: #121212;
   --gold-gradient: linear-gradient(135deg, #f6dc8a 0%, #e0b84a 45%, #b98a26 100%);
 
-  /* ---- status ---- */
-  --danger-bg: rgba(229, 83, 75, 0.15);
+  /* ---- status: each tint is the family's own hue at a low alpha, so on a
+     neutral grey it reads as that hue, not as brown ---- */
+  --danger-bg: rgba(240, 100, 90, 0.12);
   --danger-text: #ff9d95;
   --danger-strong: #f0645a;
   --danger-soft: rgba(240, 100, 90, 0.18);
-  --danger-line: rgba(240, 100, 90, 0.32);
+  --danger-line: rgba(240, 100, 90, 0.4);
   --danger-edge: rgba(255, 157, 149, 0.55);
   --on-danger: #1f0a08;
 
@@ -68,22 +66,22 @@
   --info-text: #a9cdef;
   --info-strong: #6fa8dc;
   --info-soft: rgba(111, 168, 220, 0.18);
-  --info-line: rgba(111, 168, 220, 0.28);
+  --info-line: rgba(111, 168, 220, 0.36);
   --info-edge: rgba(169, 205, 239, 0.55);
 
-  --ok-bg: rgba(90, 180, 110, 0.14);
+  --ok-bg: rgba(98, 196, 126, 0.12);
   --ok-text: #93d9a3;
   --ok-strong: #62c47e;
   --ok-soft: rgba(98, 196, 126, 0.18);
-  --ok-line: rgba(98, 196, 126, 0.26);
+  --ok-line: rgba(98, 196, 126, 0.34);
   --ok-edge: rgba(147, 217, 163, 0.5);
 
   --neutral-bg: rgba(255, 255, 255, 0.06);
-  --neutral-text: #c9c2b4;
-  --neutral-strong: #9c937f;
+  --neutral-text: #cccccc;
+  --neutral-strong: #888888;
   --neutral-soft: rgba(255, 255, 255, 0.12);
 
-  --warn-bg: rgba(240, 150, 60, 0.14);
+  --warn-bg: rgba(245, 170, 90, 0.12);
   --warn-text: #f5b77a;
   --warn-edge: rgba(245, 183, 122, 0.45);
 
@@ -92,7 +90,7 @@
   --type-condo: #d95926;
   --type-office: #199e70;
   --type-warehouse: #c98500;
-  --type-unsorted: #6f685a;
+  --type-unsorted: #888888;
 
   /* ---- type ---- */
   --body-font: "Segoe UI", system-ui, sans-serif;

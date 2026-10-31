@@ -412,6 +412,43 @@ function directoryRows() {
   return out;
 }
 
+/**
+ * The Posts tab's Property type for a listing: its Directory category, title
+ * cased the way the owner's tracker writes it ("Warehouse", "Commercial
+ * Space", "Condo / House and Lot"). Found by folder id; `fallback` (the
+ * category the app sent) when the Directory has no such row or cannot be read.
+ */
+function propertyTypeOf_(propertyId, fallback) {
+  var category = '';
+  try {
+    var id = textOf_(propertyId).trim();
+    var row = id ? directoryRows().filter(function (r) { return r.id === id; })[0] : null;
+    if (row) category = textOf_(row.category);
+  } catch (e) { /* no directory: use what the app sent */ }
+  return propertyType_(category.trim() ? category : fallback);
+}
+
+// Lower case inside a title, as the owner writes "Condo / House and Lot".
+const TITLE_SMALL_WORDS = ['a', 'an', 'and', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with'];
+
+/**
+ * A category as the tracker's Property type: "COMMERCIAL SPACE" ->
+ * "Commercial Space", "CONDO / HOUSE AND LOT" -> "Condo / House and Lot".
+ * Only text written all in one case is recased; "Virtual Office for posting"
+ * has been written with care already, and stays as it is. The app's
+ * propertyType (core/records.ts), character for character.
+ */
+function propertyType_(category) {
+  var text = textOf_(category).trim().replace(/\s+/g, ' ');
+  if (text !== text.toUpperCase() && text !== text.toLowerCase()) return text;
+  var index = 0;
+  return text.toLowerCase().replace(/[\p{L}\p{N}']+/gu, function (word) {
+    var first = index++ === 0;
+    if (!first && TITLE_SMALL_WORDS.indexOf(word) !== -1) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  });
+}
+
 /** Property name for a folder id. */
 function nameOf(propertyId) {
   var row = directoryRows().filter(function (r) { return r.id === propertyId; })[0];
@@ -798,23 +835,29 @@ function logPost(req, me) {
     var guard = cooldownFor(req.propertyId, req.property, when);
     if (guard) return guard;
 
+    // The date as ISO text, which the app reads; the time as the interns'
+    // own sheet writes it, "10:23 AM", on Manila's clock.
     var date = Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd');
     var time = Utilities.formatDate(when, CONFIG.TZ, 'HH:mm');
+    // The listing's category from the Directory; what the app sent only when
+    // the Directory has no row for it.
+    var type = propertyTypeOf_(req.propertyId, req.type);
 
     appendRow(CONFIG.POSTS_TAB, POST_FIELDS, {
       date:       date,
-      type:       req.type || 'Group post',
+      type:       type,
       title:      req.property,
-      time:       time,
-      status:     status,
       fbAccount:  req.fbAccount,
       postLink:   link,
+      time:       clockTime_(time),
+      status:     status,
       postedBy:   postedBy,
       propertyId: req.propertyId,
     });
     setAssignmentStatus(req.propertyId, req.property, postedBy, status);
     // The row as written. The app shows these, never its own clock or user.
-    return { ok: true, status: status, date: date, time: time, postedBy: postedBy };
+    // The time goes back as HH:mm, the app's format.
+    return { ok: true, status: status, date: date, time: time, type: type, postedBy: postedBy };
   } finally {
     lock.releaseLock();
   }
@@ -951,6 +994,50 @@ function normalizeName_(name) {
       return Object.prototype.hasOwnProperty.call(NAME_ABBREVIATIONS, token) ? NAME_ABBREVIATIONS[token] : token;
     })
     .join(' ');
+}
+
+// ---------------------------------------------------------------- the tracker's times
+//
+// The interns' sheet writes "10:23 AM". The app reads and shows HH:mm
+// (tracker.ts readSheetTime), so the posts action gives every time back as
+// HH:mm, whichever way the cell was written.
+
+const TRACKER_CLOCK = /^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:\s*([ap])\.?\s*m\.?)?$/i;
+
+/** "14:30" -> "2:30 PM", "00:15" -> "12:15 AM". */
+function clockTime_(hhmm) {
+  var h = +hhmm.slice(0, 2), m = hhmm.slice(3, 5);
+  return (h % 12 === 0 ? 12 : h % 12) + ':' + m + (h < 12 ? ' AM' : ' PM');
+}
+
+/** "2:30 PM", "2:30pm", "14:30", "9:05" -> HH:mm. Anything else is returned as it was. */
+function sheetTime_(text) {
+  var m = TRACKER_CLOCK.exec(textOf_(text).trim());
+  if (!m) return text;
+  var h = +m[1], min = +m[2], half = m[3] ? m[3].toLowerCase() : '';
+  if (min > 59) return text;
+  if (half) {
+    if (h < 1 || h > 12) return text;
+    h = (h % 12) + (half === 'p' ? 12 : 0);
+  } else if (h > 23) {
+    return text;
+  }
+  return pad2_(h) + ':' + pad2_(min);
+}
+
+// ---------------------------------------------------------------- the queue's words
+//
+// A queue item not posted yet is "Not Shared", the word the interns' own
+// sheet uses. Rows written before that say "To post": the same thing.
+
+const NOT_SHARED = 'Not Shared';
+
+/** A queue status as written: Posted, Pending, or else Not Shared ("To post" included). */
+function queueStatus_(value) {
+  var s = textOf_(value).trim().toLowerCase();
+  if (s === 'posted') return 'Posted';
+  if (s === 'pending') return 'Pending';
+  return NOT_SHARED;
 }
 
 /** A Posts row's status as the app reads it (tracker.ts): Pending, or else Posted. */
@@ -1122,7 +1209,7 @@ function replaceQueues_(date, queues) {
         date:       date,
         assignedTo: q.assignedTo,
         property:   it.property,
-        status:     it.status || 'To post',
+        status:     queueStatus_(it.status),
         propertyId: it.propertyId || idOf(it.property),
       });
       saved++;
@@ -1141,7 +1228,8 @@ function setStatus(req, me) {
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
     var id = req.propertyId || idOf(req.property);
-    var row = setAssignmentStatus(id, req.property, req.assignedTo, req.status);
+    // "To post", from an older app, is written as Not Shared.
+    var row = setAssignmentStatus(id, req.property, req.assignedTo, queueStatus_(req.status));
     if (!row) {
       return {
         ok: false,
@@ -1153,7 +1241,7 @@ function setStatus(req, me) {
     // Approved in the group: the post itself is live now too, or Records and
     // the Tracker would go on calling it Pending. Only the assignee's own post,
     // which for an intern is checked above to be their own.
-    if (textOf_(req.status) === 'Posted') markPostPosted_(id, req.property, req.assignedTo);
+    if (queueStatus_(req.status) === 'Posted') markPostPosted_(id, req.property, req.assignedTo);
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -1209,7 +1297,7 @@ function setAssignmentStatus(propertyId, propertyName, assignedTo, status) {
     var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
     if (!sameProperty_(a.propertyId, a.property, propertyId, key)) continue;
     if (a.assignedTo !== textOf_(assignedTo)) continue;
-    if (a.status.trim().toLowerCase() === 'posted') continue;
+    if (queueStatus_(a.status) === 'Posted') continue;
     setText_(sh.getRange(r + 1, col.status + 1), status);
     return r + 1;
   }
@@ -1231,16 +1319,21 @@ function setAssignmentStatus(propertyId, propertyName, assignedTo, status) {
 // time, "1201" a number and "=..." a formula. Everything read comes back as
 // text, the way the app reads it.
 
+// The Posts tab's columns, in the order a new tab gets them: the interns' own
+// "POSTING TRACKER - INTERNS" sheet's, then Posted by and Property ID, which
+// the records and the cooldown need. The first spelling is the one a new tab
+// is given; the rest are older spellings, still read, so an existing tab
+// keeps working.
 const POST_FIELDS = {
   date:       { headers: ['Date'], required: true },
-  type:       { headers: ['Type', 'Category', 'Property Type'] },
-  title:      { headers: ['Title', 'Property', 'Property Name'], required: true },
-  time:       { headers: ['Time'] },
-  status:     { headers: ['Status'], required: true },
-  fbAccount:  { headers: ['FB Account', 'Account', 'Facebook Account', 'FB'] },
-  postLink:   { headers: ['Post Link', 'Link', 'URL', 'Facebook Link'], required: true },
-  postedBy:   { headers: ['Posted By', 'Posted by', 'Intern', 'By'], required: true },
-  propertyId: { headers: ['PropertyId', 'Property Id', 'Folder Id'] },
+  type:       { headers: ['Property type', 'Type', 'Category'] },
+  title:      { headers: ['Property title', 'Title', 'Property', 'Property Name'], required: true },
+  fbAccount:  { headers: ['FB account name', 'FB Account', 'Account', 'Facebook Account', 'FB'] },
+  postLink:   { headers: ['Link', 'Post Link', 'URL', 'Facebook Link'], required: true },
+  time:       { headers: ['Time posted', 'Time'] },
+  status:     { headers: ['Share posting', 'Status'], required: true },
+  postedBy:   { headers: ['Posted by', 'Intern', 'By'], required: true },
+  propertyId: { headers: ['Property ID', 'PropertyId', 'Folder Id'] },
 };
 
 const ASSIGN_FIELDS = {
@@ -1344,6 +1437,8 @@ function cellText_(value, tz, field) {
     return Utilities.formatDate(value, tz, timeOfDay ? 'HH:mm' : 'yyyy-MM-dd');
   }
   if (value === true || value === false) return value ? 'TRUE' : 'FALSE';
+  // "10:23 AM", as the script writes it and the interns type it: HH:mm.
+  if (field === 'time') return sheetTime_(String(value));
   return String(value);
 }
 
