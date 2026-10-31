@@ -1,19 +1,23 @@
-/* The window. The document scrolls (so Page Down works wherever focus is) and
-   the top bar sticks, translucent, over what scrolls under it. Bar and screen
-   share one scroll container, so they always have the same width and line up,
-   and the bar runs to the window's edge. The shell is the container every
-   breakpoint is measured against. */
+/* The window: the sidebar on the left, the content beside it. The document
+   scrolls (so Page Down works wherever focus is); the sidebar and the title
+   strip stick. The content column is the container every breakpoint is
+   measured against, so a screen lays out for the room it actually has,
+   whichever width the sidebar is. */
 .shell {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
   min-height: 100%;
-  container-type: inline-size;
-  container-name: shell;
 }
 
-.shell > .topbar {
-  position: sticky;
-  top: 0;
+.shell__content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 100vh;
+  container-type: inline-size;
+  container-name: shell;
 }
 
 .shell__main {

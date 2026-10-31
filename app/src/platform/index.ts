@@ -1,9 +1,10 @@
 /**
  * The only way from the screens and the rules to the OS.
  *
- * Two versions: Tauri's, and a fake. With the fake the whole app runs in a
- * plain browser, which is how the screens are built and how they are tested —
- * no Windows, no WebView, no Rust.
+ * Three versions: Tauri's (tauri.ts), the desktop app; a plain browser's
+ * (browser.ts), for development against the real web app; and a fake
+ * (fake.ts), which is how the screens are tested — no Windows, no WebView,
+ * no Rust.
  */
 
 export interface SavedPhoto {

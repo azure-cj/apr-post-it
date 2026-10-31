@@ -170,20 +170,20 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
 ## 8. Layout
 
 - **Measured, not guessed.** Breakpoints are measured against the container's width after
-  the text-size zoom, not the viewport. In CSS that is a container query on the shell; in
-  the top bar it is literal measurement (below).
+  the text-size zoom, not the viewport. In CSS that is a container query on the shell; the
+  content column is what is measured.
 - `--bp-compact` 1100 and `--bp-stack` 900 (container widths). Page padding: 24 above
   1100, 16 between, 12 below 900. Page content is at most `--page-max`, 1320.
 - Two-pane screens: a side pane of `--pane-regular` 400 (`--pane-compact` 340 below
   1100), a gap of `--gap-regular` 40 (`--gap-compact` 24), stacking below 900.
-- **The top bar takes the first arrangement that fits**: one row (brand, nav, you), then
-  two rows (brand and you, then nav). It measures what its parts need against the room it
-  has, so it adapts to text size and to the nav a role gets, not to a fixed width. If even
-  two rows don't fit, the nav wraps.
-- **The document scrolls; the top bar sticks.** `--top-bar-bg` is 94% opaque because the
-  screen scrolls under it. One scroll container means the bar and the screen always share a
-  width (their left edges line up at every size), the bar runs to the window's edge, and
-  Page Down works wherever focus is.
+- **A left sidebar holds the app's chrome**: the words "APG Post-It" at the top (no logo
+  mark), the nav, then for an Admin the interns list (today's progress, a pending dot that
+  is never colour alone), and the person, Sign out and the collapse toggle at the bottom.
+  Collapsed it is a 64px icon rail with tooltips; Ctrl+B toggles it; the choice is
+  remembered, and windows under 1000px start collapsed. Width animates only on a toggle.
+- **A slim title bar runs across the content column**: the drag region, with minimize,
+  maximize/restore and close at the top-right. Close turns danger red on hover and always
+  asks first. Breakpoints measure the content column, so screens fit either sidebar width.
 - Breakpoints are "below": `width < 1100px`, `width < 900px`, so a 900px container is
   compact, not narrow. The container is what's measured, so a scrollbar's width counts:
   a 900px window whose page scrolls is a narrow container.
@@ -220,7 +220,7 @@ only, not in the production build) shows each in every variant with the product'
 | **Toast**, **ToastRegion**, `useToasts` | `tone` ok, info, warn, danger | Bottom centre, at most three. 4s for ok/info, 8s for warn/danger, paused while hovered or focused. Rendered into `<body>`. A problem that needs action is a Notice, not a toast |
 | **Spinner** | `small` 16, `regular` 24; `label` | Turns at constant speed; with reduced motion it breathes instead |
 | **EmptyState** | `title`, body, `action`, `icon` | Says what is empty, why, and the one thing to do next |
-| **TopBar** | `nav`, `currentKey`, `user`, `onNavigate`, `onSignOut`, `windowControls` | Brand word gold; the current item gets a gold mark and brighter text; measured layout. On the desktop the window has no frame (`decorations: false`): the bar is the drag region (double-click maximizes) and carries minimize, maximize/restore and close at the top-right corner, 46×32 with inline SVG glyphs. Close turns danger red on hover, never gold, and always asks first |
+| **Sidebar / TitleBar** | see §8 | Brand word gold; the current item gets a gold mark and brighter text. The title bar replaced the old top bar. On the desktop the window has no frame (`decorations: false`): the bar is the drag region (double-click maximizes) and carries minimize, maximize/restore and close at the top-right corner, 46×32 with inline SVG glyphs. Close turns danger red on hover, never gold, and always asks first |
 | **CheckList** | `checks: CheckResult[]`, `label` | Order kept, so a check is always in the same place. Pass, warn, fail each have an icon shape and a word for screen readers; a fail line is tinted so it is found first |
 
 The shell (`src/ui/App.tsx`) holds the routes: Sign in, Find, Property, Log a post, My

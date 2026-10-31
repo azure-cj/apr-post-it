@@ -37,13 +37,12 @@ export {
   type Toasts,
 } from './Toast';
 export {
-  TopBar,
-  chooseTopBarLayout,
-  type TopBarLayout,
-  type TopBarMeasurements,
-  type TopBarNavItem,
-  type TopBarProps,
-  type TopBarUser,
-  WindowControls,
-  type WindowControlsProps,
-} from './TopBar';
+  Sidebar,
+  pendingWords,
+  type SidebarNavItem,
+  type SidebarPeople,
+  type SidebarPerson,
+  type SidebarProps,
+  type SidebarUser,
+} from './Sidebar';
+export { TitleBar, WindowControls, type TitleBarProps, type WindowControlsProps } from './TitleBar';

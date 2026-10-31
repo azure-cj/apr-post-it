@@ -16,7 +16,12 @@ export type IconName =
   | 'fail'
   | 'info'
   | 'signOut'
-  | 'inbox';
+  | 'inbox'
+  | 'tracker'
+  | 'assign'
+  | 'settings'
+  | 'sidebar'
+  | 'refresh';
 
 const paths: Record<IconName, ReactElement> = {
   search: (
@@ -64,6 +69,45 @@ const paths: Record<IconName, ReactElement> = {
     <>
       <path d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5" />
       <path d="M5.6 5.6 3.5 13.5V18a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-4.5l-2.1-7.9A2 2 0 0 0 16.47 4H7.53a2 2 0 0 0-1.93 1.6Z" />
+    </>
+  ),
+  tracker: (
+    <>
+      <path d="M4 20h16" />
+      <path d="M7 16v-5" />
+      <path d="M12 16V6" />
+      <path d="M17 16v-3" />
+    </>
+  ),
+  assign: (
+    <>
+      <path d="M4 6h11" />
+      <path d="M4 12h11" />
+      <path d="M4 18h7" />
+      <path d="M18 14.5v7" />
+      <path d="M14.5 18h7" />
+    </>
+  ),
+  settings: (
+    <>
+      <path d="M4 7h8.5" />
+      <path d="M17.5 7H20" />
+      <circle cx="15" cy="7" r="2.5" />
+      <path d="M4 17h2.5" />
+      <path d="M11.5 17H20" />
+      <circle cx="9" cy="17" r="2.5" />
+    </>
+  ),
+  sidebar: (
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <path d="M9.5 4.5v15" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" />
+      <path d="M19.5 4.5v4h-4" />
     </>
   ),
 };

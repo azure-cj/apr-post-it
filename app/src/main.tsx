@@ -1,4 +1,4 @@
-import { StrictMode, type ReactNode } from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './theme/tokens.css';
 import './theme/base.css';
@@ -8,35 +8,22 @@ import { AppStateProvider } from './ui/state';
 
 /**
  * Tauri's platform inside the app. In a plain browser during development, the
- * demo: an in-memory web app with a realistic library, so `npm run dev` runs
- * everything. Each is loaded only where it is used, so the browser never loads
- * Tauri's modules and the desktop app never runs the demo.
+ * browser platform, which talks to the real web app with a real key: there is
+ * no sample data. Each is loaded only where it is used, so the browser never
+ * loads Tauri's modules.
  *
- * The demo is development only: `import.meta.env.DEV` is false in a production
- * build, so the branch and the demo's data are left out of it entirely. A
- * production build opened in a browser says where to open it instead.
+ * The browser platform is development only: `import.meta.env.DEV` is false in
+ * a production build, so the branch is left out of it entirely. A production
+ * build opened in a browser says where to open it instead.
  */
-async function choosePlatform(): Promise<{ readonly platform: Platform; readonly signInNote?: ReactNode } | null> {
+async function choosePlatform(): Promise<Platform | null> {
   if ('__TAURI_INTERNALS__' in window) {
     const { createTauriPlatform } = await import('./platform/tauri');
-    return { platform: createTauriPlatform() };
+    return createTauriPlatform();
   }
   if (import.meta.env.DEV) {
-    const [{ createDemoPlatform }, { DevKeysNote }] = await Promise.all([
-      import('./platform/demo-data'),
-      import('./ui/dev/DevKeysNote'),
-    ]);
-    const params = new URLSearchParams(window.location.search);
-    // ?as=manager opens the demo signed in as someone else; ?as= opens it signed out.
-    const as = params.get('as');
-    return {
-      platform: createDemoPlatform({
-        signedInAs: as === null ? 'intern' : as.trim() || null,
-        // ?titlebar draws the desktop window's controls, which do nothing here.
-        windowControls: params.has('titlebar'),
-      }),
-      signInNote: <DevKeysNote />,
-    };
+    const { createBrowserPlatform } = await import('./platform/browser');
+    return createBrowserPlatform();
   }
   return null;
 }
@@ -44,17 +31,16 @@ async function choosePlatform(): Promise<{ readonly platform: Platform; readonly
 async function start(): Promise<void> {
   const root = document.getElementById('root');
   if (!root) throw new Error('index.html has no #root element.');
-  const chosen = await choosePlatform();
-  if (!chosen) {
+  const platform = await choosePlatform();
+  if (!platform) {
     showOutsideTheApp(root);
     return;
   }
-  const { platform, signInNote } = chosen;
   setPlatform(platform);
   createRoot(root).render(
     <StrictMode>
       <AppStateProvider platform={platform}>
-        <App signInNote={signInNote} />
+        <App />
       </AppStateProvider>
     </StrictMode>,
   );

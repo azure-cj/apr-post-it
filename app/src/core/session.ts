@@ -39,8 +39,8 @@ export function parseRole(value: unknown): Role {
   }
 }
 
-/** The accounts this person may post from. Empty means any. */
-function readAccounts(value: unknown): readonly string[] {
+/** The accounts a person may post from. Empty means any. tracker.ts reads Team rows with it too. */
+export function readAccounts(value: unknown): readonly string[] {
   // A list, as Code.gs sends it; a comma-separated cell, as the Team tab holds it.
   const items = asList(value) ?? (typeof value === 'string' ? value.split(',') : []);
   const out: string[] = [];

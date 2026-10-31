@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { lastPostedOn } from './cooldown';
 import {
+  activeInterns,
   addDays,
   ago,
   assignRules,
   daysBetween,
   docHealth,
   firstName,
+  internDays,
   isDate,
   lastPostOf,
   longDate,
@@ -594,5 +596,39 @@ describe('doc health', () => {
 
   it('has nothing to say about a healthy library', () => {
     expect(docHealth([property('A Lot')])).toEqual({ groups: [], listings: 0, blocked: 0 });
+  });
+});
+
+describe('the team, for the sidebar', () => {
+  const team: readonly TeamMember[] = [
+    { name: MIKA, role: 'Intern' },
+    { name: 'Maria Santos', role: 'Admin' },
+    { name: 'Paolo Reyes', role: 'Intern', active: false },
+    { name: BEA, role: 'Intern' },
+    { name: JAN, role: 'Intern' },
+    { name: ' jan dela cruz ', role: 'Intern' },
+  ];
+
+  it('lists the active interns once each, by name', () => {
+    expect(activeInterns(team)).toEqual([BEA, JAN, MIKA]);
+    expect(activeInterns([])).toEqual([]);
+  });
+
+  it("counts each intern's queue on the day and their posts waiting for a link", () => {
+    const assignments = [
+      ...queue(JAN, TODAY, ['A', 'Posted'], ['B', 'Posted'], ['C', 'Pending'], ['D', 'To post'], ['E', 'To post']),
+      ...queue(MIKA, TOMORROW, ['F', 'To post']),
+      ...queue('paolo reyes', TODAY, ['G', 'Posted']),
+    ];
+    const posts = [
+      post('C', 0, { status: 'Pending' }),
+      post('H', 3, { status: 'Pending', by: 'mika reyes' }),
+      post('A', 0),
+    ];
+    expect(internDays(team, assignments, posts, TODAY)).toEqual([
+      { name: BEA, total: 0, posted: 0, pendingPosts: 0 },
+      { name: JAN, total: 5, posted: 2, pendingPosts: 1 },
+      { name: MIKA, total: 0, posted: 0, pendingPosts: 1 },
+    ]);
   });
 });

@@ -1,7 +1,7 @@
 //! Names Windows will accept, made from a listing's name or a photo's.
 //!
 //! Listing names are written by people for people: "Taguig, 135 East Tower",
-//! "FOR LEASE/ FOR RENT", "*NEW* Casa Amara". Every character Windows refuses
+//! "FOR LEASE/ FOR RENT", "*NEW* 3BR Townhouse". Every character Windows refuses
 //! becomes `_`, as browsers do with downloads, so the folder is still
 //! recognisably the listing's. Commas, `&`, `#` and accents are legal and kept.
 

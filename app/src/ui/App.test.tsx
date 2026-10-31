@@ -258,8 +258,8 @@ describe("the manager's screens", () => {
     expect(heading()).toBe('Assign');
     await userEvent.click(screen.getByRole('link', { name: 'Settings' }));
     expect(heading()).toBe('Settings');
-    // The web app doesn't send the team yet, and the screen says so.
-    expect(screen.getByText("The team isn't shown here yet")).toBeTruthy();
+    // The team the web app sent, in Settings' table.
+    expect(await screen.findByRole('cell', { name: intern.name })).toBeTruthy();
   });
 
   it.each(['/tracker', '/assign', '/settings'])('send an intern who asks for %s back to their queue', (path) => {

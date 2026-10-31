@@ -70,6 +70,15 @@ export const PROPERTIES = {
   ],
 };
 
+/** The `team` reply: the admins and one intern, Jan. */
+export const TEAM = {
+  ok: true,
+  team: [
+    { name: manager.name, role: 'Admin', email: 'maria@example.com', fbAccounts: '', active: true },
+    { name: intern.name, role: 'Intern', email: 'jan@example.com', fbAccounts: 'APG Main, APG Rentals South', active: true },
+  ],
+};
+
 /** A web app that answers every read, with nothing posted and nothing queued unless told otherwise. */
 export function fakeServer(
   replies: Readonly<Record<string, FakeReply>> = {},
@@ -85,6 +94,7 @@ export function fakeServer(
       property: propertyReply(),
       posts: { ok: true, posts: [] },
       assignments: { ok: true, assignments: [] },
+      team: TEAM,
       ...replies,
     },
   });

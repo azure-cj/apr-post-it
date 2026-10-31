@@ -17,11 +17,13 @@ import {
   TextInput,
   Toast,
   ToastRegion,
-  TopBar,
+  Sidebar,
+  TitleBar,
   categoryKind,
   categoryLabel,
   useToasts,
-  type TopBarNavItem,
+  type SidebarNavItem,
+  type SidebarPeople,
 } from '../components';
 import './KitScreen.css';
 
@@ -49,17 +51,27 @@ const checks: readonly CheckResult[] = [
   },
 ];
 
-const internNav: TopBarNavItem[] = [
-  { key: 'queue', label: 'My queue', href: '#/kit', count: 6, countLabel: '6 to post' },
-  { key: 'find', label: 'Find', href: '#/kit' },
+const internNav: SidebarNavItem[] = [
+  { key: 'queue', label: 'My queue', href: '#/kit', icon: 'inbox', count: 6, countLabel: '6 to post' },
+  { key: 'find', label: 'Find', href: '#/kit', icon: 'search' },
 ];
 
-const adminNav: TopBarNavItem[] = [
-  { key: 'tracker', label: 'Tracker', href: '#/kit' },
-  { key: 'assign', label: 'Assign', href: '#/kit' },
-  { key: 'find', label: 'Find', href: '#/kit' },
-  { key: 'settings', label: 'Settings', href: '#/kit' },
+const adminNav: SidebarNavItem[] = [
+  { key: 'tracker', label: 'Tracker', href: '#/kit', icon: 'tracker' },
+  { key: 'assign', label: 'Assign', href: '#/kit', icon: 'assign' },
+  { key: 'find', label: 'Find', href: '#/kit', icon: 'search' },
+  { key: 'settings', label: 'Settings', href: '#/kit', icon: 'settings' },
 ];
+
+const kitPeople: SidebarPeople = {
+  status: 'ready',
+  empty: 'No interns yet.',
+  people: [
+    { name: 'Bea Lim', href: '#/kit', progress: 'No queue today' },
+    { name: 'Jan Dela Cruz', href: '#/kit', progress: '2 of 5 posted', pending: 1, selected: true },
+    { name: 'Mika Reyes', href: '#/kit', progress: '5 of 5 posted' },
+  ],
+};
 
 export default function KitScreen() {
   const [query, setQuery] = useState('Verdant Hills');
@@ -69,6 +81,7 @@ export default function KitScreen() {
   const [internNavKey, setInternNavKey] = useState('queue');
   const [adminNavKey, setAdminNavKey] = useState('tracker');
   const [showKey, setShowKey] = useState(false);
+  const [railed, setRailed] = useState(false);
   const toasts = useToasts();
 
   const toggleCategory = (name: string) =>
@@ -87,32 +100,46 @@ export default function KitScreen() {
       </header>
 
       <div className="kit__sections">
-        <Card title="Top bar" description="The first arrangement that fits: one row, then two. Measured, not set by breakpoints.">
-          <div className="kit__stack">
-            <p className="kit__caption">An intern, at the width of this page</p>
-            <div className="kit-frame">
-              <TopBar
-                nav={internNav}
-                currentKey={internNavKey}
-                user={{ name: 'Jan Dela Cruz', role: 'Intern' }}
-                onNavigate={setInternNavKey}
-                onSignOut={() => toasts.show('Signed out.', 'info')}
-              />
-            </div>
-            <p className="kit__caption">An admin, in a 620px frame</p>
-            <div className="kit-frame kit-frame--narrow">
-              <TopBar
+        <Card title="Sidebar" description="The window's left edge. Collapses to a 64px rail where every icon keeps its name in a tooltip.">
+          <div className="kit__row kit__row--top">
+            <div className="kit-frame kit-frame--sidebar">
+              <Sidebar
                 nav={adminNav}
                 currentKey={adminNavKey}
                 user={{ name: 'Maria Santos', role: 'Admin' }}
                 onNavigate={setAdminNavKey}
                 onSignOut={() => toasts.show('Signed out.', 'info')}
+                collapsed={railed}
+                animate
+                onToggleCollapsed={() => setRailed((now) => !now)}
+                people={kitPeople}
               />
             </div>
-            <p className="kit__caption">Before sign-in</p>
-            <div className="kit-frame">
-              <TopBar />
+            <div className="kit-frame kit-frame--sidebar">
+              <Sidebar
+                nav={internNav}
+                currentKey={internNavKey}
+                user={{ name: 'Jan Dela Cruz', role: 'Intern' }}
+                onNavigate={setInternNavKey}
+                onSignOut={() => toasts.show('Signed out.', 'info')}
+                collapsed={!railed}
+                animate
+                onToggleCollapsed={() => setRailed((now) => !now)}
+              />
             </div>
+            <div className="kit-frame kit-frame--sidebar">
+              <Sidebar
+                nav={adminNav}
+                user={{ name: 'Maria Santos', role: 'Admin' }}
+                collapsed={false}
+                onToggleCollapsed={() => setRailed((now) => !now)}
+                people={{ status: 'error', message: "Couldn't reach the web app.", onRetry: () => toasts.show('Trying again.', 'info') }}
+              />
+            </div>
+          </div>
+          <p className="kit__caption">Before sign-in, the title strip carries the brand word</p>
+          <div className="kit-frame">
+            <TitleBar brandHref="#/kit" />
           </div>
         </Card>
 

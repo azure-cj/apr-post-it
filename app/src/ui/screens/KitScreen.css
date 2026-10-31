@@ -71,3 +71,18 @@
 .kit-frame--narrow {
   max-width: 620px;
 }
+
+.kit__row--top {
+  align-items: flex-start;
+}
+
+/* A sidebar shown in a frame: its own height, not the window's. */
+.kit-frame--sidebar {
+  display: flex;
+  height: 520px;
+}
+
+.kit-frame--sidebar .sidebar {
+  position: relative;
+  height: 100%;
+}

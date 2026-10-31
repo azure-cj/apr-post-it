@@ -1,6 +1,5 @@
-bin/
-obj/
-.vs/
-*.user
-*.suo
+node_modules/
+dist/
+app/src-tauri/target/
 .cache/
+*.log

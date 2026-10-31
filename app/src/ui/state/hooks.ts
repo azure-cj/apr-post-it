@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
-import type { Assignment, PostLogEntry, Property, User } from '@/core/types';
+import type { Assignment, PostLogEntry, Property, TeamMember, User } from '@/core/types';
 import { useApp } from './AppState';
 import type { Remote, RemoteResource } from './remote';
 import type { DirectoryStatus, FindState } from './services';
@@ -62,6 +62,11 @@ export function usePosts(options: RemoteOptions = {}): RemoteView<readonly PostL
 /** The Assignments rows you may see: your own queue as an intern. Read on arrival. */
 export function useAssignments(options: RemoteOptions = {}): RemoteView<readonly Assignment[]> {
   return useRemote(useApp().assignments, options);
+}
+
+/** The Team tab without its keys. Admin only: the server refuses anyone else. Read on arrival. */
+export function useTeam(options: RemoteOptions = {}): RemoteView<readonly TeamMember[]> {
+  return useRemote(useApp().team, options);
 }
 
 /** The Find screen's search and filters, kept while you open a listing and come back. */

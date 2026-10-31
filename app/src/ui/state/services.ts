@@ -142,6 +142,7 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
       directory.clear();
       posts.reset();
       assignments.reset();
+      team.reset();
       directoryStatus.set(IDLE);
       find.set(EMPTY_FIND);
       savedFolders.set(new Map());

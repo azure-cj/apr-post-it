@@ -25,8 +25,8 @@ function linkAppsScript(): Plugin {
   };
 }
 
-// Tauri serves the built files; in the browser the fake platform stands in for
-// the OS, so the whole app runs with `npm run dev` and in tests.
+// Tauri serves the built files. `npm run dev` runs the app in a browser against
+// the real web app (src/platform/browser.ts); the tests use the fake platform.
 export default defineConfig({
   plugins: [linkAppsScript(), react()],
   resolve: {

@@ -13,9 +13,20 @@ import {
   type ReactNode,
 } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { addDays, isDate, peopleIn, samePerson } from '@/core/summary';
+import { activeInterns, addDays, internDays, isDate, peopleIn, samePerson } from '@/core/summary';
 import { canManage, isAdmin, UserFacingError, type User } from '@/core/types';
-import { Button, Card, Notice, Spinner, TopBar, type TopBarNavItem, type WindowControlsProps } from './components';
+import {
+  Button,
+  Card,
+  Notice,
+  Sidebar,
+  Spinner,
+  TitleBar,
+  type IconName,
+  type SidebarPeople,
+  type SidebarProps,
+  type WindowControlsProps,
+} from './components';
 import { SignInScreen } from './screens/SignInScreen';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
 import { AssignScreen, SettingsScreen, TrackerScreen, type QueueSave } from './screens/manager';
@@ -30,6 +41,7 @@ import {
   useNotify,
   usePosts,
   useStore,
+  useTeam,
   useUser,
   type FromList,
   type NavKey,
@@ -47,6 +59,7 @@ interface NavDef {
   readonly key: NavKey;
   readonly label: string;
   readonly path: string;
+  readonly icon: IconName;
 }
 
 /**
@@ -56,15 +69,15 @@ interface NavDef {
 export function navFor(user: User): readonly NavDef[] {
   if (canManage(user)) {
     return [
-      { key: 'tracker', label: 'Tracker', path: paths.tracker },
-      { key: 'assign', label: 'Assign', path: paths.assign },
-      { key: 'find', label: 'Find', path: paths.find },
-      { key: 'settings', label: 'Settings', path: paths.settings },
+      { key: 'tracker', label: 'Tracker', path: paths.tracker, icon: 'tracker' },
+      { key: 'assign', label: 'Assign', path: paths.assign, icon: 'assign' },
+      { key: 'find', label: 'Find', path: paths.find, icon: 'search' },
+      { key: 'settings', label: 'Settings', path: paths.settings, icon: 'settings' },
     ];
   }
   return [
-    { key: 'queue', label: 'My queue', path: paths.queue },
-    { key: 'find', label: 'Find', path: paths.find },
+    { key: 'queue', label: 'My queue', path: paths.queue, icon: 'inbox' },
+    { key: 'find', label: 'Find', path: paths.find, icon: 'search' },
   ];
 }
 
@@ -99,7 +112,7 @@ function titleFor(pathname: string): string | null {
 const KitScreen = import.meta.env.DEV ? lazy(() => import('./screens/KitScreen')) : null;
 
 export interface AppProps {
-  /** Shown under the sign-in card. Development only: the browser's keys (src/ui/dev/DevKeysNote.tsx). */
+  /** Shown under the sign-in card. Optional; nothing passes one today. */
   readonly signInNote?: ReactNode;
 }
 
@@ -107,7 +120,7 @@ export interface AppProps {
 export const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true } as const;
 
 /**
- * The window: the top bar, the screen, and toasts. A hash router, because a
+ * The window: the sidebar, the title strip, the screen, and toasts. A hash router, because a
  * desktop app has no server to answer a deep link: `#/queue` survives a reload.
  * Needs an <AppStateProvider> above it.
  */
@@ -161,6 +174,23 @@ export function AppShell({ signInNote }: AppProps) {
     [platform],
   );
   const windowControls = useWindowControls(platform);
+  const sidebar = useSidebarState(platform);
+  const toggleSidebar = sidebar.toggle;
+
+  // Ctrl+B shows and hides the sidebar's words, wherever focus is, unless a
+  // question is open.
+  const signedIn = user !== null;
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.key.toLowerCase() !== 'b') return;
+      if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
+      event.preventDefault();
+      toggleSidebar();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [signedIn, toggleSidebar]);
 
   // Every in-app link (the brand, the nav, a link on the screen) goes through
   // the question while there are unsaved changes; so does reloading the page.
@@ -257,10 +287,11 @@ export function AppShell({ signInNote }: AppProps) {
   }, [signOut, navigate]);
 
   const nav = user ? navFor(user) : [];
-  const topBarNav: TopBarNavItem[] = nav.map((item) => ({
+  const sidebarNav: SidebarProps['nav'] = nav.map((item) => ({
     key: item.key,
     label: item.label,
     href: `#${item.path}`,
+    icon: item.icon,
     ...(item.key === 'queue' && queueCount > 0
       ? { count: queueCount, countLabel: `${queueCount} left in your queue today` }
       : {}),
@@ -289,68 +320,79 @@ export function AppShell({ signInNote }: AppProps) {
       </a>
 
       <div className="shell">
-        <TopBar
-          nav={topBarNav}
-          currentKey={navKeyFor(location.pathname, location.state)}
-          user={user ? { name: user.name, role: user.role } : null}
-          onNavigate={(key) => {
-            const target = nav.find((n) => n.key === key);
-            if (target) requestLeave(() => navigate(target.path));
-          }}
-          onSignOut={user ? () => requestLeave(() => setConfirmingSignOut(true)) : undefined}
-          windowControls={windowControls}
-        />
+        {user ? (
+          <ShellSidebar
+            admin={canManage(user)}
+            nav={sidebarNav}
+            currentKey={navKeyFor(location.pathname, location.state)}
+            user={{ name: user.name, role: user.role }}
+            onNavigate={(key) => {
+              const target = nav.find((n) => n.key === key);
+              if (target) requestLeave(() => navigate(target.path));
+            }}
+            onOpenPath={(path) => requestLeave(() => navigate(path))}
+            onSignOut={() => requestLeave(() => setConfirmingSignOut(true))}
+            collapsed={sidebar.collapsed}
+            animate={sidebar.animate}
+            onToggleCollapsed={toggleSidebar}
+            dragRegion={windowControls !== null}
+          />
+        ) : null}
 
-        <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
-          {session.status === 'starting' ? (
-            <Opening>Opening Post-It…</Opening>
-          ) : session.status === 'resuming' ? (
-            <Opening>Checking your key with the web app…</Opening>
-          ) : session.status === 'resume-failed' ? (
-            <ResumeFailed error={session.error} onRetry={app.retrySignIn} onSignIn={app.showSignIn} />
-          ) : (
-            <Routes>
-              <Route
-                path={paths.signIn}
-                element={
-                  user ? (
-                    <Navigate to={homeFor(user)} replace />
-                  ) : (
-                    <>
-                      <SignInScreen
-                        onSubmit={(url, key) => void handleSignIn(url, key)}
-                        onCancel={cancelSignIn}
-                        busy={signInBusy}
-                        error={signInError}
-                        initialUrl={app.settings.scriptUrl}
-                      />
-                      {signInNote ?? null}
-                    </>
-                  )
-                }
-              />
-              <Route path={paths.find} element={guard(<FindScreen />)} />
-              <Route path="/property/:id" element={guard(<PropertyScreen />)} />
-              <Route path="/property/:id/log" element={guard(<LogPostScreen />)} />
-              <Route path={paths.queue} element={guard(<QueueScreen />)} />
-              <Route path={paths.assign} element={guard(<AssignRoute onDirtyChange={setAssignDirty} />, canManage)} />
-              <Route path={paths.tracker} element={guard(<TrackerRoute />, canManage)} />
-              <Route path={paths.settings} element={guard(<SettingsRoute />, isAdmin)} />
-              {KitScreen ? (
+        <div className="shell__content">
+          <TitleBar brandHref={user ? undefined : '#/'} windowControls={windowControls} />
+
+          <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
+            {session.status === 'starting' ? (
+              <Opening>Opening Post-It…</Opening>
+            ) : session.status === 'resuming' ? (
+              <Opening>Checking your key with the web app…</Opening>
+            ) : session.status === 'resume-failed' ? (
+              <ResumeFailed error={session.error} onRetry={app.retrySignIn} onSignIn={app.showSignIn} />
+            ) : (
+              <Routes>
                 <Route
-                  path="/kit"
+                  path={paths.signIn}
                   element={
-                    <Suspense fallback={<Spinner label="Loading the UI kit" className="shell__loading" />}>
-                      <KitScreen />
-                    </Suspense>
+                    user ? (
+                      <Navigate to={homeFor(user)} replace />
+                    ) : (
+                      <>
+                        <SignInScreen
+                          onSubmit={(url, key) => void handleSignIn(url, key)}
+                          onCancel={cancelSignIn}
+                          busy={signInBusy}
+                          error={signInError}
+                          initialUrl={app.settings.scriptUrl}
+                        />
+                        {signInNote ?? null}
+                      </>
+                    )
                   }
                 />
-              ) : null}
-              <Route path="/" element={home} />
-              <Route path="*" element={home} />
-            </Routes>
-          )}
-        </main>
+                <Route path={paths.find} element={guard(<FindScreen />)} />
+                <Route path="/property/:id" element={guard(<PropertyScreen />)} />
+                <Route path="/property/:id/log" element={guard(<LogPostScreen />)} />
+                <Route path={paths.queue} element={guard(<QueueScreen />)} />
+                <Route path={paths.assign} element={guard(<AssignRoute onDirtyChange={setAssignDirty} />, canManage)} />
+                <Route path={paths.tracker} element={guard(<TrackerRoute />, canManage)} />
+                <Route path={paths.settings} element={guard(<SettingsRoute />, isAdmin)} />
+                {KitScreen ? (
+                  <Route
+                    path="/kit"
+                    element={
+                      <Suspense fallback={<Spinner label="Loading the UI kit" className="shell__loading" />}>
+                        <KitScreen />
+                      </Suspense>
+                    }
+                  />
+                ) : null}
+                <Route path="/" element={home} />
+                <Route path="*" element={home} />
+              </Routes>
+            )}
+          </main>
+        </div>
       </div>
 
       {confirmingSignOut ? (
@@ -436,6 +478,108 @@ function useWindowControls(platform: Platform): WindowControlsProps | null {
         : null,
     [platform, shown, maximized],
   );
+}
+
+/** Where the sidebar's state is kept between launches. */
+export const SIDEBAR_KEY = 'sidebar';
+
+/** Below this window width the sidebar starts as a rail, whatever was kept. */
+export const SIDEBAR_NARROW = 1000;
+
+/**
+ * Whether the sidebar is a rail: what was kept from last time, except that a
+ * narrow window starts collapsed. Animates only once someone toggles it.
+ */
+function useSidebarState(platform: Platform) {
+  const narrow = () => typeof window !== 'undefined' && window.innerWidth < SIDEBAR_NARROW;
+  const [collapsed, setCollapsed] = useState(narrow);
+  const [animate, setAnimate] = useState(false);
+  const touched = useRef(false);
+
+  useEffect(() => {
+    let live = true;
+    platform.readLocal(SIDEBAR_KEY).then(
+      (kept) => {
+        if (!live || touched.current || narrow()) return;
+        if (kept === 'collapsed' || kept === 'expanded') setCollapsed(kept === 'collapsed');
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [platform]);
+
+  const toggle = useCallback(() => {
+    touched.current = true;
+    setAnimate(true);
+    setCollapsed((now) => {
+      const next = !now;
+      void platform.writeLocal(SIDEBAR_KEY, next ? 'collapsed' : 'expanded').catch(() => {});
+      return next;
+    });
+  }, [platform]);
+
+  return { collapsed, animate, toggle };
+}
+
+type ShellSidebarProps = Omit<SidebarProps, 'people' | 'onOpenPerson'> & {
+  /** An admin also gets the interns. */
+  readonly admin: boolean;
+  /** Opens a path, asking first if Assign has unsaved changes. */
+  readonly onOpenPath: (path: string) => void;
+};
+
+/** The sidebar, with an admin's interns under the nav. */
+function ShellSidebar({ admin, onOpenPath, ...props }: ShellSidebarProps) {
+  return admin ? <AdminSidebar {...props} onOpenPath={onOpenPath} /> : <Sidebar {...props} />;
+}
+
+const EMPTY_TEAM = (
+  <>
+    No interns yet. Add them on the Team tab with <code>ADD_PERSON</code>.
+  </>
+);
+
+/**
+ * An admin's sidebar: every active intern on the team with today's progress,
+ * a dot for posts waiting for a link, and their queue a click away.
+ */
+function AdminSidebar({ onOpenPath, ...props }: Omit<ShellSidebarProps, 'admin'>) {
+  const app = useApp();
+  const location = useLocation();
+  const team = useTeam({ maxAgeMs: 300_000, pollMs: 600_000 });
+  const posts = usePosts({ pollMs: 120_000 });
+  const assignments = useAssignments({ pollMs: 120_000 });
+  const today = app.today();
+
+  const open = location.pathname === paths.assign ? new URLSearchParams(location.search).get('intern') : null;
+  const days = useMemo(
+    () => (team.data ? internDays(team.data, assignments.data ?? [], posts.data ?? [], today) : null),
+    [team.data, assignments.data, posts.data, today],
+  );
+
+  let people: SidebarPeople;
+  if (days) {
+    const progressKnown = assignments.data !== null;
+    people = {
+      status: 'ready',
+      empty: EMPTY_TEAM,
+      people: days.map((day) => ({
+        name: day.name,
+        href: `#${assignPath(day.name, today)}`,
+        progress: progressKnown ? (day.total === 0 ? 'No queue today' : `${day.posted} of ${day.total} posted`) : undefined,
+        pending: day.pendingPosts,
+        selected: open !== null && samePerson(open, day.name),
+      })),
+    };
+  } else if (team.error && !team.loading) {
+    people = { status: 'error', message: team.error, onRetry: team.reload };
+  } else {
+    people = { status: 'loading' };
+  }
+
+  return <Sidebar {...props} people={people} onOpenPerson={(name) => onOpenPath(assignPath(name, today))} />;
 }
 
 /**
@@ -646,15 +790,19 @@ function useManagerRows() {
 }
 
 /**
- * Whose queues can be built. The web app doesn't list the team to the app
- * yet, so this is everyone the tracker mentions (queues and posts), less the
- * person signed in. TODO(server): a team action, then filter to interns.
+ * Whose queues can be built: the team's active interns. Until the team has
+ * been read (or when it can't be), everyone the tracker mentions, less the
+ * person signed in.
  */
 function useInterns(rows: ReturnType<typeof useManagerRows>, me: User): readonly string[] {
   const { posts, assignments } = rows;
+  const team = useTeam({ maxAgeMs: 300_000 });
   return useMemo(
-    () => peopleIn(assignments.data ?? [], posts.data ?? []).filter((name) => !samePerson(name, me.name)),
-    [assignments.data, posts.data, me.name],
+    () =>
+      team.data
+        ? activeInterns(team.data)
+        : peopleIn(assignments.data ?? [], posts.data ?? []).filter((name) => !samePerson(name, me.name)),
+    [team.data, assignments.data, posts.data, me.name],
   );
 }
 
@@ -717,6 +865,7 @@ function TrackerRoute() {
   const asked = params.get('date') ?? '';
   const date = isDate(asked) ? asked : today;
   const loadedAt = rows.posts.loadedAt;
+  const team = useTeam({ maxAgeMs: 300_000 });
   const { platform } = app;
 
   return (
@@ -726,6 +875,7 @@ function TrackerRoute() {
       posts={rows.posts.data ?? []}
       assignments={rows.assignments.data ?? []}
       properties={rows.properties}
+      team={team.data ?? undefined}
       settings={app.settings}
       onDateChange={(day) => setParams(day === today ? {} : { date: day }, { replace: true })}
       onRefresh={() => {
@@ -747,11 +897,13 @@ function SettingsRoute() {
   const app = useApp();
   const notify = useNotify();
   const { platform } = app;
+  const team = useTeam({ maxAgeMs: 60_000 });
   return (
     <SettingsScreen
       settings={app.settings}
-      // The web app doesn't send the team to the app yet.
-      team={null}
+      team={team.data}
+      loading={team.loading}
+      error={team.data ? null : team.error}
       onCopy={(text) => {
         platform.copyText(text).then(
           () => notify('Copied.', 'ok'),

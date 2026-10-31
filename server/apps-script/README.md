@@ -96,7 +96,8 @@ read rather than hundreds of Drive calls.
 
 Every call carries `key`, and the key *is* the identity: it is resolved to a name and a
 role before anything is dispatched (`docs/ROLES.md`). The app POSTs JSON; a GET with query
-parameters is answered the same way. Every reply is `{ ok: true, … }` or
+parameters is answered the same way. The body is read as JSON whatever its content type, so
+`npm run dev` in a browser sends it as `text/plain`, which needs no CORS preflight. Every reply is `{ ok: true, … }` or
 `{ ok: false, error, message? }`.
 
 | Action | Who | What it does |
@@ -109,6 +110,7 @@ parameters is answered the same way. Every reply is `{ ok: true, … }` or
 | `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` and `postedBy`. Refuses with `error: 'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the person's Team row. |
 | `addLink` | everyone | Turns a Pending row into Posted with its link: `notfound` when there is no such row. An intern can complete only their own. |
 | `setStatus` | everyone | Moves one queue item's status: `notfound` when no open item matches. An intern can move only their own. |
+| `team` | Admin | The Team tab without keys: `name`, `role`, `email`, `fbAccounts` (a list) and `active` for each person, revoked people included. The Key column is never sent. |
 | `saveQueue` | Admin | Replaces one person's queue for one date. |
 
 Two things in a reply come from the key, never from the request:

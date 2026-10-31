@@ -27,6 +27,7 @@ export type Action =
   | 'property'
   | 'posts'
   | 'assignments'
+  | 'team'
   | 'logPost'
   | 'addLink'
   | 'saveQueue'
@@ -168,6 +169,7 @@ const DOING: Readonly<Record<Action, string>> = {
   property: 'open that property',
   posts: 'load the posts',
   assignments: 'load the queues',
+  team: 'load the team',
   logPost: 'log the post',
   addLink: 'add the link',
   saveQueue: 'save the queue',
@@ -181,6 +183,7 @@ const WHAT: Readonly<Record<Action, string>> = {
   property: 'that property',
   posts: 'the posts',
   assignments: 'the queues',
+  team: 'the team',
   logPost: 'its answer',
   addLink: 'its answer',
   saveQueue: 'its answer',

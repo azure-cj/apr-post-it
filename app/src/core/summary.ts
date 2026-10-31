@@ -811,3 +811,45 @@ export function docHealth(properties: readonly HealthSource[]): DocHealth {
     blocked,
   };
 }
+
+// ------------------------------------------------------------------ the team, for the sidebar
+
+/** The team's active interns, by name: whose queues can be built. */
+export function activeInterns(team: readonly Pick<TeamMember, 'name' | 'role' | 'active'>[]): string[] {
+  const names: string[] = [];
+  for (const member of team) {
+    if (member.role !== 'Intern' || member.active === false || !member.name.trim()) continue;
+    if (!names.some((n) => samePerson(n, member.name))) names.push(member.name);
+  }
+  return names.sort((a, b) => byName.compare(a, b));
+}
+
+/** One intern's day at a glance: their queue's progress and posts still waiting for a link. */
+export interface InternDay {
+  readonly name: string;
+  /** Items in their queue on the day. */
+  readonly total: number;
+  /** Of those, posted. */
+  readonly posted: number;
+  /** Their posts waiting for a link, whatever the date: as the tracker counts pending. */
+  readonly pendingPosts: number;
+}
+
+/** Every active intern on the team, by name, with their queue's progress on `date`. */
+export function internDays(
+  team: readonly Pick<TeamMember, 'name' | 'role' | 'active'>[],
+  assignments: readonly Assignment[],
+  posts: readonly PostLogEntry[],
+  date: string,
+): InternDay[] {
+  const day = assignments.filter((a) => a.date === date);
+  return activeInterns(team).map((name) => {
+    const progress = progressOf(name, day);
+    return {
+      name,
+      total: progress.total,
+      posted: progress.posted,
+      pendingPosts: posts.filter((p) => p.status === 'Pending' && samePerson(p.postedBy, name)).length,
+    };
+  });
+}

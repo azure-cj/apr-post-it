@@ -17,6 +17,7 @@
  */
 
 import { asList, asRecord, asText, unreadableReply, type Backend } from './backend';
+import { parseRole, readAccounts } from './session';
 import {
   type TeamMember,
   UserFacingError,
@@ -61,7 +62,7 @@ export interface Tracker {
 
   /**
    * The Team tab, without keys: Admin only (server action `team`). Revoked
-   * people included, with `active: false`. TODO(agent A): implement + tests.
+   * people included, with `active: false`. Rows with no name are left out.
    */
   team(): Promise<readonly TeamMember[]>;
 
@@ -118,7 +119,16 @@ export function createTracker(deps: TrackerDeps): Tracker {
 
   return {
     async team(): Promise<readonly TeamMember[]> {
-      throw new Error('team(): not implemented yet');
+      const reply = await backend.call('team');
+      const rows = asList(reply['team']);
+      if (!rows) throw unreadableReply('team');
+      const out: TeamMember[] = [];
+      for (const raw of rows) {
+        const row = asRecord(raw);
+        const member = row ? readTeamMember(row) : null;
+        if (member) out.push(member);
+      }
+      return out;
     },
 
     async posts(): Promise<readonly PostLogEntry[]> {
@@ -257,6 +267,21 @@ function readPost(row: Readonly<Record<string, unknown>>): PostLogEntry {
     postLink: asText(row['postLink']),
     postedBy: asText(row['postedBy']),
     propertyId: asText(row['propertyId']),
+  };
+}
+
+/** One Team row, or null when it has no name. Names are kept exactly as sent: they are matched with ===. */
+function readTeamMember(row: Readonly<Record<string, unknown>>): TeamMember | null {
+  const name = asText(row['name']);
+  if (!name.trim()) return null;
+  const active = row['active'];
+  return {
+    name,
+    role: parseRole(row['role']),
+    email: asText(row['email']).trim(),
+    fbAccounts: readAccounts(row['fbAccounts']),
+    // Only an explicit "no" revokes, as the server's identify() reads the Active cell.
+    active: !(active === false || (typeof active === 'string' && active.trim().toUpperCase() === 'FALSE')),
   };
 }
 

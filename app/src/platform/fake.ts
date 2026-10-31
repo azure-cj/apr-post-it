@@ -1,6 +1,7 @@
 /**
- * The platform with no OS behind it: everything in memory. It is what runs
- * the app in a plain browser (`npm run dev`) and what the tests use.
+ * The platform with no OS behind it: everything in memory. It is the test
+ * double; it holds no data of its own; each test scripts the replies it needs.
+ * (`npm run dev` uses platform/browser.ts, against the real web app.)
  *
  * A test scripts what the web app answers, per action, and afterwards reads
  * what was copied, opened, posted and saved:
@@ -16,7 +17,7 @@
  *   });
  *   setPlatform(fake);
  *   …
- *   expect(fake.copied).toEqual(['FOR SALE — Casa Amara…']);
+ *   expect(fake.copied).toEqual(['FOR SALE — …']);
  *   expect(fake.posts.map((p) => p.action)).toEqual(['ping', 'property']);
  *
  * Where the real platform has rules a caller can see, the fake keeps them:

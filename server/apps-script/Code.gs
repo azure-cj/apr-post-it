@@ -87,6 +87,7 @@ function route(req) {
       case 'property':    return json({ ok: true, property: getProperty(req.id, me.canSeeInternal) });
       case 'posts':       return json({ ok: true, posts: mine(me, readRows(CONFIG.POSTS_TAB, POST_FIELDS), 'postedBy') });
       case 'assignments': return json({ ok: true, assignments: mine(me, readRows(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS), 'assignedTo') });
+      case 'team':        return json({ ok: true, team: teamList() });
       case 'logPost':     return json(logPost(req, me));
       case 'addLink':     return json(addLink(req, me));
       case 'saveQueue':   return json(saveQueue(req, me));
@@ -153,6 +154,25 @@ function teamRows() {
   var rows = readSheet('Team', TEAM_HEADERS);
   try { cache.put('team', JSON.stringify(rows), 60); } catch (e) { /* ignore */ }
   return rows;
+}
+
+/**
+ * The Team tab for the app's screens: Admin only (PERMISSIONS). Built field by
+ * field so the Key column can never come along with a row. Revoked people are
+ * included, with active: false.
+ */
+function teamList() {
+  return teamRows()
+    .filter(function (t) { return textOf_(t.Name).trim(); })
+    .map(function (t) {
+      return {
+        name: textOf_(t.Name),
+        role: roleOf_(t.Role),
+        email: textOf_(t.Email),
+        fbAccounts: textOf_(t['FB Accounts']).split(',').map(function (x) { return x.trim(); }).filter(String),
+        active: String(t.Active).toUpperCase() !== 'FALSE',
+      };
+    });
 }
 
 function allowed(role, action) {

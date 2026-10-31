@@ -66,7 +66,7 @@ reformat 1,474 existing documents:
 Category: House and Lot          ← optional metadata, allow-listed keys only
 Location: Antipolo City
 
-FOR SALE — Casa Amara            ← everything above the first marker is the public text
+FOR SALE — 3BR house, Antipolo   ← everything above the first marker is the public text
 PHP 8,500,000
 • 3 bedrooms
 Contact: 0917 123 4567

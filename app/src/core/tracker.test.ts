@@ -246,6 +246,90 @@ describe('the assignments', () => {
   });
 });
 
+describe('the team', () => {
+  it('asks the server for the team action', async () => {
+    const { post, sent } = scripted({ ok: true, team: [] });
+    await expect(trackerOver(post).team()).resolves.toEqual([]);
+
+    expect(sent.map((s) => s.body['action'])).toEqual(['team']);
+  });
+
+  it('maps each row, reading the role as sign-in does', async () => {
+    const { post } = scripted({
+      ok: true,
+      team: [
+        { name: 'Jan Dela Cruz', role: 'Intern', email: 'jan@example.com', fbAccounts: ['APG Main', 'APG Rentals'], active: true },
+        { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], active: true },
+        { name: 'Old Manager', role: 'manager', fbAccounts: [] },
+        { name: 'Someone', role: 'Supervisor' },
+      ],
+    });
+
+    expect(await trackerOver(post).team()).toEqual([
+      { name: 'Jan Dela Cruz', role: 'Intern', email: 'jan@example.com', fbAccounts: ['APG Main', 'APG Rentals'], active: true },
+      { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], active: true },
+      { name: 'Old Manager', role: 'Admin', email: '', fbAccounts: [], active: true },
+      { name: 'Someone', role: 'Intern', email: '', fbAccounts: [], active: true },
+    ]);
+  });
+
+  it('reads FB accounts from a list or a comma-separated cell, trimmed, without blanks or repeats', async () => {
+    const { post } = scripted({
+      ok: true,
+      team: [
+        { name: 'A', fbAccounts: 'APG Main, APG Rentals ,, APG Main' },
+        { name: 'B', fbAccounts: [' APG Main', '', 7, null] },
+        { name: 'C', fbAccounts: { 0: 'APG Main' } },
+      ],
+    });
+    const team = await trackerOver(post).team();
+
+    expect(team.map((t) => t.fbAccounts)).toEqual([['APG Main', 'APG Rentals'], ['APG Main', '7'], []]);
+  });
+
+  it('is active unless the row says false or FALSE', async () => {
+    const values: unknown[] = [true, 'TRUE', '', undefined, null, 0, 'no', false, 'FALSE', ' false '];
+    const { post } = scripted({ ok: true, team: values.map((active, i) => ({ name: `P${i}`, active })) });
+    const team = await trackerOver(post).team();
+
+    expect(team.map((t) => t.active)).toEqual([true, true, true, true, true, true, true, false, false, false]);
+  });
+
+  it('drops rows with no name, and anything that is not a row', async () => {
+    const { post } = scripted({
+      ok: true,
+      team: [{ name: '' }, { name: '   ' }, { role: 'Admin' }, null, 'Jan', ['Jan'], { name: 'Ana Reyes' }],
+    });
+
+    expect((await trackerOver(post).team()).map((t) => t.name)).toEqual(['Ana Reyes']);
+  });
+
+  it('keeps names exactly as the sheet has them', async () => {
+    const { post } = scripted({ ok: true, team: [{ name: 'Jan Dela Cruz ' }] });
+
+    expect((await trackerOver(post).team())[0]!.name).toBe('Jan Dela Cruz ');
+  });
+
+  it('never keeps a key, if one were ever sent', async () => {
+    const { post } = scripted({ ok: true, team: [{ name: 'Jan', key: 'key-jan', Key: 'key-jan' }] });
+    const team = await trackerOver(post).team();
+
+    expect(JSON.stringify(team)).not.toContain('key-jan');
+  });
+
+  it('that does not arrive as a list is a sentence, not an empty team', async () => {
+    const { post } = scripted({ ok: true, team: 'Jan, Ana' });
+    const error = await refusal(trackerOver(post).team());
+
+    expect(error.message).toContain('could not read');
+  });
+
+  it('passes on the server refusing an intern', async () => {
+    const { post } = scripted({ ok: false, error: 'forbidden', message: 'Your account cannot do that.' });
+    await refusal(trackerOver(post).team());
+  });
+});
+
 // ------------------------------------------------------------------ logging a post
 
 describe('logging a post', () => {

@@ -65,7 +65,7 @@ export function PastePanel({
           className="field__input assign-paste__input"
           rows={6}
           spellCheck={false}
-          placeholder={'Verdant Hills Lot 12\nCasa Amara House & Lot'}
+          placeholder={'One listing name per line'}
           aria-describedby={hintId}
           value={text}
           onChange={(event) => onText(event.target.value)}
