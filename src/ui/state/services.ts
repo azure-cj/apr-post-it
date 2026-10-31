@@ -111,6 +111,7 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
     saveQueues: (date, queues) => writing(() => raw.saveQueues(date, queues)),
     addPerson: (input) => teamWrite(() => raw.addPerson(input)),
     setActive: (name, active) => teamWrite(() => raw.setActive(name, active)),
+    updatePerson: (name, changes) => teamWrite(() => raw.updatePerson(name, changes)),
     newKey: (name) => teamWrite(() => raw.newKey(name)),
     indexCheck: () => raw.indexCheck(),
   };

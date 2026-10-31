@@ -55,7 +55,13 @@ const DOC_MIME    = 'application/vnd.google-apps.document';
 const PHOTO_MIME  = /^image\/(jpeg|png|webp|gif)$/;
 const DOC_NAME    = /\.(docx?|txt|md)$/i;
 
-const TEAM_HEADERS   = ['Name', 'Email', 'Role', 'Key', 'FB Accounts', 'Active'];
+// FB Accounts holds the person's FB broker name(s): the Facebook account name
+// they post as (comma separated when more than one). FB Profile Link is the
+// link to that profile. A Team tab made before it existed has no FB Profile
+// Link column: it is read by header name, and added the first time a Team row
+// is written (teamColumns_).
+const TEAM_HEADERS   = ['Name', 'Email', 'Role', 'Key', 'FB Accounts', 'FB Profile Link', 'Active'];
+const TEAM_OPTIONAL_HEADERS = ['FB Profile Link'];
 const ROLES = ['Intern', 'Admin'];
 
 // What each role may call. Admin may call anything.
@@ -97,6 +103,7 @@ function route(req) {
       case 'team':        return json({ ok: true, team: teamList() });
       case 'addPerson':   return json(addPerson(req, me));
       case 'setActive':   return json(setActive(req, me));
+      case 'updatePerson': return json(updatePerson(req, me));
       case 'newKey':      return json(newKey(req, me));
       case 'logPost':     return json(logPost(req, me));
       case 'addLink':     return json(addLink(req, me));
@@ -188,6 +195,7 @@ function personOf_(t) {
     role: roleOf_(t.Role),
     email: textOf_(t.Email),
     fbAccounts: accountsOf_(t['FB Accounts']),
+    fbProfileLink: textOf_(t['FB Profile Link']).trim(),
     active: String(t.Active).toUpperCase() !== 'FALSE',
   };
 }
@@ -212,8 +220,8 @@ function mine(me, rows, column) {
  * Editor helper (ADD_PERSON, the spreadsheet menu): add a person and hand back
  * their key. The same checks as the addPerson action; a refusal is thrown.
  */
-function addTeamMember(name, email, role, fbAccounts) {
-  var result = addPerson_({ name: name, email: email, role: role, fbAccounts: fbAccounts });
+function addTeamMember(name, email, role, fbAccounts, fbProfileLink) {
+  var result = addPerson_({ name: name, email: email, role: role, fbAccounts: fbAccounts, fbProfileLink: fbProfileLink });
   if (!result.ok) throw new Error(result.message);
   return result.key;
 }
@@ -250,16 +258,10 @@ function addPerson_(req) {
   var canonical = ROLES.filter(function (r) { return r.toLowerCase() === role.toLowerCase(); })[0];
   if (!canonical) return { ok: false, error: 'bad-role', message: 'The role must be Admin or Intern.' };
 
-  var accounts = req.fbAccounts;
-  if (accounts === undefined || accounts === null || accounts === '') accounts = [];
-  if (typeof accounts === 'string') accounts = accountsOf_(accounts);
-  if (!Array.isArray(accounts) || accounts.some(function (a) { return typeof a !== 'string'; })) {
-    return { ok: false, error: 'bad-accounts', message: 'The Facebook accounts must be a list of names.' };
-  }
-  accounts = accounts.map(function (a) { return a.trim(); }).filter(String);
-  if (accounts.some(function (a) { return a.indexOf(',') !== -1; })) {
-    return { ok: false, error: 'bad-accounts', message: 'A Facebook account name cannot contain a comma.' };
-  }
+  var accounts = accountsIn_(req.fbAccounts);
+  if (accounts.problem) return accounts.problem;
+  var link = profileLinkIn_(req.fbProfileLink);
+  if (link.problem) return link.problem;
 
   // Read fresh, not from the cache: a name added a moment ago must count.
   var want = name.toLowerCase();
@@ -267,7 +269,7 @@ function addPerson_(req) {
   if (taken) return { ok: false, error: 'duplicate', message: 'There is already someone called ' + name + ' on the team.' };
 
   var row = { Name: name, Email: textOf_(req.email).trim(), Role: canonical, Key: newKey_(),
-              'FB Accounts': accounts.join(', '), Active: 'TRUE' };
+              'FB Accounts': accounts.list.join(', '), 'FB Profile Link': link.value, Active: 'TRUE' };
   var sh = plainTab('Team', TEAM_HEADERS);
   var col = teamColumns_(sh);
   var out = new Array(Math.max(sh.getLastColumn(), TEAM_HEADERS.length)).fill('');
@@ -295,6 +297,68 @@ function setActive(req, me) {
     setText_(sh.getRange(r, col.Active + 1), row.Active);
     return { ok: true, person: personOf_(row) };
   });
+}
+
+/**
+ * updatePerson { name, fbAccounts?, fbProfileLink? }: changes the person's FB
+ * broker name(s) and profile link, only the fields sent, with addPerson's
+ * checks. Name, role and key never change here. Replies { person }.
+ */
+function updatePerson(req, me) {
+  requireAll(req, ['name']);
+  var hasAccounts = req.fbAccounts !== undefined;
+  var hasLink = req.fbProfileLink !== undefined;
+  var accounts = hasAccounts ? accountsIn_(req.fbAccounts) : null;
+  if (accounts && accounts.problem) return accounts.problem;
+  var link = hasLink ? profileLinkIn_(req.fbProfileLink) : null;
+  if (link && link.problem) return link.problem;
+  return editTeamRow_(req.name, function (sh, r, col, row) {
+    if (accounts) {
+      row['FB Accounts'] = accounts.list.join(', ');
+      setText_(sh.getRange(r, col['FB Accounts'] + 1), row['FB Accounts']);
+    }
+    if (link) {
+      row['FB Profile Link'] = link.value;
+      setText_(sh.getRange(r, col['FB Profile Link'] + 1), row['FB Profile Link']);
+    }
+    return { ok: true, person: personOf_(row) };
+  });
+}
+
+/** FB Accounts as sent (a list, or comma-separated text): { list } or { problem }. */
+function accountsIn_(value) {
+  var accounts = value;
+  if (accounts === undefined || accounts === null || accounts === '') accounts = [];
+  if (typeof accounts === 'string') accounts = accountsOf_(accounts);
+  if (!Array.isArray(accounts) || accounts.some(function (a) { return typeof a !== 'string'; })) {
+    return { problem: { ok: false, error: 'bad-accounts', message: 'The Facebook accounts must be a list of names.' } };
+  }
+  accounts = accounts.map(function (a) { return a.trim(); }).filter(String);
+  if (accounts.some(function (a) { return a.indexOf(',') !== -1; })) {
+    return { problem: { ok: false, error: 'bad-accounts', message: 'A Facebook account name cannot contain a comma.' } };
+  }
+  return { list: accounts };
+}
+
+// A Facebook profile's address: https, on facebook.com (www., m., web.) or
+// fb.com, any path. Typed without a scheme, https:// is put in front first.
+// The app applies the same rule (src/core/links.ts, facebookProfileProblem).
+const FACEBOOK_PROFILE_HOSTS = ['facebook.com', 'www.facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.com'];
+
+/** The profile link as sent: { value } ('' when blank) or { problem }. */
+function profileLinkIn_(value) {
+  if (value === undefined || value === null) return { value: '' };
+  if (typeof value !== 'string') return { problem: badProfileLink_() };
+  var text = value.trim();
+  if (!text) return { value: '' };
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) text = 'https://' + text;
+  var m = /^https:\/\/([^\/?#\s]+)(?:[\/?#][^\s]*)?$/i.exec(text);
+  if (!m || FACEBOOK_PROFILE_HOSTS.indexOf(m[1].toLowerCase()) === -1) return { problem: badProfileLink_() };
+  return { value: text };
+}
+
+function badProfileLink_() {
+  return { ok: false, error: 'bad-profile-link', message: 'That isn\'t a Facebook profile link.' };
 }
 
 function newKey(req, me) {
@@ -337,16 +401,29 @@ function editTeamRow_(name, edit) {
   }
 }
 
-/** The Team tab's header -> 0-based column. Every one of TEAM_HEADERS must be there. */
+/**
+ * The Team tab's header -> 0-based column. Every one of TEAM_HEADERS must be
+ * there, except the optional ones (FB Profile Link), which a tab made before
+ * them lacks: such a header is added after the last column, as it is about to
+ * be written.
+ */
 function teamColumns_(sh) {
   var header = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0]
     .map(function (h) { return textOf_(h).trim(); });
   var col = {}, missing = [];
   TEAM_HEADERS.forEach(function (h) {
     col[h] = header.indexOf(h);
-    if (col[h] === -1) missing.push(h);
+    if (col[h] === -1 && TEAM_OPTIONAL_HEADERS.indexOf(h) === -1) missing.push(h);
   });
   if (missing.length) throw new Error('The Team tab has no column for: ' + missing.join(', ') + '.');
+  TEAM_OPTIONAL_HEADERS.forEach(function (h) {
+    if (col[h] !== -1) return;
+    var last = sh.getLastColumn();
+    if (last >= sh.getMaxColumns()) sh.insertColumnAfter(last);
+    setText_(sh.getRange(1, last + 1), h);
+    sh.getRange(1, last + 1).setFontWeight('bold');
+    col[h] = last;
+  });
   return col;
 }
 
@@ -1549,9 +1626,10 @@ function onOpen() {
 function ADD_PERSON() {
   var name       = 'Your Name';
   var role       = 'Admin';           // Admin (assigns postings) | Intern
-  var fbAccounts = '';                // comma separated; blank = any
+  var fbAccounts = '';                // FB broker name(s), comma separated; blank = any
+  var fbProfileLink = '';             // optional: https://www.facebook.com/...
 
-  var key = addTeamMember(name, '', role, fbAccounts);
+  var key = addTeamMember(name, '', role, fbAccounts, fbProfileLink);
   Logger.log('%s (%s) key: %s', name, role, key);
   return key;
 }
@@ -1581,7 +1659,8 @@ function promptAddTeamMember() {
   var name = ui.prompt('Full name').getResponseText();
   if (!name) return;
   var role = ui.prompt('Role: Admin or Intern').getResponseText();
-  var fb = ui.prompt('Facebook accounts they may post from (comma separated, blank = any)').getResponseText();
-  var key = addTeamMember(name, '', role, fb);
+  var fb = ui.prompt('FB broker name: the Facebook account name they post as (comma separated, blank = any)').getResponseText();
+  var link = ui.prompt('FB profile link (optional)').getResponseText();
+  var key = addTeamMember(name, '', role, fb, link);
   ui.alert('Key for ' + name + ':\n\n' + key + '\n\nPaste it into their copy of Post-It. It is on the Team tab if you need it again.');
 }

@@ -812,6 +812,67 @@ describe('managing the team', () => {
     expect(sent[0]!.body).toMatchObject({ name: 'Mia', active: false });
   });
 
+  it('sends the profile link with a new person, https:// put in front, and refuses a bad one without asking', async () => {
+    const { post, sent } = scripted({
+      ok: true,
+      person: { name: 'Cyrus', role: 'Intern', fbAccounts: ['CYRUS ORBANO'], fbProfileLink: 'https://facebook.com/cyrus' },
+      key: 'k-1',
+    });
+    const added = await trackerOver(post).addPerson({
+      name: 'Cyrus',
+      role: 'Intern',
+      fbAccounts: ['CYRUS ORBANO'],
+      fbProfileLink: ' facebook.com/cyrus ',
+    });
+    expect(added.person.fbProfileLink).toBe('https://facebook.com/cyrus');
+    expect(sent[0]!.body).toMatchObject({ fbProfileLink: 'https://facebook.com/cyrus' });
+
+    const bad = scripted({ ok: true });
+    expect((await refusal(trackerOver(bad.post).addPerson({ name: 'X', role: 'Admin', fbProfileLink: 'https://x.com/a' }))).message)
+      .toBe("That isn't a Facebook profile link.");
+    expect(bad.sent).toHaveLength(0);
+  });
+
+  it('updates only the fields given, and reads the person back', async () => {
+    const { post, sent } = scripted((body: Wire) => ({
+      ok: true,
+      person: { name: body['name'], role: 'Intern', fbAccounts: ['CYRUS ORBANO'], fbProfileLink: 'https://www.facebook.com/cyrus', active: true },
+    }));
+    const tracker = trackerOver(post);
+
+    const person = await tracker.updatePerson('Cyrus', { fbAccounts: [' CYRUS ORBANO ', ''], fbProfileLink: 'www.facebook.com/cyrus' });
+    expect(person).toEqual({
+      name: 'Cyrus',
+      role: 'Intern',
+      email: '',
+      fbAccounts: ['CYRUS ORBANO'],
+      fbProfileLink: 'https://www.facebook.com/cyrus',
+      active: true,
+    });
+    expect(sent[0]!.body).toEqual({
+      action: 'updatePerson',
+      key: 'testkey',
+      name: 'Cyrus',
+      fbAccounts: ['CYRUS ORBANO'],
+      fbProfileLink: 'https://www.facebook.com/cyrus',
+    });
+
+    await tracker.updatePerson('Cyrus', { fbProfileLink: '' });
+    expect(sent[1]!.body).toEqual({ action: 'updatePerson', key: 'testkey', name: 'Cyrus', fbProfileLink: '' });
+
+    expect((await refusal(tracker.updatePerson('Cyrus', { fbProfileLink: 'http://facebook.com/x' }))).message)
+      .toBe("That isn't a Facebook profile link.");
+    expect(sent).toHaveLength(2);
+  });
+
+  it('says a bad profile link and a person it cannot read plainly', async () => {
+    const refused = scripted({ ok: false, error: 'bad-profile-link', message: 'Server words.' });
+    expect((await refusal(trackerOver(refused.post).updatePerson('Mia', { fbAccounts: ['A'] }))).message)
+      .toBe("That isn't a Facebook profile link.");
+    const empty = scripted({ ok: true });
+    expect((await refusal(trackerOver(empty.post).updatePerson('Mia', { fbAccounts: ['A'] }))).message).toMatch(/could not read/);
+  });
+
   it('makes a new key', async () => {
     const { post } = scripted({ ok: true, key: ' k-9 ' });
     expect(await trackerOver(post).newKey('Mia')).toBe('k-9');

@@ -17,7 +17,7 @@
  */
 
 import { asList, asRecord, asText, unreadableReply, type Backend } from './backend';
-import { postLinkProblem } from './links';
+import { facebookProfileProblem, normalizeProfileLink, postLinkProblem } from './links';
 import { parseRole, readAccounts } from './session';
 import {
   type IndexCheck,
@@ -77,9 +77,17 @@ export interface QueueInput {
 export interface AddPersonInput {
   readonly name: string;
   readonly role: Role;
-  /** Facebook accounts they may post from. Empty or missing means any. */
+  /** FB broker name(s): the Facebook account name they post as. Empty or missing means any. */
   readonly fbAccounts?: readonly string[] | undefined;
+  /** The link to that Facebook profile: https on facebook.com or fb.com (links.ts). Blank means none. */
+  readonly fbProfileLink?: string | undefined;
   readonly email?: string | undefined;
+}
+
+/** What `updatePerson` may change. A field left out stays as it is; blank clears it. */
+export interface UpdatePersonInput {
+  readonly fbAccounts?: readonly string[] | undefined;
+  readonly fbProfileLink?: string | undefined;
 }
 
 export interface Tracker {
@@ -136,6 +144,12 @@ export interface Tracker {
 
   /** Revokes or restores someone (Admin). You cannot deactivate yourself. */
   setActive(name: string, active: boolean): Promise<TeamMember>;
+
+  /**
+   * Changes someone's FB broker name(s) and profile link (Admin). Only the
+   * fields given are sent; name, role and key never change here.
+   */
+  updatePerson(name: string, changes: UpdatePersonInput): Promise<TeamMember>;
 
   /** A new key for someone (Admin). Their old key stops working at once. */
   newKey(name: string): Promise<string>;
@@ -350,10 +364,12 @@ export function createTracker(deps: TrackerDeps): Tracker {
       if (input.role !== 'Intern' && input.role !== 'Admin') throw new UserFacingError('Choose Intern or Admin.');
       const fbAccounts = readAccounts(input.fbAccounts ?? []);
       const email = (input.email ?? '').trim();
+      const fbProfileLink = checkedProfileLink(input.fbProfileLink ?? '');
       const reply = await backend.call('addPerson', {
         name,
         role: input.role,
         fbAccounts: fbAccounts.length > 0 ? fbAccounts : undefined,
+        fbProfileLink: fbProfileLink || undefined,
         email: email || undefined,
       });
       const row = asRecord(reply['person']);
@@ -370,6 +386,18 @@ export function createTracker(deps: TrackerDeps): Tracker {
       const row = asRecord(reply['person']);
       const person = row ? readTeamMember(row) : null;
       if (!person) throw unreadableReply('setActive');
+      return person;
+    },
+
+    async updatePerson(name: string, changes: UpdatePersonInput): Promise<TeamMember> {
+      if (!name.trim()) throw new UserFacingError('Choose who to change.');
+      const payload: Record<string, unknown> = { name };
+      if (changes.fbAccounts !== undefined) payload['fbAccounts'] = readAccounts(changes.fbAccounts);
+      if (changes.fbProfileLink !== undefined) payload['fbProfileLink'] = checkedProfileLink(changes.fbProfileLink);
+      const reply = await backend.call('updatePerson', payload);
+      const row = asRecord(reply['person']);
+      const person = row ? readTeamMember(row) : null;
+      if (!person) throw unreadableReply('updatePerson');
       return person;
     },
 
@@ -397,6 +425,13 @@ export function createTracker(deps: TrackerDeps): Tracker {
       };
     },
   };
+}
+
+/** The profile link to send, normalized, or a refusal before any request when it is not Facebook's. */
+function checkedProfileLink(url: string): string {
+  const problem = facebookProfileProblem(url);
+  if (problem) throw new UserFacingError(problem);
+  return normalizeProfileLink(url);
 }
 
 function isQueueMap(
@@ -451,6 +486,7 @@ function readTeamMember(row: Readonly<Record<string, unknown>>): TeamMember | nu
     role: parseRole(row['role']),
     email: asText(row['email']).trim(),
     fbAccounts: readAccounts(row['fbAccounts']),
+    ...(asText(row['fbProfileLink']).trim() ? { fbProfileLink: asText(row['fbProfileLink']).trim() } : {}),
     // Only an explicit "no" revokes, as the server's identify() reads the Active cell.
     active: !(active === false || (typeof active === 'string' && active.trim().toUpperCase() === 'FALSE')),
   };

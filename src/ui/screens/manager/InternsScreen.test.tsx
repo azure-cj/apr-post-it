@@ -14,7 +14,14 @@ const TEAM = {
     { name: 'Mika Reyes', role: 'Intern', email: '', fbAccounts: '', active: true },
     { name: manager.name, role: 'Admin', email: '', fbAccounts: '', active: true },
     { name: 'Paolo Reyes', role: 'Intern', email: '', fbAccounts: 'APG Rentals South', active: false },
-    { name: intern.name, role: 'Intern', email: '', fbAccounts: 'APG Main, APG Rentals South', active: true },
+    {
+      name: intern.name,
+      role: 'Intern',
+      email: '',
+      fbAccounts: 'APG Main, APG Rentals South',
+      fbProfileLink: 'https://www.facebook.com/jan.delacruz',
+      active: true,
+    },
   ],
 };
 
@@ -90,6 +97,19 @@ describe('the Interns screen', () => {
     expect(within(stats).getByText('Done today').nextElementSibling!.textContent).toBe('0 of 1');
     expect(within(stats).getByText('With pending posts').nextElementSibling!.textContent).toBe('1');
     expect(within(stats).getByText('No queue today').nextElementSibling!.textContent).toBe('1');
+  });
+
+  it("shows each intern's FB broker name, with their profile a click away", async () => {
+    const platform = server();
+    renderApp({ platform, user: admin, path: '/interns' });
+    await table();
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('FB broker name');
+
+    const jan = await rowOf(intern.name);
+    await userEvent.click(within(jan).getByRole('button', { name: `Open ${intern.name}'s Facebook profile` }));
+    await waitFor(() => expect(platform.opened).toEqual(['https://www.facebook.com/jan.delacruz']));
+    // No link on the Team tab: no Profile.
+    expect(within(await rowOf('Mika Reyes')).queryByRole('button', { name: /Facebook profile/ })).toBeNull();
   });
 
   it('follows the day picker', async () => {

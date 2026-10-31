@@ -34,6 +34,7 @@ export type Action =
   | 'setStatus'
   | 'addPerson'
   | 'setActive'
+  | 'updatePerson'
   | 'newKey'
   | 'saveQueues'
   | 'indexCheck';
@@ -113,6 +114,7 @@ export type BackendErrorCode =
   | 'incomplete'
   | 'link-required'
   | 'bad-link'
+  | 'bad-profile-link'
   | 'bad-status'
   | 'duplicate'
   | 'self'
@@ -200,6 +202,7 @@ const DOING: Readonly<Record<Action, string>> = {
   setStatus: 'update the queue',
   addPerson: 'add that person',
   setActive: 'change who is active',
+  updatePerson: 'save that person',
   newKey: 'make a new key',
   saveQueues: 'save the queues',
   indexCheck: 'compare the directory with the checker',
@@ -219,6 +222,7 @@ const WHAT: Readonly<Record<Action, string>> = {
   setStatus: 'its answer',
   addPerson: 'the new person',
   setActive: 'that person',
+  updatePerson: 'that person',
   newKey: 'the new key',
   saveQueues: 'its answer',
   indexCheck: 'the comparison',
@@ -232,6 +236,7 @@ const WRITES: ReadonlySet<Action> = new Set<Action>([
   'setStatus',
   'addPerson',
   'setActive',
+  'updatePerson',
   'newKey',
   'saveQueues',
 ]);
@@ -400,6 +405,8 @@ function refusal(reply: Reply, action: Action): BackendError {
       return new BackendError('link-required', action, "Paste the post's link.");
     case 'bad-link':
       return new BackendError('bad-link', action, "That isn't a Facebook link.");
+    case 'bad-profile-link':
+      return new BackendError('bad-profile-link', action, "That isn't a Facebook profile link.");
     case 'bad-status':
       return new BackendError('bad-status', action, 'Choose Posted or Pending.');
     case 'duplicate':

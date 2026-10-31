@@ -35,6 +35,8 @@ export interface InternsScreenProps {
   readonly updatedAt?: string | null | undefined;
   /** Open Assign for this intern on this day. Without it, no queue actions. */
   readonly onOpenQueue?: ((intern: string, date: string) => void) | undefined;
+  /** Opens a link in the browser (platform.open). Without it, profile links are not offered. */
+  readonly onOpenLink?: ((url: string) => void) | undefined;
 }
 
 interface InternLine {
@@ -43,13 +45,16 @@ interface InternLine {
   readonly posted: number;
   readonly pendingPosts: number;
   readonly last: PostLogEntry | undefined;
+  /** FB broker name(s): the Facebook account name they post as. */
   readonly accounts: readonly string[];
+  /** Their Facebook profile's link, '' when none. */
+  readonly profile: string;
 }
 
 /**
  * Everyone on the team who posts, in one place: the day's queue and how far
  * along it is, posts still waiting for approval, when each last posted, and the
- * FB accounts they may use. Revoked people are kept apart, folded away.
+ * FB broker name they post as, with their profile. Revoked people are kept apart, folded away.
  */
 export function InternsScreen({
   date,
@@ -63,16 +68,21 @@ export function InternsScreen({
   error,
   updatedAt,
   onOpenQueue,
+  onOpenLink,
 }: InternsScreenProps) {
   const [query, setQuery] = useState('');
 
   const lines = useMemo<readonly InternLine[]>(() => {
     if (!team) return [];
-    return internDays(team, assignments, posts, date).map((day) => ({
-      ...day,
-      last: lastPostBy(posts, day.name),
-      accounts: team.find((m) => samePerson(m.name, day.name))?.fbAccounts ?? [],
-    }));
+    return internDays(team, assignments, posts, date).map((day) => {
+      const member = team.find((m) => samePerson(m.name, day.name));
+      return {
+        ...day,
+        last: lastPostBy(posts, day.name),
+        accounts: member?.fbAccounts ?? [],
+        profile: member?.fbProfileLink?.trim() ?? '',
+      };
+    });
   }, [team, assignments, posts, date]);
 
   const revoked = useMemo<readonly TeamMember[]>(() => {
@@ -185,6 +195,7 @@ export function InternsScreen({
                 today={today}
                 queueHeading={isToday ? 'Today’s queue' : `Queue ${day}`}
                 onOpenQueue={onOpenQueue ? (name) => onOpenQueue(name, date) : undefined}
+                onOpenLink={onOpenLink}
                 onPlanTomorrow={onOpenQueue ? (name) => onOpenQueue(name, tomorrow) : undefined}
               />
             )}
@@ -205,9 +216,10 @@ interface InternTableProps {
   readonly queueHeading: string;
   readonly onOpenQueue?: ((name: string) => void) | undefined;
   readonly onPlanTomorrow?: ((name: string) => void) | undefined;
+  readonly onOpenLink?: ((url: string) => void) | undefined;
 }
 
-function InternTable({ lines, today, queueHeading, onOpenQueue, onPlanTomorrow }: InternTableProps) {
+function InternTable({ lines, today, queueHeading, onOpenQueue, onPlanTomorrow, onOpenLink }: InternTableProps) {
   const actions = Boolean(onOpenQueue || onPlanTomorrow);
   return (
     <div className="interns-table__wrap">
@@ -218,7 +230,7 @@ function InternTable({ lines, today, queueHeading, onOpenQueue, onPlanTomorrow }
             <th scope="col">{queueHeading}</th>
             <th scope="col">Pending</th>
             <th scope="col">Last post</th>
-            <th scope="col">FB accounts</th>
+            <th scope="col">FB broker name</th>
             {actions ? (
               <th scope="col">
                 <span className="visually-hidden">Actions</span>
@@ -254,6 +266,16 @@ function InternTable({ lines, today, queueHeading, onOpenQueue, onPlanTomorrow }
               </td>
               <td className="interns-table__accounts">
                 {line.accounts.length === 0 ? <span className="interns__muted">Any</span> : line.accounts.join(', ')}
+                {line.profile && onOpenLink ? (
+                  <Button
+                    variant="link"
+                    className="interns-table__profile"
+                    aria-label={`Open ${line.name}'s Facebook profile`}
+                    onClick={() => onOpenLink(line.profile)}
+                  >
+                    Profile
+                  </Button>
+                ) : null}
               </td>
               {actions ? (
                 <td className="interns-table__actions">
@@ -338,7 +360,7 @@ function Revoked({ people, total, query }: { readonly people: readonly TeamMembe
                   <span className="interns-revoked__name">{member.name}</span>
                   <Pill tone="neutral">Revoked</Pill>
                   <span className="interns-revoked__accounts">
-                    FB accounts: {accounts.length === 0 ? 'Any' : accounts.join(', ')}
+                    FB broker name: {accounts.length === 0 ? 'Any' : accounts.join(', ')}
                   </span>
                 </li>
               );

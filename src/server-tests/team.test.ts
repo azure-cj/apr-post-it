@@ -16,11 +16,11 @@ describe('team', () => {
     expect(w.call('maria', 'team')).toEqual({
       ok: true,
       team: [
-        { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], active: true },
-        { name: 'Ana Reyes', role: 'Intern', email: '', fbAccounts: [], active: true },
-        { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], active: true },
-        { name: 'Rico Bautista', role: 'Admin', email: '', fbAccounts: [], active: true },
-        { name: 'Former Intern', role: 'Intern', email: '', fbAccounts: [], active: false },
+        { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], fbProfileLink: '', active: true },
+        { name: 'Ana Reyes', role: 'Intern', email: '', fbAccounts: [], fbProfileLink: '', active: true },
+        { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], fbProfileLink: '', active: true },
+        { name: 'Rico Bautista', role: 'Admin', email: '', fbAccounts: [], fbProfileLink: '', active: true },
+        { name: 'Former Intern', role: 'Intern', email: '', fbAccounts: [], fbProfileLink: '', active: false },
       ],
     });
   });

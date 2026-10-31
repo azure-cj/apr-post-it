@@ -1,4 +1,4 @@
-import { isFacebookPostLink, postLinkProblem } from './links';
+import { facebookProfileProblem, isFacebookPostLink, normalizeProfileLink, postLinkProblem } from './links';
 
 describe('a post link', () => {
   it.each([
@@ -47,5 +47,42 @@ describe('what the server refuses, the app refuses', () => {
   ])('%s (%s)', (link) => {
     expect(isFacebookPostLink(link)).toBe(false);
     expect(postLinkProblem(link)).toBe("That isn't a Facebook link.");
+  });
+});
+
+describe('a Facebook profile link', () => {
+  it.each([
+    ['https://www.facebook.com/cyrus.orbano', 'https://www.facebook.com/cyrus.orbano'],
+    ['https://facebook.com/profile.php?id=100012345', 'https://facebook.com/profile.php?id=100012345'],
+    ['https://m.facebook.com/cyrus', 'https://m.facebook.com/cyrus'],
+    ['https://web.facebook.com/cyrus', 'https://web.facebook.com/cyrus'],
+    ['https://fb.com/cyrus', 'https://fb.com/cyrus'],
+    ['https://www.facebook.com/groups/x/posts/1/', 'https://www.facebook.com/groups/x/posts/1/'],
+    ['www.facebook.com/cyrus', 'https://www.facebook.com/cyrus'],
+    ['  facebook.com/cyrus  ', 'https://facebook.com/cyrus'],
+    ['https://WWW.Facebook.com/Cyrus', 'https://WWW.Facebook.com/Cyrus'],
+  ])('%j is one, saved as %j', (typed, saved) => {
+    expect(facebookProfileProblem(typed)).toBeNull();
+    expect(normalizeProfileLink(typed)).toBe(saved);
+  });
+
+  it.each([
+    'http://www.facebook.com/cyrus',
+    'https://fb.me/cyrus',
+    'https://www.fb.com/cyrus',
+    'https://l.facebook.com/x',
+    'https://facebook.com.evil.example/x',
+    'https://instagram.com/cyrus',
+    'ftp://facebook.com/cyrus',
+    'https://www.facebook.com/a b',
+    'cyrus orbano',
+  ])('%j is not', (url) => {
+    expect(facebookProfileProblem(url)).toBe("That isn't a Facebook profile link.");
+  });
+
+  it('is optional: blank is fine', () => {
+    expect(facebookProfileProblem('')).toBeNull();
+    expect(facebookProfileProblem('   ')).toBeNull();
+    expect(normalizeProfileLink('  ')).toBe('');
   });
 });

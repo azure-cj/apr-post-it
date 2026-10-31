@@ -183,8 +183,13 @@ export class UserFacingError extends Error {
 export interface TeamMember {
   readonly name: string;
   readonly role: Role;
-  /** Facebook accounts they may post from. Empty or missing means any. */
+  /**
+   * Their FB broker name(s): the Facebook account name they post as, which is
+   * what they pick as "FB account name" when logging. Empty or missing means any.
+   */
   readonly fbAccounts?: readonly string[] | undefined;
+  /** The link to that Facebook profile. Missing when the Team tab has none. */
+  readonly fbProfileLink?: string | undefined;
   readonly email?: string | undefined;
   /** False once revoked on the Team tab. Missing means active. */
   readonly active?: boolean | undefined;

@@ -39,3 +39,34 @@ export function postLinkProblem(url: string): string | null {
   if (!url.trim()) return LINK_MISSING;
   return isFacebookPostLink(url) ? null : LINK_NOT_FACEBOOK;
 }
+
+/**
+ * A Facebook profile's link, Code.gs's profileLinkIn_ rule: https, on
+ * facebook.com, www.facebook.com, m.facebook.com, web.facebook.com or fb.com,
+ * any path (a post's link is not looked for). Typed without a scheme, it gets
+ * "https://" in front before it is checked, as the server does.
+ */
+const PROFILE_HOSTS: ReadonlySet<string> = new Set([
+  'facebook.com',
+  'www.facebook.com',
+  'm.facebook.com',
+  'web.facebook.com',
+  'fb.com',
+]);
+
+export const PROFILE_LINK_NOT_FACEBOOK = "That isn't a Facebook profile link.";
+
+/** The profile link as it will be saved: trimmed, with https:// in front when it had no scheme. '' stays ''. */
+export function normalizeProfileLink(url: string): string {
+  const text = url.trim();
+  if (!text) return '';
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`;
+}
+
+/** What is wrong with `url` as a Facebook profile link, as a short sentence, or null. Blank is fine: the link is optional. */
+export function facebookProfileProblem(url: string): string | null {
+  const text = normalizeProfileLink(url);
+  if (!text) return null;
+  const m = LINK.exec(text);
+  return m !== null && PROFILE_HOSTS.has(m[1]!.toLowerCase()) ? null : PROFILE_LINK_NOT_FACEBOOK;
+}

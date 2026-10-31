@@ -27,8 +27,9 @@ Every call is a POST of `{ action, key, ... }`. Every reply is `{ ok, ... }`, or
 | `setStatus` | all (own rows) / admin | `status: 'Not Shared'\|'Pending'\|'Posted'` (`'To post'` is accepted and written `Not Shared`) | unchanged (Pending → Posted). With `Posted`, the assignee's newest Pending Posts row for that listing becomes Posted too. |
 | `property` | all | `{ id }` | the detail, with the same checker fields as `properties`, joined the same way. |
 | `addLink` | unchanged | | kept for old rows that have no link |
-| `team` | admin | — | unchanged |
-| `addPerson` | admin | `{ name, role:'Intern'\|'Admin', fbAccounts?: string[], email? }` | `{ person: TeamMember, key }`. The key is shown ONCE. A name that already exists (case-insensitive) gives `error:'duplicate'`. |
+| `team` | admin | — | each person also has `fbProfileLink` (`''` when none). Never a key. |
+| `addPerson` | admin | `{ name, role:'Intern'\|'Admin', fbAccounts?: string[], fbProfileLink?, email? }` | `{ person: TeamMember, key }`. The key is shown ONCE. A name that already exists (case-insensitive) gives `error:'duplicate'`. `fbAccounts` holds the FB broker name(s), the Facebook account name the person posts as (what they pick as "FB account name" when logging). `fbProfileLink`, optional, must be https on facebook.com, www./m./web.facebook.com or fb.com, any path; without a scheme, `https://` is put in front first. Otherwise `error:'bad-profile-link'`. |
+| `updatePerson` | admin | `{ name, fbAccounts?, fbProfileLink? }` | `{ person }`. Changes only the fields sent, with addPerson's checks; name, role and key never change. Clears the team cache. |
 | `setActive` | admin | `{ name, active:boolean }` | `{ person }`. You cannot deactivate yourself (`error:'self'`). |
 | `newKey` | admin | `{ name }` | `{ key }`. The old key stops working at once (clear the team cache). |
 | `saveQueues` | admin | `{ date, queues:[{ assignedTo, items:[{ propertyName, propertyId?, status? }] }] }` | `{ saved: <number of rows> }`. Atomic under one lock. Replaces each named intern's queue for that date the same way `saveQueue` does. |
@@ -70,16 +71,19 @@ its column names, words and formats (server/README.md has the detail).
   shows the same columns in the same order.
 
 - `Property` (types.ts) gains these optional fields: `city, size, dealType, availability, issues`.
+- `TeamMember` gains `fbProfileLink?: string`; `AddPersonInput` gains `fbProfileLink?`.
 - `LogPostInput.postLink` becomes required (a string), plus `status: 'Posted' | 'Pending'`.
 - `Tracker` gains:
   - `addPerson(input) → { person, key }`
   - `setActive(name, active) → TeamMember`
+  - `updatePerson(name, { fbAccounts?, fbProfileLink? }) → TeamMember`
   - `newKey(name) → string`
   - `saveQueues(date, queues) → number`
   - `indexCheck() → IndexCheck`
 - `core/links.ts`:
   - `isFacebookPostLink(url): boolean`
   - `postLinkProblem(url): string | null`. The second returns a short sentence. The same rule as the server's.
+  - `facebookProfileProblem(url): string | null`: the Team tab's profile link rule, the same as the server's (blank is fine).
 - `core/planner.ts`, `planQueues(input) → Plan`. It's pure. Input:
   - `properties` (the Directory rows)
   - `posts`

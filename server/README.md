@@ -51,7 +51,11 @@ read rather than hundreds of Drive calls.
 * **The tracker**: the one the company already uses. Posts and Assignments rows go here,
   into its existing columns. Do not make a new one.
 * **A private admin sheet**: create this one, and share it with nobody. It holds the
-  script's `Team` tab. `Team` lists everyone's key, so it cannot live in a sheet the team
+  script's `Team` tab: `Name`, `Email`, `Role`, `Key`, `FB Accounts` (the FB broker
+  name(s), the Facebook account name the person posts as; comma separated), `FB Profile Link`
+  and `Active`. Columns are found by header name. A tab made before `FB Profile Link`
+  existed keeps working: the column is added after the last one the first time a Team row is
+  written. `Team` lists everyone's key, so it cannot live in a sheet the team
   can open: whoever reads an admin's key can act as that admin (D3).
 * **The directory**, written by `BuildDirectory.gs`.
 
@@ -97,7 +101,7 @@ read rather than hundreds of Drive calls.
 1. Paste the files into the project (step 3).
 2. Set the sheet IDs in `CONFIG` (step 4).
 3. In the editor, open `ADD_PERSON`, put **your own name** in `name`, leave `role` as
-   `'Admin'`, and press **Run**, once.
+   `'Admin'` (`fbAccounts` and `fbProfileLink` may stay blank), and press **Run**, once.
 4. The key appears in **View → Executions** (the execution log), and on the Team tab of the
    private admin sheet. Paste it into your copy of Post-It.
 5. After that, add everyone else from the app: **Settings → Team**. `SHARED_KEY` stops
@@ -127,8 +131,9 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` (`HH:mm`), `type` (the Property type written) and `postedBy`. `postLink` is required, an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com`, `fb.com` or `fb.me` (`error: 'link-required'` or `'bad-link'`), and so is `status`, `Posted` or `Pending` (`'bad-status'`); Pending means posted in a group and awaiting its admin's approval. Refuses with `'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the poster's Team row. An Admin may send `postedBy`: that person must be on the Team tab and active (`'unknown-person'`), and the account must be one of theirs. |
 | `addLink` | everyone | Turns a Pending row into Posted with its link: `notfound` when there is no such row. An intern can complete only their own. Kept for old rows logged without a link. |
 | `setStatus` | everyone | Moves one queue item's status (`Not Shared`, `Pending` or `Posted`; an older app's `To post` is written `Not Shared`): `notfound` when no open item matches. An intern can move only their own. With `Posted`, also marks the assignee's newest Pending post of that listing Posted (by id, else by name), keeping its link. |
-| `team` | Admin | The Team tab without keys: `name`, `role`, `email`, `fbAccounts` (a list) and `active` for each person, revoked people included. The Key column is never sent. |
-| `addPerson` | Admin | Adds `{ name, role: 'Intern' \| 'Admin', fbAccounts?, email? }` to the Team tab and replies `{ person, key }`. The key is shown this once. A name already on the tab, in any case, is `'duplicate'`; any other role is `'bad-role'`. |
+| `team` | Admin | The Team tab without keys: `name`, `role`, `email`, `fbAccounts` (a list: the FB broker name(s)), `fbProfileLink` (`''` when none) and `active` for each person, revoked people included. The Key column is never sent. |
+| `addPerson` | Admin | Adds `{ name, role: 'Intern' \| 'Admin', fbAccounts?, fbProfileLink?, email? }` to the Team tab and replies `{ person, key }`. The key is shown this once. A name already on the tab, in any case, is `'duplicate'`; any other role is `'bad-role'`. `fbProfileLink` is optional; when given it must be an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com` or `fb.com`, any path (typed without a scheme, `https://` is put in front first), else `'bad-profile-link'`. |
+| `updatePerson` | Admin | `{ name, fbAccounts?, fbProfileLink? }`: changes only the fields sent (blank clears), with `addPerson`'s checks, replying `{ person }`. Name, role and key never change. The cached Team tab is cleared, so the log step's account check uses the new broker name at once. |
 | `setActive` | Admin | `{ name, active }`: revokes or restores a person, replying `{ person }`. Nobody can deactivate themselves (`'self'`). |
 | `newKey` | Admin | `{ name }`: gives the person a new key, replying `{ key }`. The old one stops working at once. |
 | `saveQueue` | Admin | Replaces one person's queue for one date. |
@@ -142,8 +147,8 @@ Two things in a reply come from the key, never from the request:
   (`heading: Commission: 3%`), so an intern's `cutAt` is the kind of marker only (`heading`).
 * **`postedBy`** on a logged post is the caller's own name. An Admin may log on an
   intern's behalf by sending `postedBy`; from an intern it is ignored.
-* **A key** is in the reply of `addPerson` and `newKey` only. No other reply, `team` and
-  `setActive` included, ever carries one.
+* **A key** is in the reply of `addPerson` and `newKey` only. No other reply, `team`,
+  `updatePerson` and `setActive` included, ever carries one.
 
 ### `withheld`
 

@@ -1,28 +1,32 @@
-/* The people in the main column; the setup they depend on in the side pane. */
+/*
+ * The team takes the full width, so every row action shows without scrolling;
+ * the setup it depends on sits below it, side by side while there is room.
+ */
 .settings__panes {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--pane-regular);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--gap-regular);
   align-items: start;
 }
 
-.settings__main,
-.settings__side {
+.settings__main {
   display: grid;
   gap: var(--space-12);
   min-width: 0;
 }
 
-@container shell (width < 1100px) {
-  .settings__panes {
-    grid-template-columns: minmax(0, 1fr) var(--pane-compact);
-    gap: var(--gap-compact);
-  }
+.settings__side {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--gap-regular);
+  align-items: start;
+  min-width: 0;
 }
 
-@container shell (width < 900px) {
-  .settings__panes {
-    grid-template-columns: minmax(0, 1fr);
+@container shell (width < 1100px) {
+  .settings__panes,
+  .settings__side {
+    gap: var(--gap-compact);
   }
 }
 
@@ -265,4 +269,10 @@ summary.check__row:focus-visible {
   color: var(--text-muted);
   font-size: var(--text-caption);
   line-height: var(--lh-caption);
+}
+
+.settings__optional {
+  color: var(--text-muted);
+  font-family: var(--body-font);
+  font-weight: 400;
 }

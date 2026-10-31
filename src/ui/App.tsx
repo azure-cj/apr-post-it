@@ -882,6 +882,7 @@ function InternsRoute() {
       error={team.error ?? posts.error ?? assignments.error}
       updatedAt={loadedAt === null ? null : manilaTime(loadedAt)}
       onOpenQueue={(intern, day) => navigate(assignPath(intern, day))}
+      onOpenLink={(url) => void app.platform.open(url)}
     />
   );
 }
@@ -935,6 +936,8 @@ function SettingsRoute() {
       error={team.data ? null : team.error}
       onAddPerson={(input) => tracker.addPerson(input)}
       onSetActive={(name, active) => tracker.setActive(name, active)}
+      onUpdatePerson={(name, changes) => tracker.updatePerson(name, changes)}
+      onOpenLink={(url) => void platform.open(url)}
       onNewKey={(name) => tracker.newKey(name)}
       onIndexCheck={() => tracker.indexCheck()}
       onCopy={(text) => {

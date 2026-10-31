@@ -203,6 +203,12 @@ export interface WorldOptions extends ProjectOptions {
    * Sheet1 a new spreadsheet starts with.
    */
   readonly directoryFirst?: boolean;
+  /**
+   * The Team tab's headers. By default the tab predates FB Profile Link
+   * (TEAM_HEADERS), as the deployed one does. People's cells are put under
+   * their own header, whatever the order.
+   */
+  readonly teamHeaders?: readonly string[];
 }
 
 export function createWorld(options: WorldOptions = {}): World {
@@ -216,9 +222,11 @@ export function createWorld(options: WorldOptions = {}): World {
   const assignments = tracker.addSheet('Assignments', ASSIGN_HEADERS);
 
   const admin = sheets.create(ADMIN_ID, { name: 'Post-It admin (private)' });
-  const team = admin.addSheet('Team', TEAM_HEADERS);
+  const teamHeaders = options.teamHeaders ?? TEAM_HEADERS;
+  const team = admin.addSheet('Team', teamHeaders);
   for (const p of Object.values(PEOPLE)) {
-    team.type([p.name, '', p.role, p.key, p.fbAccounts, p.active]);
+    const cells: Record<string, string> = { Name: p.name, Role: p.role, Key: p.key, 'FB Accounts': p.fbAccounts, Active: p.active };
+    team.type(teamHeaders.map((h) => cells[h] ?? ''));
   }
 
   const directory = sheets.create(DIRECTORY_ID, { name: 'APG listing directory' });

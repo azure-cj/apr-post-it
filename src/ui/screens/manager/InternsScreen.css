@@ -244,3 +244,7 @@
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
 }
+
+.interns-table__profile {
+  margin-inline-start: var(--space-6);
+}

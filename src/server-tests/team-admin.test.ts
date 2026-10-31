@@ -31,12 +31,20 @@ describe('addPerson', () => {
 
     expect(reply).toEqual({
       ok: true,
-      person: { name: 'Lia Gomez', role: 'Intern', email: 'lia@apg.example', fbAccounts: ['APG Main', 'APG Leasing'], active: true },
+      person: {
+        name: 'Lia Gomez',
+        role: 'Intern',
+        email: 'lia@apg.example',
+        fbAccounts: ['APG Main', 'APG Leasing'],
+        fbProfileLink: '',
+        active: true,
+      },
       key: expect.stringMatching(KEY),
     });
     const row = w.team.lastRow;
-    expect(w.team.row(row)).toEqual(['Lia Gomez', 'lia@apg.example', 'Intern', reply['key'], 'APG Main, APG Leasing', 'TRUE']);
-    expect(w.team.formats(row)).toEqual(['@', '@', '@', '@', '@', '@']);
+    // The world's Team tab predates FB Profile Link: the column is added after Active.
+    expect(w.team.row(row)).toEqual(['Lia Gomez', 'lia@apg.example', 'Intern', reply['key'], 'APG Main, APG Leasing', 'TRUE', '']);
+    expect(w.team.formats(row)).toEqual(['@', '@', '@', '@', '@', '@', '@']);
   });
 
   it('gives a key that works at once, though the Team tab was cached a moment before', () => {
@@ -102,7 +110,7 @@ describe('setActive', () => {
 
     expect(w.call('maria', 'setActive', { name: 'Jan Dela Cruz', active: false })).toEqual({
       ok: true,
-      person: { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], active: false },
+      person: { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], fbProfileLink: '', active: false },
     });
     expect(w.call('jan', 'ping')).toMatchObject({ ok: false, error: 'unauthorized' });
     expect(w.team.row(2)[5]).toBe('FALSE');

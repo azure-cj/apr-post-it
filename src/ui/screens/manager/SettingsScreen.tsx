@@ -2,10 +2,10 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Button, Card, EmptyState, Icon, Notice, Pill, Spinner, TextInput } from '../../components';
 import { BackendError } from '@/core/backend';
 import { firstName, plural, samePerson, type TeamMember } from '@/core/summary';
-import type { AddPersonInput } from '@/core/tracker';
-import { UserFacingError, type IndexCheck, type Role, type Settings } from '@/core/types';
+import type { AddPersonInput, UpdatePersonInput } from '@/core/tracker';
+import { UserFacingError, type IndexCheck, type Settings } from '@/core/types';
 import { Dialog } from './Dialog';
-import { Segmented } from './Segmented';
+import { PersonDialog } from './PersonDialog';
 import './SettingsScreen.css';
 
 export interface SettingsScreenProps {
@@ -27,13 +27,16 @@ export interface SettingsScreenProps {
   readonly onAddPerson?: ((input: AddPersonInput) => Promise<{ readonly key: string }>) | undefined;
   /** Turns someone off or on. Without it, no row actions. */
   readonly onSetActive?: ((name: string, active: boolean) => Promise<unknown>) | undefined;
+  /** Changes someone's FB broker name and profile link. Without it, no Edit. */
+  readonly onUpdatePerson?: ((name: string, changes: UpdatePersonInput) => Promise<unknown>) | undefined;
+  /** Opens a link in the browser (platform.open). Without it, profile links are not offered. */
+  readonly onOpenLink?: ((url: string) => void) | undefined;
   /** Makes someone a new key; the old one stops working. Resolves with the new key, shown once. */
   readonly onNewKey?: ((name: string) => Promise<string>) | undefined;
   /** Compares the Directory with the listing checker's index. Without it, no Listings check. */
   readonly onIndexCheck?: (() => Promise<IndexCheck>) | undefined;
 }
 
-const ROLES: readonly Role[] = ['Intern', 'Admin'];
 const FAILED = "That didn't work. Check your connection, then try again.";
 
 const sentence = (err: unknown) => (err instanceof UserFacingError ? err.message : FAILED);
@@ -41,6 +44,7 @@ const sentence = (err: unknown) => (err instanceof UserFacingError ? err.message
 /** What a dialog on this screen is doing. */
 type Open =
   | { readonly kind: 'add' }
+  | { readonly kind: 'edit'; readonly member: TeamMember }
   | { readonly kind: 'newKey'; readonly name: string }
   | { readonly kind: 'active'; readonly name: string; readonly active: boolean }
   | { readonly kind: 'key'; readonly name: string; readonly key: string; readonly added: boolean };
@@ -60,6 +64,8 @@ export function SettingsScreen({
   error,
   onAddPerson,
   onSetActive,
+  onUpdatePerson,
+  onOpenLink,
   onNewKey,
   onIndexCheck,
 }: SettingsScreenProps) {
@@ -107,6 +113,8 @@ export function SettingsScreen({
               <TeamTable
                 team={team}
                 me={me}
+                onOpenLink={onOpenLink}
+                onEdit={onUpdatePerson ? (member) => setOpen({ kind: 'edit', member }) : undefined}
                 onNewKey={onNewKey ? (name) => setOpen({ kind: 'newKey', name }) : undefined}
                 onSetActive={onSetActive ? (name, active) => setOpen({ kind: 'active', name, active }) : undefined}
               />
@@ -152,12 +160,25 @@ export function SettingsScreen({
       </div>
 
       {open?.kind === 'add' && onAddPerson ? (
-        <AddPersonDialog
+        <PersonDialog
+          mode="add"
           team={team ?? []}
           onClose={close}
           onAdd={async (input) => {
             const { key } = await onAddPerson(input);
             setOpen({ kind: 'key', name: input.name, key, added: true });
+          }}
+        />
+      ) : null}
+
+      {open?.kind === 'edit' && onUpdatePerson ? (
+        <PersonDialog
+          mode="edit"
+          member={open.member}
+          onClose={close}
+          onSave={async (name, changes) => {
+            await onUpdatePerson(name, changes);
+            close();
           }}
         />
       ) : null}
@@ -200,15 +221,19 @@ export function SettingsScreen({
 function TeamTable({
   team,
   me,
+  onOpenLink,
+  onEdit,
   onNewKey,
   onSetActive,
 }: {
   readonly team: readonly TeamMember[];
   readonly me?: string | undefined;
+  readonly onOpenLink?: ((url: string) => void) | undefined;
+  readonly onEdit?: ((member: TeamMember) => void) | undefined;
   readonly onNewKey?: ((name: string) => void) | undefined;
   readonly onSetActive?: ((name: string, active: boolean) => void) | undefined;
 }) {
-  const withActions = Boolean(onNewKey || onSetActive);
+  const withActions = Boolean(onEdit || onNewKey || onSetActive);
   return (
     <div className="settings__table-wrap">
       <table className="settings__table">
@@ -216,7 +241,8 @@ function TeamTable({
           <tr>
             <th scope="col">Name</th>
             <th scope="col">Role</th>
-            <th scope="col">FB accounts</th>
+            <th scope="col">FB broker name</th>
+            <th scope="col">FB profile</th>
             <th scope="col">Active</th>
             {withActions ? (
               <th scope="col">
@@ -228,6 +254,7 @@ function TeamTable({
         <tbody>
           {team.map((member, index) => {
             const accounts = member.fbAccounts ?? [];
+            const profile = member.fbProfileLink?.trim() ?? '';
             const active = member.active !== false;
             const self = me !== undefined && samePerson(member.name, me);
             return (
@@ -237,7 +264,16 @@ function TeamTable({
                   {self ? <span className="settings__you">You</span> : null}
                 </td>
                 <td>{member.role}</td>
-                <td>{accounts.length === 0 ? <span className="settings__muted">Any</span> : accounts.join(', ')}</td>
+                <td>{accounts.length === 0 ? <span className="settings__muted">—</span> : accounts.join(', ')}</td>
+                <td>
+                  {profile && onOpenLink ? (
+                    <Button variant="link" onClick={() => onOpenLink(profile)} aria-label={`Open ${member.name}'s Facebook profile`}>
+                      Open
+                    </Button>
+                  ) : (
+                    <span className="settings__muted">—</span>
+                  )}
+                </td>
                 <td>
                   {active ? (
                     <Pill tone="ok" dot>
@@ -249,6 +285,11 @@ function TeamTable({
                 </td>
                 {withActions ? (
                   <td className="settings__row-actions">
+                    {onEdit ? (
+                      <Button size="small" variant="quiet" onClick={() => onEdit(member)} aria-label={`Edit ${member.name}`}>
+                        Edit
+                      </Button>
+                    ) : null}
                     {self ? null : (
                       <>
                         {onNewKey && active ? (
@@ -276,103 +317,6 @@ function TeamTable({
         </tbody>
       </table>
     </div>
-  );
-}
-
-/** Name, role and FB accounts. The key comes back from the web app, once. */
-function AddPersonDialog({
-  team,
-  onAdd,
-  onClose,
-}: {
-  readonly team: readonly TeamMember[];
-  readonly onAdd: (input: AddPersonInput) => Promise<void>;
-  readonly onClose: () => void;
-}) {
-  const nameRef = useRef<HTMLInputElement>(null);
-  const [name, setName] = useState('');
-  const [role, setRole] = useState<Role>('Intern');
-  const [accounts, setAccounts] = useState('');
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (busy) return;
-    const clean = name.trim().replace(/\s+/g, ' ');
-    if (!clean) {
-      setNameError('Type their name.');
-      nameRef.current?.focus();
-      return;
-    }
-    const existing = team.find((m) => samePerson(m.name, clean));
-    if (existing) {
-      setNameError(`${existing.name} is already on the team.`);
-      nameRef.current?.focus();
-      return;
-    }
-    const fbAccounts = accounts
-      .split(',')
-      .map((a) => a.trim())
-      .filter(Boolean);
-    setBusy(true);
-    setError(null);
-    try {
-      await onAdd({ name: clean, role, fbAccounts });
-    } catch (err) {
-      setError(sentence(err));
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog
-      title="Add person"
-      onClose={onClose}
-      busy={busy}
-      initialFocus={nameRef}
-      actions={
-        <>
-          <Button onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button type="submit" form="add-person" variant="primary" busy={busy}>
-            {busy ? 'Adding…' : 'Add person'}
-          </Button>
-        </>
-      }
-    >
-      <form id="add-person" className="settings__form" onSubmit={(e) => void submit(e)} noValidate>
-        <TextInput
-          ref={nameRef}
-          label="Name"
-          autoComplete="off"
-          value={name}
-          readOnly={busy}
-          error={nameError ?? undefined}
-          onChange={(e) => {
-            setName(e.target.value);
-            setNameError(null);
-          }}
-        />
-        <Segmented label="Role" options={ROLES} value={role} onChange={setRole} disabled={busy} />
-        <TextInput
-          label="FB accounts"
-          autoComplete="off"
-          value={accounts}
-          readOnly={busy}
-          placeholder="APG Main, APG Rentals South"
-          hint="Separate with commas. Blank allows any."
-          onChange={(e) => setAccounts(e.target.value)}
-        />
-        {error ? (
-          <Notice tone="danger" live>
-            {error}
-          </Notice>
-        ) : null}
-      </form>
-    </Dialog>
   );
 }
 
