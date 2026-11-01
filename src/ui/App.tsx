@@ -840,6 +840,9 @@ function TrackerRoute() {
   const loadedAt = rows.posts.loadedAt;
   const team = useTeam({ maxAgeMs: 300_000 });
   const { platform } = app;
+  const interns = internsPath(monitorWeek(date), today);
+  const records = `${paths.records}?period=custom&from=${date}&to=${date}`;
+  const settings = `${paths.settings}?tab=listings`;
 
   return (
     <TrackerScreen
@@ -849,7 +852,6 @@ function TrackerRoute() {
       assignments={rows.assignments.data ?? []}
       properties={rows.properties}
       team={team.data ?? undefined}
-      settings={app.settings}
       onDateChange={(day) => setParams(day === today ? {} : { date: day }, { replace: true })}
       onRefresh={() => {
         rows.posts.reload();
@@ -860,12 +862,19 @@ function TrackerRoute() {
       error={rows.error}
       updatedAt={loadedAt === null ? null : manilaTime(loadedAt)}
       onOpenLink={(url) => void platform.open(url)}
-      onOpenProperty={(id) => navigate(paths.property(id), { state: { section: 'tracker' } satisfies FromList })}
-      onAssign={(intern, day) => navigate(assignPath(intern, day))}
-      internsHref={`#${paths.interns}`}
-      onOpenInterns={() => navigate(paths.interns)}
+      internsHref={`#${interns}`}
+      onOpenInterns={() => navigate(interns)}
+      recordsHref={`#${records}`}
+      onOpenRecords={() => navigate(records)}
+      settingsHref={`#${settings}`}
+      onOpenSettings={() => navigate(settings)}
     />
   );
+}
+
+/** The Interns screen on a week: no `?week=` for the week it opens on anyway. */
+export function internsPath(week: string, today: string): string {
+  return week === monitorWeek(today) ? paths.interns : `${paths.interns}?week=${week}`;
 }
 
 function InternsRoute() {
@@ -907,6 +916,7 @@ function InternsRoute() {
 function RecordsRoute() {
   const app = useApp();
   const notify = useNotify();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const posts = usePosts({ pollMs: 120_000 });
   const assignments = useAssignments({ pollMs: 120_000 });
@@ -924,10 +934,10 @@ function RecordsRoute() {
       period={period}
       onPeriodChange={(next) => setParams(periodQuery(next, today), { replace: true })}
       interns={interns}
-      cooldownDays={app.settings.cooldownDays}
+      internsHref={(week) => `#${internsPath(week, today)}`}
+      onOpenIntern={(_name, week) => navigate(internsPath(week, today))}
       loading={posts.data === null}
       error={posts.error ?? assignments.error}
-      onOpenLink={(url) => void platform.open(url)}
       onExport={(csv, fileName) => {
         // A browser downloads it; the desktop app has no save dialog, so it goes to the clipboard.
         if (!platform.hasFileSystem) {

@@ -212,3 +212,27 @@ The owner: "assign per week only, e.g. 40 listings per week; Friday is the final
 - **Assign:** a week picker (This week / Next week / ‹ ›, labelled "2–6 Nov"). From Saturday it defaults to next week, otherwise this week. "Add 40 for posting" fills the week.
 - **Interns:** the weekly monitor (pace, Mon–Fri dots, Missed), plus the "Who posted?" lookup.
 - **Intern's My queue:** "This week · 12 of 40 · Due Fri".
+
+## v7: documents with no separator are shown, with a warning (the owner's decision)
+
+- **Before:** an intern never saw a document with no separator, and Copy was blocked (D6/D13).
+- **Now:** the owner wants these shown with a warning to check the contents before posting.
+
+**Server (`property` action), for an intern and a no-separator document:**
+- Send the full text as `publicText`, plus `unseparated: true` and `withheld: false`.
+- Also send `flaggedLines: number[]`: 0-based line numbers in publicText where `markerKind_` or the owner/commission/phone patterns match. These are the "possible owner or commission detail" lines.
+- Separated documents are unchanged: interns still never get the internal section.
+- A missing document stays as it is.
+- Bump SERVER_VERSION and EXPECTED_SERVER_VERSION to `2026-11-01.4`.
+
+**App, for an unseparated document:**
+- Show the text with an amber notice: "No separator. Check before posting: remove owner names, numbers and commission."
+- Highlight the flagged lines.
+- Copy needs a tick: "I checked it".
+- What's copied leaves out the flagged lines.
+- The pre-post checks run on the text that would be copied. A commission hit still blocks, with the line shown.
+
+**Doc health:**
+- `core/summary.docHealth(properties)` returns `{ noSeparator, noDocument, noPhotos, emptyAbove, unreadable }`, each a list of `{ id, name, docId?, folder }`.
+- The issues text comes from BuildDirectory: "No separator line", "No document", "No photos", "Document is empty above the separator", "Could not read document". The server's `properties` rows should carry `docId` (the DocId column) when present.
+- Each list offers "Open doc" (https://docs.google.com/document/d/<docId>/edit) or Open folder, so an admin can fix it in Google Docs. A fixed document applies at once, because opening a listing re-reads it live.

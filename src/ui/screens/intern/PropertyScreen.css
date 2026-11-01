@@ -81,6 +81,21 @@
   color: var(--danger-text);
 }
 
+/* Waiting only for "I checked it". */
+.post-text__confirm {
+  color: var(--warn-text);
+}
+
+/* Words for screen readers only: "Not copied: " before a flagged line. */
+.post-text__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .post-text__ok,
 .post-text__done {
   color: var(--ok-text);
@@ -108,11 +123,100 @@
   border-color: var(--ok-line);
 }
 
+/* Nobody has separated it: amber until it has been checked (D15). */
+.post-text__body--check {
+  border-color: var(--warn-edge);
+}
+
 /* Blocked: not selectable either, so it can't be copied by hand. */
 .post-text__body--blocked {
   border-color: var(--danger-line);
   color: var(--text-label);
   user-select: none;
+}
+
+/* ---- a document nobody has separated: one row per line ----------------- */
+
+.post-text__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 44px;
+  padding-inline: var(--space-6);
+  border: var(--border-width) solid var(--button-edge);
+  border-radius: var(--radius-chip);
+  background: var(--card-bg);
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.post-text__check:has(input:disabled) {
+  color: var(--placeholder);
+  cursor: not-allowed;
+}
+
+.post-text__check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  /* Ticked is "selected": one of gold's four jobs. */
+  accent-color: var(--gold);
+  cursor: inherit;
+}
+
+.post-text__row {
+  position: relative;
+  display: block;
+  min-height: var(--lh-body);
+}
+
+/* A line that may hold the owner's or the broker's details: set aside, not
+   copied, and not selectable, so it can't be copied by hand either. */
+.post-text__row--flag,
+.post-text__row--hit {
+  margin-inline: calc(var(--space-12) * -1);
+  padding-inline: calc(var(--space-12) - 3px) var(--space-12);
+  border-inline-start: 3px solid var(--warn-text);
+  background: var(--warn-bg);
+}
+
+.post-text__row--flag {
+  /* Room for "Not copied" on hover, so it never sits on the words. */
+  padding-inline-end: calc(var(--space-12) + 6.5em);
+  color: var(--text-muted);
+  user-select: none;
+}
+
+/* The commission word that still blocks Copy. */
+.post-text__row--hit {
+  border-inline-start-color: var(--danger-strong);
+  background: var(--danger-bg);
+}
+
+.post-text__row--flag + .post-text__row--flag {
+  margin-top: 1px;
+}
+
+.post-text__row--flag::after {
+  content: attr(data-note);
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: var(--space-6);
+  color: var(--warn-text);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: var(--lh-body);
+  font-weight: var(--weight-heading);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+  pointer-events: none;
+}
+
+.post-text__row--flag:hover::after {
+  opacity: 1;
 }
 
 .post-text__body--loading {
@@ -320,6 +424,12 @@
   --verdict-bg: var(--ok-bg);
   --verdict-line: var(--ok-line);
   --verdict-text: var(--ok-text);
+}
+
+.verdict--warn {
+  --verdict-bg: var(--warn-bg);
+  --verdict-line: var(--warn-edge);
+  --verdict-text: var(--warn-text);
 }
 
 .verdict--danger {

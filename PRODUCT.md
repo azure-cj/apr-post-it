@@ -42,8 +42,9 @@ sheet that is rebuilt nightly:
 Each listing is a folder: one posting document and its photos. The document is public
 text first, then a separator, then the internal section. The documents don't agree on a
 separator (D5), so the text is cut at the earliest known marker. **79 documents have no
-separator at all, and Copy is blocked for them** (D6): an invisible hazard made into a
-visible queue of documents to fix.
+separator at all.** They are shown with a warning: the lines that may hold the owner's or
+the broker's details are marked and never copied, and Copy waits for "I checked it" (D15).
+They stay a visible queue of documents to fix.
 
 ## Who uses it
 

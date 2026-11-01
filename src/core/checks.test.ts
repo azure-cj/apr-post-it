@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runChecks } from './checks';
-import { parsePostingText } from './posting-text';
+import { copyTextFor, parsePostingText } from './posting-text';
 import type { CheckResult } from './types';
 
 // TestApp.StandardDoc in the C# tests.
@@ -353,4 +353,34 @@ describe('the same answer every time', () => {
       for (let i = 0; i < 3; i++) expect(runChecks({ publicText: text, hasInternal: true })).toEqual(first);
     },
   );
+});
+
+describe('runChecks on a document nobody has separated, shown to be checked (D15)', () => {
+  const whole = 'FOR SALE: Lot 9\nPrice: PHP 1,200,000\nCall the owner 0918 765 4321';
+
+  it('still blocks when it is not shown: no separator fails', () => {
+    expect(runChecks({ publicText: whole, hasInternal: false }).find((c) => c.name === INTERNAL)?.status).toBe('fail');
+  });
+
+  it('only warns about the separator when it is, and checks what would be copied', () => {
+    const copy = copyTextFor({ publicText: whole, hasInternal: false });
+    const checks = runChecks({ publicText: copy, hasInternal: false, unseparated: true });
+
+    expect(checks.map((c) => [c.name, c.status])).toEqual([
+      [PRICE, 'pass'],
+      [CONTACTS, 'warn'],
+      [COMMISSION, 'pass'],
+      [INTERNAL, 'warn'],
+    ]);
+    expect(checks[3]!.detail).toBe('No separator. Marked lines are left out.');
+  });
+
+  it('still fails on commission wording the flags missed', () => {
+    const copy = copyTextFor({ publicText: `${whole}\nRebate for agents.`, hasInternal: false });
+    expect(copy).toContain('Rebate');
+    expect(runChecks({ publicText: copy, hasInternal: false, unseparated: true }).find((c) => c.name === COMMISSION)).toMatchObject({
+      status: 'fail',
+      detail: 'Found "Rebate" — remove it before posting',
+    });
+  });
 });

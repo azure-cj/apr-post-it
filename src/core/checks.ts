@@ -102,8 +102,15 @@ const NOT_DIGIT = /\P{Nd}/gu;
  * Runs every check on the public part of the document. Always the same four, in
  * the same order: price, contact numbers, commission wording, internal section.
  * Takes a parsed document or a property as the server sent it.
+ *
+ * For a document nobody has separated that is shown to be checked (D15), pass
+ * what Copy would copy (copyTextFor) with `unseparated: true`: the missing
+ * separator then asks for a look rather than blocking, and a commission word
+ * the flags missed still blocks.
  */
-export function runChecks(text: Pick<PostingText, 'publicText' | 'hasInternal'>): CheckResult[] {
+export function runChecks(
+  text: Pick<PostingText, 'publicText' | 'hasInternal'> & { readonly unseparated?: boolean | undefined },
+): CheckResult[] {
   return [
     checkPrice(text.publicText),
     checkContacts(text.publicText),
@@ -112,15 +119,18 @@ export function runChecks(text: Pick<PostingText, 'publicText' | 'hasInternal'>)
     // documents had no marker of any kind, and documents in that state were found
     // to carry owner names, mobile numbers and commission terms. "No marker" does
     // not mean "nothing private in here", it means nobody has separated it yet —
-    // so Copy waits for a person.
+    // so Copy waits for a person. Since D15 such a document can be shown to be
+    // checked: then its flagged lines are out of the copy, and this only warns.
     text.hasInternal
       ? { name: 'Internal section hidden', status: 'pass', detail: 'Kept out of the copy' }
-      : {
-          name: 'Internal section hidden',
-          status: 'fail',
-          detail:
-            "No separator in the document, so none of this text is confirmed safe to post. Add one above the owner's details.",
-        },
+      : text.unseparated === true
+        ? { name: 'Internal section hidden', status: 'warn', detail: 'No separator. Marked lines are left out.' }
+        : {
+            name: 'Internal section hidden',
+            status: 'fail',
+            detail:
+              "No separator in the document, so none of this text is confirmed safe to post. Add one above the owner's details.",
+          },
   ];
 }
 

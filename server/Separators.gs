@@ -83,6 +83,45 @@ function isDividerKind_(kind) {
   return kind === '__ line' || kind === 'bar line' || kind === 'equals line' || kind === '--- line';
 }
 
+/**
+ * The lines of a document nobody has separated that may hold the owner's or
+ * the broker's details: 0-based indexes into its lines, split as
+ * splitAtSeparator_ splits them (D15).
+ *
+ * Such a document is shown to an intern with a warning, and these lines are
+ * marked on screen and left out of what Copy copies. A line is flagged when
+ * markerKind_ calls it anything, when it carries a Philippine mobile or
+ * landline number, or when it mentions an owner or a commission. Listing copy
+ * such as "Owner financing available" is not flagged. Flagging a line too many
+ * costs the intern one line of the post; missing one publishes it.
+ */
+function flaggedLines_(text) {
+  var raw = String(text == null ? '' : text).replace(/\r\n?|[\u0085\u2028\u2029]/g, '\n');
+  var lines = raw.split('\n');
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    if (isFlaggedLine_(lines[i])) out.push(i);
+  }
+  return out;
+}
+
+/** True when one line may hold an owner's or a broker's details (flaggedLines_). */
+function isFlaggedLine_(line) {
+  var s = String(line == null ? '' : line);
+  if (!s.trim()) return false;
+  if (markerKind_(s)) return true;
+  // Mobiles: 0917 123 4567, +63 917 123 4567, 0917-123-4567, 0917.123.4567.
+  if (/(?:\+\s?63|\b63|\b0)\s?9\d{2}[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/.test(s)) return true;
+  // Landlines: (02) 8123 4567, 02 8123 4567, +63 2 8123 4567, (049) 123 4567.
+  if (/\(\s?0?\d{1,3}\s?\)\s?\d{3,4}[\s.-]?\d{4}(?!\d)/.test(s)) return true;
+  if (/(?:\+\s?63\s?|\b0)\d{1,3}[\s.-]\d{3,4}[\s.-]?\d{4}(?!\d)/.test(s)) return true;
+  // The owner, by name or role: "Owner: Juan", "c/o owner", "owner's".
+  if (/\bowner(?:['\u2019]?s)?\b(?![-\s]+(occupied|financ|managed))/i.test(s)) return true;
+  // The broker's terms, however they are spelled.
+  if (/\b(commissions?|[ck]omis[iy]on|comm\.?\s*\d|net\s+to\s+owner|net\s+price)\b/i.test(s)) return true;
+  return false;
+}
+
 /** What kind of marker a line is, or '' when it is ordinary text. */
 function markerKind_(line) {
   var s = String(line == null ? '' : line);

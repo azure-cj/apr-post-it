@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parsePostingText } from './posting-text';
+import { flaggedLines_ } from '@server/Separators.gs';
+import { copyTextFor, flaggedLinesOf, linesOf, parsePostingText } from './posting-text';
 
 // TestApp.StandardDoc in the C# tests.
 const STANDARD_DOC =
@@ -250,5 +251,66 @@ describe('parsePostingText — the cut, as the server makes it', () => {
 
     expect(text.hasInternal).toBe(true);
     expect(text.publicText).toBe('FOR SALE');
+  });
+});
+
+describe('copyTextFor and flaggedLinesOf (D15)', () => {
+  const unseparated = {
+    publicText: 'FOR SALE: Lot 9\nPrice: PHP 1,200,000\n\nCall the owner 0918 765 4321\n\nTitle clean',
+    hasInternal: false,
+  };
+
+  it('copies a separated document as it stands, flags or not', () => {
+    const separated = { publicText: 'FOR SALE\nCall 0917 000 1111', hasInternal: true, flaggedLines: [1] };
+    expect(copyTextFor(separated)).toBe(separated.publicText);
+    expect([...flaggedLinesOf(separated)]).toEqual([]);
+  });
+
+  it('drops the flagged lines of an unseparated one, and tidies the blank lines they leave', () => {
+    expect(copyTextFor({ ...unseparated, flaggedLines: [3] })).toBe('FOR SALE: Lot 9\nPrice: PHP 1,200,000\n\nTitle clean');
+  });
+
+  it('flags with Separators.gs too, so a line the server missed is still left out', () => {
+    expect([...flaggedLinesOf({ ...unseparated, flaggedLines: [] })]).toEqual([3]);
+    expect([...flaggedLinesOf({ ...unseparated, flaggedLines: [0] })].sort()).toEqual([0, 3]);
+    expect(copyTextFor(unseparated)).toBe('FOR SALE: Lot 9\nPrice: PHP 1,200,000\n\nTitle clean');
+  });
+
+  it('numbers lines as the server does, whatever the line endings', () => {
+    expect(linesOf('a\r\nb\rc d')).toEqual(['a', 'b', 'c', 'd']);
+    expect(copyTextFor({ publicText: 'a\r\nOwner: x\r\nb', hasInternal: false, flaggedLines: [1] })).toBe('a\nb');
+  });
+
+  it('copies nothing when every line is flagged', () => {
+    expect(copyTextFor({ publicText: 'Owner 0917 123 4567\n\n(02) 8123 4567', hasInternal: false })).toBe('');
+  });
+});
+
+describe('flaggedLines_ (Separators.gs)', () => {
+  it.each([
+    ['a mobile', 'Call Juan 0918 765 4321'],
+    ['a mobile with +63', 'Viber +63 917 222 3333'],
+    ['a mobile with dots', '0917.123.4567'],
+    ['a landline in brackets', 'Tel (02) 8123 4567'],
+    ['a provincial landline', '(049) 123 4567'],
+    ['a landline written out', '02 8123 4567'],
+    ['the owner', 'Ask for the owner, Mrs. Dizon'],
+    ["the owner's", 'Owner’s cousin will show the unit'],
+    ['commission', '3% commission'],
+    ['komisyon', 'May komisyon'],
+    ['net to owner', 'PHP 4M net to owner'],
+  ])('flags %s', (_name, line) => {
+    expect(flaggedLines_(`FOR SALE\n${line}`)).toEqual([1]);
+  });
+
+  it.each([
+    ['a price', 'Price: PHP 1,200,000'],
+    ['a size', '320 sqm, 12 x 26.6 m'],
+    ['owner financing', 'Owner financing available'],
+    ['owner-occupied', 'Owner-occupied, move-in ready'],
+    ['a date', 'Available 2026-11-01'],
+    ['a blank line', '   '],
+  ])('leaves %s alone', (_name, line) => {
+    expect(flaggedLines_(`FOR SALE\n${line}`)).toEqual([]);
   });
 });

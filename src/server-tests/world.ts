@@ -88,10 +88,14 @@ export const TOWER: Listing = {
 
 export const LISTINGS: readonly Listing[] = [CASA, LOT_9, TOWER];
 
-/** Strings that must never reach an intern, by listing. */
+/**
+ * Strings that must never reach an intern, by listing. LOT_9 has none since v7:
+ * nobody has separated it, so an intern is sent all of it, with the private
+ * line flagged (D15, security.test.ts).
+ */
 export const PRIVATE: Readonly<Record<string, readonly string[]>> = {
   [CASA.id]: ['Mr. Reyes', '0917 123 4567', '3%', 'Owner', 'Commission'],
-  [LOT_9.id]: ['Juan', '0918 765 4321', 'Verdant Hills Lot 9\nPrice'],
+  [LOT_9.id]: [],
   [TOWER.id]: ['1 month', '40,000', 'net to owner', 'Mrs. Lim', '0917 555 0000', 'Commission'],
 };
 

@@ -269,10 +269,15 @@ function sameServer(a: ServerState, b: ServerState): boolean {
  * - the internal section is dropped, not hidden: it is not in the object;
  * - a document nobody has separated keeps none of its text, since none of it
  *   is confirmed safe. `hasInternal: false` is how a screen knows to explain
- *   that rather than show an empty box.
+ *   that rather than show an empty box. The one exception is a v7 server's
+ *   `unseparated: true`: the owner's decision to show it, to be checked, with
+ *   its risky lines flagged (D15). Without that flag (an older server, or a
+ *   reply that also says `withheld`), it is withheld as before.
  */
 export function forViewer(detail: PropertyDetail, viewer: User): PropertyDetail {
   if (canManage(viewer)) return detail;
   const { internalText: _never, ...publicOnly } = detail;
-  return detail.hasInternal ? publicOnly : { ...publicOnly, publicText: '' };
+  if (detail.hasInternal) return publicOnly;
+  if (detail.unseparated === true && detail.withheld !== true) return publicOnly;
+  return { ...publicOnly, publicText: '' };
 }

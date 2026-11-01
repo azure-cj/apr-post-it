@@ -13,7 +13,8 @@
  * went through the gap.
  */
 
-import { splitAtSeparator_ } from '@server/Separators.gs';
+import { flaggedLines_, splitAtSeparator_ } from '@server/Separators.gs';
+import type { PropertyDetail } from './types';
 
 export interface PostingText {
   readonly publicText: string;
@@ -59,6 +60,39 @@ export function parsePostingText(raw: string | null | undefined): PostingText {
     ...(category === undefined ? {} : { category }),
     ...(location === undefined ? {} : { location }),
   };
+}
+
+/** What copyTextFor and flaggedLinesOf need of a property. */
+export type CopySource = Pick<PropertyDetail, 'publicText' | 'hasInternal' | 'flaggedLines'>;
+
+/**
+ * A property's text as lines, split as `flaggedLines_` splits it, so a line
+ * number from the server points at the same line here.
+ */
+export function linesOf(text: string): string[] {
+  return text.replace(/\r\n?|[\u0085\u2028\u2029]/g, '\n').split('\n');
+}
+
+/**
+ * The lines of a document nobody has separated that are never copied (D15):
+ * the server's flags and the same file's own, together, so an app newer than
+ * its server still marks every line it knows to mark. None for a separated
+ * document, whose internal section was never sent.
+ */
+export function flaggedLinesOf(detail: CopySource): ReadonlySet<number> {
+  if (detail.hasInternal) return new Set();
+  return new Set([...(detail.flaggedLines ?? []), ...flaggedLines_(detail.publicText)]);
+}
+
+/**
+ * What Copy copies. A separated document's public text as it stands; an
+ * unseparated one's without its flagged lines, with the blank lines they leave
+ * tidied, so the post never has a gap where the owner's number was.
+ */
+export function copyTextFor(detail: CopySource): string {
+  if (detail.hasInternal) return detail.publicText;
+  const flagged = flaggedLinesOf(detail);
+  return tidy(linesOf(detail.publicText).filter((_, i) => !flagged.has(i)));
 }
 
 function readMetadata(lines: readonly string[]) {

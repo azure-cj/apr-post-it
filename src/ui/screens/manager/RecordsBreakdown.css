@@ -1,5 +1,5 @@
-/* Beside the chart: the period by intern, by category and by FB account,
-   as tabs. Rows are buttons that filter the list. */
+/* Beside the chart: the period by intern and by category, as tabs. An
+   intern's row links to their week on Interns; category rows are read only. */
 
 .breakdown {
   display: grid;
@@ -159,25 +159,13 @@
   margin-inline-start: auto;
 }
 
-/* The row picks the intern: the name's button covers it, as on Interns. */
+/* The name links to the intern's week; its link covers the row, as on Interns. */
 .breakdown-row {
   position: relative;
 }
 
-.breakdown-row:hover > * {
+.breakdown-row--link:hover > * {
   background-color: var(--row-hover);
-}
-
-.breakdown-row--on > *,
-.breakdown-row--on:hover > * {
-  background-color: var(--gold-soft);
-}
-
-.breakdown-row--on > th:first-child {
-  background-image: linear-gradient(var(--gold), var(--gold));
-  background-position: left;
-  background-size: 3px 100%;
-  background-repeat: no-repeat;
 }
 
 .breakdown-row__pick {
@@ -192,6 +180,7 @@
   color: inherit;
   font: inherit;
   text-align: start;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -236,7 +225,7 @@
   fill: var(--text-label);
 }
 
-/* ---- by category and by FB account ------------------------------------------- */
+/* ---- by category ---------------------------------------------------------------- */
 
 .count-bars {
   display: grid;
@@ -253,36 +242,14 @@
   width: 100%;
   min-height: 40px;
   padding: 0 var(--space-4);
-  border: 0;
   border-top: var(--border-width) solid var(--border-soft);
-  background: none;
   color: var(--text-label);
-  font: inherit;
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
-  text-align: start;
-  cursor: pointer;
 }
 
-.count-bars li:first-child .count-bar {
+.count-bar:first-child {
   border-top: 0;
-}
-
-.count-bar:hover {
-  background: var(--row-hover);
-}
-
-.count-bar:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: -2px;
-  border-radius: var(--radius-chip);
-}
-
-.count-bar--on,
-.count-bar--on:hover {
-  background:
-    linear-gradient(var(--gold), var(--gold)) left / 3px 100% no-repeat,
-    var(--gold-soft);
 }
 
 .count-bar__name {

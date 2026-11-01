@@ -7,6 +7,9 @@ import {
   assignRules,
   daysBetween,
   docHealth,
+  docLink,
+  docsToFix,
+  folderLink,
   firstName,
   internDays,
   isDate,
@@ -596,39 +599,40 @@ describe('doc health', () => {
     expect(readIssues('  ·  ')).toEqual([]);
   });
 
-  it('groups listings by problem, worst first, each by name, saying what else is wrong', () => {
+  it('lists the documents to fix by kind, each by name, with its doc and folder links (v7)', () => {
     const rows: HealthSource[] = [
-      { id: '1', name: 'Casa Amara House & Lot', category: 'CONDO / HOUSE AND LOT', issues: 'No photos' },
-      { id: '2', name: 'Verdant Hills Lot 7', category: 'COMMERCIAL SPACE', issues: 'No separator line — the whole document is treated as postable. Check it. · No photos' },
-      { id: '3', name: 'Mabini Commercial Space', category: 'COMMERCIAL SPACE', issues: 'No document · No photos' },
-      { id: '4', name: 'Sta. Rosa Lot 22', category: 'WAREHOUSE', issues: 'Could not read document: Word file — save it as a Google Doc' },
-      { id: '5', name: 'Antipolo Ridge Lot 18', category: 'OFFICE SPACE', issues: 'Document is empty above the separator' },
-      { id: '6', name: 'Seaside Residences 2BR', category: 'OFFICE SPACE', issues: '' },
-      { id: '7', name: 'Greenfield Farm Lot', category: 'WAREHOUSE', hasIssues: true },
-      { id: '8', name: 'Lakeshore Villas Unit 7', category: 'WAREHOUSE', hasIssues: false, issues: '   ' },
+      { id: '1', name: 'Casa Amara House & Lot', issues: 'No photos', docId: 'docCasa' },
+      { id: '2', name: 'Verdant Hills Lot 7', issues: 'No separator line — the whole document is treated as postable. Check it. · No photos', docId: 'docVerdant' },
+      { id: '3', name: 'Mabini Commercial Space', issues: 'No document · No photos' },
+      { id: '4', name: 'Sta. Rosa Lot 22', issues: 'Could not read document: Word file — save it as a Google Doc', docId: ' ' },
+      { id: '5', name: 'Antipolo Ridge Lot 18', issues: 'Document is empty above the separator', docId: 'docAntipolo' },
+      { id: '6', name: 'Seaside Residences 2BR', issues: '' },
+      { id: '7', name: 'Greenfield Farm Lot', hasIssues: true },
+      { id: '8', name: 'Lakeshore Villas Unit 7', issues: 'Could not open folder: Access denied\nNo separator line' },
+      { id: '9', name: 'Alabang Office 3F', issues: 'Something new the directory says' },
     ];
 
     const health = docHealth(rows);
+    const names = (kind: keyof typeof health) => health[kind].map((p) => p.name);
 
-    expect(health.groups.map((g) => `${g.kind}: ${g.items.map((i) => i.name).join(', ')}`)).toEqual([
-      'noSeparator: Verdant Hills Lot 7',
-      'noDocument: Mabini Commercial Space',
-      'wordFile: Sta. Rosa Lot 22',
-      'other: Antipolo Ridge Lot 18, Greenfield Farm Lot',
-      'noPhotos: Casa Amara House & Lot, Mabini Commercial Space, Verdant Hills Lot 7',
-    ]);
-    expect(health.listings).toBe(6);
-    expect(health.blocked).toBe(3);
-    expect(health.groups[0]?.items[0]?.also).toEqual(['noPhotos']);
-    expect(health.groups[4]?.items[2]?.also).toEqual(['noSeparator']);
-    expect(health.groups[3]?.items[1]?.detail).toBe(''); // flagged, but the list did not say why
-  });
-
-  it('works from the list as it is today, where only the flag says something is wrong', () => {
-    const health = docHealth([{ ...property('A Lot'), hasIssues: true }, property('B Lot')]);
-    expect(health.listings).toBe(1);
-    expect(health.blocked).toBe(0);
-    expect(health.groups.map((g) => g.kind)).toEqual(['other']);
+    expect(Object.keys(health)).toEqual(['noSeparator', 'noDocument', 'noPhotos', 'emptyAbove', 'unreadable']);
+    expect(names('noSeparator')).toEqual(['Lakeshore Villas Unit 7', 'Verdant Hills Lot 7']);
+    expect(names('noDocument')).toEqual(['Mabini Commercial Space']);
+    expect(names('noPhotos')).toEqual(['Casa Amara House & Lot', 'Mabini Commercial Space', 'Verdant Hills Lot 7']);
+    expect(names('emptyAbove')).toEqual(['Antipolo Ridge Lot 18']);
+    expect(names('unreadable')).toEqual(['Lakeshore Villas Unit 7', 'Sta. Rosa Lot 22']);
+    // The doc's id when the directory has one; the folder always.
+    expect(health.noSeparator[1]).toEqual({
+      id: '2',
+      name: 'Verdant Hills Lot 7',
+      docId: 'docVerdant',
+      folder: 'https://drive.google.com/drive/folders/2',
+    });
+    expect(health.unreadable[1]).toEqual({ id: '4', name: 'Sta. Rosa Lot 22', folder: 'https://drive.google.com/drive/folders/4' });
+    // Six listings to fix, each counted once, though three have two problems.
+    expect(docsToFix(health)).toBe(6);
+    expect(docLink('docVerdant')).toBe('https://docs.google.com/document/d/docVerdant/edit');
+    expect(folderLink('a b')).toBe('https://drive.google.com/drive/folders/a%20b');
   });
 
   it("says what stops a listing being posted, and nothing for a problem that doesn't", () => {
@@ -640,8 +644,12 @@ describe('doc health', () => {
     expect(postingProblem(property('A Lot'))).toBeUndefined(); // the list as it is today: no Issues text
   });
 
-  it('has nothing to say about a healthy library', () => {
-    expect(docHealth([property('A Lot')])).toEqual({ groups: [], listings: 0, blocked: 0 });
+  it('has nothing to fix in a healthy library, or one whose list carries no Issues text', () => {
+    const empty = { noSeparator: [], noDocument: [], noPhotos: [], emptyAbove: [], unreadable: [] };
+    expect(docHealth([property('A Lot')])).toEqual(empty);
+    expect(docHealth([{ ...property('A Lot'), hasIssues: true }])).toEqual(empty);
+    expect(docHealth([])).toEqual(empty);
+    expect(docsToFix(docHealth([]))).toBe(0);
   });
 });
 

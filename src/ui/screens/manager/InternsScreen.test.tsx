@@ -353,14 +353,13 @@ describe('the Interns screen', () => {
     expect(screen.queryByRole('searchbox', { name: /Who posted\?/ })).toBeNull();
   });
 
-  it("is linked from the Tracker, whose Interns card shows each intern's week", async () => {
+  it("is linked from the Tracker, whose This week card shows each intern's week", async () => {
     renderAt(THURSDAY, { platform: server(), path: '/tracker' });
-    const card = await screen.findByRole('region', { name: 'Interns' });
+    const card = await screen.findByRole('region', { name: 'This week' });
     await waitFor(() => expect(card.querySelectorAll('.intern-row')).toHaveLength(4));
     const jan = Array.from(card.querySelectorAll('.intern-row')).find((r) => r.textContent?.includes(intern.name))!;
     expect(jan.querySelector('.week-bar__count')!.textContent).toBe('3 / 10');
     expect(jan.textContent).toContain('Behind');
-    expect(card.textContent).toContain('2–6 Nov');
     // Still the day's tracker: today's posts, and the week's laggards counted.
     expect(stat('Interns behind')).toBe('2 of 4');
 

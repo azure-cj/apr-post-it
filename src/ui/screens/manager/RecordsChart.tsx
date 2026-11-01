@@ -6,10 +6,6 @@ import './RecordsChart.css';
 
 export interface RecordsChartProps {
   readonly buckets: readonly ChartBucket[];
-  /** The bar picked as a filter, by its first day. */
-  readonly selected: string | null;
-  /** A bar was clicked: filter the list to it, or (the same bar again) stop. */
-  readonly onSelect: (bucket: Span | null) => void;
   /** Read out before the bars: the period's numbers in a sentence. */
   readonly summary: string;
 }
@@ -64,22 +60,22 @@ function tickLabels(buckets: readonly ChartBucket[]): (string | null)[] {
 
 /**
  * Posts per day as stacked columns: posted (green) at the baseline, pending
- * (amber) above it, a 2px gap between. Each column is a button: hover or
- * focus shows its numbers; a click filters the list to it. Arrow keys move
- * along the bars. Days still to come are drawn empty and can't be picked.
+ * (amber) above it, a 2px gap between. Hover or focus shows a column's
+ * numbers; one tab stop, and the arrow keys move along the bars. Days still
+ * to come are drawn empty.
  */
-export function RecordsChart({ buckets, selected, onSelect, summary }: RecordsChartProps) {
+export function RecordsChart({ buckets, summary }: RecordsChartProps) {
   const summaryId = useId();
   const [hover, setHover] = useState<number | null>(null);
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const refs = useRef<(HTMLSpanElement | null)[]>([]);
   const max = Math.max(0, ...buckets.map((b) => b.posted + b.pending));
   const ticks = axisTicks(max);
   const top = ticks.at(-1)!;
   const labels = tickLabels(buckets);
   const pickable = buckets.map((b, i) => (b.later ? -1 : i)).filter((i) => i !== -1);
-  const selectedIndex = buckets.findIndex((b) => b.from === selected);
-  // One tab stop: the picked bar, else the latest one that has happened.
-  const tabStop = selectedIndex !== -1 ? selectedIndex : (pickable.at(-1) ?? -1);
+  // One tab stop: the latest bar that has happened, or the one last focused.
+  const [stop, setStop] = useState<number | null>(null);
+  const tabStop = stop ?? pickable.at(-1) ?? -1;
   const dense = buckets.length > 14;
 
   const move = (event: KeyboardEvent, from: number) => {
@@ -98,7 +94,7 @@ export function RecordsChart({ buckets, selected, onSelect, summary }: RecordsCh
   const tipEdge = hover === null ? '' : hover < 2 ? ' rchart__tip--start' : hover > buckets.length - 3 ? ' rchart__tip--end' : '';
 
   return (
-    <div className={`rchart${selected ? ' rchart--picked' : ''}${dense ? ' rchart--dense' : ''}`}>
+    <div className={`rchart${dense ? ' rchart--dense' : ''}`}>
       <p id={summaryId} className="visually-hidden">
         {summary}
       </p>
@@ -115,11 +111,10 @@ export function RecordsChart({ buckets, selected, onSelect, summary }: RecordsCh
             <span key={t} className="rchart__gridline" style={{ bottom: `${(t / top) * 100}%` }} />
           ))}
         </div>
-        <div className="rchart__bars" role="group" aria-label={`Posts by ${buckets[0]?.unit === 'week' ? 'week' : 'day'}. Pick a bar to filter the list.`} aria-describedby={summaryId}>
+        <div className="rchart__bars" role="group" aria-label={`Posts by ${buckets[0]?.unit === 'week' ? 'week' : 'day'}`} aria-describedby={summaryId}>
           {buckets.map((b, i) => {
             const total = b.posted + b.pending;
             const name = bucketName(b);
-            const picked = b.from === selected;
             const stack =
               total === 0 ? null : (
                 <span className="rchart__stack" style={{ height: `${(total / top) * 100}%` }}>
@@ -135,25 +130,26 @@ export function RecordsChart({ buckets, selected, onSelect, summary }: RecordsCh
               );
             }
             return (
-              <button
+              <span
                 key={b.from}
                 ref={(el) => {
                   refs.current[i] = el;
                 }}
-                type="button"
-                className={`rchart__slot${picked ? ' rchart__slot--picked' : ''}`}
+                role="img"
+                className="rchart__slot"
                 tabIndex={i === tabStop ? 0 : -1}
-                aria-pressed={picked}
                 aria-label={`${name}: ${plural(b.posted, 'posted', 'posted')}, ${plural(b.pending, 'pending', 'pending')}`}
-                onClick={() => onSelect(picked ? null : { from: b.from, to: b.to })}
                 onKeyDown={(e) => move(e, i)}
                 onPointerEnter={() => setHover(i)}
                 onPointerLeave={() => setHover((h) => (h === i ? null : h))}
-                onFocus={() => setHover(i)}
+                onFocus={() => {
+                  setHover(i);
+                  setStop(i);
+                }}
                 onBlur={() => setHover((h) => (h === i ? null : h))}
               >
                 {stack}
-              </button>
+              </span>
             );
           })}
         </div>
@@ -180,7 +176,7 @@ export function RecordsChart({ buckets, selected, onSelect, summary }: RecordsCh
       </div>
       <div className="rchart__labels" aria-hidden="true">
         {buckets.map((b, i) => (
-          <span key={b.from} className={`rchart__label${b.from === selected ? ' rchart__label--picked' : ''}`}>
+          <span key={b.from} className="rchart__label">
             {labels[i] ?? ''}
           </span>
         ))}

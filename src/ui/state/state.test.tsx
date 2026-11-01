@@ -38,6 +38,19 @@ describe('forViewer', () => {
     expect('internalText' in seen).toBe(false);
   });
 
+  it('keeps an unseparated document for an intern when a v7 server says so, to be checked (D15)', () => {
+    const whole = { ...detail, hasInternal: false, withheld: false, unseparated: true, flaggedLines: [1], publicText: 'Lot 12\nOwner 0918 555 0135' };
+    const seen = forViewer(whole, intern);
+    expect(seen.publicText).toBe(whole.publicText);
+    expect(seen.flaggedLines).toEqual([1]);
+    expect('internalText' in seen).toBe(false);
+  });
+
+  it('keeps none of it when the reply also says withheld', () => {
+    const seen = forViewer({ ...detail, hasInternal: false, withheld: true, unseparated: true, publicText: 'Owner 0918 555 0135' }, intern);
+    expect(seen.publicText).toBe('');
+  });
+
   it('gives a manager the whole reply', () => {
     expect(forViewer(detail, manager)).toBe(detail);
   });

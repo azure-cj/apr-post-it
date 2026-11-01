@@ -50,6 +50,10 @@ used is recorded in a `Cut at` column so the result can be audited rather than t
 
 ### D6. A document with no separator cannot be copied (Oct 31, 2026)
 
+> **Superseded in part by D15 (Nov 1, 2026).** Such a document is now shown, and can be
+> copied after a check, without its flagged lines. What still holds: a missing separator
+> is never treated as "safe", and the documents stay a visible queue to fix.
+
 79 of 1,474 documents have no marker of any kind. The check for this existed but only
 warned, and a warning stops nobody. It now blocks Copy.
 
@@ -144,7 +148,8 @@ a heading ending in "line" being taken for a divider, and listing copy such as
 
 Two further rules came with it:
 
-- **An intern is never sent text nobody has separated.** Blocking the Copy
+- **An intern is never sent text nobody has separated.** (Superseded by D15:
+  now they are, marked `unseparated`, with the risky lines flagged.) Blocking the Copy
   button (D6) is not enough: text on screen can be selected and copied by
   hand. When no separator is found, an intern's reply has an empty
   `publicText` and `withheld: true`; a manager still gets the whole document,
@@ -170,3 +175,37 @@ Intern: an unknown role gets the fewest rights, never the most. On screen, a per
 The boundaries in `ROLES.md` are unchanged: the internal section still never reaches an
 Intern, and the role is still the key's, never the request's.
 
+### D15. Unseparated documents are shown with a warning (Nov 1, 2026)
+
+**Supersedes part of D6** (and the first rule under D13): a document with no separator is
+no longer blocked outright.
+
+The owner's decision. Blocking left about 79 listings, 5% of the library, unpostable
+until somebody found time to separate each document, and the screen that blocked them was
+confusing: "Copy is blocked: the document has no separator yet", "The document has nothing
+above its separator" and "No price found in the public text" at once, about a document
+that had a separator problem and a price. The owner would rather the intern read the
+document, check it, and post it.
+
+So an unseparated document is shown whole, under one amber notice, "No separator. Check
+before posting." The safeguards:
+
+- **Flagged lines are not copied.** The server sends `flaggedLines`: every line that
+  `markerKind_` names, or that carries a Philippine mobile or landline number, or mentions an
+  owner or a commission (`flaggedLines_` in `Separators.gs`, so the rule lives in the one
+  file, D13). The app adds its own flags from the same file, so an app newer than its
+  server still marks what it knows. Flagged lines are marked on screen ("Not copied"), not
+  selectable, and left out of what Copy copies.
+- **A tick before copying.** Copy stays off until the intern ticks "I checked it", once
+  per listing.
+- **The checks run on what would be copied.** A commission word the flags missed ("3
+  percent to whoever closes", "rebate") still blocks Copy, and the screen names its line.
+  Sold, the cooldown and a folder with no document still block too.
+- **Only on the server's word.** An intern's app shows the text only when the server says
+  `unseparated: true`. A reply without it, from a server before v7, is withheld as before,
+  and a folder with no document is still `withheld: true`.
+
+The cost is the agent's own number: in an unseparated document it cannot be told from the
+owner's, so it is flagged too, and "Contact numbers present" warns. A post missing a contact
+number can be fixed; a published owner's number cannot (D5). Separated documents are
+unchanged, and the internal section still never reaches an intern.

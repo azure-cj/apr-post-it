@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-01.3';
+const SERVER_VERSION = '2026-11-01.4';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -113,7 +113,7 @@ function route_(req) {
     switch (req.action) {
       case 'ping':        return json_({ ok: true, name: me.name, role: me.role, fbAccounts: me.fbAccounts, time: now_(),
                                      version: SERVER_VERSION, rules: rules_() });
-      case 'properties':  return json_({ ok: true, properties: listProperties_() });
+      case 'properties':  return json_({ ok: true, properties: listProperties_(me.canSeeInternal) });
       case 'indexCheck':  return json_(indexCheck_());
       case 'property':    return json_({ ok: true, property: getProperty_(req.id, me.canSeeInternal) });
       case 'posts':       return json_({ ok: true, posts: mine_(me, readRows_(CONFIG.POSTS_TAB, POST_FIELDS), 'postedBy') });
@@ -570,7 +570,7 @@ function idOf_(propertyName) {
  * the checker knows the listing at all. When it cannot (switched off, or the
  * fetch failed) the rows go out without those fields, and the call still works.
  */
-function listProperties_() {
+function listProperties_(includeDocId) {
   var checker = checkerIndex_(false);
   var geo = geoIndex_();
   return directoryRows_().map(function (r) {
@@ -585,6 +585,10 @@ function listProperties_() {
       // As BuildDirectory.gs wrote it: the planner skips "No separator" and "No document".
       issues: textOf_(r.issues),
     };
+    // The posting document's id, for an Admin's "Open doc" (doc health). Only
+    // when there is one, and never to an intern, who has no use for it.
+    var docId = textOf_(r.docId).trim();
+    if (includeDocId && docId) out.docId = docId;
     joinChecker_(out, checker, r.id);
     joinGeo_(out, geo, r.id);
     return out;
@@ -870,10 +874,15 @@ function getProperty_(id, includeInternal) {
     }
   }
 
-  // Nobody has separated this document, so none of it is confirmed safe.
-  // Blocking the Copy button is not enough: the text can still be selected and
-  // copied by hand. An intern is not sent it at all; a manager is, to fix it.
-  if (!separated && !includeInternal) {
+  // Nobody has separated this document, so none of it is confirmed safe. Since
+  // v7 an intern is sent it anyway, with a warning, because the owner wants
+  // these listings posted (D15): the lines that may hold the owner's or the
+  // broker's details are flagged, and the app marks them and leaves them out of
+  // what Copy copies. A folder with no document, or a document with no text,
+  // has nothing to show, and stays withheld as before (D13).
+  var unseparated = !separated && !!row.docId && publicText.trim() !== '';
+  var withheld = !separated && !includeInternal && !unseparated;
+  if (withheld) {
     publicText = '';
   }
 
@@ -900,9 +909,9 @@ function getProperty_(id, includeInternal) {
     folder: row.folder,
     publicText: publicText,
     hasInternal: separated,
-    // True when the text was withheld because nobody has separated it yet, so
-    // the screen can say why it is empty rather than look broken.
-    withheld: !separated && !includeInternal,
+    // True when the text was withheld (no document, or nothing in it), so the
+    // screen can say why it is empty rather than look broken.
+    withheld: withheld,
     // A heading's label quotes the heading ("heading: Commission: 3%"), which
     // is the internal section's first line. An intern is told the kind only.
     cutAt: includeInternal ? cutAt : cutAt.split(':')[0],
@@ -911,6 +920,11 @@ function getProperty_(id, includeInternal) {
     photos: photos,
   };
   if (includeInternal) out.internalText = internalText;
+  // An Admin's reply is as it was: the whole document, to fix it.
+  else if (unseparated) {
+    out.unseparated = true;
+    out.flaggedLines = flaggedLines_(publicText);
+  }
   // The same join as the list's, so the screen can rely on the detail alone.
   joinChecker_(out, checkerIndex_(false), row.id);
   return out;

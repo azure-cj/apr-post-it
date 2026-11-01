@@ -48,6 +48,12 @@ export interface Property {
    * No photos"). Absent from a server that does not send it yet.
    */
   readonly issues?: string;
+  /**
+   * The posting document's Drive id (the directory's DocId column), for an
+   * admin's "Open doc". Absent for an intern, for a folder with no document,
+   * and from a server before v7.
+   */
+  readonly docId?: string;
   // From the listing checker's Index CSV, joined on the folder id (CONTRACT-v3).
   // All absent when the server has the join turned off.
   /** "Makati", as the checker has it. */
@@ -84,8 +90,19 @@ export interface PropertyDetail extends Property {
   /** Present only for a manager or admin. Absent means "not yours to see". */
   readonly internalText?: string;
   readonly hasInternal: boolean;
-  /** Set by the server when the text was kept from this person (an intern, no separator found). */
+  /** Set by the server when the text was kept from this person (an intern, and no document or no text). */
   readonly withheld?: boolean;
+  /**
+   * True when nobody has separated the document and the server sent it whole
+   * anyway, to be checked before posting (D15). Only a v7 server sends it, and
+   * only to an intern. Without it, an intern's unseparated document stays withheld.
+   */
+  readonly unseparated?: boolean;
+  /**
+   * With `unseparated`: 0-based lines of publicText that may hold the owner's
+   * or the broker's details. Marked on screen and never copied (copyTextFor).
+   */
+  readonly flaggedLines?: readonly number[];
   /** Which marker the text was cut at, for auditing. Blank when none was found. */
   readonly cutAt: string;
   readonly issues: string;

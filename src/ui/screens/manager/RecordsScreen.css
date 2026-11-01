@@ -1,6 +1,5 @@
 /* Records: the record book. The heading, the period and Export across the
-   top; five numbers; posts per day beside the breakdown; then the posts,
-   with a listing's history beside them when one is open. */
+   top; five numbers; posts per day beside the breakdown. */
 
 .page-header.records__header {
   display: flex;
@@ -169,7 +168,6 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 36rem);
   gap: var(--space-8);
   align-items: stretch;
-  margin-bottom: var(--space-8);
 }
 
 .records-chart {
@@ -191,116 +189,6 @@
   margin: 0;
   font-size: var(--text-title);
   line-height: var(--lh-title);
-}
-
-/* ---- the posts, and a listing's history beside them -------------------------- */
-
-.records__body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-8);
-  align-items: start;
-}
-
-.records__body--panel {
-  grid-template-columns: minmax(0, 1fr) var(--pane-compact);
-}
-
-.record-history__head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--space-6);
-}
-
-.record-history__title {
-  font-size: var(--text-name);
-  line-height: var(--lh-name);
-}
-
-.record-history__facts {
-  display: grid;
-  gap: var(--space-4);
-  margin: 0;
-}
-
-.record-history__tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3) var(--space-8);
-  color: var(--text-label);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-}
-
-.record-history__facts > div {
-  display: grid;
-  grid-template-columns: 7rem minmax(0, 1fr);
-  align-items: baseline;
-  gap: var(--space-6);
-}
-
-.record-history__facts dt {
-  color: var(--text-muted);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-}
-
-.record-history__facts dd {
-  margin: 0;
-  color: var(--text);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-}
-
-.record-history__type {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.record-history__note {
-  color: var(--text-muted);
-}
-
-.record-history__list {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* When, then status and Open; who and as which account below. */
-.history-post {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0 var(--space-6);
-  padding-block: var(--space-4);
-  border-top: var(--border-width) solid var(--border-soft);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-}
-
-.history-post__when {
-  color: var(--text);
-  font-family: var(--heading-font);
-  font-weight: var(--weight-label);
-  white-space: nowrap;
-}
-
-.history-post__end {
-  display: flex;
-  grid-row: span 2;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.history-post__who {
-  min-width: 0;
-  color: var(--text-label);
-  overflow-wrap: anywhere;
 }
 
 /* ---- narrower ---------------------------------------------------------------- */
@@ -326,18 +214,5 @@
 
   .records__export {
     margin-inline-start: 0;
-  }
-}
-
-@container shell (width < 900px) {
-  .records__body--panel {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  /* Stacked: the history comes first, where the click was answered. */
-  .records__body--panel .record-history {
-    position: static;
-    order: -1;
-    max-height: none;
   }
 }

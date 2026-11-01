@@ -1,20 +1,19 @@
-import { useId, useMemo, useState, type ReactNode } from 'react';
-import { Badge, Button, Card, CategoryTag, Icon, Notice, Pill, Spinner } from '../../components';
+import { useId, useMemo, useState } from 'react';
+import { Button, Card, Icon, Notice, Pill, Spinner } from '../../components';
+import { clockTime } from '@/core/records';
 import {
   activeInterns,
+  DOC_ISSUES,
   docHealth,
-  firstName,
-  isBlocking,
+  docLink,
+  docsToFix,
+  newestFirst,
   peopleIn,
-  plural,
   shortDate,
-  summarizeDay,
   teamWeek,
-  type HealthGroup,
-  type IssueKind,
   type DirectoryRow,
-  type RepostItem,
-  type Rules,
+  type DocIssue,
+  type DocProblem,
   type TeamMember,
 } from '@/core/summary';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
@@ -22,6 +21,7 @@ import { assignmentWeek, weekLabel } from '@/core/week';
 import { DayPicker } from './DayPicker';
 import { isBehind, monitorWeek, PacePill, WeekBar } from './InternsParts';
 import { Stat } from './Stat';
+import { RouteLink } from './TrackerLink';
 import './TrackerScreen.css';
 
 export interface TrackerScreenProps {
@@ -33,12 +33,10 @@ export interface TrackerScreenProps {
   readonly posts: readonly PostLogEntry[];
   /** Every Assignments row. */
   readonly assignments: readonly Assignment[];
-  /** Every listing in the directory, with its Issues text when the list carries it. */
+  /** Every listing in the directory, with its Issues text (and DocId) when the list carries them. */
   readonly properties: readonly DirectoryRow[];
-  /** The team, so an intern with no queue that day still shows. Without it, only people with a queue do. */
+  /** The team, so an intern with no queue still shows. Without it, only people with a queue do. */
   readonly team?: readonly TeamMember[] | undefined;
-  /** The cooldown and repost-due days. */
-  readonly settings: Rules;
   /** Show another day. */
   readonly onDateChange: (date: string) => void;
   /** Read the rows again. Without it, there is no Refresh button. */
@@ -48,27 +46,29 @@ export interface TrackerScreenProps {
   readonly loading?: boolean | undefined;
   /** Why the rows couldn't be read, as a sentence. */
   readonly error?: string | null | undefined;
-  /** When the rows were read, on the tracker's clock: "10:42". */
+  /** When the rows were read, on the tracker's clock: "10:42". Said on Refresh's tooltip. */
   readonly updatedAt?: string | null | undefined;
-  /** Open a post's link in the browser. Without it, links are not offered. */
+  /** Opens a link in the browser: a post, a doc, a folder. Without it, no Open buttons. */
   readonly onOpenLink?: ((url: string) => void) | undefined;
-  /** Open a listing in the app. Without it, names are plain text. */
-  readonly onOpenProperty?: ((id: string) => void) | undefined;
-  /** Go to Assign for this intern (null: whoever comes first) and day. Kept for callers; the card links to Interns. */
-  readonly onAssign?: ((intern: string | null, date: string) => void) | undefined;
-  /** Where the Interns screen is: "See all interns" links there. Without it, no link. */
+  /** The Interns screen on the week shown: "See all" in This week. Without it, no link. */
   readonly internsHref?: string | undefined;
-  /** Follows that link through the app's router. Without it, the link is followed as it is. */
   readonly onOpenInterns?: (() => void) | undefined;
+  /** Records on the day shown: "See all in Records" under a long day. Without it, no link. */
+  readonly recordsHref?: string | undefined;
+  readonly onOpenRecords?: (() => void) | undefined;
+  /** Settings, where Rebuild is: the word "Settings" in Documents links there. */
+  readonly settingsHref?: string | undefined;
+  readonly onOpenSettings?: (() => void) | undefined;
 }
 
-/** How many of a list show before "Show all". */
-export const LIST_LIMIT = 6;
+/** How many of the day's posts show before "See all in Records". */
+export const POSTS_LIMIT = 8;
+/** How many listings a document group shows before "Show all": four rows of three. */
+export const LIST_LIMIT = 12;
 
 /**
- * The day at a glance, for a manager: what went out, what's waiting for the
- * group admin's approval, who's done, what's due for a repost or has never
- * been posted, and which documents need fixing. Every number is shown, zero included.
+ * The day at a glance: four numbers, the day's posts, the week's pace and the
+ * documents to fix. An overview: the detail is on Records and Interns.
  */
 export function TrackerScreen({
   date,
@@ -77,7 +77,6 @@ export function TrackerScreen({
   assignments,
   properties,
   team,
-  settings,
   onDateChange,
   onRefresh,
   refreshing = false,
@@ -85,18 +84,29 @@ export function TrackerScreen({
   error,
   updatedAt,
   onOpenLink,
-  onOpenProperty,
   internsHref,
   onOpenInterns,
+  recordsHref,
+  onOpenRecords,
+  settingsHref,
+  onOpenSettings,
 }: TrackerScreenProps) {
-  const { cooldownDays, repostDueDays } = settings;
-  const summary = useMemo(
-    () => summarizeDay({ date, posts, assignments, properties, team, settings: { cooldownDays, repostDueDays } }),
-    [date, posts, assignments, properties, team, cooldownDays, repostDueDays],
-  );
-  const health = useMemo(() => docHealth(properties), [properties]);
+  const docsId = useId();
 
-  // The Interns card is weekly: the work week of the day shown (on a weekend, the one just ended).
+  const day = useMemo(() => {
+    const onDay = newestFirst(posts.filter((p) => p.date === date));
+    return {
+      posts: onDay,
+      posted: onDay.filter((p) => p.status === 'Posted').length,
+      // Waiting for the group admin's approval, whatever day they were posted.
+      pending: posts.filter((p) => p.status === 'Pending').length,
+    };
+  }, [posts, date]);
+
+  const health = useMemo(() => docHealth(properties), [properties]);
+  const toFix = docsToFix(health);
+
+  // The week of the day shown; on a weekend, the one that just ended.
   const week = monitorWeek(date);
   const pace = useMemo(() => {
     const names = team
@@ -110,34 +120,32 @@ export function TrackerScreen({
   const behind = pace.filter(isBehind).length;
 
   const isToday = date === today;
-  const day = shortDate(date);
   const waiting = loading && posts.length === 0 && assignments.length === 0 && properties.length === 0;
 
-  const openName = (id: string, name: string): ReactNode =>
-    onOpenProperty ? (
-      <Button variant="link" className="tracker__open" onClick={() => onOpenProperty(id)}>
-        {name}
-      </Button>
-    ) : (
-      name
-    );
+  const showDocs = () => {
+    const card = document.getElementById(docsId);
+    if (!card) return;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? true;
+    card.scrollIntoView?.({
+      block: 'start',
+      behavior: still ? 'auto' : 'smooth',
+    });
+    card.focus({ preventScroll: true });
+  };
 
   return (
     <div className="page tracker">
       <header className="page-header tracker__header">
-        <div className="tracker__heading">
-          <h1 className="page-header__title" tabIndex={-1}>
-            Tracker
-          </h1>
-        </div>
+        <h1 className="page-header__title" tabIndex={-1}>
+          Tracker
+        </h1>
         <div className="tracker__day">
           <DayPicker date={date} today={today} onChange={onDateChange} label="Day shown" quick={['today']} />
           {onRefresh ? (
-            <Button size="small" busy={refreshing} onClick={onRefresh}>
+            <Button size="small" busy={refreshing} onClick={onRefresh} title={updatedAt ? `Updated ${updatedAt}` : undefined}>
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </Button>
           ) : null}
-          {updatedAt ? <span className="tracker__updated">Updated {updatedAt}</span> : null}
         </div>
       </header>
 
@@ -165,40 +173,43 @@ export function TrackerScreen({
         </div>
       ) : (
         <>
-          <dl className="tracker-stats">
-            <Stat label={isToday ? 'Posted today' : `Posted ${day}`} value={summary.postedToday} />
-            <Stat label="Pending" value={summary.pending} note="Waiting for group approval" />
-            <Stat label="Interns behind" value={behind} of={pace.length} note={weekLabel(week)} />
-            <Stat label="Due for repost" value={summary.dueForRepost.length} note={`Not posted for ${repostDueDays}+ days`} />
-            <Stat label="Never posted" value={summary.neverPosted.length} />
+          <dl className="tracker-stats tracker__stats">
+            <Stat label={isToday ? 'Posted today' : 'Posted'} value={day.posted} />
+            <Stat label="Pending" value={day.pending} />
+            <Stat label="Interns behind" value={behind} of={pace.length} />
+            <Card padding="tight" className="tracker-stat tracker-stat--link">
+              <dt className="tracker-stat__label">
+                <button type="button" className="tracker-stat__jump" onClick={showDocs}>
+                  Docs to fix
+                </button>
+              </dt>
+              <dd className={`tracker-stat__value tabular${toFix === 0 ? ' tracker-stat__value--zero' : ''}`}>
+                {toFix.toLocaleString('en-PH')}
+              </dd>
+            </Card>
           </dl>
 
-          <div className="tracker__row tracker__row--day">
-            <Card
-              className="tracker__posts"
-              title={isToday ? 'Posts today' : `Posts on ${day}`}
-              description="Newest first."
-            >
-              <PostsTable posts={summary.posts} day={isToday ? 'today' : `on ${day}`} onOpenLink={onOpenLink} />
+          <div className="tracker__grid">
+            <Card className="tracker__posts" title={isToday ? "Today's posts" : `Posts on ${shortDate(date)}`} padding="tight">
+              <DayPosts posts={day.posts} isToday={isToday} onOpenLink={onOpenLink} />
+              {day.posts.length > POSTS_LIMIT && recordsHref ? (
+                <div className="tracker__more">
+                  <RouteLink href={recordsHref} onNavigate={onOpenRecords}>
+                    See all in Records
+                  </RouteLink>
+                </div>
+              ) : null}
             </Card>
 
             <Card
-              className="tracker__interns"
-              title="Interns"
-              description={weekLabel(week)}
+              className="tracker__week"
+              title={week === monitorWeek(today) ? 'This week' : weekLabel(week)}
+              padding="tight"
               actions={
                 internsHref ? (
-                  <a
-                    className="button button--link"
-                    href={internsHref}
-                    onClick={(event) => {
-                      if (!onOpenInterns || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                      event.preventDefault();
-                      onOpenInterns();
-                    }}
-                  >
-                    See all interns
-                  </a>
+                  <RouteLink href={internsHref} onNavigate={onOpenInterns} aria-label="See all interns">
+                    See all
+                  </RouteLink>
                 ) : undefined
               }
             >
@@ -211,75 +222,45 @@ export function TrackerScreen({
                       <span className="avatar" aria-hidden="true">
                         {initials(row.name)}
                       </span>
-                      <WeekBar progress={row} label={
+                      <WeekBar
+                        progress={row}
+                        label={
                           <span className="intern-row__name" title={row.name}>
                             {row.name}
                           </span>
-                        } />
+                        }
+                      />
                       <PacePill progress={row} />
                     </li>
                   ))}
                 </ul>
               )}
             </Card>
-          </div>
 
-          <div className="tracker__row">
-            <div className="tracker__lists">
-              <Card
-                title="Due for repost"
-                description={`${repostDueDays}+ days since last post`}
-              >
-                <ShowSome
-                  items={summary.dueForRepost}
-                  limit={LIST_LIMIT}
-                  what="listings"
-                  empty="Nothing is due for a repost."
-                  render={(item) => (
-                    <AttentionItem
-                      key={item.property.id}
-                      item={item}
-                      name={openName(item.property.id, item.property.name)}
-                      days={item.daysSince ?? 0}
-                    />
-                  )}
-                />
-              </Card>
-              <Card title="Never posted">
-                <ShowSome
-                  items={summary.neverPosted}
-                  limit={LIST_LIMIT}
-                  what="listings"
-                  empty="Every listing has been posted at least once."
-                  render={(item) => (
-                    <AttentionItem
-                      key={item.property.id}
-                      item={item}
-                      name={openName(item.property.id, item.property.name)}
-                    />
-                  )}
-                />
-              </Card>
-            </div>
-
-            <Card
-              className="tracker__health"
-              title="Doc health"
-              description="Worst first."
-            >
-              {health.listings === 0 ? (
-                <p className="tracker__quiet">No problems.</p>
+            <Card id={docsId} className="tracker__docs" title="Documents" padding="tight" tabIndex={-1}>
+              {toFix === 0 ? (
+                <p className="docs__clean">
+                  <Icon name="pass" size={18} className="docs__clean-icon" />
+                  All documents OK
+                </p>
               ) : (
                 <>
-                  <p className="health__summary">
-                    {plural(health.listings, 'listing needs', 'listings need')} fixing.
-                    {health.blocked > 0
-                      ? ` ${health.blocked.toLocaleString('en-PH')} of them can't be posted until ${health.blocked === 1 ? 'it is' : 'they are'}.`
-                      : ''}
+                  <p className="docs__note">
+                    Fixed documents apply at once. Run Rebuild in{' '}
+                    {settingsHref ? (
+                      <RouteLink href={settingsHref} onNavigate={onOpenSettings} className="button button--link docs__settings">
+                        Settings
+                      </RouteLink>
+                    ) : (
+                      'Settings'
+                    )}{' '}
+                    to refresh these counts.
                   </p>
-                  {health.groups.map((group) => (
-                    <HealthGroupView key={group.kind} group={group} openName={openName} />
-                  ))}
+                  <ul className="docs">
+                    {DOC_ISSUES.filter((kind) => health[kind].length > 0).map((kind) => (
+                      <DocGroup key={kind} kind={kind} items={health[kind]} onOpenLink={onOpenLink} />
+                    ))}
+                  </ul>
                 </>
               )}
             </Card>
@@ -292,193 +273,157 @@ export function TrackerScreen({
 
 // ------------------------------------------------------------------ the day's posts
 
-interface PostsTableProps {
+function DayPosts({
+  posts,
+  isToday,
+  onOpenLink,
+}: {
   readonly posts: readonly PostLogEntry[];
-  /** "today", "on Wed 28 Oct". */
-  readonly day: string;
+  readonly isToday: boolean;
   readonly onOpenLink?: ((url: string) => void) | undefined;
-}
-
-function PostsTable({ posts, day, onOpenLink }: PostsTableProps) {
-  if (posts.length === 0) return <p className="tracker__quiet">No posts {day} yet.</p>;
+}) {
+  if (posts.length === 0) return <p className="tracker__quiet">{isToday ? 'No posts yet.' : 'No posts.'}</p>;
   return (
-    <div className="tracker-table__wrap">
-      <table className="tracker-table">
-        <thead>
-          <tr>
-            <th scope="col">Time</th>
-            <th scope="col">Listing</th>
-            <th scope="col">Posted by</th>
-            <th scope="col">Status</th>
+    <table className="day-posts">
+      <colgroup>
+        <col className="day-posts__col-time" />
+        <col />
+        <col className="day-posts__col-who" />
+        <col className="day-posts__col-status" />
+        <col className="day-posts__col-open" />
+      </colgroup>
+      <thead className="visually-hidden">
+        <tr>
+          <th scope="col">Time</th>
+          <th scope="col">Listing</th>
+          <th scope="col">Intern</th>
+          <th scope="col">Status</th>
+          <th scope="col">Post</th>
+        </tr>
+      </thead>
+      <tbody>
+        {posts.slice(0, POSTS_LIMIT).map((post, index) => (
+          <tr key={`${index}-${post.time}-${post.title}`}>
+            <td className="day-posts__time tabular">{post.time ? clockTime(post.time) : '–'}</td>
+            <td className="day-posts__listing" title={post.title}>
+              {post.title}
+            </td>
+            <td className="day-posts__who" title={post.postedBy}>
+              {post.postedBy}
+            </td>
+            <td className="day-posts__status">
+              <Pill tone={post.status === 'Posted' ? 'ok' : 'warn'} dot>
+                {post.status}
+              </Pill>
+            </td>
+            <td className="day-posts__open">
+              {onOpenLink && post.postLink.trim() !== '' ? (
+                <Button variant="link" onClick={() => onOpenLink(post.postLink)} aria-label={`Open the post of ${post.title}`}>
+                  Open
+                </Button>
+              ) : null}
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {posts.map((post, index) => (
-            <tr key={`${index}-${post.time}-${post.title}`}>
-              <td className="tracker-table__time tabular">{post.time || '–'}</td>
-              <td className="tracker-table__listing">{post.title}</td>
-              <td>
-                <span className="tracker-table__who">{post.postedBy}</span>
-                <span className="tracker-table__account">{post.fbAccount}</span>
-              </td>
-              <td>
-                <div className="tracker-table__status">
-                  <Pill tone={post.status === 'Posted' ? 'ok' : 'warn'} dot>
-                    {post.status}
-                  </Pill>
-                  {post.postLink.trim() === '' ? (
-                    <span className="tracker__muted">No link</span>
-                  ) : onOpenLink ? (
-                    <Button
-                      variant="link"
-                      onClick={() => onOpenLink(post.postLink)}
-                      aria-label={`Open the post of ${post.title}`}
-                    >
-                      Open
-                    </Button>
-                  ) : null}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
-// ------------------------------------------------------------------ lists
+// ------------------------------------------------------------------ documents
 
-interface ShowSomeProps<T> {
-  readonly items: readonly T[];
-  readonly limit: number;
-  /** What the items are, for "Show all 23 listings". */
-  readonly what: string;
-  readonly empty: string;
-  readonly render: (item: T) => ReactNode;
-}
-
-/** The first few, and the rest on request. */
-function ShowSome<T>({ items, limit, what, empty, render }: ShowSomeProps<T>) {
-  const [all, setAll] = useState(false);
-  const listId = useId();
-  if (items.length === 0) return <p className="tracker__quiet">{empty}</p>;
-  const shown = all ? items : items.slice(0, limit);
-  return (
-    <>
-      <ul className="attention-list" id={listId}>
-        {shown.map(render)}
-      </ul>
-      {items.length > limit ? (
-        <Button variant="link" className="tracker__more" aria-controls={listId} aria-expanded={all} onClick={() => setAll((a) => !a)}>
-          {all ? 'Show fewer' : `Show all ${items.length.toLocaleString('en-PH')} ${what}`}
-        </Button>
-      ) : null}
-    </>
-  );
-}
-
-function AttentionItem({ item, name, days }: { item: RepostItem; name: ReactNode; days?: number | undefined }) {
-  return (
-    <li className="attention-item">
-      <div className="attention-item__top">
-        <span className="attention-item__name">{name}</span>
-        {days !== undefined ? (
-          <span className="attention-item__days tabular">
-            {plural(days, 'day', 'days')}
-            <span className="visually-hidden"> since it was last posted</span>
-          </span>
-        ) : null}
-      </div>
-      <span className="attention-item__meta">
-        <CategoryTag category={item.property.category} />
-        {item.queuedFor ? <span>In {firstName(item.queuedFor)}&rsquo;s queue</span> : null}
-      </span>
-    </li>
-  );
-}
-
-// ------------------------------------------------------------------ doc health
-
-const issueLabel: Record<IssueKind, string> = {
+const DOC_LABEL: Record<DocIssue, string> = {
   noSeparator: 'No separator',
   noDocument: 'No document',
-  wordFile: 'Word file',
-  other: 'Something else',
   noPhotos: 'No photos',
+  emptyAbove: 'Empty above separator',
+  unreadable: "Couldn't read",
 };
 
-const issueAdvice: Record<IssueKind, string> = {
-  noSeparator:
-    "Copy is blocked. Add a separator line above the owner's details.",
-  noDocument: 'No posting document in the folder. Add one.',
-  wordFile: 'Word file. Save it as a Google Doc.',
-  other: 'Open each one to see what the directory found.',
-  noPhotos: 'Add photos to the folder.',
+/** Only these are posted anyway; the rest stop a listing being posted, or are a folder to fill. */
+const DOC_HINT: Partial<Record<DocIssue, string>> = {
+  noSeparator: 'Shown to interns with a warning',
 };
 
-const issueAlso: Record<IssueKind, string> = {
-  noSeparator: 'no separator',
-  noDocument: 'no document',
-  wordFile: 'a Word file',
-  other: 'something else',
-  noPhotos: 'no photos',
-};
+/** Can't be posted until fixed: nothing to copy. */
+const BLOCKS: ReadonlySet<DocIssue> = new Set<DocIssue>(['noDocument', 'emptyAbove', 'unreadable']);
 
-const UNEXPLAINED =
-  'Open one to see what the directory found.';
+/** Where the fix is: the folder for a missing doc or photos, else the doc when the directory knows it. */
+function fixLink(kind: DocIssue, item: DocProblem): { readonly label: string; readonly url: string } {
+  if (kind !== 'noDocument' && kind !== 'noPhotos' && item.docId) return { label: 'Open doc', url: docLink(item.docId) };
+  return { label: 'Open folder', url: item.folder };
+}
 
-function HealthGroupView({
-  group,
-  openName,
+function DocGroup({
+  kind,
+  items,
+  onOpenLink,
 }: {
-  group: HealthGroup;
-  openName: (id: string, name: string) => ReactNode;
+  readonly kind: DocIssue;
+  readonly items: readonly DocProblem[];
+  readonly onOpenLink?: ((url: string) => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
-  const titleId = useId();
+  const [all, setAll] = useState(false);
   const listId = useId();
-  const blocking = isBlocking(group.kind);
-  const unexplained = group.kind === 'other' && group.items.every((item) => item.detail === '');
-  const count = group.items.length;
+  const count = items.length;
+  const shown = all ? items : items.slice(0, LIST_LIMIT);
+  const hint = DOC_HINT[kind];
   return (
-    <section className="health-group" aria-labelledby={titleId}>
-      <div className="health-group__head">
-        <h3 id={titleId} className="health-group__title">
-          <Icon
-            name={blocking ? 'fail' : 'warn'}
-            size={18}
-            className={blocking ? 'health-group__icon health-group__icon--danger' : 'health-group__icon health-group__icon--warn'}
-          />
-          <span>{issueLabel[group.kind]}</span>
-        </h3>
-        <Badge count={count} label={plural(count, 'listing', 'listings')} tone={blocking ? 'danger' : 'neutral'} />
-      </div>
-      <p className="health-group__advice">{unexplained ? UNEXPLAINED : issueAdvice[group.kind]}</p>
-      <Button
-        variant="link"
-        className="health-group__toggle"
+    <li className={`docs-group${open ? ' docs-group--open' : ''}`}>
+      <button
+        type="button"
+        className="docs-group__toggle"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         onClick={() => setOpen((o) => !o)}
       >
-        {open ? 'Hide the list' : `Show ${count === 1 ? 'the listing' : `the ${count.toLocaleString('en-PH')} listings`}`}
-      </Button>
+        <svg className="docs-group__chevron" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="m9.5 6 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <Icon
+          name={BLOCKS.has(kind) ? 'fail' : 'warn'}
+          size={18}
+          className={`docs-group__icon docs-group__icon--${BLOCKS.has(kind) ? 'danger' : 'warn'}`}
+        />
+        <span className="docs-group__label">{DOC_LABEL[kind]}</span>
+        <span className="docs-group__count tabular">
+          <span aria-hidden="true">· </span>
+          {count.toLocaleString('en-PH')}
+        </span>
+        {hint ? <span className="docs-group__hint">{hint}</span> : null}
+      </button>
       {open ? (
-        <ul className="attention-list health-group__list" id={listId}>
-          {group.items.map((item) => (
-            <li key={item.id} className="attention-item">
-              <span className="attention-item__name">{openName(item.id, item.name)}</span>
-              {(group.kind === 'other' && item.detail) || item.also.length > 0 ? (
-                <span className="attention-item__meta">
-                  {group.kind === 'other' && item.detail ? <span>{item.detail}</span> : null}
-                  {item.also.length > 0 ? <span>Also {item.also.map((kind) => issueAlso[kind]).join(', ')}.</span> : null}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        <div id={listId} className="docs-group__body">
+          <ul className="docs-group__list" aria-label={DOC_LABEL[kind]}>
+            {shown.map((item) => {
+              const fix = fixLink(kind, item);
+              return (
+                <li key={item.id} className="docs-item">
+                  <span className="docs-item__name" title={item.name}>
+                    {item.name}
+                  </span>
+                  {onOpenLink ? (
+                    <Button
+                      variant="link"
+                      className="docs-item__open"
+                      onClick={() => onOpenLink(fix.url)}
+                      aria-label={`${fix.label}, ${item.name}`}
+                    >
+                      {fix.label}
+                    </Button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {count > LIST_LIMIT ? (
+            <Button variant="link" className="docs-group__all" aria-expanded={all} onClick={() => setAll((a) => !a)}>
+              {all ? 'Show fewer' : `Show all ${count.toLocaleString('en-PH')}`}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
-    </section>
+    </li>
   );
 }

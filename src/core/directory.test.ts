@@ -895,3 +895,51 @@ describe("the checker's fields on one property", () => {
     for (const field of ['city', 'size', 'dealType', 'availability', 'inChecker']) expect(b).not.toHaveProperty(field);
   });
 });
+
+describe('the document id on the list (v7)', () => {
+  it('is kept when sent, absent when blank or not sent, and survives the copy on disk', async () => {
+    const store = memoryStore();
+    const reply = {
+      ok: true,
+      properties: [
+        { id: 'A', name: 'Alpha', docId: ' D-alpha ' },
+        { id: 'B', name: 'Bravo', docId: '' },
+        { id: 'C', name: 'Charlie' },
+      ],
+    };
+    const first = await directoryOver(scripted(reply).post, { store }).list();
+    expect(first[0]).toMatchObject({ docId: 'D-alpha' });
+    expect(first[1]).not.toHaveProperty('docId');
+    expect(first[2]).not.toHaveProperty('docId');
+
+    const relaunched = await directoryOver(scripted(reply).post, { store }).list();
+    expect(relaunched[0]).toMatchObject({ docId: 'D-alpha' });
+  });
+});
+
+describe('a document nobody has separated, on one property (v7, D15)', () => {
+  it('keeps `unseparated` and `flaggedLines` when sent, cleaned, and leaves them out when not', async () => {
+    const { post } = scripted((body: Wire) =>
+      body['id'] === 'A'
+        ? {
+            ok: true,
+            property: {
+              id: 'A',
+              name: 'Alpha',
+              publicText: 'FOR SALE\nOwner 0917 123 4567',
+              hasInternal: false,
+              withheld: false,
+              unseparated: true,
+              flaggedLines: [3, 1, 1, -1, 2.5, '4', null],
+            },
+          }
+        : { ok: true, property: { id: 'B', name: 'Bravo', unseparated: 'yes', flaggedLines: 'all' } },
+    );
+    const directory = directoryOver(post);
+
+    expect(await directory.detail('A')).toMatchObject({ unseparated: true, withheld: false, flaggedLines: [1, 3] });
+    const b = await directory.detail('B');
+    expect(b).not.toHaveProperty('unseparated');
+    expect(b).not.toHaveProperty('flaggedLines');
+  });
+});

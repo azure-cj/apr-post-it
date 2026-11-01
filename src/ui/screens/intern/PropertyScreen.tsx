@@ -4,6 +4,7 @@ import { BackendError } from '@/core/backend';
 import { runChecks } from '@/core/checks';
 import { cooldown, lastPostedOn } from '@/core/cooldown';
 import { normalize } from '@/core/matcher';
+import { copyTextFor, flaggedLinesOf, linesOf } from '@/core/posting-text';
 import {
   canManage,
   type CheckResult,
@@ -130,18 +131,45 @@ function PropertyPage({ id }: { readonly id: string }) {
   // Sold, by the listing checker: neither copied nor logged.
   const sold = isSold(detail) || isSold(summary);
 
-  // An intern is never sent the text of a document nobody has separated (D13).
-  // The server says so with its `withheld` flag; when a reply has no flag, it
-  // is judged here from `hasInternal`. Either way forViewer has already
-  // emptied the text of an unseparated document, so nothing shows.
-  const withheld = detail !== null && !manager && isWithheld(detail);
+  // A document nobody has separated is shown, to be checked before posting
+  // (D15): to an intern only when the server says `unseparated`, to an admin
+  // whenever it has text. Its flagged lines are marked and never copied, and
+  // the checks run on what would be copied.
+  const unseparated = detail !== null && isUnseparated(detail, manager);
+  const flagged = unseparated ? flaggedLinesOf(detail) : NONE;
+  const copyText = detail === null ? '' : unseparated ? copyTextFor(detail) : detail.publicText;
+
+  // Otherwise an intern is never sent the text of a document nobody has
+  // separated (D13): a folder with no document, or an older server. The server
+  // says so with its `withheld` flag; when a reply has no flag, it is judged
+  // here from `hasInternal`. Either way forViewer has already emptied the text.
+  const withheld = detail !== null && !manager && !unseparated && isWithheld(detail);
   const noDocument = withheld && /\bno document\b/i.test(detail.issues);
-  const checks: readonly CheckResult[] = detail && !withheld ? runChecks(detail) : [];
+  const checks: readonly CheckResult[] =
+    detail && !withheld ? runChecks(unseparated ? { publicText: copyText, hasInternal: false, unseparated: true } : detail) : [];
+  // A commission word the flags missed, on the line it is on, so it can be shown.
+  const hitLine = unseparated ? commissionLine(detail.publicText, checks, flagged) : null;
+
+  // "I checked it": once per listing, since the page is keyed by it.
+  const [checked, setChecked] = useState(false);
 
   const mine = posts.data && name ? postsOf(posts.data, { id, name }) : [];
   const cool: CooldownState | null = posts.data && name ? cooldown(lastPostedOn(posts.data, { id, name }), app.today(), app.settings) : null;
 
-  const gate = copyGate({ detail, sold, withheld, noDocument, checks, cool, manager, checkingCooldown: posts.data === null && posts.loading });
+  const gate = copyGate({
+    detail,
+    copyText,
+    sold,
+    withheld,
+    noDocument,
+    unseparated,
+    checked,
+    hitLine,
+    checks,
+    cool,
+    manager,
+    checkingCooldown: posts.data === null && posts.loading,
+  });
   const canCopy = gate.kind === 'ready';
 
   // ---- actions ---------------------------------------------------------------
@@ -156,8 +184,8 @@ function PropertyPage({ id }: { readonly id: string }) {
     setCopying(true);
     setCopyError(null);
     try {
-      // The public text and nothing else: never the internal section.
-      await app.platform.copyText(detail.publicText);
+      // The public text and nothing else: never the internal section, never a flagged line.
+      await app.platform.copyText(copyText);
       setCopiedAt(manilaTime(app.now()));
       notify('Copied. Paste it into Facebook.');
     } catch (err) {
@@ -234,6 +262,7 @@ function PropertyPage({ id }: { readonly id: string }) {
   }, []);
 
   const reasonId = useId();
+  const checkId = useId();
   const textTitleId = useId();
   const photosTitleId = useId();
 
@@ -270,7 +299,9 @@ function PropertyPage({ id }: { readonly id: string }) {
     );
   }
 
-  const wholeDocument = detail !== null && !detail.hasInternal && manager;
+  const wholeDocument = detail !== null && !detail.hasInternal && manager && !unseparated;
+  // The directory's "No separator line" is what the notice on the text already says.
+  const issues = detail ? detail.issues.split(/\s+·\s+/).filter((i) => i.trim() !== '' && !(unseparated && /no separator/i.test(i))) : [];
 
   return (
     <div className="page property">
@@ -306,7 +337,7 @@ function PropertyPage({ id }: { readonly id: string }) {
                 className="post-text__copy"
                 disabled={!canCopy}
                 busy={copying}
-                aria-describedby={reasonId}
+                aria-describedby={unseparated ? `${reasonId} ${checkId}` : reasonId}
                 aria-keyshortcuts="Alt+C"
                 onClick={() => void copy()}
               >
@@ -315,7 +346,12 @@ function PropertyPage({ id }: { readonly id: string }) {
             </div>
 
             <div id={reasonId} className="post-text__status" role="status">
-              {gate.kind === 'waiting' ? (
+              {gate.kind === 'confirm' ? (
+                <p className="post-text__confirm">
+                  <Icon name="warn" size={18} />
+                  <span>{gate.text}</span>
+                </p>
+              ) : gate.kind === 'waiting' ? (
                 <Waiting>{gate.text}</Waiting>
               ) : gate.kind === 'blocked' ? (
                 <p className="post-text__blocked">
@@ -330,7 +366,7 @@ function PropertyPage({ id }: { readonly id: string }) {
               ) : (
                 <p className="post-text__ok">
                   <Icon name="pass" size={18} />
-                  <span>Ready to copy. Every check passed.</span>
+                  <span>{unseparated ? 'Ready to copy. Marked lines stay out.' : 'Ready to copy. Every check passed.'}</span>
                 </p>
               )}
             </div>
@@ -341,7 +377,39 @@ function PropertyPage({ id }: { readonly id: string }) {
               </Notice>
             ) : null}
 
-            <PostText detail={detail} withheld={withheld} noDocument={noDocument} manager={manager} blocked={!canCopy} />
+            {unseparated ? (
+              <Notice
+                tone="warn"
+                id={checkId}
+                className="post-text__check-notice"
+                title="No separator. Check before posting."
+                action={
+                  <label className="post-text__check">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={gate.kind === 'blocked' && !checked}
+                      onChange={(event) => setChecked(event.target.checked)}
+                    />
+                    I checked it
+                  </label>
+                }
+              >
+                Lines that may hold owner or commission details are marked and won’t be copied.
+                {manager ? ' Add a separator to fix it.' : ''}
+              </Notice>
+            ) : null}
+
+            <PostText
+              detail={detail}
+              withheld={withheld}
+              noDocument={noDocument}
+              blocked={gate.kind === 'blocked'}
+              copyable={canCopy}
+              unseparated={unseparated}
+              flagged={flagged}
+              hitLine={hitLine?.index ?? null}
+            />
           </section>
 
           {manager && detail?.hasInternal ? <InternalSection detail={detail} /> : null}
@@ -444,10 +512,10 @@ function PropertyPage({ id }: { readonly id: string }) {
             />
           </Card>
 
-          {detail && detail.issues.trim() && !withheld ? (
+          {issues.length > 0 && !withheld ? (
             <Notice tone="warn" title="Flagged by the directory">
               <ul className="issues">
-                {detail.issues.split(/\s+·\s+/).map((issue) => (
+                {issues.map((issue) => (
                   <li key={issue}>{issue}</li>
                 ))}
               </ul>
@@ -504,6 +572,8 @@ function Facts({ property, checker }: { readonly property: Property; readonly ch
 type CopyGate =
   | { readonly kind: 'ready' }
   | { readonly kind: 'waiting'; readonly text: string }
+  /** Nothing blocks, but nobody has separated the document: it waits for "I checked it" (D15). */
+  | { readonly kind: 'confirm'; readonly text: string }
   | { readonly kind: 'blocked'; readonly cause: 'sold' | 'no-document' | 'withheld' | 'check' | 'empty' | 'cooldown'; readonly text: string };
 
 /**
@@ -513,9 +583,14 @@ type CopyGate =
  */
 function copyGate(input: {
   detail: PropertyDetail | null;
+  /** What Copy would copy: the public text, less any flagged lines. */
+  copyText: string;
   sold: boolean;
   withheld: boolean;
   noDocument: boolean;
+  unseparated: boolean;
+  checked: boolean;
+  hitLine: CommissionLine | null;
   checks: readonly CheckResult[];
   cool: CooldownState | null;
   manager: boolean;
@@ -534,30 +609,69 @@ function copyGate(input: {
   const first = failed[0];
   if (first) {
     const more = failed.length > 1 ? ` ${failed.length - 1} more ${failed.length === 2 ? 'check' : 'checks'} failed too.` : '';
-    return { kind: 'blocked', cause: 'check', text: `Copy is blocked: ${failReason(first, manager)}${more}` };
+    return { kind: 'blocked', cause: 'check', text: `Copy is blocked: ${failReason(first, manager, input.hitLine)}${more}` };
   }
-  if (!detail.publicText.trim()) {
-    return { kind: 'blocked', cause: 'empty', text: 'Copy is blocked: there is no public text above the separator.' };
+  if (!input.copyText.trim()) {
+    const why = input.unseparated
+      ? 'every line is marked, so nothing is left to copy.'
+      : detail.hasInternal
+        ? 'there is no public text above the separator.'
+        : 'the document is empty.';
+    return { kind: 'blocked', cause: 'empty', text: `Copy is blocked: ${why}` };
   }
   if (cool?.blocked && cool.nextAllowed) {
     return { kind: 'blocked', cause: 'cooldown', text: `Copy is blocked: it is in its cooldown until ${longDate(cool.nextAllowed)}.` };
   }
+  if (input.unseparated && !input.checked) return { kind: 'confirm', text: 'Tick “I checked it” to copy.' };
   if (input.checkingCooldown) return { kind: 'waiting', text: 'Checking when it was last posted…' };
   return { kind: 'ready' };
 }
 
 /**
  * Withheld when the server says so OR no separator was found. Either is enough:
- * a server flag of false never unlocks text nobody has separated.
+ * a server flag of false never unlocks text nobody has separated. Asked only
+ * of a document that is not shown to be checked (isUnseparated).
  */
 function isWithheld(detail: PropertyDetail): boolean {
   return detail.withheld === true || !detail.hasInternal;
 }
 
-function failReason(check: CheckResult, manager: boolean): string {
+/**
+ * Shown whole, to be checked (D15): nobody has separated it and it has text.
+ * An intern only on a v7 server's word (`unseparated`, not `withheld`), so an
+ * older server's reply is still withheld; an admin is sent it whole either way.
+ */
+function isUnseparated(detail: PropertyDetail, manager: boolean): boolean {
+  if (detail.hasInternal || !detail.publicText.trim()) return false;
+  return manager || (detail.unseparated === true && detail.withheld !== true);
+}
+
+const NONE: ReadonlySet<number> = new Set();
+
+/** A commission word left in the copy, and the line of the text it is on. */
+interface CommissionLine {
+  /** 0-based, in the text as shown. */
+  readonly index: number;
+  readonly quoted: string;
+}
+
+function commissionLine(text: string, checks: readonly CheckResult[], flagged: ReadonlySet<number>): CommissionLine | null {
+  const check = checks.find((c) => c.name === 'No commission wording' && c.status === 'fail');
+  const quoted = check ? /"([^"]+)"/.exec(check.detail)?.[1] : undefined;
+  if (!quoted) return null;
+  const index = linesOf(text).findIndex((line, i) => !flagged.has(i) && line.includes(quoted));
+  return index === -1 ? null : { index, quoted };
+}
+
+function failReason(check: CheckResult, manager: boolean, hit: CommissionLine | null = null): string {
   if (check.name === 'No commission wording') {
     const quoted = /"([^"]+)"/.exec(check.detail)?.[1];
     const what = quoted ? `“${quoted}”` : 'commission wording';
+    if (hit) {
+      return manager
+        ? `line ${hit.index + 1} mentions “${hit.quoted}”. Move it below a separator in the document.`
+        : `line ${hit.index + 1} mentions “${hit.quoted}”. Ask your admin to remove it from the document.`;
+    }
     return manager
       ? `the public text mentions ${what}. Move it below the separator in the document.`
       : `the public text mentions ${what}. Ask your admin to remove it from the document.`;
@@ -572,14 +686,23 @@ function PostText({
   detail,
   withheld,
   noDocument,
-  manager,
   blocked,
+  copyable,
+  unseparated,
+  flagged,
+  hitLine,
 }: {
   readonly detail: PropertyDetail | null;
   readonly withheld: boolean;
   readonly noDocument: boolean;
-  readonly manager: boolean;
+  /** Something stops Copy outright: the text is shown as blocked. */
   readonly blocked: boolean;
+  /** Copy may be used now. Until then, copying by hand is refused too. */
+  readonly copyable: boolean;
+  readonly unseparated: boolean;
+  readonly flagged: ReadonlySet<number>;
+  /** A line with commission wording on it, marked as what blocks. */
+  readonly hitLine: number | null;
 }) {
   if (detail === null) {
     return (
@@ -605,29 +728,43 @@ function PostText({
   }
 
   if (!detail.publicText.trim()) {
-    return <p className="post-text__empty meta">The document has nothing above its separator.</p>;
+    return (
+      <p className="post-text__empty meta">
+        {detail.hasInternal ? 'The document has nothing above its separator.' : 'The document is empty.'}
+      </p>
+    );
   }
 
-  // Blocked text can't be selected or copied by hand either: the safe action is the only one offered.
+  // Text that may not be copied yet can't be copied by hand either: the safe action is the only one offered.
   const refuse = (event: ClipboardEvent) => {
-    if (blocked) event.preventDefault();
+    if (!copyable) event.preventDefault();
   };
+  const state = blocked ? ' post-text__body--blocked' : unseparated && !copyable ? ' post-text__body--check' : '';
   return (
     <>
-      {!detail.hasInternal && manager ? (
-        <Notice tone="danger" title="Nobody has separated this document yet">
-          Interns see none of it. Add a separator above the owner's details.
-        </Notice>
-      ) : null}
       <div
-        className={`post-text__body${blocked ? ' post-text__body--blocked' : ''}`}
+        className={`post-text__body${state}`}
         onCopy={refuse}
         onCut={refuse}
         tabIndex={0}
         role="document"
-        aria-label={blocked ? 'Public text, blocked from copying' : 'Public text'}
+        aria-label={blocked ? 'Public text, blocked from copying' : unseparated ? 'Whole document, marked lines not copied' : 'Public text'}
       >
-        {detail.publicText}
+        {unseparated
+          ? linesOf(detail.publicText).map((line, i) =>
+              flagged.has(i) ? (
+                <span key={i} className="post-text__row post-text__row--flag" data-note="Not copied">
+                  <span className="post-text__sr">Not copied: </span>
+                  {line}
+                </span>
+              ) : (
+                <span key={i} className={`post-text__row${i === hitLine ? ' post-text__row--hit' : ''}`}>
+                  {i === hitLine ? <span className="post-text__sr">Blocks Copy: </span> : null}
+                  {line}
+                </span>
+              ),
+            )
+          : detail.publicText}
       </div>
       {detail.live ? null : <p className="meta post-text__source">From the directory’s last rebuild: the document didn’t open.</p>}
     </>
@@ -669,9 +806,10 @@ function Verdict({
   readonly cool: CooldownState | null;
   readonly manager: boolean;
 }) {
-  const [tone, word, line] = ((): readonly ['ok' | 'danger' | 'neutral', string, string] => {
+  const [tone, word, line] = ((): readonly ['ok' | 'warn' | 'danger' | 'neutral', string, string] => {
     if (gate.kind === 'ready') return ['ok', 'Ready to post', 'Copy, post, then log the link.'];
     if (gate.kind === 'waiting') return ['neutral', 'Checking…', gate.text];
+    if (gate.kind === 'confirm') return ['warn', 'Check before posting', 'The document has no separator.'];
     switch (gate.cause) {
       case 'sold':
         return ['danger', 'Sold', 'Not to be posted.'];

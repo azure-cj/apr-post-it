@@ -1,14 +1,11 @@
-.tracker__header {
+/* Tracker: the day at a glance. The heading and the day across the top; four
+   numbers; the day's posts beside the week; the documents to fix under both. */
+
+.page-header.tracker__header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-8) var(--space-12);
-}
-
-.tracker__heading {
-  display: grid;
-  gap: var(--space-3);
+  align-items: center;
+  gap: var(--space-6) var(--space-12);
 }
 
 .tracker__day {
@@ -16,12 +13,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-4) var(--space-8);
-}
-
-.tracker__updated {
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
 }
 
 .tracker__notice {
@@ -37,143 +28,172 @@
   color: var(--text-muted);
 }
 
-.tracker__quiet,
-.tracker__muted {
+.tracker__quiet {
   color: var(--text-muted);
 }
 
-/* A link that is a name in a list: reads as the name, acts as a link. */
-.button--link.tracker__open {
-  font-weight: var(--weight-heading);
-  text-align: start;
-  white-space: normal;
+/* ---- the four numbers ------------------------------------------------------- */
+
+.tracker__stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: var(--space-8);
 }
 
-/* ---- two panes: the main column and the side pane, twice ----------------- */
+/* "Docs to fix" goes to the Documents card: its label is a link-coloured
+   button whose hit area is the whole tile. */
+.tracker-stat--link {
+  position: relative;
+}
 
-.tracker__row {
+.tracker-stat__jump {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--info-text);
+  font: inherit;
+  text-align: start;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--info-edge);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.tracker-stat__jump::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-card);
+  background: var(--row-hover);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.tracker-stat__jump:hover {
+  text-decoration-color: currentColor;
+}
+
+.tracker-stat__jump:hover::after {
+  opacity: 1;
+}
+
+.tracker-stat__jump:focus-visible {
+  outline: none;
+}
+
+.tracker-stat__jump:focus-visible::after {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* ---- the cards ---------------------------------------------------------------- */
+
+.tracker__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--pane-regular);
-  gap: var(--gap-regular);
-  align-items: start;
+  gap: var(--space-8);
 }
 
-.tracker__row + .tracker__row {
-  margin-top: var(--gap-regular);
+.tracker__docs {
+  grid-column: 1 / -1;
 }
 
-.tracker__lists {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: var(--space-12);
-  align-items: start;
+/* Reached from "Docs to fix": a place, not a control, so no ring. */
+.tracker__docs:focus {
+  outline: none;
 }
 
 @container shell (width < 1100px) {
-  .tracker__row {
-    grid-template-columns: minmax(0, 1fr) var(--pane-compact);
-    gap: var(--gap-compact);
+  .tracker__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .tracker__row + .tracker__row {
-    margin-top: var(--gap-compact);
+  .tracker__grid {
+    grid-template-columns: minmax(0, 1fr) var(--pane-compact);
   }
 }
 
 @container shell (width < 900px) {
-  .tracker__row {
+  .tracker__grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-/* The day's table needs the width more than the pane does: below 1100 the
-   interns move under it, two to a row while there is room. */
-@container shell (width < 1100px) {
-  .tracker__row--day {
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* ---- the day's posts ---------------------------------------------------------- */
 
-  .tracker__row--day .intern-list {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-    column-gap: var(--space-20);
-  }
-}
-
-/* ---- the day's posts ------------------------------------------------------ */
-
-.tracker-table__wrap {
-  overflow-x: auto;
-}
-
-.tracker-table {
+.day-posts {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.tracker-table th {
-  padding: 0 var(--space-6) var(--space-4) 0;
-  border-bottom: var(--border-width) solid var(--border);
-  color: var(--text-muted);
-  font-family: var(--heading-font);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-  font-weight: var(--weight-label);
-  text-align: start;
-  white-space: nowrap;
-}
-
-.tracker-table td {
-  padding: var(--space-5) var(--space-6) var(--space-5) 0;
-  border-bottom: var(--border-width) solid var(--border-soft);
+.day-posts td {
+  padding: var(--space-4) var(--space-6) var(--space-4) 0;
+  border-top: var(--border-width) solid var(--border-soft);
   color: var(--text-label);
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
   vertical-align: middle;
 }
 
-.tracker-table tr:last-child td {
-  border-bottom: 0;
+.day-posts tr:first-child td {
+  border-top: 0;
 }
 
-.tracker-table th:last-child,
-.tracker-table td:last-child {
+.day-posts td:last-child {
   padding-inline-end: 0;
 }
 
-.tracker-table__time {
+.day-posts__col-time {
+  width: 5.25rem;
+}
+
+.day-posts__col-who {
+  width: 9.5rem;
+}
+
+.day-posts__col-status {
+  width: 7rem;
+}
+
+.day-posts__col-open {
+  width: 3rem;
+}
+
+.day-posts__time {
   color: var(--text-muted);
   white-space: nowrap;
 }
 
-.tracker-table td.tracker-table__listing {
+/* The listing takes what is left, on one line. */
+.day-posts td.day-posts__listing {
+  overflow: hidden;
   color: var(--text);
   font-weight: var(--weight-heading);
-}
-
-.tracker-table__who,
-.tracker-table__account {
-  display: block;
-}
-
-.tracker-table__account {
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-}
-
-.tracker-table__status {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-6);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* ---- interns -------------------------------------------------------------- */
+.day-posts__who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-posts__open {
+  text-align: end;
+}
+
+.tracker__more {
+  padding-top: var(--space-6);
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
+/* ---- this week ------------------------------------------------------------------ */
 
 .intern-list {
   display: grid;
-  gap: var(--space-10);
+  gap: var(--space-8);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -200,124 +220,172 @@
   text-overflow: ellipsis;
 }
 
-/* The name and "19 / 40" on one line, the bar under both. */
 .intern-row .week-bar__count {
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
 }
 
+/* ---- documents ------------------------------------------------------------------ */
 
-/* ---- due for repost, never posted, doc health ------------------------------- */
+.docs__clean {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--text-label);
+}
 
-.attention-list {
+.docs__clean-icon {
+  flex: none;
+  color: var(--ok-strong);
+}
+
+.docs__note {
+  margin-bottom: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.button--link.docs__settings {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.docs {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.attention-item {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-5) 0;
-  border-bottom: var(--border-width) solid var(--border-soft);
-}
-
-.attention-item:first-child {
-  padding-top: 0;
-}
-
-.attention-item:last-child {
-  border-bottom: 0;
-}
-
-.attention-item__top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-6);
-}
-
-.attention-item__name {
-  min-width: 0;
-  color: var(--text);
-  font-weight: var(--weight-heading);
-  overflow-wrap: anywhere;
-}
-
-/* Days since the last post, lined up on the right: the list is longest first. */
-.attention-item__days {
-  flex: none;
-  color: var(--text-label);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-}
-
-.attention-item__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-6);
-  color: var(--text-muted);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-}
-
-.attention-item__meta:empty {
-  display: none;
-}
-
-.tracker__more {
-  margin-top: var(--space-6);
-}
-
-.health__summary {
-  margin-bottom: var(--space-4);
-  color: var(--text-label);
-}
-
-.health-group {
-  padding: var(--space-8) 0;
+.docs-group {
   border-top: var(--border-width) solid var(--border-soft);
 }
 
-.health-group:last-child {
-  padding-bottom: 0;
+.docs-group:first-child {
+  border-top: 0;
 }
 
-.health-group__head {
+/* A whole row opens the group: a chevron, the icon, what's wrong · how many,
+   and for No separator what interns see. Left-aligned, so the count sits by
+   its label however wide the card is. */
+.docs-group__toggle {
+  position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
+  gap: var(--space-2) var(--space-4);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-4) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
 }
 
-.health-group__title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  font-size: var(--text-body);
-  line-height: var(--lh-body);
+.docs-group__toggle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--row-hover);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
 }
 
-.health-group__icon {
+.docs-group__toggle:hover::before {
+  opacity: 1;
+}
+
+.docs-group__toggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.docs-group__chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform var(--dur-move) var(--ease-out);
+}
+
+.docs-group--open .docs-group__chevron {
+  transform: rotate(90deg);
+}
+
+.docs-group__icon {
   flex: none;
 }
 
-.health-group__icon--danger {
+.docs-group__icon--danger {
   color: var(--danger-strong);
 }
 
-.health-group__icon--warn {
+.docs-group__icon--warn {
   color: var(--warn-text);
 }
 
-.health-group__advice {
-  margin: var(--space-2) 0 var(--space-3);
-  color: var(--text-muted);
+.docs-group__label,
+.docs-group__count {
+  font-family: var(--heading-font);
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
+  font-weight: var(--weight-heading);
 }
 
-.health-group__list {
-  margin-top: var(--space-6);
+.docs-group__count {
+  color: var(--text-label);
+}
+
+.docs-group__hint {
+  margin-inline-start: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+/* Under the label, past the chevron and the icon. */
+.docs-group__body {
+  padding: 0 0 var(--space-6) calc(var(--space-3) + 18px + var(--space-4) + 18px + var(--space-4));
+}
+
+/* Alphabetical down each column: as many columns as fit whole names. */
+.docs-group__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 24rem 3;
+  column-gap: var(--space-20);
+}
+
+/* The link right after its name, so the two read as one. */
+.docs-item {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) auto;
+  justify-content: start;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-3) 0;
+  break-inside: avoid;
+}
+
+.docs-item__name {
+  overflow: hidden;
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.button--link.docs-item__open {
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  white-space: nowrap;
+}
+
+.docs-group__all {
+  margin-top: var(--space-3);
 }

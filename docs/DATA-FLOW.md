@@ -90,9 +90,13 @@ the text above the marker as it stands; reading the metadata off it is the app's
 
 79 of the 1,474 have none (D6). That does not mean there is nothing private in them: nobody has
 separated them yet, and those are the documents found carrying owners' mobile numbers. None of
-the text is confirmed safe, so **an intern is never sent it** (D13). The `property` reply has
-`publicText: ''` and `withheld: true`, so the screen can say why it is empty rather than look
-broken. A manager gets the whole document, to add the marker.
+the text is confirmed safe. Until v7 an intern was never sent it (D13). The owner decided they
+should be posted after a check (D15), so an intern now gets the whole document marked
+`unseparated: true`, with `flaggedLines`: the lines that may hold an owner, a phone number or a
+commission. The app marks them, leaves them out of the copy, and asks for a tick before Copy. A
+folder with no document still reaches an intern as `publicText: ''` and `withheld: true`, so
+the screen can say why it is empty rather than look broken. A manager gets the whole document,
+to add the marker.
 
 ### Doc health
 
@@ -103,8 +107,9 @@ says which marker the text was cut at, so the result can be audited rather than 
 The `properties` list carries `hasIssues`, and an opened property its `issues`.
 
 When a property is opened, the app runs its pre-post checks (`src/core/checks.ts`) over the
-public text: a price, a contact number, no commission wording, and a marker found. A missing
-marker blocks Copy (D6).
+public text: a price, a contact number, no commission wording, and a marker found. For a
+document with no marker they run on what Copy would copy, without the flagged lines, and a
+missing marker asks for a check rather than blocking (D15).
 
 One screen, fixed once per property. This turns a parsing problem into a data-quality chore
 somebody can actually finish. The server reports whether a marker was found (`hasInternal`);

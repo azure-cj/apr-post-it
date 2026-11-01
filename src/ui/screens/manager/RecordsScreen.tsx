@@ -1,7 +1,6 @@
-import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Button, Notice, Spinner } from '../../components';
 import {
-  byAccount,
   byCategory,
   byIntern,
   chartBuckets,
@@ -14,24 +13,20 @@ import {
   periodLabel,
   periodTotals,
   postsCsv,
-  postsForProperty,
   queueWeeks,
   searchPosts,
   sortPosts,
   spanLabel,
   type Change,
   type ChartBucket,
-  type CountRow,
   type Period,
   type Span,
 } from '@/core/records';
-import { addDays, heldBy, heldListings, plural, shortDate } from '@/core/summary';
-import type { Assignment, PostLogEntry, PostStatus } from '@/core/types';
+import { addDays, plural, shortDate } from '@/core/summary';
+import type { Assignment, PostLogEntry } from '@/core/types';
 import { RecordsBreakdown, type BreakdownTab } from './RecordsBreakdown';
-import { bucketName, ChartLegend, RecordsChart } from './RecordsChart';
-import { RecordsHistory } from './RecordsHistory';
+import { ChartLegend, RecordsChart } from './RecordsChart';
 import { RecordsPeriod } from './RecordsPeriod';
-import { RecordsPosts, type ActiveFilter, type PostSort } from './RecordsPosts';
 import './InternsParts.css';
 import './InternsScreen.css';
 import './RecordsScreen.css';
@@ -48,26 +43,15 @@ export interface RecordsScreenProps {
   readonly onPeriodChange: (period: Period) => void;
   /** The active interns, so one who posted nothing still has a row. */
   readonly interns?: readonly string[] | undefined;
-  /** The cooldown rule, for a listing's history. */
-  readonly cooldownDays?: number | undefined;
   /** The rows haven't arrived yet. */
   readonly loading?: boolean | undefined;
   readonly error?: string | null | undefined;
-  /** Opens a post's link in the browser. */
-  readonly onOpenLink?: ((url: string) => void) | undefined;
-  /** Hands over the list as CSV, with a file name for it. */
+  /** The Interns screen on a week (its Monday): an intern's row links there. Without it, names are plain. */
+  readonly internsHref?: ((week: string) => string) | undefined;
+  /** Follows that link through the app's router. */
+  readonly onOpenIntern?: ((name: string, week: string) => void) | undefined;
+  /** Hands over the period's posts as CSV, with a file name for it. */
   readonly onExport?: ((csv: string, fileName: string) => void) | undefined;
-}
-
-/** The day (or week) the list is cut to, from a bar. */
-interface DayFilter extends Span {
-  readonly label: string;
-}
-
-/** The listing whose history is open. */
-interface OpenListing {
-  readonly id: string;
-  readonly name: string;
 }
 
 const NO_ASSIGNMENTS: readonly Assignment[] = [];
@@ -75,10 +59,8 @@ const NO_NAMES: readonly string[] = [];
 
 /**
  * The record book: a period's numbers against the one before, posts per day,
- * the same by intern, category and FB account, then every post, filterable
- * and sortable, in the interns' sheet's columns. A bar, an intern, a
- * category or an account filters the list; a title opens the listing's
- * whole history beside it. Export hands the list over as the sheet's CSV.
+ * and the same by intern and by category. An intern opens their week on
+ * Interns. Export hands the period's posts over as the sheet's CSV.
  */
 export function RecordsScreen({
   posts,
@@ -87,31 +69,14 @@ export function RecordsScreen({
   period,
   onPeriodChange,
   interns = NO_NAMES,
-  cooldownDays = 7,
   loading = false,
   error,
-  onOpenLink,
+  internsHref,
+  onOpenIntern,
   onExport,
 }: RecordsScreenProps) {
   const [tab, setTab] = useState<BreakdownTab>('intern');
-  const [day, setDay] = useState<DayFilter | null>(null);
-  const [intern, setIntern] = useState<string | null>(null);
-  const [category, setCategory] = useState<CountRow | null>(null);
-  const [account, setAccount] = useState<CountRow | null>(null);
-  const [status, setStatus] = useState<PostStatus | null>(null);
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<PostSort>({ key: 'date', direction: 'desc' });
-  const [page, setPage] = useState(0);
-  const [open, setOpen] = useState<OpenListing | null>(null);
-  const panelHeading = useRef<HTMLHeadingElement>(null);
-  const opener = useRef<HTMLButtonElement | null>(null);
-  const deferredQuery = useDeferredValue(query);
   const chartTitle = useId();
-
-  // A bar belongs to its period: another period drops it.
-  useEffect(() => setDay(null), [period.from, period.to]);
-  // Any change to what the list holds starts it at its first page.
-  useEffect(() => setPage(0), [period.from, period.to, day, intern, category, account, status, deferredQuery, sort]);
 
   const span: Span = useMemo(() => ({ from: period.from, to: period.to }), [period.from, period.to]);
   const elapsed = elapsedSpan(period, today);
@@ -133,61 +98,16 @@ export function RecordsScreen({
       prevMissed,
       interns: byIntern(posts, weeks, span, trendBuckets, interns),
       categories: byCategory(posts, span),
-      accounts: byAccount(posts, span),
     };
     // `before` is derived from period and today.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, assignments, period, span, today, interns]);
 
-  // The list: the period, then every filter but status (for the chips' counts), then status.
-  const unsorted = useMemo(
-    () =>
-      searchPosts(posts, {
-        from: day?.from ?? span.from,
-        to: day?.to ?? span.to,
-        query: deferredQuery,
-        intern: intern ?? undefined,
-        type: category?.key,
-        fbAccount: account?.key,
-      }),
-    [posts, span, day, deferredQuery, intern, category, account],
-  );
-  const statusCounts = useMemo(() => {
-    let posted = 0;
-    for (const p of unsorted) if (p.status === 'Posted') posted++;
-    return { Posted: posted, Pending: unsorted.length - posted };
-  }, [unsorted]);
-  const list = useMemo(
-    () => sortPosts(status ? unsorted.filter((p) => p.status === status) : unsorted, sort.key, sort.direction),
-    [unsorted, status, sort],
-  );
+  // Every post of the period, newest first: what Export hands over.
+  const periodPosts = useMemo(() => sortPosts(searchPosts(posts, { from: span.from, to: span.to, query: '' }), 'date', 'desc'), [posts, span]);
 
-  const history = useMemo(() => (open ? postsForProperty(posts, open) : []), [posts, open]);
-  const held = useMemo(() => (open ? heldBy(heldListings(assignments, today), open) : undefined), [assignments, open, today]);
-
-  useEffect(() => {
-    if (open) panelHeading.current?.focus({ preventScroll: true });
-  }, [open]);
-
-  const closePanel = () => {
-    setOpen(null);
-    opener.current?.focus();
-  };
-
-  const clearFilters = () => {
-    setDay(null);
-    setIntern(null);
-    setCategory(null);
-    setAccount(null);
-    setStatus(null);
-    setQuery('');
-  };
-
-  const filters: ActiveFilter[] = [];
-  if (day) filters.push({ key: 'day', kind: 'Day', label: day.label, onRemove: () => setDay(null) });
-  if (intern) filters.push({ key: 'intern', kind: 'Intern', label: intern, onRemove: () => setIntern(null) });
-  if (category) filters.push({ key: 'category', kind: 'Category', label: category.label, onRemove: () => setCategory(null) });
-  if (account) filters.push({ key: 'account', kind: 'FB account', label: account.label, onRemove: () => setAccount(null) });
+  // An intern's row opens Interns on the period's latest week that has begun.
+  const internWeek = mondayOf(period.to < today ? period.to : today < period.from ? period.from : today);
 
   const waiting = loading && posts.length === 0;
   const versus = comparisonLabel(period, today);
@@ -200,7 +120,7 @@ export function RecordsScreen({
         (now.busiest ? ` Busiest ${shortDate(now.busiest.date)}, ${now.busiest.count}.` : '');
 
   return (
-    <div className={`page records${open ? ' records--panel' : ''}`}>
+    <div className="page records">
       <header className="page-header records__header">
         <h1 className="page-header__title" tabIndex={-1}>
           Records
@@ -210,9 +130,9 @@ export function RecordsScreen({
           <Button
             size="small"
             className="records__export"
-            disabled={list.length === 0}
-            title={`The ${plural(list.length, 'post', 'posts')} in the list, as the posting tracker's columns`}
-            onClick={() => onExport(postsCsv(list), `posts ${period.from} to ${period.to}.csv`)}
+            disabled={periodPosts.length === 0}
+            title={`The period's ${plural(periodPosts.length, 'post', 'posts')}, in the posting tracker's columns`}
+            onClick={() => onExport(postsCsv(periodPosts), `posts ${period.from} to ${period.to}.csv`)}
           >
             Export CSV
           </Button>
@@ -265,15 +185,7 @@ export function RecordsScreen({
                 </h2>
                 <ChartLegend />
               </div>
-              <RecordsChart
-                buckets={report.buckets}
-                selected={day?.from ?? null}
-                summary={summary}
-                onSelect={(bucket) => {
-                  const picked = bucket ? report.buckets.find((b) => b.from === bucket.from) : undefined;
-                  setDay(bucket && picked ? { ...bucket, label: bucketName(picked) } : null);
-                }}
-              />
+              <RecordsChart buckets={report.buckets} summary={summary} />
             </section>
 
             <RecordsBreakdown
@@ -281,54 +193,9 @@ export function RecordsScreen({
               onTabChange={setTab}
               interns={report.interns}
               categories={report.categories}
-              accounts={report.accounts}
-              intern={intern}
-              category={category?.key ?? null}
-              account={account?.key ?? null}
-              onIntern={setIntern}
-              onCategory={setCategory}
-              onAccount={setAccount}
+              internHref={internsHref ? () => internsHref(internWeek) : undefined}
+              onIntern={onOpenIntern ? (name) => onOpenIntern(name, internWeek) : undefined}
             />
-          </div>
-
-          <div className={`records__body${open ? ' records__body--panel' : ''}`}>
-            <RecordsPosts
-              posts={list}
-              query={query}
-              onQueryChange={setQuery}
-              status={status}
-              onStatusChange={setStatus}
-              statusCounts={statusCounts}
-              filters={filters}
-              onClearFilters={clearFilters}
-              sort={sort}
-              onSortChange={setSort}
-              page={page}
-              onPageChange={setPage}
-              isOpen={(post) => open !== null && sameListing(post, open)}
-              onOpenProperty={(post, button) => {
-                opener.current = button;
-                const next = { id: post.propertyId, name: post.title };
-                setOpen((was) => (was && sameListing(post, was) ? null : next));
-              }}
-              onOpenLink={onOpenLink}
-              emptyPeriod={elapsed ? `No posts in ${periodLabel(period)}.` : `${periodLabel(period)} hasn't started.`}
-            />
-
-            {open ? (
-              <RecordsHistory
-                ref={panelHeading}
-                key={`${open.id}|${open.name}`}
-                title={history[0]?.title ?? open.name}
-                type={history[0]?.type ?? ''}
-                posts={history}
-                held={held}
-                today={today}
-                cooldownDays={cooldownDays}
-                onClose={closePanel}
-                onOpenLink={onOpenLink}
-              />
-            ) : null}
           </div>
         </>
       )}
@@ -348,12 +215,6 @@ function trendSpans(buckets: readonly ChartBucket[]): Span[] {
     else weeks.set(monday, { from: b.from, to: b.to });
   }
   return [...weeks.values()];
-}
-
-function sameListing(post: PostLogEntry, listing: OpenListing): boolean {
-  const id = post.propertyId.trim();
-  if (id && listing.id.trim()) return id === listing.id.trim();
-  return postsForProperty([post], listing).length === 1;
 }
 
 /** The first Friday on or after `date`. */

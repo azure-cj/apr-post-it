@@ -8,8 +8,9 @@ runs **as the owner** and returns JSON. That one decision buys three things:
   key.
 * **The internal section never leaves the server.** Where a listing's postable text ends is
   decided by `splitAtSeparator_` in `Separators.gs`. An intern's reply has no `internalText`
-  at all, and a document nobody has separated reaches an intern as no text, marked
-  `withheld` (below). The **role** decides this, from the key. Nothing in the request can
+  at all. A document nobody has separated reaches an intern whole but marked `unseparated`,
+  with the lines that may hold the owner's or the broker's details flagged, so the app can
+  leave them out of the copy (v7, below). The **role** decides this, from the key. Nothing in the request can
   ask for more.
 * **The cooldown is a real guarantee.** `logPost` checks it under `LockService`,
   so two interns saving the same property at the same moment cannot both get through.
@@ -126,8 +127,8 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | Action | Who | What it does |
 |---|---|---|
 | `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`; also `version` (`SERVER_VERSION` at the top of `Code.gs`) and `rules`: `{ cooldownDays, repostDueDays, perWeek, perIntern }`, the live values (below); `perIntern` is `perWeek` again, under its old name, for an app built before v6. |
-| `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. With the geocoding sheet joined on by FolderId (below): `lat` and `lng`, numbers, only for a listing that has a good position. |
-| `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. The checker's fields too, joined as for `properties`. |
+| `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). For an Admin only, `docId` (the posting document's id, the DocId column) when there is one, for doc health's "Open doc". One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. With the geocoding sheet joined on by FolderId (below): `lat` and `lng`, numbers, only for a listing that has a good position. |
+| `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. For an intern and a document nobody has separated, also `unseparated: true` and `flaggedLines` (below). The checker's fields too, joined as for `properties`. |
 | `posts` | everyone | The Posts tab as rows, every value text. An intern gets only their own. |
 | `assignments` | everyone | The Assignments tab as rows, every value text. An intern gets only their own. Each row also has `week`: the Monday of the week its Date is in (`''` when the date can't be read), with `date` kept as written, so a daily row from before v6 reads as its week (below). |
 | `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` (`HH:mm`), `type` (the Property type written) and `postedBy`. `postLink` is required, an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com`, `fb.com` or `fb.me` (`error: 'link-required'` or `'bad-link'`), and so is `status`, `Posted` or `Pending` (`'bad-status'`); Pending means posted in a group and awaiting its admin's approval. Refuses with `'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the poster's Team row. An Admin may send `postedBy`: that person must be on the Team tab and active (`'unknown-person'`), and the account must be one of theirs. |
@@ -203,15 +204,30 @@ its week:
 To move a held listing, remove it from the first intern's queue and save that, then add it
 to the other's.
 
-### `withheld`
+### Documents nobody has separated: `unseparated` and `withheld` (v7)
 
 When nobody has separated a document, `Separators.gs` finds no marker, and none of the text
-is confirmed safe to post. Blocking the Copy button is not enough (D6): text on screen can be
-selected and copied by hand. So an intern is not sent it at all (D13). Their reply has
-`publicText: ''`, `hasInternal: false` and `withheld: true`, so the screen can say why it is
-empty. An Admin gets the whole document in `publicText`, with `withheld: false`,
-so they can add the separator. The same holds when the text comes from the directory's copy
-rather than the live document.
+is confirmed safe to post. Until v7 an intern was not sent it at all (D6, D13). The owner
+decided these listings should be posted anyway, after a check (D15), so now:
+
+* **An intern** gets the whole document in `publicText`, with `unseparated: true`,
+  `withheld: false`, `hasInternal: false`, and `flaggedLines`: the 0-based line numbers
+  in `publicText` that may hold the owner's or the broker's details. A line is flagged when
+  `markerKind_` names it, when it carries a Philippine mobile or landline number, or when it
+  mentions an owner or a commission (`flaggedLines_` in `Separators.gs`, so the rule is in
+  the one file). The app marks those lines, leaves them out of what Copy copies, runs its
+  checks on what is left (a commission word there still blocks), and asks for a tick,
+  "I checked it", before Copy.
+* **An Admin** is unchanged: the whole document in `publicText`, with `withheld: false`,
+  so they can add the separator. No `unseparated` or `flaggedLines`; the app flags the
+  lines itself with the same file.
+* **A folder with no document**, or a document with no text, has nothing to show. An
+  intern's reply is as before: `publicText: ''`, `hasInternal: false` and `withheld: true`,
+  so the screen can say why it is empty.
+* **A separated document** is unchanged: an intern never gets the internal section.
+
+The same holds when the text comes from the directory's copy rather than the live document.
+An app built before v7 reads an unseparated reply as before and withholds the text itself.
 
 ## The listing checker's index
 

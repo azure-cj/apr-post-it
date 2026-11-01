@@ -823,71 +823,85 @@ export function readIssues(text: string): Issue[] {
   }));
 }
 
-/** A listing in a doc-health group. */
-export interface HealthItem {
-  readonly id: string;
-  readonly name: string;
-  readonly category: string;
-  /** This group's problem in the directory's words. Blank when the list only said "has issues". */
-  readonly detail: string;
-  /** Its other problems, worst first. */
-  readonly also: readonly IssueKind[];
-}
-
-export interface HealthGroup {
-  readonly kind: IssueKind;
-  /** By name. */
-  readonly items: readonly HealthItem[];
-}
-
-export interface DocHealth {
-  /** Worst first; a kind nobody has is left out. */
-  readonly groups: readonly HealthGroup[];
-  /** Listings with at least one problem. */
-  readonly listings: number;
-  /** Listings that can't be posted until their document is fixed. */
-  readonly blocked: number;
-}
-
-/** A directory row: its Issues text when the list carries it, else only the flag. */
-export type HealthSource = Pick<Property, 'id' | 'name' | 'category'> & {
+/**
+ * A directory row: its Issues text when the list carries it, else only the
+ * flag, and its posting document's id (the Directory's DocId column, CONTRACT
+ * v7) when the server sends it.
+ */
+export type HealthSource = Pick<Property, 'id' | 'name' | 'docId'> & {
   readonly hasIssues?: boolean | undefined;
   readonly issues?: string | undefined;
 };
 
-/** The directory's problems grouped by kind, worst first: a queue of documents to fix. */
+/** A listing whose document or folder needs fixing (CONTRACT v7). */
+export interface DocProblem {
+  readonly id: string;
+  readonly name: string;
+  /** The posting document's id, when the directory has one. */
+  readonly docId?: string;
+  /** The listing's Drive folder, as a link. */
+  readonly folder: string;
+}
+
+/** The kinds of doc health, in the order the Tracker lists them. */
+export type DocIssue = 'noSeparator' | 'noDocument' | 'noPhotos' | 'emptyAbove' | 'unreadable';
+
+export const DOC_ISSUES: readonly DocIssue[] = ['noSeparator', 'noDocument', 'noPhotos', 'emptyAbove', 'unreadable'];
+
+/** Each kind's listings, by name. A listing with two problems is in both lists. */
+export type DocHealth = Readonly<Record<DocIssue, readonly DocProblem[]>>;
+
+/** A Drive folder's link. */
+export function folderLink(id: string): string {
+  return `https://drive.google.com/drive/folders/${encodeURIComponent(id)}`;
+}
+
+/** A Google Doc's edit link. */
+export function docLink(docId: string): string {
+  return `https://docs.google.com/document/d/${encodeURIComponent(docId)}/edit`;
+}
+
+/**
+ * One phrase of the Issues column, as BuildDirectory.gs writes it: "No
+ * separator line — …", "No document", "No photos", "Document is empty above
+ * the separator", "Could not read document: …", "Could not open folder: …".
+ */
+function docIssueOf(text: string): DocIssue | undefined {
+  const t = text.toLowerCase();
+  if (/\bno separator\b/.test(t)) return 'noSeparator';
+  if (/^no (?:posting )?doc(?:ument)?\b/.test(t)) return 'noDocument';
+  if (/^no photos?\b/.test(t)) return 'noPhotos';
+  if (/\bempty above\b/.test(t)) return 'emptyAbove';
+  if (/^could ?n[o']t (?:read|open)\b/.test(t)) return 'unreadable';
+  return undefined;
+}
+
+/**
+ * The directory's documents that need fixing, by kind (CONTRACT v7): pure,
+ * from each row's Issues text. A row with no Issues text has nothing to fix.
+ */
 export function docHealth(properties: readonly HealthSource[]): DocHealth {
-  const groups = new Map<IssueKind, HealthItem[]>();
-  let listings = 0;
-  let blocked = 0;
+  const lists: Record<DocIssue, DocProblem[]> = { noSeparator: [], noDocument: [], noPhotos: [], emptyAbove: [], unreadable: [] };
   for (const p of properties) {
-    let issues = readIssues(p.issues ?? '');
-    // Flagged, but the list didn't say why: kept, so nothing is silently dropped.
-    if (issues.length === 0 && p.hasIssues === true) issues = [{ kind: 'other', text: '' }];
-    if (issues.length === 0) continue;
-    listings++;
-    if (issues.some((issue) => isBlocking(issue.kind))) blocked++;
-    for (const issue of issues) {
-      const item: HealthItem = {
-        id: p.id,
-        name: p.name,
-        category: p.category,
-        detail: issue.text,
-        also: issues.filter((other) => other !== issue).map((other) => other.kind),
-      };
-      const list = groups.get(issue.kind);
-      if (list) list.push(item);
-      else groups.set(issue.kind, [item]);
+    const kinds = new Set<DocIssue>();
+    for (const part of (p.issues ?? '').split(/\s*(?:·|\r?\n)\s*/)) {
+      const kind = part.trim() ? docIssueOf(part.trim()) : undefined;
+      if (kind) kinds.add(kind);
     }
+    if (kinds.size === 0) continue;
+    const docId = p.docId?.trim();
+    const item: DocProblem = { id: p.id, name: p.name, ...(docId ? { docId } : {}), folder: folderLink(p.id) };
+    for (const kind of kinds) lists[kind].push(item);
   }
-  return {
-    groups: ISSUE_ORDER.flatMap((kind) => {
-      const items = groups.get(kind);
-      return items ? [{ kind, items: items.sort((a, b) => byName.compare(a.name, b.name)) }] : [];
-    }),
-    listings,
-    blocked,
-  };
+  for (const kind of DOC_ISSUES) lists[kind].sort((a, b) => byName.compare(a.name, b.name));
+  return lists;
+}
+
+/** How many listings have at least one problem: each counted once. */
+export function docsToFix(health: DocHealth): number {
+  const ids = new Set<string>();
+  for (const kind of DOC_ISSUES) for (const item of health[kind]) ids.add(item.id);
+  return ids.size;
 }
 
 // ------------------------------------------------------------------ the team, for the sidebar

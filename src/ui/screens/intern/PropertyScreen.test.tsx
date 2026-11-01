@@ -19,7 +19,7 @@ const listWith = (changes: Readonly<Record<string, unknown>>) => ({
 const copyButton = () => screen.getByRole('button', { name: 'Copy' }) as HTMLButtonElement;
 
 /** The sentence beside Copy: what it says about why it is on or off. */
-const reason = () => document.getElementById(copyButton().getAttribute('aria-describedby') ?? '')?.textContent ?? '';
+const reason = () => document.getElementById((copyButton().getAttribute('aria-describedby') ?? '').split(' ')[0] ?? '')?.textContent ?? '';
 
 /** Waits until the document and the posts are in, so Copy has its final state. */
 async function settled() {
@@ -62,18 +62,6 @@ describe('Copy', () => {
       user: manager,
       reply: { publicText: `${CLEAN.publicText}\n2% to the agent who closes.` },
       says: /mentions “2% to the agent”/,
-    },
-    {
-      case: 'no separator in the document (a manager, who is sent all of it)',
-      user: manager,
-      reply: { hasInternal: false, cutAt: '', publicText: `${CLEAN.publicText}\nMr. Lim 0918 555 0135` },
-      says: /no separator yet/,
-    },
-    {
-      case: 'two checks at once',
-      user: manager,
-      reply: { hasInternal: false, cutAt: '', publicText: `${CLEAN.publicText}\nRebate for agents.` },
-      says: /1 more check failed too/,
     },
   ];
 
@@ -123,7 +111,133 @@ describe('Copy', () => {
   });
 });
 
-describe('a document nobody has separated', () => {
+describe('a document nobody has separated, shown to be checked (D15)', () => {
+  /** A v7 server's reply: the whole document, with the owner's line flagged. */
+  const UNSEPARATED = propertyReply({
+    hasInternal: false,
+    withheld: false,
+    unseparated: true,
+    cutAt: '',
+    issues: 'No separator line — the whole document is treated as postable. Check it.',
+    publicText: 'FOR SALE: 320 sqm lot in Verdant Hills\nPrice: ₱4.2M\n\nCall the owner, Mr. Lim, 0918 555 0135\n\nTitle clean, ready for transfer.',
+    flaggedLines: [3],
+  });
+  const tick = () => screen.getByRole('checkbox', { name: 'I checked it' }) as HTMLInputElement;
+  const flaggedRows = () => Array.from(document.querySelectorAll('.post-text__row--flag'));
+
+  it('shows the whole text with the flagged line marked, and Copy waits for the tick', async () => {
+    const platform = fakeServer({ property: UNSEPARATED });
+    renderApp({ platform, path: PATH });
+
+    expect(await screen.findByText('No separator. Check before posting.')).toBeTruthy();
+    expect(screen.getByText(/marked and won’t be copied/)).toBeTruthy();
+    const body = screen.getByRole('document', { name: 'Whole document, marked lines not copied' });
+    expect(body.textContent).toContain('Mr. Lim, 0918 555 0135');
+    expect(flaggedRows().map((r) => r.textContent)).toEqual(['Not copied: Call the owner, Mr. Lim, 0918 555 0135']);
+
+    await waitFor(() => expect(reason()).toBe('Tick “I checked it” to copy.'));
+    expect(copyButton().disabled).toBe(true);
+    expect(screen.getByText('Check before posting', { selector: '.verdict__word' })).toBeTruthy();
+    expect(document.querySelector('.verdict--danger')).toBeNull();
+
+    // Before the tick, neither the shortcut nor copying by hand gets anything out.
+    await userEvent.keyboard('{Alt>}c{/Alt}');
+    const copyEvent = new Event('copy', { bubbles: true, cancelable: true });
+    body.dispatchEvent(copyEvent);
+    expect(copyEvent.defaultPrevented).toBe(true);
+    expect(platform.copied).toEqual([]);
+
+    await userEvent.click(tick());
+    await waitFor(() => expect(copyButton().disabled).toBe(false));
+    expect(reason()).toBe('Ready to copy. Marked lines stay out.');
+    await userEvent.click(copyButton());
+    await waitFor(() =>
+      expect(platform.copied).toEqual(['FOR SALE: 320 sqm lot in Verdant Hills\nPrice: ₱4.2M\n\nTitle clean, ready for transfer.']),
+    );
+  });
+
+  it('runs the checks on what would be copied, and says nothing contradictory', async () => {
+    renderApp({ platform: fakeServer({ property: UNSEPARATED }), path: PATH });
+    await waitFor(() => expect(reason()).toBe('Tick “I checked it” to copy.'));
+
+    const checks = screen.getByRole('list', { name: 'Pre-post checks' }).textContent ?? '';
+    expect(checks).toContain('₱4.2M');
+    expect(checks).not.toContain('No price found');
+    // The owner's number is not in the copy, so it is not counted as a contact.
+    expect(checks).toContain('No contact number found');
+    expect(checks).toContain('No separator. Marked lines are left out.');
+
+    const page = document.body.textContent ?? '';
+    expect(page).not.toMatch(/nothing above its separator/);
+    expect(page).not.toMatch(/Copy is blocked/);
+    expect(page).not.toMatch(/no separator yet/);
+    expect(page).not.toMatch(/nothing safe to show/);
+    // The directory's "No separator line" is the notice's to say, once.
+    expect(screen.queryByText('Flagged by the directory')).toBeNull();
+  });
+
+  it('marks a line the app flags itself, even when the server missed it', async () => {
+    const platform = fakeServer({
+      property: propertyReply({
+        hasInternal: false,
+        withheld: false,
+        unseparated: true,
+        cutAt: '',
+        publicText: 'FOR LEASE: 2BR, Pasig\nRent: ₱38,000 a month\nViber 0917 222 3333',
+        flaggedLines: [],
+      }),
+    });
+    renderApp({ platform, path: PATH });
+    await waitFor(() => expect(flaggedRows()).toHaveLength(1));
+    expect(flaggedRows()[0]!.textContent).toContain('0917 222 3333');
+
+    await userEvent.click(tick());
+    await userEvent.click(copyButton());
+    await waitFor(() => expect(platform.copied).toEqual(['FOR LEASE: 2BR, Pasig\nRent: ₱38,000 a month']));
+  });
+
+  it('still blocks on commission wording the flags missed, and shows the line', async () => {
+    const platform = fakeServer({
+      property: propertyReply({
+        hasInternal: false,
+        withheld: false,
+        unseparated: true,
+        cutAt: '',
+        publicText: `${CLEAN.publicText}\n3 percent to whoever closes.`,
+        flaggedLines: [2],
+      }),
+    });
+    renderApp({ platform, path: PATH });
+    await waitFor(() => expect(reason()).toMatch(/^Copy is blocked: /));
+
+    expect(reason()).toBe('Copy is blocked: line 4 mentions “3 percent to whoever closes”. Ask your admin to remove it from the document.');
+    expect(document.querySelector('.post-text__row--hit')?.textContent).toContain('3 percent to whoever closes.');
+    expect(copyButton().disabled).toBe(true);
+    expect(tick().disabled).toBe(true);
+    expect(screen.getByText('Copy is blocked', { selector: '.verdict__word' })).toBeTruthy();
+    await userEvent.keyboard('{Alt>}c{/Alt}');
+    expect(platform.copied).toEqual([]);
+  });
+
+  it('is shown to an admin the same way, flagged by the app, with how to fix it', async () => {
+    const platform = fakeServer({
+      property: propertyReply({ hasInternal: false, withheld: false, internalText: '', cutAt: '', publicText: `${CLEAN.publicText}\nMr. Lim 0918 555 0135` }),
+    });
+    renderApp({ platform, user: manager, path: PATH });
+
+    expect(await screen.findByText('No separator. Check before posting.')).toBeTruthy();
+    expect(screen.getByText(/Add a separator to fix it\./)).toBeTruthy();
+    // Both numbers are flagged: the app can't tell the agent's from the owner's.
+    expect(flaggedRows().map((r) => r.textContent)).toEqual(['Not copied: Contact: 0917 555 0142', 'Not copied: Mr. Lim 0918 555 0135']);
+    expect(screen.queryByText(/Interns see none of it/)).toBeNull();
+
+    await userEvent.click(tick());
+    await userEvent.click(copyButton());
+    await waitFor(() => expect(platform.copied).toEqual(['FOR SALE: 320 sqm lot in Verdant Hills\nPrice: ₱4.2M']));
+  });
+});
+
+describe('a document nobody has separated, from an older server or with no document', () => {
   it('shows an intern the explanation and none of the text', async () => {
     const platform = fakeServer({
       property: propertyReply({ hasInternal: false, withheld: true, cutAt: '', publicText: '', issues: 'No separator line' }),
@@ -137,7 +251,7 @@ describe('a document nobody has separated', () => {
     expect(reason()).toBe('Copy is blocked: nobody has separated this document yet.');
   });
 
-  it('shows an intern none of it even when the reply wrongly carried the text', async () => {
+  it('shows an intern none of it when an older server, without `unseparated`, carried the text', async () => {
     const platform = fakeServer({
       property: propertyReply({
         hasInternal: false,
@@ -152,7 +266,18 @@ describe('a document nobody has separated', () => {
     expect(document.body.textContent).not.toContain('Edgardo Lim');
     expect(document.body.textContent).not.toContain('0918 555 0135');
     expect(document.body.textContent).not.toContain('Price: ₱4.2M');
+    expect(screen.queryByRole('checkbox', { name: 'I checked it' })).toBeNull();
     expect(copyButton().disabled).toBe(true);
+  });
+
+  it('shows none of it when a reply says both unseparated and withheld', async () => {
+    const platform = fakeServer({
+      property: propertyReply({ hasInternal: false, withheld: true, unseparated: true, cutAt: '', publicText: 'Mr. Edgardo Lim, 0918 555 0135' }),
+    });
+    renderApp({ platform, path: PATH });
+
+    expect(await screen.findByText("There's nothing safe to show yet")).toBeTruthy();
+    expect(document.body.textContent).not.toContain('Edgardo Lim');
   });
 
   it('says so differently when the folder has no document at all', async () => {

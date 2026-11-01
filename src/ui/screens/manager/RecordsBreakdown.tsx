@@ -2,14 +2,14 @@ import { useId, useRef, type KeyboardEvent } from 'react';
 import { CategoryDot, categoryKind } from '../../components';
 import type { CountRow, InternRow } from '@/core/records';
 import { plural } from '@/core/summary';
+import { RouteLink } from './TrackerLink';
 import './RecordsBreakdown.css';
 
-export type BreakdownTab = 'intern' | 'category' | 'account';
+export type BreakdownTab = 'intern' | 'category';
 
 const TABS: readonly { readonly key: BreakdownTab; readonly label: string }[] = [
   { key: 'intern', label: 'By intern' },
   { key: 'category', label: 'By category' },
-  { key: 'account', label: 'By FB account' },
 ];
 
 export interface RecordsBreakdownProps {
@@ -17,20 +17,16 @@ export interface RecordsBreakdownProps {
   readonly onTabChange: (tab: BreakdownTab) => void;
   readonly interns: readonly InternRow[];
   readonly categories: readonly CountRow[];
-  readonly accounts: readonly CountRow[];
-  /** The filters these rows set, to show which is picked. */
-  readonly intern: string | null;
-  readonly category: string | null;
-  readonly account: string | null;
-  readonly onIntern: (name: string | null) => void;
-  readonly onCategory: (row: CountRow | null) => void;
-  readonly onAccount: (row: CountRow | null) => void;
+  /** Where an intern's row links: Interns on the period's week. Without it, names are plain. */
+  readonly internHref?: ((name: string) => string) | undefined;
+  /** Follows that link through the app's router. */
+  readonly onIntern?: ((name: string) => void) | undefined;
 }
 
 /**
- * The period three ways, as tabs: interns ranked (posts, pending, missed,
- * how much of their weekly queues got done, and a sparkline), and posts per
- * category and per FB account as bars. A row filters the list.
+ * The period two ways, as tabs: interns ranked (posts, pending, missed, how
+ * much of their weekly queues got done, and a sparkline), and posts per
+ * category as bars. An intern's name opens their week on Interns.
  */
 export function RecordsBreakdown(props: RecordsBreakdownProps) {
   const { tab, onTabChange } = props;
@@ -74,11 +70,9 @@ export function RecordsBreakdown(props: RecordsBreakdownProps) {
       </div>
       <div className="breakdown__panel" role="tabpanel" id={`${base}-panel`} aria-labelledby={`${base}-tab-${tab}`}>
         {tab === 'intern' ? (
-          <InternTable rows={props.interns} picked={props.intern} onPick={props.onIntern} />
-        ) : tab === 'category' ? (
-          <CountBars rows={props.categories} picked={props.category} onPick={props.onCategory} dots label="Category" />
+          <InternTable rows={props.interns} href={props.internHref} onOpen={props.onIntern} />
         ) : (
-          <CountBars rows={props.accounts} picked={props.account} onPick={props.onAccount} label="FB account" />
+          <CountBars rows={props.categories} label="Category" />
         )}
       </div>
     </section>
@@ -91,12 +85,12 @@ function percent(share: number | null): string {
 
 function InternTable({
   rows,
-  picked,
-  onPick,
+  href,
+  onOpen,
 }: {
   readonly rows: readonly InternRow[];
-  readonly picked: string | null;
-  readonly onPick: (name: string | null) => void;
+  readonly href?: ((name: string) => string) | undefined;
+  readonly onOpen?: ((name: string) => void) | undefined;
 }) {
   if (rows.length === 0) return <p className="breakdown__quiet">No posts</p>;
   const peak = Math.max(1, ...rows.flatMap((r) => r.trend));
@@ -125,13 +119,16 @@ function InternTable({
       </thead>
       <tbody>
         {rows.map((r) => {
-          const on = picked !== null && picked.toLowerCase() === r.name.toLowerCase();
           return (
-            <tr key={r.name} className={`breakdown-row${on ? ' breakdown-row--on' : ''}`}>
+            <tr key={r.name} className={`breakdown-row${href ? ' breakdown-row--link' : ''}`}>
               <th scope="row">
-                <button type="button" className="breakdown-row__pick" aria-pressed={on} onClick={() => onPick(on ? null : r.name)}>
+                {href ? (
+                  <RouteLink href={href(r.name)} onNavigate={onOpen ? () => onOpen(r.name) : undefined} className="breakdown-row__pick">
+                    <span className="breakdown-row__name">{r.name}</span>
+                  </RouteLink>
+                ) : (
                   <span className="breakdown-row__name">{r.name}</span>
-                </button>
+                )}
               </th>
               <td className={`breakdown-table__num tabular${r.posts === 0 ? ' breakdown-table__zero' : ''}`}>{r.posts}</td>
               <td className={`breakdown-table__num tabular${r.pending === 0 ? ' breakdown-table__zero' : ''}`}>{r.pending}</td>
@@ -170,48 +167,28 @@ function Sparkline({ values, peak }: { readonly values: readonly number[]; reado
   );
 }
 
-function CountBars({
-  rows,
-  picked,
-  onPick,
-  dots = false,
-  label,
-}: {
-  readonly rows: readonly CountRow[];
-  readonly picked: string | null;
-  readonly onPick: (row: CountRow | null) => void;
-  readonly dots?: boolean;
-  readonly label: string;
-}) {
+function CountBars({ rows, label }: { readonly rows: readonly CountRow[]; readonly label: string }) {
   if (rows.length === 0) return <p className="breakdown__quiet">No posts</p>;
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
     <ul className="count-bars" aria-label={label}>
-      {rows.map((r) => {
-        const on = picked === r.key;
-        return (
-          <li key={r.key}>
-            <button
-              type="button"
-              className={`count-bar${on ? ' count-bar--on' : ''}`}
-              aria-pressed={on}
-              aria-label={`${r.label}: ${plural(r.count, 'post', 'posts')}, ${r.pending.toLocaleString('en-PH')} pending`}
-              onClick={() => onPick(on ? null : r)}
-            >
-              <span className="count-bar__name">
-                {dots ? <CategoryDot kind={categoryKind(r.label)} /> : null}
-                <span className="count-bar__label">{r.label}</span>
-              </span>
-              <span className="count-bar__track" aria-hidden="true">
-                <span className="count-bar__fill" style={{ width: `${(r.count / max) * 100}%` }} />
-              </span>
-              <span className="count-bar__value tabular" aria-hidden="true">
-                {r.count.toLocaleString('en-PH')}
-              </span>
-            </button>
-          </li>
-        );
-      })}
+      {rows.map((r) => (
+        <li key={r.key} className="count-bar">
+          <span className="count-bar__name">
+            <CategoryDot kind={categoryKind(r.label)} />
+            <span className="count-bar__label">{r.label}</span>
+          </span>
+          <span className="count-bar__track" aria-hidden="true">
+            <span className="count-bar__fill" style={{ width: `${(r.count / max) * 100}%` }} />
+          </span>
+          <span className="count-bar__value tabular">
+            {r.count.toLocaleString('en-PH')}
+            <span className="visually-hidden">
+              {` ${r.count === 1 ? 'post' : 'posts'}, ${plural(r.pending, 'pending', 'pending')}`}
+            </span>
+          </span>
+        </li>
+      ))}
     </ul>
   );
 }

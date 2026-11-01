@@ -309,8 +309,8 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   mark): the bar and pace, Open in Assign and FB profile, the last 4 weeks as small bars,
   then Not shared / Pending / Posted (with Open) / Missed, five each before "Show all".
   Escape or Close shuts it. Revoked people sit in a folded "Revoked" card below. The
-  Tracker's Interns card shows the same week as "12 / 40" and the pace, and links here
-  with "See all interns". The intern's My queue heads the week: "This week · 12 of 40", a
+  Tracker's This week card shows the same week as "12 / 40" and the pace, and links here
+  with "See all". The intern's My queue heads the week: "This week · 12 of 40", a
   bar, "Due Fri 6 Nov" (an amber "Due today" on Friday), and from Saturday next week's
   queue with "Starts Mon 9 Nov".
 - **Sign-in** is one card: a two-segment "Sign in as" control (Intern / Admin, the picked
@@ -343,13 +343,22 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   per week, the week, keep existing queues, the active interns as ticks, then Preview
   (one line per intern with a green fill bar against "per week", opening to the list;
   how many short; the skipped reasons) and Save all, the dialog's one gold button.
-- **Records** (`/records`, Admin; nav between Interns and Find): the range as chips
-  (Today, 7 days, 30 days) in the header; Posts per day as hand-built CSS bars (posted
-  green, pending amber, never gold) beside a compact day table that says the same in
-  words; then Posts: a search (property, intern or link), Export CSV, and a table of
-  time, property, posted by, FB account, status and Open. A property opens its whole
-  history in a dialog. Export downloads a file in a browser and copies the CSV on the
-  desktop.
+- **Records** (`/records`, Admin; nav between Interns and Find) is an overview: the
+  period (‹ › This week, Last week, This month, Last 30 days, Custom) and Export CSV in
+  the header; five tiles against the period before; Posts per day as hand-built CSS bars
+  (posted green, pending amber, never gold; hover or focus shows a bar's numbers, nothing
+  more) beside By intern / By category tabs. An intern's name opens Interns on the
+  period's week; category rows are read only. There is no list of posts: Export hands
+  over every post of the period (a file in a browser, the clipboard on the desktop), and
+  Interns' "Who posted?" answers inquiries.
+- **Tracker** (`/tracker`, Admin) is a one-minute read with no descriptions: "Tracker",
+  the day (‹ › Today) and Refresh on one line; four tiles (Posted today, Pending, Interns
+  behind, Docs to fix, the last a link to Documents); Today's posts (time, listing,
+  intern, status, Open; 8 at most, then "See all in Records") beside This week (each
+  intern's "12 / 40" bar and pace, "See all" to Interns); then Documents, full width:
+  `docHealth` grouped by issue as folded rows ("No separator · 36"), each listing with
+  Open doc (Google Docs, from DocId) or Open folder, under one line on Rebuild; "All
+  documents OK" when there is nothing to fix.
 - **Wording on admin screens:** a heading and no description line unless it says
   something the screen doesn't; labels over sentences.
 - **A slim title bar runs across the content column**: the drag region, with minimize,

@@ -67,34 +67,100 @@ describe('an intern\'s property reply carries nothing private (D1)', () => {
   });
 });
 
-describe('a document nobody has separated (D6, D13)', () => {
-  it('reaches an intern as empty publicText, withheld', () => {
+describe('a document nobody has separated (D15, superseding part of D6)', () => {
+  it('reaches an intern whole, marked unseparated, with the private line flagged', () => {
     const w = createWorld();
+    const property = w.call('jan', 'property', { id: LOT_9.id })['property'];
+
+    expect(property).toMatchObject({
+      publicText: LOT_9.doc.join('\n'),
+      unseparated: true,
+      withheld: false,
+      hasInternal: false,
+      flaggedLines: [2],
+      live: true,
+    });
+    expect(property).not.toHaveProperty('internalText');
+  });
+
+  it('flags the owner, phone numbers and commission, and leaves listing copy alone', () => {
+    const doc = [
+      'FOR SALE: Lot 14, Silang',
+      'Owner financing available',
+      'Price: PHP 2,400,000',
+      'Ask for the owner, Mrs. Dizon',
+      'Landline (02) 8123 4567',
+      'Call +63 917 222 3333',
+      '3% komisyon',
+      'Owner-occupied, move-in ready',
+    ];
+    const w = createWorld({ listings: [{ ...LOT_9, doc }] });
 
     expect(w.call('jan', 'property', { id: LOT_9.id })['property']).toMatchObject({
-      publicText: '',
-      withheld: true,
-      hasInternal: false,
-      live: true,
+      unseparated: true,
+      flaggedLines: [3, 4, 5, 6],
     });
   });
 
-  it('is withheld from the sheet\'s copy too, which holds the whole document', () => {
+  it('is flagged the same from the sheet\'s copy, when the document cannot be read', () => {
     const w = createWorld();
     w.project.drive.remove(LOT_9.docId);
 
-    expect(w.call('ana', 'property', { id: LOT_9.id })['property']).toMatchObject({ publicText: '', withheld: true, live: false });
+    expect(w.call('ana', 'property', { id: LOT_9.id })['property']).toMatchObject({
+      publicText: LOT_9.doc.join('\n'),
+      unseparated: true,
+      withheld: false,
+      flaggedLines: [2],
+      live: false,
+    });
   });
 
-  it.each(['maria', 'rico'] as const)('reaches a %s whole, to fix it', (person) => {
+  it.each(['maria', 'rico'] as const)('reaches a %s whole, as before', (person) => {
     const w = createWorld();
+    const property = w.call(person, 'property', { id: LOT_9.id })['property'];
 
-    expect(w.call(person, 'property', { id: LOT_9.id })['property']).toMatchObject({
+    expect(property).toMatchObject({
       publicText: LOT_9.doc.join('\n'),
       internalText: '',
       withheld: false,
       hasInternal: false,
     });
+    expect(property).not.toHaveProperty('unseparated');
+    expect(property).not.toHaveProperty('flaggedLines');
+  });
+
+  it('a separated document still withholds the internal section from an intern', () => {
+    const w = createWorld();
+    const text = w.project.postText({ action: 'property', id: CASA.id, key: PEOPLE.jan.key });
+    const property = (JSON.parse(text) as { property: Record<string, unknown> }).property;
+
+    expect(property).toMatchObject({ publicText: CASA.doc.slice(0, 4).join('\n'), hasInternal: true, withheld: false });
+    expect(property).not.toHaveProperty('internalText');
+    expect(property).not.toHaveProperty('unseparated');
+    expect(property).not.toHaveProperty('flaggedLines');
+    expect(text).not.toContain('Mr. Reyes');
+  });
+
+  it('a folder with no document is withheld from an intern, as before', () => {
+    const w = createWorld();
+    w.directoryTab.writeText([
+      'LOT', 'FOR SALE', '', 'Empty Lot', 'https://drive.google.com/drive/folders/F-empty', 0, '', '', '', 'No', 'No document · No photos', 'F-empty', '',
+    ]);
+
+    const property = w.call('jan', 'property', { id: 'F-empty' })['property'];
+    expect(property).toMatchObject({ publicText: '', withheld: true, hasInternal: false });
+    expect(property).not.toHaveProperty('unseparated');
+    expect(property).not.toHaveProperty('flaggedLines');
+  });
+});
+
+describe('the properties list', () => {
+  it('carries each row\'s docId to an Admin, and never to an intern', () => {
+    const w = createWorld();
+    const rows = (person: 'maria' | 'jan') => w.call(person, 'properties')['properties'] as Record<string, unknown>[];
+
+    expect(rows('maria').find((r) => r['id'] === CASA.id)).toMatchObject({ docId: CASA.docId });
+    for (const row of rows('jan')) expect(row).not.toHaveProperty('docId');
   });
 });
 

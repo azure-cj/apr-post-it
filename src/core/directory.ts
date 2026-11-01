@@ -254,6 +254,7 @@ function readProperty(raw: unknown): Property | null {
     photoCount: wholeNumber(row['photoCount']),
     hasIssues: row['hasIssues'] === true,
     ...(typeof row['issues'] === 'string' ? { issues: row['issues'] } : {}),
+    ...(typeof row['docId'] === 'string' && row['docId'].trim() !== '' ? { docId: row['docId'].trim() } : {}),
     // The checker's fields: each one only when it was sent, and sent as something readable.
     ...optionalText('city', row['city']),
     ...optionalText('size', row['size']),
@@ -331,10 +332,20 @@ function readDetail(raw: unknown): PropertyDetail | null {
     photos,
     folder: asText(row['folder']),
     ...(typeof row['withheld'] === 'boolean' ? { withheld: row['withheld'] } : {}),
+    // v7 (D15): a document nobody has separated, sent whole, with its risky lines.
+    ...(row['unseparated'] === true ? { unseparated: true } : {}),
+    ...readFlaggedLines(row['flaggedLines']),
   };
   // Absent for an intern: the server never sent it (D1). Not hidden here — not here at all.
   const internal = row['internalText'];
   return typeof internal === 'string' ? { ...detail, internalText: internal } : detail;
+}
+
+/** Whole, non-negative line numbers, in order, once each; anything else is dropped. */
+function readFlaggedLines(raw: unknown): { flaggedLines?: readonly number[] } {
+  if (!Array.isArray(raw)) return {};
+  const lines = raw.filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0);
+  return { flaggedLines: [...new Set(lines)].sort((a, b) => a - b) };
 }
 
 function readPhotos(raw: unknown): readonly Photo[] {
