@@ -1,0 +1,282 @@
+/* The period's posts: tools on one row, then the interns' sheet's columns
+   under a header that sticks below the title strip as the page scrolls. */
+
+.records-posts__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.records-posts__title {
+  margin: 0;
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+}
+
+.records-posts__count {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.records-posts__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.records-posts__search {
+  flex: 0 1 22rem;
+  min-width: 14rem;
+}
+
+.records-posts__search .searchbox__input {
+  height: 40px;
+}
+
+.records-posts__status {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.records-posts__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A filter in force: what it is, its value, and × to take it off. Neutral:
+   the thing picked is gold where it was picked (the bar, the row). */
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: 0 var(--space-3) 0 var(--space-6);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-chip);
+  background: var(--neutral-bg);
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filter-chip:hover {
+  background: var(--neutral-soft);
+}
+
+.filter-chip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.filter-chip__kind {
+  color: var(--text-muted);
+  font-weight: var(--weight-label);
+}
+
+.filter-chip__label {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filter-chip__x {
+  color: var(--text-muted);
+}
+
+.records-posts__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-12) var(--space-4);
+  color: var(--text-muted);
+}
+
+.records-posts__empty p {
+  margin: 0;
+}
+
+/* ---- the table ------------------------------------------------------------------ */
+
+.posts-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Sticks under the 32px title strip while the page scrolls. */
+.posts-table thead th {
+  position: sticky;
+  top: 32px;
+  z-index: 2;
+  padding: 0;
+  border-bottom: var(--border-width) solid var(--border);
+  background: var(--card-bg);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.posts-table__sort,
+.posts-table__plain {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-weight: var(--weight-label);
+}
+
+.posts-table__sort {
+  border-radius: var(--radius-chip);
+  cursor: pointer;
+}
+
+.posts-table__sort:hover {
+  background: var(--row-hover);
+  color: var(--text-label);
+}
+
+.posts-table__sort:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.posts-table__sort--on {
+  color: var(--text);
+}
+
+/* Room for the arrow kept, so a header doesn't move when it's sorted on. */
+.posts-table__arrow {
+  display: inline-flex;
+  width: 16px;
+}
+
+.posts-table tbody th,
+.posts-table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-soft);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: 400;
+  text-align: start;
+  vertical-align: middle;
+}
+
+.posts-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.posts-table tbody tr:hover > * {
+  background-color: var(--row-hover);
+}
+
+/* The row whose history is open: selected. */
+.posts-table__row--open > *,
+.posts-table__row--open:hover > * {
+  background-color: var(--gold-soft);
+}
+
+.posts-table__row--open > :first-child {
+  background-image: linear-gradient(var(--gold), var(--gold));
+  background-position: left;
+  background-size: 3px 100%;
+  background-repeat: no-repeat;
+}
+
+.posts-table__date,
+.posts-table__time,
+.posts-table__link,
+.posts-table__status {
+  white-space: nowrap;
+}
+
+.posts-table__type-in {
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.posts-table__title {
+  min-width: 10rem;
+}
+
+.posts-table__listing {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-family: var(--heading-font);
+  font-weight: var(--weight-label);
+  text-align: start;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.posts-table__listing:hover {
+  text-decoration-color: currentColor;
+}
+
+.posts-table__listing:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.posts-table__none {
+  color: var(--text-muted);
+}
+
+.records-posts__pages {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  padding-top: var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+/* Narrow: the table scrolls sideways (and its header no longer sticks). */
+@container shell (width < 900px) {
+  .posts-table__wrap {
+    overflow-x: auto;
+  }
+
+  .posts-table thead th {
+    position: static;
+  }
+}
+
+/* With the history open beside it, the quieter columns make room. */
+@container shell (width < 1300px) {
+  .records--panel .posts-table__type,
+  .records--panel .posts-table__account {
+    display: none;
+  }
+}

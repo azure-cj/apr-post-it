@@ -1,18 +1,16 @@
-/* Records: the range in the header, posts per day (bars and a table side by
-   side), then the searchable posts. */
+/* Records: the record book. The heading, the period and Export across the
+   top; five numbers; posts per day beside the breakdown; then the posts,
+   with a listing's history beside them when one is open. */
 
 .page-header.records__header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
+  gap: var(--space-6) var(--space-12);
 }
 
-.records__ranges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
+.records__export {
+  margin-inline-start: auto;
 }
 
 .records__notice {
@@ -28,273 +26,318 @@
   color: var(--text-muted);
 }
 
-.records__daily {
-  margin-bottom: var(--space-12);
+/* ---- the period ------------------------------------------------------------ */
+
+.records-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-8);
 }
 
-.records__daily-body {
+/* Wide enough for "29 Sep – 28 Oct", so the arrows don't move. */
+.day-picker__date.records-period__label {
+  min-width: 8.8em;
+}
+
+.records-period__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.records-period__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-6);
+}
+
+.records-period__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+.records-period__input {
+  height: 36px;
+  padding: 0 var(--space-4);
+  border: var(--border-width) solid var(--pick-edge);
+  border-radius: var(--radius-input);
+  background: var(--input-bg);
+  color: var(--text);
+  font-family: var(--body-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.records-period__input:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* ---- the five numbers -------------------------------------------------------- */
+
+.records-tiles {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--pane-regular);
-  gap: var(--gap-compact);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-8);
+  margin: 0 0 var(--space-8);
+}
+
+.records-tile {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  padding: var(--space-6) var(--space-8);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--card-bg) padding-box,
+    var(--card-edge) border-box;
+}
+
+.records-tile dd {
+  margin: 0;
+}
+
+/* The number first to the eye; the label first to a screen reader. */
+.records-tile__value {
+  order: -1;
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-verdict);
+  line-height: var(--lh-verdict);
+  font-weight: var(--weight-heading);
+  white-space: nowrap;
+}
+
+.records-tile__value--zero {
+  color: var(--text-muted);
+}
+
+.records-tile__detail {
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+.records-tile__label {
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.records-tile__change {
+  overflow: hidden;
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-weight: var(--weight-heading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Better or worse is said by the arrow and the words; colour only helps. */
+.records-tile__change--good {
+  color: var(--ok-text);
+}
+
+.records-tile__change--bad {
+  color: var(--danger-text);
+}
+
+.records-tile__change--same {
+  color: var(--text-muted);
+}
+
+.records-tile__versus {
+  color: var(--text-muted);
+  font-family: var(--body-font);
+  font-weight: 400;
+}
+
+/* ---- the chart and the breakdown ---------------------------------------------- */
+
+.records__overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 36rem);
+  gap: var(--space-8);
   align-items: stretch;
+  margin-bottom: var(--space-8);
+}
+
+.records-chart {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.records-chart__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-8);
+}
+
+.records-chart__title {
+  margin: 0;
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+}
+
+/* ---- the posts, and a listing's history beside them -------------------------- */
+
+.records__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.records__body--panel {
+  grid-template-columns: minmax(0, 1fr) var(--pane-compact);
+}
+
+.record-history__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-6);
+}
+
+.record-history__title {
+  font-size: var(--text-name);
+  line-height: var(--lh-name);
+}
+
+.record-history__facts {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.record-history__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-8);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.record-history__facts > div {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-6);
+}
+
+.record-history__facts dt {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.record-history__facts dd {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.record-history__type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.record-history__note {
+  color: var(--text-muted);
+}
+
+.record-history__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* When, then status and Open; who and as which account below. */
+.history-post {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 var(--space-6);
+  padding-block: var(--space-4);
+  border-top: var(--border-width) solid var(--border-soft);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.history-post__when {
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-label);
+  white-space: nowrap;
+}
+
+.history-post__end {
+  display: flex;
+  grid-row: span 2;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.history-post__who {
+  min-width: 0;
+  color: var(--text-label);
+  overflow-wrap: anywhere;
+}
+
+/* ---- narrower ---------------------------------------------------------------- */
+
+@container shell (width < 1300px) {
+  .records-tiles {
+    gap: var(--space-6);
+  }
+
+  .records__overview {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 33rem);
+  }
 }
 
 @container shell (width < 1100px) {
-  .records__daily-body {
-    grid-template-columns: minmax(0, 1fr) var(--pane-compact);
+  .records-tiles {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  }
+
+  .records__overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .records__export {
+    margin-inline-start: 0;
   }
 }
 
 @container shell (width < 900px) {
-  .records__daily-body {
+  .records__body--panel {
     grid-template-columns: minmax(0, 1fr);
   }
-}
 
-/* ---- the bars ------------------------------------------------------------------ */
-
-.bars {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: 200px auto;
-  gap: var(--space-4) var(--space-4);
-  min-width: 0;
-}
-
-.bars__scale {
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding-bottom: calc(var(--lh-caption) + var(--space-3));
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-  text-align: end;
-}
-
-.bars__plot {
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  align-items: stretch;
-  gap: 3px;
-  min-width: 0;
-}
-
-.bars__day {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.bars__stack {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  justify-content: flex-end;
-  width: 100%;
-  max-width: 48px;
-  border-bottom: var(--border-width) solid var(--border);
-}
-
-.bars__stack span {
-  display: block;
-  min-height: 2px;
-}
-
-.bars__posted {
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: var(--ok-strong);
-}
-
-.bars__pending {
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: var(--warn-text);
-}
-
-.bars__pending + .bars__posted {
-  border-radius: 0;
-  border-top: var(--border-width) solid var(--bg);
-}
-
-.bars__label {
-  overflow: visible;
-  height: var(--lh-caption);
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-  text-align: center;
-  white-space: nowrap;
-}
-
-.bars__key {
-  grid-column: 2;
-  grid-row: 2;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-}
-
-.bars__swatch {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-}
-
-.bars__swatch + .bars__swatch,
-.bars__key .bars__swatch--pending {
-  margin-inline-start: var(--space-6);
-}
-
-.bars__swatch--posted {
-  background: var(--ok-strong);
-}
-
-.bars__swatch--pending {
-  background: var(--warn-text);
-}
-
-/* ---- tables ----------------------------------------------------------------- */
-
-.records__table-wrap {
-  overflow-x: auto;
-}
-
-.records__day-table {
-  max-height: 232px;
-  overflow-y: auto;
-  border-radius: var(--radius-row);
-  background: var(--input-bg);
-  padding: var(--space-2) var(--space-6);
-}
-
-.records__table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.records__table thead th {
-  position: sticky;
-  top: 0;
-  padding: var(--space-3) var(--space-8) var(--space-3) 0;
-  border-bottom: var(--border-width) solid var(--border);
-  color: var(--text-muted);
-  font-family: var(--heading-font);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-  font-weight: var(--weight-label);
-  text-align: start;
-  white-space: nowrap;
-}
-
-.records__day-table thead th {
-  background: var(--input-bg);
-}
-
-.records__table tbody th,
-.records__table td {
-  padding: var(--space-4) var(--space-8) var(--space-4) 0;
-  border-bottom: var(--border-width) solid var(--border-soft);
-  color: var(--text-label);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-  font-weight: 400;
-  text-align: start;
-  vertical-align: middle;
-}
-
-.records__table th:last-child,
-.records__table td:last-child {
-  padding-inline-end: 0;
-}
-
-.records__table tbody tr:last-child th,
-.records__table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.records__day-table tbody th {
-  white-space: nowrap;
-}
-
-.records__table .records__num {
-  text-align: end;
-}
-
-.records__zero {
-  color: var(--text-muted);
-}
-
-.records__by {
-  color: var(--text-muted);
-}
-
-.records__time {
-  white-space: nowrap;
-}
-
-.records__posts .card__header {
-  flex-wrap: wrap;
-}
-
-.records__tools {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-}
-
-.records__search {
-  width: min(320px, 100%);
-}
-
-.records__search .searchbox__input {
-  height: 36px;
-}
-
-.records__count {
-  margin-bottom: var(--space-4);
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-}
-
-.records__table .records__property {
-  color: var(--text);
-}
-
-/* The property opens its history: a text button, underlined on hover. */
-.records__property-button {
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: var(--border-strong);
-  text-underline-offset: 3px;
-}
-
-.records__property-button:hover {
-  text-decoration-color: currentColor;
-}
-
-.records__property-button:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--space-1);
-}
-
-.records__link {
-  white-space: nowrap;
+  /* Stacked: the history comes first, where the click was answered. */
+  .records__body--panel .record-history {
+    position: static;
+    order: -1;
+    max-height: none;
+  }
 }

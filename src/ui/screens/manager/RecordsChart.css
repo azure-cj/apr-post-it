@@ -1,0 +1,288 @@
+/* Posts per day: stacked columns on recessive hairline gridlines. Posted
+   green at the baseline, pending amber above, a 2px surface gap between,
+   4px rounded at the top only. Never gold, except the picked bar's mark. */
+
+.rchart {
+  --rchart-plot: 188px;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(var(--rchart-plot), 1fr) auto;
+  column-gap: var(--space-4);
+  min-width: 0;
+}
+
+.rchart__axis {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* Each label sits centred on its line. */
+  margin-block: calc(var(--lh-caption) / -2);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  text-align: end;
+}
+
+.rchart__plot {
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.rchart__grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.rchart__gridline {
+  position: absolute;
+  inset-inline: 0;
+  height: 0;
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
+/* The baseline: one step stronger than the grid. */
+.rchart__gridline:first-child {
+  border-top-color: var(--border);
+}
+
+.rchart__bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+/* A day's whole column is the target, not only the painted bar. */
+.rchart__slot {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.rchart__slot::before {
+  content: "";
+  position: absolute;
+  inset: 0 1px;
+  border-radius: var(--radius-sm);
+  background: var(--row-hover);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.rchart__slot:hover::before,
+.rchart__slot:focus-visible::before {
+  opacity: 1;
+}
+
+.rchart__slot:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 0;
+}
+
+.rchart__stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(24px, 64%);
+  min-height: 3px;
+}
+
+.rchart__posted,
+.rchart__pending {
+  flex-basis: 0;
+  min-height: 1px;
+}
+
+.rchart__posted {
+  background: var(--ok-strong);
+}
+
+.rchart__pending {
+  background: var(--warn-text);
+}
+
+/* Rounded where the data ends, square on the baseline. */
+.rchart__stack > :first-child {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* A day still to come: a short neutral tick on the baseline, nothing to pick. */
+.rchart__slot--later {
+  cursor: default;
+}
+
+.rchart__future {
+  width: min(24px, 64%);
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+}
+
+/* One bar picked as the filter: the others step back, the pick keeps a gold
+   mark under it (selected: gold's third job). */
+.rchart--picked .rchart__slot:not(.rchart__slot--picked) .rchart__stack {
+  opacity: 0.4;
+}
+
+.rchart__slot--picked::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  width: min(24px, 64%);
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+}
+
+.rchart__labels {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  padding-top: var(--space-5);
+}
+
+.rchart__label {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: visible;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* With many bars a label belongs to its day but may run past the column. */
+.rchart--dense .rchart__label {
+  text-align: start;
+}
+
+.rchart__label--picked {
+  color: var(--gold);
+  font-weight: var(--weight-heading);
+}
+
+/* ---- the tooltip ------------------------------------------------------------- */
+
+.rchart__tip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 128px;
+  padding: var(--space-4) var(--space-6);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-chip);
+  background: var(--tip-bg);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: rchart-tip var(--dur-fast) var(--ease-out);
+}
+
+.rchart__tip--start {
+  transform: translateX(-20%);
+}
+
+.rchart__tip--end {
+  transform: translateX(-80%);
+}
+
+@keyframes rchart-tip {
+  from {
+    opacity: 0;
+  }
+}
+
+.rchart__tip-day {
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-label);
+  white-space: nowrap;
+}
+
+.rchart__tip-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  white-space: nowrap;
+}
+
+/* Values lead, labels follow. */
+.rchart__tip-row strong {
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+}
+
+.rchart__key {
+  width: 10px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+}
+
+.rchart__key--posted {
+  background: var(--ok-strong);
+}
+
+.rchart__key--pending {
+  background: var(--warn-text);
+}
+
+/* ---- the legend ---------------------------------------------------------------- */
+
+.rchart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-8);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.rchart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.rchart__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.rchart__swatch--posted {
+  background: var(--ok-strong);
+}
+
+.rchart__swatch--pending {
+  background: var(--warn-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rchart__tip {
+    animation: none;
+  }
+}

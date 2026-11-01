@@ -15,6 +15,7 @@ import {
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { BUILT_IN_SCRIPT_URL } from '@/config';
 import { activeInterns, addDays, isDate, peopleIn, samePerson } from '@/core/summary';
+import { periodFromQuery, periodQuery } from '@/core/records';
 import { assignmentWeek, weekOf } from '@/core/week';
 import { canManage, DEFAULT_RULES, isAdmin, UserFacingError, type Role, type User } from '@/core/types';
 import {
@@ -906,14 +907,26 @@ function InternsRoute() {
 function RecordsRoute() {
   const app = useApp();
   const notify = useNotify();
+  const [params, setParams] = useSearchParams();
   const posts = usePosts({ pollMs: 120_000 });
+  const assignments = useAssignments({ pollMs: 120_000 });
+  const team = useTeam({ maxAgeMs: 300_000 });
   const { platform } = app;
+  const today = app.today();
+  // ?period=week&from=… and the like (core/records periodFromQuery); none: this week.
+  const period = periodFromQuery({ period: params.get('period'), from: params.get('from'), to: params.get('to') }, today);
+  const interns = useMemo(() => (team.data ? activeInterns(team.data) : []), [team.data]);
   return (
     <RecordsScreen
       posts={posts.data ?? []}
-      today={app.today()}
+      assignments={assignments.data ?? []}
+      today={today}
+      period={period}
+      onPeriodChange={(next) => setParams(periodQuery(next, today), { replace: true })}
+      interns={interns}
+      cooldownDays={app.settings.cooldownDays}
       loading={posts.data === null}
-      error={posts.error}
+      error={posts.error ?? assignments.error}
       onOpenLink={(url) => void platform.open(url)}
       onExport={(csv, fileName) => {
         // A browser downloads it; the desktop app has no save dialog, so it goes to the clipboard.

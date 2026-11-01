@@ -1,0 +1,319 @@
+/* Beside the chart: the period by intern, by category and by FB account,
+   as tabs. Rows are buttons that filter the list. */
+
+.breakdown {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+/* Tabs: words on one line; the picked one gold, with a bar under it. */
+.breakdown__tabs {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+
+.breakdown__tab {
+  position: relative;
+  min-height: 36px;
+  padding: 0 var(--space-5);
+  border: 0;
+  border-radius: var(--radius-chip) var(--radius-chip) 0 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.breakdown__tab:hover {
+  background: var(--row-hover);
+  color: var(--text-label);
+}
+
+.breakdown__tab:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.breakdown__tab--on,
+.breakdown__tab--on:hover {
+  color: var(--gold);
+}
+
+.breakdown__tab--on::after {
+  content: "";
+  position: absolute;
+  inset-inline: var(--space-5);
+  bottom: -1px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+}
+
+/* As tall as the chart beside it; a long team scrolls inside. */
+.breakdown__panel {
+  min-height: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.breakdown__quiet {
+  margin: 0;
+  padding: var(--space-8) 0;
+  color: var(--text-muted);
+}
+
+/* ---- by intern ---------------------------------------------------------------- */
+
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/* Fixed columns: the name takes what is left and ends in "…" when long. */
+.breakdown-table thead th.breakdown-table__num {
+  width: 3.9rem;
+}
+
+.breakdown-table thead th.breakdown-table__pending {
+  width: 4.7rem;
+}
+
+.breakdown-table thead th.breakdown-table__missed-col {
+  width: 4.3rem;
+}
+
+.breakdown-table thead th.breakdown-table__trend {
+  width: 72px;
+}
+
+.breakdown-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0 var(--space-4) var(--space-3);
+  /* Opaque, so rows scroll under it: the card's own fill, and its rule. */
+  background:
+    linear-gradient(var(--border), var(--border)) bottom / 100% 1px no-repeat,
+    var(--card-bg);
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-weight: var(--weight-label);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.breakdown-table tbody th,
+.breakdown-table td {
+  padding: var(--space-2) var(--space-4);
+  border-top: var(--border-width) solid var(--border-soft);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  text-align: start;
+  vertical-align: middle;
+}
+
+.breakdown-table tbody tr:first-child > * {
+  border-top: 0;
+}
+
+.breakdown-table th:first-child {
+  padding-inline-start: var(--space-2);
+}
+
+.breakdown-table .breakdown-table__num {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.breakdown-table td.breakdown-table__num {
+  color: var(--text);
+}
+
+.breakdown-table td.breakdown-table__zero {
+  color: var(--text-muted);
+}
+
+.breakdown-table td.breakdown-table__missed {
+  color: var(--danger-text);
+  font-weight: var(--weight-heading);
+}
+
+.breakdown-table .breakdown-table__trend {
+  padding-inline-end: var(--space-2);
+  text-align: end;
+}
+
+.breakdown-table__trend .sparkline {
+  margin-inline-start: auto;
+}
+
+/* The row picks the intern: the name's button covers it, as on Interns. */
+.breakdown-row {
+  position: relative;
+}
+
+.breakdown-row:hover > * {
+  background-color: var(--row-hover);
+}
+
+.breakdown-row--on > *,
+.breakdown-row--on:hover > * {
+  background-color: var(--gold-soft);
+}
+
+.breakdown-row--on > th:first-child {
+  background-image: linear-gradient(var(--gold), var(--gold));
+  background-position: left;
+  background-size: 3px 100%;
+  background-repeat: no-repeat;
+}
+
+.breakdown-row__pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 36px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.breakdown-row__pick::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.breakdown-row__pick:focus-visible {
+  outline: none;
+}
+
+.breakdown-row__pick:focus-visible::after {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-chip);
+}
+
+.breakdown-row__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: var(--weight-heading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sparkline {
+  display: block;
+  overflow: visible;
+}
+
+.sparkline polyline {
+  stroke: var(--neutral-strong);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sparkline circle {
+  fill: var(--text-label);
+}
+
+/* ---- by category and by FB account ------------------------------------------- */
+
+.count-bars {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.count-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 13rem) minmax(0, 1fr) 3.5ch;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-top: var(--border-width) solid var(--border-soft);
+  background: none;
+  color: var(--text-label);
+  font: inherit;
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  text-align: start;
+  cursor: pointer;
+}
+
+.count-bars li:first-child .count-bar {
+  border-top: 0;
+}
+
+.count-bar:hover {
+  background: var(--row-hover);
+}
+
+.count-bar:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-chip);
+}
+
+.count-bar--on,
+.count-bar--on:hover {
+  background:
+    linear-gradient(var(--gold), var(--gold)) left / 3px 100% no-repeat,
+    var(--gold-soft);
+}
+
+.count-bar__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.count-bar__label {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count-bar__track {
+  display: flex;
+  height: 10px;
+}
+
+/* One series, one colour: neutral, so it never reads as a status. */
+.count-bar__fill {
+  min-width: 2px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--neutral-strong);
+}
+
+.count-bar__value {
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+  text-align: end;
+}
