@@ -190,10 +190,10 @@ describe('Assign, the week picker and the link', () => {
   }
   const week = (path: string) => new URLSearchParams(path.split('?')[1]).get('week');
 
-  function renderShell(now: number, at = '/assign') {
+  function renderShell(now: number, at = '/assign', platform = fakeServer()) {
     let path = '';
     render(
-      <AppStateProvider platform={fakeServer()} initialUser={manager} initialSettings={{ scriptUrl: EXEC }} now={() => now}>
+      <AppStateProvider platform={platform} initialUser={manager} initialSettings={{ scriptUrl: EXEC }} now={() => now}>
         <MemoryRouter initialEntries={[at]} future={routerFuture}>
           <AppShell />
           <Spy onPath={(p) => (path = p)} />
@@ -234,6 +234,38 @@ describe('Assign, the week picker and the link', () => {
     await screen.findByRole('list', { name: 'Interns' });
     expect(weekShown()).toBe('2–6 Nov');
     expect(screen.getByRole('button', { name: 'This week' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('keeps the library’s page in the link, and drops it for a new search', async () => {
+    const many = Array.from({ length: 25 }, (_, i) => ({
+      id: `m${i}`,
+      name: `Marikina Warehouse ${String(i + 1).padStart(2, '0')}`,
+      category: 'WAREHOUSE',
+      listingType: 'FOR LEASE/ FOR RENT',
+      subCategory: '',
+      photoCount: 3,
+      hasIssues: false,
+    }));
+    const at = `/assign?intern=${encodeURIComponent(janUser.name)}&week=${WEEK}&page=2`;
+    const path = renderShell(Date.parse('2026-10-28T02:00:00Z'), at, fakeServer({ properties: { ok: true, properties: many } }));
+    await screen.findByRole('heading', { level: 1, name: janUser.name });
+    await waitFor(() => expect(listNames()[0]).toBe('Marikina Warehouse 11'));
+    const nav = screen.getByRole('navigation', { name: 'Pages' });
+    expect(within(nav).getByRole('button', { name: 'Page 2' }).getAttribute('aria-current')).toBe('page');
+
+    await userEvent.click(within(nav).getByRole('button', { name: 'Page 3' }));
+    expect(new URLSearchParams(path().split('?')[1]).get('page')).toBe('3');
+    expect(listNames()).toHaveLength(5);
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search listings' }), 'marikina');
+    await waitFor(() => expect(new URLSearchParams(path().split('?')[1]).get('page')).toBeNull());
+    expect(listNames()[0]).toBe('Marikina Warehouse 01');
+
+    // Another week starts at the first page too.
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Pages' })).getByRole('button', { name: 'Page 2' }));
+    expect(new URLSearchParams(path().split('?')[1]).get('page')).toBe('2');
+    await userEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    expect(new URLSearchParams(path().split('?')[1]).get('page')).toBeNull();
   });
 
   it('reads a week from the link, and an older link’s day as its week', async () => {
@@ -277,6 +309,42 @@ describe('Assign, step two: the library by category', () => {
     screen.getByRole('button', { name: 'Add Meycauayan Warehouse B' }).focus();
     await userEvent.keyboard('{Enter}');
     expect(queueNames()).toContain('Meycauayan Warehouse B');
+  });
+
+  it('pages the library ten at a time, back to page 1 on a new tab, search or filter', async () => {
+    const many = Array.from({ length: 23 }, (_, i) => listing(`m${i}`, `Marikina Warehouse ${String(i + 1).padStart(2, '0')}`, 'WAREHOUSE'));
+    render(<Harness properties={[...LIBRARY, ...many]} />);
+    await userEvent.click(chip(/Warehouse/));
+    expect(listNames()).toHaveLength(10);
+    const nav = () => screen.getByRole('navigation', { name: 'Pages' });
+    expect(nav().closest('.pagination')!.textContent).toContain('1–10 of 26');
+    expect(screen.queryByRole('button', { name: /^Show .* more$/ })).toBeNull();
+
+    await userEvent.click(within(nav()).getByRole('button', { name: 'Page 3' }));
+    // Never posted first, then the longest since posted: the last page ends with the posted ones.
+    expect(listNames()).toEqual([
+      'Marikina Warehouse 21',
+      'Marikina Warehouse 22',
+      'Marikina Warehouse 23',
+      'Meycauayan Warehouse B',
+      'Calamba Warehouse C',
+      'Valenzuela Warehouse A',
+    ]);
+    expect(document.activeElement).toBe(screen.getByRole('list', { name: 'Warehouse listings' }));
+
+    await filter('Fresh');
+    expect(within(nav()).getByRole('button', { name: 'Page 1' }).getAttribute('aria-current')).toBe('page');
+    await filter('Fresh');
+    await userEvent.click(within(nav()).getByRole('button', { name: 'Next page' }));
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search listings' }), 'warehouse');
+    expect(listNames()[0]).toBe('Marikina Warehouse 01');
+    await userEvent.click(within(nav()).getByRole('button', { name: 'Next page' }));
+    await userEvent.click(chip(/^All/));
+    expect(within(nav()).getByRole('button', { name: 'Page 1' }).getAttribute('aria-current')).toBe('page');
+
+    // Ten or fewer: a count, no pages.
+    await userEvent.click(chip(/Office space/));
+    expect(screen.queryByRole('navigation', { name: 'Pages' })).toBeNull();
   });
 
   it('searches within the tab', async () => {

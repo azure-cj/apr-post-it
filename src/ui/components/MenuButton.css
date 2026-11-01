@@ -1,0 +1,122 @@
+/* A button that opens a small panel under it: Filter, Sort, and ⋯. */
+
+.menu {
+  position: relative;
+  flex: none;
+}
+
+.button.menu__button--icon {
+  width: 36px;
+  padding: 0;
+  gap: 0;
+}
+
+.button.menu__button--icon .button__icon {
+  margin: 0;
+}
+
+.menu__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-inline-start: var(--space-3);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+  color: var(--text);
+  font-size: var(--text-caption);
+  line-height: 1;
+}
+
+.menu__panel {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 220px;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-row);
+  background: var(--tip-bg);
+  animation: rise-in var(--dur-enter) var(--ease-out) both;
+}
+
+.menu__group {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.menu__check,
+.menu__item {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+
+.menu__check::before,
+.menu__item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.menu__check:hover::before,
+.menu__item:hover::before {
+  opacity: 1;
+}
+
+.menu__check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--gold);
+}
+
+.menu__check input:disabled + span {
+  color: var(--placeholder);
+}
+
+.menu__check:has(input:disabled) {
+  cursor: default;
+}
+
+.menu__check:has(input:disabled)::before {
+  display: none;
+}
+
+/* A group's name inside the panel, and the line between groups. */
+.menu__heading {
+  margin: 0;
+  padding: var(--space-3) var(--space-5) var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.menu__sep {
+  height: var(--border-width);
+  margin: var(--space-3) var(--space-2);
+  border: 0;
+  background: var(--border-soft);
+}

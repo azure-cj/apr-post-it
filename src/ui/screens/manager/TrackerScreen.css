@@ -386,6 +386,8 @@
   white-space: nowrap;
 }
 
-.docs-group__all {
-  margin-top: var(--space-3);
+.docs-group__pages {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--border-soft);
 }

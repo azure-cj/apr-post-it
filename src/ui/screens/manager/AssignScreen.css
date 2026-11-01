@@ -705,101 +705,6 @@
   cursor: default;
 }
 
-/* ---- menus: Filter and More ----------------------------------------------------- */
-
-.menu {
-  position: relative;
-  flex: none;
-}
-
-.button.menu__button--icon {
-  width: 36px;
-  padding: 0;
-  gap: 0;
-}
-
-.button.menu__button--icon .button__icon {
-  margin: 0;
-}
-
-.menu__count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 22px;
-  height: 22px;
-  margin-inline-start: var(--space-3);
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--neutral-soft);
-  color: var(--text);
-  font-size: var(--text-caption);
-  line-height: 1;
-}
-
-.menu__panel {
-  position: absolute;
-  top: calc(100% + var(--space-3));
-  right: 0;
-  z-index: 20;
-  display: grid;
-  min-width: 220px;
-  padding: var(--space-3);
-  border: var(--border-width) solid var(--border-strong);
-  border-radius: var(--radius-row);
-  background: var(--tip-bg);
-  animation: rise-in var(--dur-enter) var(--ease-out) both;
-}
-
-.menu__group {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.menu__check,
-.menu__item {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  min-height: 40px;
-  padding: var(--space-2) var(--space-5);
-  border: 0;
-  border-radius: var(--radius-chip);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: var(--text-meta);
-  text-align: start;
-  cursor: pointer;
-}
-
-.menu__check::before,
-.menu__item::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--neutral-bg);
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out);
-}
-
-.menu__check:hover::before,
-.menu__item:hover::before {
-  opacity: 1;
-}
-
-.menu__check input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: var(--gold);
-}
-
 .lib__none {
   padding: var(--space-8) 0;
 }
@@ -932,13 +837,14 @@
   color: var(--placeholder);
 }
 
-.lib__more {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-  padding-top: var(--space-4);
+.lib__pages,
+.lib__count {
+  padding-top: var(--space-6);
   border-top: var(--border-width) solid var(--border-soft);
+}
+
+.lib__count {
+  margin: 0;
   font-size: var(--text-caption);
 }
 

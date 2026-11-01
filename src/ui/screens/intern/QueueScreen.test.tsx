@@ -200,6 +200,31 @@ describe('My queue', () => {
     expect(within(nav).getByRole('link', { name: /My queue/ }).getAttribute('aria-current')).toBe('page');
   });
 
+  it('shows a long week ten at a time', async () => {
+    const forty = Array.from({ length: 40 }, (_, i) => item(`Queue listing ${String(i + 1).padStart(2, '0')}`, `q${i}`, 'Not Shared'));
+    renderOn(THURSDAY, fakeServer({ assignments: { ok: true, assignments: forty }, posts: { ok: true, posts: [] } }));
+    // None of these is in the property list, so none is "next up": all forty are listed.
+    const list = await screen.findByRole('list', { name: 'This week' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10);
+    const nav = screen.getByRole('navigation', { name: 'Pages' });
+    expect(nav.closest('.pagination')!.textContent).toContain('1–10 of 40');
+    await userEvent.click(within(nav).getByRole('button', { name: 'Page 4' }));
+    expect(within(list).getAllByRole('listitem').map((li) => li.querySelector('.queue-item__name')!.textContent)).toEqual([
+      'Queue listing 31',
+      'Queue listing 32',
+      'Queue listing 33',
+      'Queue listing 34',
+      'Queue listing 35',
+      'Queue listing 36',
+      'Queue listing 37',
+      'Queue listing 38',
+      'Queue listing 39',
+      'Queue listing 40',
+    ]);
+    // Numbered as the week is, not from 1 on every page.
+    expect(list.getAttribute('start')).toBe('31');
+  });
+
   it('says plainly when nothing is assigned this week', async () => {
     renderOn(THURSDAY, fakeServer());
     expect(await screen.findByText('Nothing in your queue this week')).toBeTruthy();

@@ -5,7 +5,7 @@ import { normalize } from '@/core/matcher';
 import { isDate, samePerson, weekProgress } from '@/core/summary';
 import { queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry, type Property } from '@/core/types';
 import { assignmentWeek, weekdaysElapsed, weekFriday, weekOf } from '@/core/week';
-import { Button, CategoryDot, EmptyState, Notice, Pill, TextInput, categoryKind, categoryLabel } from '../../components';
+import { Button, CategoryDot, EmptyState, Notice, PAGE_SIZE, Pagination, Pill, TextInput, categoryKind, categoryLabel, usePaged } from '../../components';
 import {
   manilaTime,
   paths,
@@ -89,6 +89,8 @@ export function QueueScreen() {
   const posted = items.filter((i) => i.status === 'Posted');
   const next = toPost.find((i) => openable(i, list !== null));
   const rest = items.filter((i) => i !== next);
+  // A week can hold forty: ten a page. The page stays put as items move between groups.
+  const paged = usePaged(rest);
 
   const reload = () => {
     queue.reload();
@@ -170,8 +172,13 @@ export function QueueScreen() {
           ) : null}
 
           {rest.length > 0 ? (
-            <ol className="queue__list" aria-label={next ? 'The rest of the week' : 'This week'}>
-              {rest.map((item) => (
+            <ol
+              className="queue__list"
+              aria-label={next ? 'The rest of the week' : 'This week'}
+              ref={paged.topRef}
+              start={(paged.page - 1) * PAGE_SIZE + 1}
+            >
+              {paged.items.map((item) => (
                 <Row
                   key={`${item.assignment.propertyId || item.assignment.propertyName}-${item.status}`}
                   item={item}
@@ -181,6 +188,7 @@ export function QueueScreen() {
               ))}
             </ol>
           ) : null}
+          <Pagination {...paged.pagination} className="queue__pages" />
         </div>
       )}
     </div>

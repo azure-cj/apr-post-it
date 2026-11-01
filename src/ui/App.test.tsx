@@ -127,7 +127,7 @@ describe('signing in', () => {
     expect(await screen.findByText('Checking your key with the web app…', { selector: '.opening__text' })).toBeTruthy();
     answer(PING_INTERN);
     // Where it was asked for, not the home screen.
-    expect(await screen.findByRole('heading', { level: 1, name: 'Find a property' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Find' })).toBeTruthy();
   });
 
   it('offers to try again, with nothing typed, when the kept key cannot be checked', async () => {
@@ -224,8 +224,8 @@ describe('the shell', () => {
     renderApp({ platform: fakeServer(), path: '/queue' });
     await screen.findByText('Next week isn’t assigned yet');
     await userEvent.click(screen.getByRole('link', { name: 'Find' }));
-    expect(heading()).toBe('Find a property');
-    expect(document.title).toBe('Find a property · APG Post-It');
+    expect(heading()).toBe('Find');
+    expect(document.title).toBe('Find · APG Post-It');
     expect(screen.getByRole('link', { name: 'Find' }).getAttribute('aria-current')).toBe('page');
   });
 
@@ -303,7 +303,7 @@ describe("the manager's screens", () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     // Nothing unsaved any more: moving on asks nothing.
     await userEvent.click(screen.getByRole('link', { name: 'Find' }));
-    expect(heading()).toBe('Find a property');
+    expect(heading()).toBe('Find');
   });
 
 });

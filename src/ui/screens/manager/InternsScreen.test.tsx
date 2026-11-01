@@ -223,6 +223,47 @@ describe('the Interns screen: who posted?', () => {
   });
 });
 
+describe('the Interns screen: long answers and groups', () => {
+  it('pages twelve posts of a listing ten at a time, and a long group in the panel', async () => {
+    const many = Array.from({ length: 12 }, (_, i) =>
+      post(intern.name, 'Kapitolyo Ground Floor Retail, Pasig', 'Posted', `2026-10-${String(10 + i).padStart(2, '0')}`, '09:00'),
+    );
+    renderAt(THURSDAY, {
+      platform: server({
+        posts: { ok: true, posts: many },
+        assignments: { ok: true, assignments: queue(intern.name, 14) },
+      }),
+    });
+    await rowOf('Bea Lim');
+    await userEvent.type(screen.getByRole('searchbox', { name: /Who posted\?/ }), 'kapitolyo');
+    const results = screen.getByRole('region', { name: 'Who posted?' });
+    expect(results.querySelectorAll('.who-answer')).toHaveLength(10);
+    const nav = within(results).getByRole('navigation', { name: 'Posts, pages' });
+    expect(results.textContent).toContain('1–10 of 12');
+    await userEvent.click(within(nav).getByRole('button', { name: 'Next page' }));
+    expect(results.querySelectorAll('.who-answer')).toHaveLength(2);
+    expect(results.querySelector('.who-answer')!.textContent).toContain('11 Oct');
+    // A new search starts again at the top.
+    await userEvent.type(screen.getByRole('searchbox', { name: /Who posted\?/ }), ' pasig');
+    await waitFor(() => expect(results.querySelectorAll('.who-answer')).toHaveLength(10));
+
+    await userEvent.click(within(await rowOf(intern.name)).getByRole('button', { name: new RegExp(intern.name) }));
+    const panel = screen.getByRole('complementary', { name: intern.name });
+    const group = within(panel).getByRole('region', { name: /^Not shared/ });
+    expect(group.querySelectorAll('.panel-item')).toHaveLength(10);
+    const pages = within(group).getByRole('navigation', { name: 'Not shared, pages' });
+    // Compact in the side pane: arrows only.
+    expect(within(pages).getByRole('button', { name: 'Next page' }).textContent).toBe('');
+    await userEvent.click(within(pages).getByRole('button', { name: 'Page 2' }));
+    expect(Array.from(group.querySelectorAll('.panel-item__name')).map((n) => n.textContent)).toEqual([
+      `${intern.name} listing 11`,
+      `${intern.name} listing 12`,
+      `${intern.name} listing 13`,
+      `${intern.name} listing 14`,
+    ]);
+  });
+});
+
 describe("the Interns screen: an intern's week", () => {
   it('opens beside the list with the queue grouped, links to the posts, and the last four weeks', async () => {
     const platform = server();
@@ -242,10 +283,9 @@ describe("the Interns screen: an intern's week", () => {
       'Posted 2',
     ]);
     expect(group('Pending').textContent).toContain('Seaside Residences 2BR, Pasay');
-    // A long group shows its first five, and the rest on request. Not shared has no link to open.
-    expect(group('Not shared').querySelectorAll('.panel-item')).toHaveLength(5);
-    await userEvent.click(within(group('Not shared')).getByRole('button', { name: 'Show all 7' }));
+    // Ten or fewer show whole, with no pages. Not shared has no link to open.
     expect(group('Not shared').querySelectorAll('.panel-item')).toHaveLength(7);
+    expect(within(panel).queryByRole('navigation')).toBeNull();
     expect(within(group('Not shared')).queryByRole('button', { name: /Open/ })).toBeNull();
     await userEvent.click(within(group('Posted')).getByRole('button', { name: 'Open the post of Kapitolyo Ground Floor Retail, Pasig' }));
     await waitFor(() => expect(platform.opened).toEqual([JAN_KAPITOLYO]));

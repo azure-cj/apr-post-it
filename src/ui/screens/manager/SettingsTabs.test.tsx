@@ -133,6 +133,31 @@ describe('Settings → Listings', () => {
     await waitFor(() => expect(platform.opened).toEqual(['https://drive.google.com/drive/folders/s2']));
   });
 
+  it('pages a long list ten at a time, inside its fold', async () => {
+    const sold = Array.from({ length: 23 }, (_, i) => ({ id: `s${i}`, name: `Sold listing ${String(i + 1).padStart(2, '0')}` }));
+    renderApp({
+      platform: fakeServer({ indexCheck: { ...CHECK, sold }, directoryStatus: { ok: true, running: false, done: 0, total: 0, builtAt: '' } }),
+      user: admin,
+      path: '/settings?tab=listings',
+    });
+    const card = screen.getByRole('region', { name: 'Listings check' });
+    const fold = (await within(card).findByText('Sold')).closest('details')!;
+    await userEvent.click(within(fold).getByText('Sold'));
+    const list = within(fold).getByRole('list', { name: 'Sold' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10);
+    const nav = within(fold).getByRole('navigation', { name: 'Sold, pages' });
+    await userEvent.click(within(nav).getByRole('button', { name: 'Page 3' }));
+    expect(within(list).getAllByRole('listitem').map((li) => li.textContent?.replace('Open in Drive', ''))).toEqual([
+      'Sold listing 21',
+      'Sold listing 22',
+      'Sold listing 23',
+    ]);
+    // A search starts at its first page; ten or fewer have none.
+    await userEvent.type(within(fold).getByRole('searchbox', { name: 'Search sold' }), 'listing 1');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10);
+    expect(within(fold).queryByRole('navigation')).toBeNull();
+  });
+
   it('reads the build every poll while it runs, and stops when it is done', async () => {
     const replies = [
       { running: true, done: 320, total: 1797, builtAt: '' },

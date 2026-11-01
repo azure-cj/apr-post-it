@@ -127,7 +127,7 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | Action | Who | What it does |
 |---|---|---|
 | `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`; also `version` (`SERVER_VERSION` at the top of `Code.gs`) and `rules`: `{ cooldownDays, repostDueDays, perWeek, perIntern }`, the live values (below); `perIntern` is `perWeek` again, under its old name, for an app built before v6. |
-| `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). For an Admin only, `docId` (the posting document's id, the DocId column) when there is one, for doc health's "Open doc". One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. With the geocoding sheet joined on by FolderId (below): `lat` and `lng`, numbers, only for a listing that has a good position. |
+| `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). For an Admin only, `docId` (the posting document's id, the DocId column) when there is one, for doc health's "Open doc". One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `building` (Building / street), `created` (the checker's Created as `yyyy-MM-dd`, `''` when unreadable), `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. With the geocoding sheet joined on by FolderId (below): `lat` and `lng`, numbers, only for a listing that has a good position. |
 | `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. For an intern and a document nobody has separated, also `unseparated: true` and `flaggedLines` (below). The checker's fields too, joined as for `properties`. |
 | `posts` | everyone | The Posts tab as rows, every value text. An intern gets only their own. |
 | `assignments` | everyone | The Assignments tab as rows, every value text. An intern gets only their own. Each row also has `week`: the Monday of the week its Date is in (`''` when the date can't be read), with `date` kept as written, so a daily row from before v6 reads as its week (below). |
@@ -235,7 +235,8 @@ The listing checker is another team's Apps Script, and Post-It never edits it, i
 its files. It publishes its Index as CSV (`CONFIG.CHECKER_INDEX_CSV_URL`), and `properties`
 reads that one URL with `UrlFetchApp`, parses it with `Utilities.parseCsv`, and joins it to
 the directory on **Folder ID** = `FolderId`: `City`, `Size (sqm)` (as text), `Deal type`,
-`Status` (as `availability`) and `inChecker`. The parsed index is cached for 10 minutes, in
+`Building / street` (as `building`), `Created` (as `created`, `yyyy-MM-dd`), `Status` (as
+`availability`) and `inChecker`. The parsed index is cached for 10 minutes, in
 several cache entries because one holds at most 100 KB. If the fetch fails, or the URL is
 `''`, the properties go out unchanged, without those fields; the call never fails for it.
 `indexCheck` reads the CSV fresh and lists what one side has that the other does not, and

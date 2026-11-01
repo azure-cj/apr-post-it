@@ -27,13 +27,30 @@ export interface DirectoryStatus {
   readonly lastAttempt: number | null;
 }
 
+/** How Find orders its results. "best" is Best match while searching, and Name otherwise. */
+export type FindSort = 'best' | 'name' | 'newest' | 'posted';
+
+/** Find's Filter menu: each one narrows the list while it is on. */
+export interface FindFilters {
+  readonly sale: boolean;
+  readonly lease: boolean;
+  /** Not in cooldown, not sold, and has a document. */
+  readonly ready: boolean;
+  readonly fresh: boolean;
+  readonly photos: boolean;
+}
+
 /** What the Find screen was showing, kept while you open a listing and come back. */
 export interface FindState {
   readonly query: string;
-  /** A category facet's key, or '' for every category. */
+  /** A category as components' categoryKind gives it ('warehouse', 'condo', …), or '' for all. */
   readonly category: string;
-  /** A listing-type facet's key, or '' for every listing type. */
-  readonly listingType: string;
+  readonly filters: FindFilters;
+  readonly sort: FindSort;
+  /** The page of results, from 1. */
+  readonly page: number;
+  /** The listing last opened from Find, so coming back puts focus on its row. */
+  readonly opened: string;
 }
 
 /** What the server said about itself in its last `ping`. */
@@ -52,7 +69,15 @@ export interface ServerState {
   readonly rules: ServerRules | null;
 }
 
-export const EMPTY_FIND: FindState = Object.freeze({ query: '', category: '', listingType: '' });
+export const NO_FIND_FILTERS: FindFilters = Object.freeze({ sale: false, lease: false, ready: false, fresh: false, photos: false });
+export const EMPTY_FIND: FindState = Object.freeze({
+  query: '',
+  category: '',
+  filters: NO_FIND_FILTERS,
+  sort: 'best',
+  page: 1,
+  opened: '',
+});
 const IDLE: DirectoryStatus = Object.freeze({ refreshing: false, error: null, lastAttempt: null });
 const UNKNOWN_SERVER: ServerState = Object.freeze({ known: false, version: '', versionStatus: 'unknown', rules: null });
 

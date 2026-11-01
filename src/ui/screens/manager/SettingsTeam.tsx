@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Button, Chip, EmptyState, Icon, Notice, Pill, SearchBox, Spinner, TextInput } from '../../components';
+import { Button, Chip, EmptyState, Icon, Notice, PAGE_SIZE, Pagination, Pill, SearchBox, Spinner, TextInput, usePaged } from '../../components';
 import { facebookProfileProblem, normalizeProfileLink } from '@/core/links';
 import { addDays, samePerson, shortDate, type TeamMember } from '@/core/summary';
 import type { AddPersonInput, UpdatePersonInput } from '@/core/tracker';
@@ -103,6 +103,7 @@ export function SettingsTeam({
   }, [people, query, filters]);
 
   const member = picked ? people.find((m) => samePerson(m.name, picked)) ?? null : null;
+  const paged = usePaged(shown, PAGE_SIZE, [query.trim().toLowerCase(), ...[...filters].sort()].join('|'));
 
   const toggle = (filter: Filter, on: boolean) =>
     setFilters((now) => {
@@ -152,57 +153,60 @@ export function SettingsTeam({
       }
     />
   ) : (
-    <table className="team-table">
-      <thead>
-        <tr>
-          <th scope="col">Name</th>
-          <th scope="col">FB broker name</th>
-          <th scope="col">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {shown.map((m, index) => {
-          const self = me !== undefined && samePerson(m.name, me);
-          const selected = member !== null && samePerson(m.name, member.name);
-          const accounts = m.fbAccounts ?? [];
-          return (
-            <tr
-              key={`${index}-${m.name}`}
-              className={['team-table__row', selected ? 'team-table__row--on' : null, isOn(m) ? null : 'team-table__row--off']
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => setPicked(m.name)}
-            >
-              <td className="team-table__name">
-                <button
-                  type="button"
-                  className="team-table__open"
-                  aria-expanded={selected}
-                  ref={(el) => {
-                    if (el) rows.current.set(m.name, el);
-                    else rows.current.delete(m.name);
-                  }}
-                >
-                  {m.name}
-                </button>
-                {self ? <span className="settings__you">You</span> : null}
-                {m.role === 'Admin' ? <span className="team-table__role">Admin</span> : null}
-              </td>
-              <td>{accounts.length === 0 ? <span className="settings__muted">—</span> : accounts.join(', ')}</td>
-              <td>
-                {isOn(m) ? (
-                  <Pill tone="ok" dot>
-                    Active
-                  </Pill>
-                ) : (
-                  <Pill tone="neutral">Turned off</Pill>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <>
+      <table className="team-table">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">FB broker name</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody ref={paged.topRef}>
+          {paged.items.map((m, index) => {
+            const self = me !== undefined && samePerson(m.name, me);
+            const selected = member !== null && samePerson(m.name, member.name);
+            const accounts = m.fbAccounts ?? [];
+            return (
+              <tr
+                key={`${index}-${m.name}`}
+                className={['team-table__row', selected ? 'team-table__row--on' : null, isOn(m) ? null : 'team-table__row--off']
+                  .filter(Boolean)
+                  .join(' ')}
+                onClick={() => setPicked(m.name)}
+              >
+                <td className="team-table__name">
+                  <button
+                    type="button"
+                    className="team-table__open"
+                    aria-expanded={selected}
+                    ref={(el) => {
+                      if (el) rows.current.set(m.name, el);
+                      else rows.current.delete(m.name);
+                    }}
+                  >
+                    {m.name}
+                  </button>
+                  {self ? <span className="settings__you">You</span> : null}
+                  {m.role === 'Admin' ? <span className="team-table__role">Admin</span> : null}
+                </td>
+                <td>{accounts.length === 0 ? <span className="settings__muted">—</span> : accounts.join(', ')}</td>
+                <td>
+                  {isOn(m) ? (
+                    <Pill tone="ok" dot>
+                      Active
+                    </Pill>
+                  ) : (
+                    <Pill tone="neutral">Turned off</Pill>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <Pagination {...paged.pagination} className="team__pages" />
+    </>
   );
 
   return (

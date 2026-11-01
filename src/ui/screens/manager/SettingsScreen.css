@@ -171,6 +171,11 @@
   padding: var(--space-4) var(--space-8);
 }
 
+.team__pages {
+  padding: var(--space-6) var(--space-4) var(--space-4);
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
 .team-table {
   width: 100%;
   border-collapse: collapse;
@@ -596,10 +601,8 @@ summary.check__row:focus-visible {
 
 .check__list {
   display: grid;
-  max-height: 280px;
   margin: 0;
   padding: var(--space-2) var(--space-6);
-  overflow-y: auto;
   border-radius: var(--radius-row);
   background: var(--inset);
   list-style: none;

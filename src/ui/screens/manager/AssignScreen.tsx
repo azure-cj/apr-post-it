@@ -82,6 +82,9 @@ export interface AssignScreenProps {
   readonly onQueuesSaved?: ((note: string) => void) | undefined;
   /** Opens a post's link. Default: the link opens as links do. */
   readonly onOpenLink?: ((url: string) => void) | undefined;
+  /** The library's page, when the URL keeps it (?page=). Without it, the library keeps its own. */
+  readonly libraryPage?: number | undefined;
+  readonly onLibraryPageChange?: ((page: number) => void) | undefined;
 }
 
 type Mode = 'library' | 'paste';
@@ -194,6 +197,8 @@ export function AssignScreen({
   onSaveQueues,
   onQueuesSaved,
   onOpenLink,
+  libraryPage,
+  onLibraryPageChange,
 }: AssignScreenProps) {
   const [filling, setFilling] = useState(false);
   const { cooldownDays, repostDueDays } = settings;
@@ -989,6 +994,8 @@ export function AssignScreen({
               onAdd={(p) => add([p])}
               tab={tab}
               onTab={(next) => setTab(next)}
+              page={libraryPage}
+              onPageChange={onLibraryPageChange}
             />
           ) : (
             <PastePanel

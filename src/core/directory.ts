@@ -181,7 +181,8 @@ function buildIndex(properties: readonly Property[], fetchedAt: number): Index {
   const list = [...byId.values()].sort((a, b) => byName.compare(a.name, b.name));
   const entries = list.map((property): Entry => ({
     property,
-    haystack: normalizeForSearch(`${property.name} ${folderLine(property)}`),
+    // The checker's city and building too, so "Makati" finds what the name doesn't say.
+    haystack: normalizeForSearch(`${property.name} ${folderLine(property)} ${property.city ?? ''} ${property.building ?? ''}`),
     categoryKey: normalizeForSearch(property.category),
     listingTypeKey: normalizeForSearch(property.listingType),
   }));
@@ -259,6 +260,8 @@ function readProperty(raw: unknown): Property | null {
     ...optionalText('city', row['city']),
     ...optionalText('size', row['size']),
     ...optionalText('dealType', row['dealType']),
+    ...optionalText('building', row['building']),
+    ...optionalDay('created', row['created']),
     ...optionalAvailability(row['availability']),
     ...(typeof row['inChecker'] === 'boolean' ? { inChecker: row['inChecker'] } : {}),
     ...optionalPosition(row['lat'], row['lng']),
@@ -272,7 +275,13 @@ function optionalPosition(lat: unknown, lng: unknown): { lat?: number; lng?: num
   return { lat, lng };
 }
 
-function optionalText<K extends 'city' | 'size' | 'dealType'>(name: K, value: unknown): { [P in K]?: string } {
+/** A yyyy-MM-dd day, or nothing: the checker's Created, as the server reads it. */
+function optionalDay<K extends 'created'>(name: K, value: unknown): { [P in K]?: string } {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return {};
+  return { [name]: value.trim() } as { [P in K]?: string };
+}
+
+function optionalText<K extends 'city' | 'size' | 'dealType' | 'building'>(name: K, value: unknown): { [P in K]?: string } {
   if (typeof value !== 'string' && typeof value !== 'number') return {};
   const text = asText(value).trim();
   return { [name]: text } as { [P in K]?: string };

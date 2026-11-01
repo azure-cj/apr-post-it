@@ -1,0 +1,143 @@
+/* Where we are on the left, the way through on the right. Quiet until used:
+   the current page is the only gold, because it is what is selected. */
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-8);
+}
+
+.pagination__range {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.pagination__nav {
+  margin-inline-start: auto;
+}
+
+.pagination__list {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pagination__page,
+.pagination__step {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 36px;
+  height: 36px;
+  padding: 0 var(--space-4);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: 1;
+  font-weight: var(--weight-label);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.pagination__step {
+  padding-inline: var(--space-4) var(--space-5);
+}
+
+li:last-child > .pagination__step {
+  padding-inline: var(--space-5) var(--space-4);
+}
+
+/* Hover is a wash that fades in. */
+.pagination__page::before,
+.pagination__step::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--border-width) * -1);
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.pagination__page:hover::before,
+.pagination__step:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.pagination__page:active,
+.pagination__step:active:not(:disabled) {
+  transform: scale(var(--press-scale));
+}
+
+.pagination__page:hover,
+.pagination__step:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* The page shown: selected, so gold (wash, edge and text), and heavier, so it reads without colour. */
+.pagination__page--current,
+.pagination__page--current:hover {
+  border-color: var(--gold-edge);
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-weight: var(--weight-heading);
+  cursor: default;
+}
+
+.pagination__page--current::before {
+  display: none;
+}
+
+.pagination__step:disabled {
+  color: var(--placeholder);
+  cursor: default;
+}
+
+.pagination__chevron {
+  flex: none;
+}
+
+.pagination__gap {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 36px;
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+}
+
+.pagination--compact .pagination__step {
+  padding: 0;
+  width: 36px;
+}
+
+.pagination--compact .pagination__list {
+  gap: var(--space-1);
+}
+
+/* A paged list's top: where paging lands. It is a place, not a control, so
+   it takes focus without a ring (as a screen's h1 does), and stops clear of
+   the title strip when scrolled to. */
+[data-paged-top] {
+  scroll-margin-top: var(--space-24);
+}
+
+[data-paged-top]:focus,
+[data-paged-top]:focus-visible {
+  outline: none;
+}

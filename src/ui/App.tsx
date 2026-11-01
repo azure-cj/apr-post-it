@@ -105,7 +105,7 @@ function titleFor(pathname: string): string | null {
   if (pathname.startsWith('/property/')) return null;
   const titles: Record<string, string> = {
     '/sign-in': 'Sign in',
-    '/find': 'Find a property',
+    '/find': 'Find',
     '/queue': 'My queue',
     '/assign': 'Assign',
     '/tracker': 'Tracker',
@@ -783,6 +783,8 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
   const week = weekOf(isDate(asked) ? asked : today);
   // No intern in the link: the screen asks whose queue first.
   const intern = params.get('intern') || null;
+  // ?page=: the library's page, so Back and a reload keep it.
+  const libraryPage = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1);
 
   // Gone from the screen: nothing left unsaved to guard.
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
@@ -793,6 +795,8 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
     if (who) next.set('intern', who);
     else next.delete('intern');
     next.delete('date');
+    // The library's page belongs to one intern's week: another starts at the first.
+    next.delete('page');
     next.set('week', changes.week ?? week);
     // Choosing an intern is a step forward, so Back returns to the list; a week is not.
     setParams(next, { replace: changes.intern === undefined });
@@ -825,6 +829,13 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
         notify(note, 'ok');
       }}
       onOpenLink={(url) => void platform.open(url)}
+      libraryPage={libraryPage}
+      onLibraryPageChange={(page) => {
+        const next = new URLSearchParams(params);
+        if (page > 1) next.set('page', String(page));
+        else next.delete('page');
+        setParams(next, { replace: true });
+      }}
     />
   );
 }

@@ -89,6 +89,24 @@ describe('Settings → Team', () => {
     expect(names()).toHaveLength(4);
   });
 
+  it('pages a team of more than ten, and a search starts at its first page', async () => {
+    const interns = Array.from({ length: 13 }, (_, i) => ({
+      name: `Intern ${String(i + 1).padStart(2, '0')}`,
+      role: 'Intern',
+      email: '',
+      fbAccounts: `FB ${i + 1}`,
+      active: true,
+    }));
+    await openTeam({ team: { ok: true, team: [...TEAM.team, ...interns] } });
+    expect(names()).toHaveLength(10);
+    const nav = screen.getByRole('navigation', { name: 'Pages' });
+    expect(nav.closest('.pagination')!.textContent).toContain('1–10 of 17');
+    await userEvent.click(within(nav).getByRole('button', { name: 'Next page' }));
+    expect(names()).toEqual(['Intern 07', 'Intern 08', 'Intern 09', 'Intern 10', 'Intern 11', 'Intern 12', 'Intern 13']);
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search the team' }), 'intern');
+    expect(names()[0]).toBe('Intern 01');
+  });
+
   it('says so when no one is on the team yet', async () => {
     renderApp({ platform: fakeServer({ team: { ok: true, team: [] } }), user: admin, path: '/settings' });
     expect(await screen.findByText('No one yet')).toBeTruthy();

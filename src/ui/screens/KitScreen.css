@@ -123,3 +123,8 @@
   font-size: var(--text-title);
   font-weight: var(--weight-heading);
 }
+
+/* As wide as a side pane. */
+.kit__narrow {
+  max-width: 360px;
+}

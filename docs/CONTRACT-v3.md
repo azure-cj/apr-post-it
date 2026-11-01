@@ -236,3 +236,12 @@ The owner: "assign per week only, e.g. 40 listings per week; Friday is the final
 - `core/summary.docHealth(properties)` returns `{ noSeparator, noDocument, noPhotos, emptyAbove, unreadable }`, each a list of `{ id, name, docId?, folder }`.
 - The issues text comes from BuildDirectory: "No separator line", "No document", "No photos", "Document is empty above the separator", "Could not read document". The server's `properties` rows should carry `docId` (the DocId column) when present.
 - Each list offers "Open doc" (https://docs.google.com/document/d/<docId>/edit) or Open folder, so an admin can fix it in Google Docs. A fixed document applies at once, because opening a listing re-reads it live.
+
+## v8 (proposed with the Find redesign; the owner to agree): building and created
+
+- `properties` rows gain two more optional checker fields, joined the same way: `building`
+  (the CSV's "Building / street", for search) and `created` (its "Created" as `yyyy-MM-dd`;
+  `''` when it can't be read). Absent when the join is off.
+- `Property` gains `building?` and `created?`. The directory's search also matches the city and
+  the building. Find's "Newest" sorts by `created`, and is offered only once some listing has it.
+- No version bump: the fields are optional, and an older server simply doesn't send them.

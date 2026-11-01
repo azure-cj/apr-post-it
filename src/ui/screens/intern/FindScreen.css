@@ -1,69 +1,149 @@
-/* Find: one column, as wide as a line can be read in one sweep. Name on
-   the left, what to know about it on the right. */
+/* Find: the heading and the list's age on one line, one big search under it,
+   the categories and the Filter and Sort menus on one line, then ten rows a
+   page. Each row lines up with the next: the name and where it is on the
+   left, its status, then its photos, in columns, so a page reads at a glance. */
 .find {
-  --find-max: 920px;
+  --find-max: 1080px;
+  --find-name: 30rem;
+  --find-state: 17rem;
+  --find-photos: 6.5rem;
 }
 
 .find .page-header,
-.find__controls,
+.find__bar,
 .find__results {
   max-width: var(--find-max);
+}
+
+.find__header {
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
 }
 
 .find__title-row {
   justify-content: space-between;
 }
 
-.find__freshness {
+/* ---- the list's age: a footnote ------------------------------------------ */
+
+.find__fresh {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-height: 36px;
-}
-
-.find__controls {
-  display: grid;
-  gap: var(--space-6);
-  margin-bottom: var(--space-12);
-}
-
-.find__hint {
+  margin: 0;
   color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.find__fresh .button--link {
   font-size: var(--text-caption);
   line-height: var(--lh-caption);
 }
 
-.find__chips {
+.find__fresh--failed .find__fresh-icon {
+  color: var(--warn-text);
+}
+
+/* ---- the search: the screen's one big control --------------------------- */
+
+/* The search fills the row; Filter and Sort sit at its end, as tall as it. */
+.find__find {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-4);
 }
 
-.find__results {
-  display: grid;
-  gap: var(--space-6);
+.find__search {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.find__loading {
-  padding-block: var(--space-12);
+.find__tools .button.menu__button {
+  height: 52px;
+  padding-inline: var(--space-8);
 }
 
-.find__count {
-  margin: 0;
+.find__search .searchbox__input {
+  height: 52px;
+  padding-inline-start: 48px;
+  font-size: var(--text-name);
 }
 
-.find__more {
+.find__search .searchbox__icon {
+  inset-inline-start: var(--space-8);
+}
+
+/* "/" at the field's end says how to come back to it; gone while typing. */
+.find__slash {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: var(--space-8);
+  min-width: 24px;
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-family: var(--body-font);
+  font-size: var(--text-caption);
+  line-height: 20px;
+  text-align: center;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.find__search:focus-within .find__slash,
+.find__search:has(.searchbox__clear) .find__slash {
+  opacity: 0;
+}
+
+/* ---- categories ------------------------------------------------------------ */
+
+.find__bar {
+  margin-bottom: var(--space-6);
+}
+
+/* The categories on one line; more than fit scroll sideways, never wrap. */
+.find__chips {
   display: flex;
-  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-inline-start: calc(var(--space-2) * -1);
+  padding: var(--space-2) var(--space-12) var(--space-2) var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* The row fades at its end, so more chips read as "scroll", not as cut off. */
+  mask-image: linear-gradient(to right, var(--text) calc(100% - var(--space-12)), transparent);
+}
+
+.find__chips > .chip {
+  flex: none;
+}
+
+.find__tools {
+  display: flex;
+  flex: none;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-  padding: var(--space-4) var(--space-8) 0;
+  gap: var(--space-4);
+}
+
+.find__sort .menu__panel {
+  min-width: 180px;
 }
 
 /* ---- the results ---------------------------------------------------------- */
 
-.results {
+.find__results {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.find-list {
   margin: 0;
   padding: var(--space-3);
   list-style: none;
@@ -74,26 +154,31 @@
     var(--card-edge) border-box;
 }
 
-.results__item + .results__item {
+.find-row + .find-row {
   border-top: var(--border-width) solid var(--border-soft);
 }
 
-.result {
+.find-row__link,
+.find-row--skeleton {
+  display: grid;
+  /* The name column stops at a reading width, so the status sits near what it describes. */
+  grid-template-columns: minmax(0, var(--find-name)) var(--find-state) minmax(var(--find-photos), 1fr);
+  align-items: center;
+  gap: var(--space-2) var(--space-10);
+  min-height: 60px;
+  padding: var(--space-4) var(--space-8);
+}
+
+.find-row__link {
   position: relative;
   isolation: isolate;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-4) var(--space-10);
-  min-height: 64px;
-  padding: var(--space-5) var(--space-8);
   border-radius: var(--radius-row);
   color: var(--text);
   text-decoration: none;
 }
 
 /* Hover is a wash that fades in: only opacity animates. */
-.result::before {
+.find-row__link::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -104,25 +189,22 @@
   transition: opacity var(--dur-fast) var(--ease-out);
 }
 
-.result:hover::before {
+.find-row__link:hover::before,
+.find-row__link:focus-visible::before {
   opacity: 1;
 }
 
-.result:focus-visible {
+.find-row__link:focus-visible {
   outline-offset: -2px;
 }
 
-.result:focus-visible::before {
-  opacity: 1;
-}
-
-.result__main {
+.find-row__main {
   display: grid;
   gap: var(--space-1);
   min-width: 0;
 }
 
-.result__name {
+.find-row__name {
   font-family: var(--heading-font);
   font-size: var(--text-name);
   line-height: var(--lh-name);
@@ -130,49 +212,156 @@
   overflow-wrap: anywhere;
 }
 
-.result__folder {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-}
-
-.result__side {
+.find-row__meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-4) var(--space-8);
+  gap: 0 var(--space-3);
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
 }
 
-.result__photos {
-  min-width: 7ch;
+.find-row__cat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* "·" between the parts, drawn, so it is never read out. */
+.find-row__part::before {
+  content: "·";
+  margin-inline-end: var(--space-3);
+}
+
+.find-row__cat--dot + .find-row__part::before {
+  content: none;
+}
+
+.find-row__note {
   color: var(--text-label);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
+}
+
+.find-row__state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+.find-row__holder {
+  color: var(--info-text);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  white-space: nowrap;
+}
+
+.find-row__photos {
+  color: var(--text-label);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
   font-variant-numeric: tabular-nums;
   text-align: end;
+  white-space: nowrap;
 }
 
-.result__photos--none {
+.find-row__photos--none {
   color: var(--text-muted);
 }
 
-/* Narrow: what to know about it goes under the name. */
+.find__pages {
+  padding-inline: var(--space-4);
+}
+
+/* Nothing matches: one line and the way out. */
+.find__none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-10) var(--space-12);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--card-bg) padding-box,
+    var(--card-edge) border-box;
+  color: var(--text-label);
+}
+
+.find__none p {
+  margin: 0;
+}
+
+/* ---- loading: the shape of ten rows, breathing ---------------------------- */
+
+.skeleton {
+  display: block;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--neutral-soft);
+  animation: find-breathe 1.6s var(--ease-out) infinite alternate;
+}
+
+.skeleton--name {
+  height: 18px;
+}
+
+.skeleton--meta {
+  margin-top: var(--space-3);
+  background: var(--neutral-bg);
+}
+
+.skeleton--pill {
+  width: 7rem;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+}
+
+.skeleton--photos {
+  width: 4.5rem;
+  margin-inline-start: auto;
+  background: var(--neutral-bg);
+}
+
+.find-row--skeleton:nth-child(even) .skeleton {
+  animation-delay: 0.2s;
+}
+
+@keyframes find-breathe {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* Compact: the status column narrows. */
+@container shell (width < 1100px) {
+  .find {
+    --find-state: 15rem;
+  }
+}
+
+/* Narrow: what to know about it goes under the name, and the bar wraps. */
 @container shell (width < 900px) {
-  .result {
-    grid-template-columns: minmax(0, 1fr);
+  .find-row__link,
+  .find-row--skeleton {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .result__side {
-    justify-content: flex-start;
+  .find-row__main {
+    grid-column: 1 / -1;
   }
 
-  .result__photos {
-    min-width: 0;
-    text-align: start;
-  }
 }

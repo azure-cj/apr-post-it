@@ -14,7 +14,7 @@ const PUBLISHED =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vT_xOq-DEX-QXpSMfkkH8eEiwVkd1ylTKh6jhOxY4TfjrvnpLg-OqemlwcL6GLWlNXvjiWyTlZEymJU/pub?gid=90841346&single=true&output=csv';
 
 const BASE = ['id', 'name', 'category', 'listingType', 'subCategory', 'photoCount', 'hasIssues', 'issues'];
-const JOINED = ['city', 'size', 'dealType', 'availability', 'inChecker'];
+const JOINED = ['city', 'size', 'dealType', 'building', 'created', 'availability', 'inChecker'];
 
 function properties(w: ReturnType<typeof createWorld>): Row[] {
   const reply = w.call('jan', 'properties');
@@ -50,6 +50,20 @@ describe('the checker join', () => {
       city: '', size: '', dealType: '', availability: '', inChecker: false,
     });
     expect(rows).toHaveLength(3);
+  });
+
+  it('adds the building for search and the day the checker first indexed the folder, as yyyy-MM-dd', () => {
+    const w = createWorld();
+    w.publishChecker([
+      { id: CASA.id, name: 'a', building: 'Casa Amara, Sumulong Hwy', created: '2026-03-09 14:20' },
+      { id: TOWER.id, name: 'b', created: '3/9/2026' },
+      { id: LOT_9.id, name: 'c', created: 'last spring' },
+    ]);
+    const rows = new Map(properties(w).map((r) => [r['id'], r]));
+
+    expect(rows.get(CASA.id)).toMatchObject({ building: 'Casa Amara, Sumulong Hwy', created: '2026-03-09' });
+    expect(rows.get(TOWER.id)).toMatchObject({ building: '', created: '2026-03-09' });
+    expect(rows.get(LOT_9.id)).toMatchObject({ created: '' });
   });
 
   it('flags Sold however the checker cases it, and reads any other status as unknown', () => {

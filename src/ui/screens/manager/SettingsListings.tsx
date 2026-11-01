@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Button, Card, Notice, SearchBox, Spinner } from '../../components';
+import { Button, Card, Notice, PAGE_SIZE, Pagination, SearchBox, Spinner, usePaged } from '../../components';
 import { BackendError } from '@/core/backend';
 import type { IndexCheck } from '@/core/types';
 import { ConfirmAction, sentence } from './SettingsShared';
@@ -264,6 +264,7 @@ function CheckGroup({
     const q = query.trim().toLowerCase();
     return q ? items.filter((i) => `${i.name} ${i.path ?? ''}`.toLowerCase().includes(q)) : items;
   }, [items, query]);
+  const paged = usePaged(shown, PAGE_SIZE, query.trim().toLowerCase());
 
   if (items.length === 0) {
     return (
@@ -286,8 +287,8 @@ function CheckGroup({
         {shown.length === 0 ? (
           <p className="settings__muted check__none">No match for &ldquo;{query.trim()}&rdquo;.</p>
         ) : (
-          <ul className="check__list" id={listId} aria-label={label}>
-            {shown.map((item) => (
+          <ul className="check__list" id={listId} aria-label={label} ref={paged.topRef}>
+            {paged.items.map((item) => (
               <li key={item.id || item.name} className="check__item">
                 <span className="check__text">
                   {item.name}
@@ -302,6 +303,7 @@ function CheckGroup({
             ))}
           </ul>
         )}
+        <Pagination {...paged.pagination} compact label={`${label}, pages`} />
       </div>
     </details>
   );

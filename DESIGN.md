@@ -307,7 +307,7 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   started and Missed danger, Behind warn, On track neutral, Done ok), and the last post.
   A row opens that intern's week in a side pane (the row gets the gold selected wash and
   mark): the bar and pace, Open in Assign and FB profile, the last 4 weeks as small bars,
-  then Not shared / Pending / Posted (with Open) / Missed, five each before "Show all".
+  then Not shared / Pending / Posted (with Open) / Missed, ten a page (compact pages).
   Escape or Close shuts it. Revoked people sit in a folded "Revoked" card below. The
   Tracker's This week card shows the same week as "12 / 40" and the pace, and links here
   with "See all". The intern's My queue heads the week: "This week · 12 of 40", a
@@ -343,6 +343,22 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   per week, the week, keep existing queues, the active interns as ticks, then Preview
   (one line per intern with a green fill bar against "per week", opening to the list;
   how many short; the skipped reasons) and Save all, the dialog's one gold button.
+- **Find** (`/find`, both roles) is the listing browser: "Find" and a small "Updated 10:42 ·
+  Refresh" on one line (a failed refresh says "Couldn't update · Try again" there, never a
+  banner); one big search (name, city, building; focused on arrival, `/` from anywhere) with
+  Filter (For sale, For lease · Ready to post, Never posted, Has photos) and Sort (Best match
+  while searching, Name, Newest once the checker sends Created, Last posted) at its end; the
+  categories as one scrolling row of chips with counts, as Assign's. Ten rows a page, in
+  columns: name over "● category · city · size · sale/lease"; one status pill (Ready ok, In
+  cooldown until Fri 13 Nov danger, Sold neutral, No separator warn, No document danger) with
+  "In your queue" (an intern) or "With Jan" (an admin) beside it in info text; the photos.
+  Search, category, filters, sort and page are kept while a listing is open, and coming back
+  lands on its row. Loading is ten skeleton rows; nothing matching is one line and Clear
+  filters.
+- **Lists of more than ten page ten at a time** with Pagination ("1–10 of 1,474", ‹ Prev
+  1 … 4 5 6 … 148 Next ›), never "Show more": Find, the Assign library (its page in `?page=`),
+  Who posted?, the Interns panel's groups, Tracker's document groups, Settings' Team and
+  listing check lists, Records' By intern and My queue. Ten or fewer show whole, with no bar.
 - **Records** (`/records`, Admin; nav between Interns and Find) is an overview: the
   period (‹ › This week, Last week, This month, Last 30 days, Custom) and Export CSV in
   the header; five tiles against the period before; Posts per day as hand-built CSS bars
@@ -401,6 +417,8 @@ only, not in the production build) shows each in every variant with the product'
 | **Spinner** | `small` 16, `regular` 24; `label` | Turns at constant speed; with reduced motion it breathes instead |
 | **EmptyState** | `title`, body, `action`, `icon` | Says what is empty, why, and the one thing to do next |
 | **Sidebar / TitleBar** | see §8 | Brand word gold; the current item gets a gold mark and brighter text. The title bar replaced the old top bar. On the desktop the window has no frame (`decorations: false`): the bar is the drag region (double-click maximizes) and carries minimize, maximize/restore and close at the top-right corner, 46×32 with inline SVG glyphs. Close turns danger red on hover, never gold, and always asks first |
+| **Pagination**, `usePaged` | `page`, `total`, `pageSize` (10), `onPageChange`, `label` ("Pages"), `compact`; `usePaged(items, 10, resetKey, control?)` | Hidden on one page. The current page is selected: gold wash, edge and text, heavier, `aria-current="page"`. The gaps keep the same number of slots, so buttons don't move under the pointer. Arrows, Home and End move between its buttons. A page change scrolls the list's top into view and focuses it (as a place, no ring); a new `resetKey` (search, filters) goes back to page 1 |
+| **MenuButton** | `label`, `count`, `text`, `leading`, `icon` | A small panel under a button: Filter, Sort, ⋯. Escape or a click outside closes it, focus back on the button |
 | **CheckList** | `checks: CheckResult[]`, `label` | Order kept, so a check is always in the same place. Pass, warn, fail each have an icon shape and a word for screen readers; a fail line is tinted so it is found first |
 
 The shell (`src/ui/App.tsx`) holds the routes: Sign in, Find, Property, Log a post, My

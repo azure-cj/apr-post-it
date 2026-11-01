@@ -34,7 +34,17 @@ export {
   type RemoteView,
 } from './hooks';
 export { createRemote, sentenceOf, UNEXPECTED, type Remote, type RemoteResource } from './remote';
-export { createServices, EMPTY_FIND, forViewer, type DirectoryStatus, type FindState, type Services } from './services';
+export {
+  createServices,
+  EMPTY_FIND,
+  forViewer,
+  NO_FIND_FILTERS,
+  type DirectoryStatus,
+  type FindFilters,
+  type FindSort,
+  type FindState,
+  type Services,
+} from './services';
 export { navKeys, paths, sectionOf, type FromList, type NavKey } from './routes';
 export { defaultAppSettings, parseSettings, serializeSettings, SETTINGS_KEY, type AppSettings } from './settings';
 export { createStore, useStore, type Store } from './store';

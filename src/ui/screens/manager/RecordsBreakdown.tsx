@@ -1,5 +1,5 @@
 import { useId, useRef, type KeyboardEvent } from 'react';
-import { CategoryDot, categoryKind } from '../../components';
+import { CategoryDot, Pagination, categoryKind, usePaged } from '../../components';
 import type { CountRow, InternRow } from '@/core/records';
 import { plural } from '@/core/summary';
 import { RouteLink } from './TrackerLink';
@@ -92,60 +92,65 @@ function InternTable({
   readonly href?: ((name: string) => string) | undefined;
   readonly onOpen?: ((name: string) => void) | undefined;
 }) {
+  // A long team pages ten at a time; the sparklines keep one scale across every page.
+  const paged = usePaged(rows);
   if (rows.length === 0) return <p className="breakdown__quiet">No posts</p>;
   const peak = Math.max(1, ...rows.flatMap((r) => r.trend));
   return (
-    <table className="breakdown-table">
-      <thead>
-        <tr>
-          <th scope="col">Intern</th>
-          <th scope="col" className="breakdown-table__num">
-            Posts
-          </th>
-          <th scope="col" className="breakdown-table__num breakdown-table__pending">
-            Pending
-          </th>
-          <th scope="col" className="breakdown-table__num breakdown-table__missed-col">
-            Missed
-          </th>
-          <th scope="col" className="breakdown-table__num" title="Share of their weekly queues posted">
-            <span aria-hidden="true">Done</span>
-            <span className="visually-hidden">Weekly queues done</span>
-          </th>
-          <th scope="col" className="breakdown-table__trend">
-            <span className="visually-hidden">Trend</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => {
-          return (
-            <tr key={r.name} className={`breakdown-row${href ? ' breakdown-row--link' : ''}`}>
-              <th scope="row">
-                {href ? (
-                  <RouteLink href={href(r.name)} onNavigate={onOpen ? () => onOpen(r.name) : undefined} className="breakdown-row__pick">
+    <>
+      <table className="breakdown-table">
+        <thead>
+          <tr>
+            <th scope="col">Intern</th>
+            <th scope="col" className="breakdown-table__num">
+              Posts
+            </th>
+            <th scope="col" className="breakdown-table__num breakdown-table__pending">
+              Pending
+            </th>
+            <th scope="col" className="breakdown-table__num breakdown-table__missed-col">
+              Missed
+            </th>
+            <th scope="col" className="breakdown-table__num" title="Share of their weekly queues posted">
+              <span aria-hidden="true">Done</span>
+              <span className="visually-hidden">Weekly queues done</span>
+            </th>
+            <th scope="col" className="breakdown-table__trend">
+              <span className="visually-hidden">Trend</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody ref={paged.topRef}>
+          {paged.items.map((r) => {
+            return (
+              <tr key={r.name} className={`breakdown-row${href ? ' breakdown-row--link' : ''}`}>
+                <th scope="row">
+                  {href ? (
+                    <RouteLink href={href(r.name)} onNavigate={onOpen ? () => onOpen(r.name) : undefined} className="breakdown-row__pick">
+                      <span className="breakdown-row__name">{r.name}</span>
+                    </RouteLink>
+                  ) : (
                     <span className="breakdown-row__name">{r.name}</span>
-                  </RouteLink>
-                ) : (
-                  <span className="breakdown-row__name">{r.name}</span>
-                )}
-              </th>
-              <td className={`breakdown-table__num tabular${r.posts === 0 ? ' breakdown-table__zero' : ''}`}>{r.posts}</td>
-              <td className={`breakdown-table__num tabular${r.pending === 0 ? ' breakdown-table__zero' : ''}`}>{r.pending}</td>
-              <td className={`breakdown-table__num tabular${r.missed === 0 ? ' breakdown-table__zero' : ' breakdown-table__missed'}`}>
-                {r.missed}
-              </td>
-              <td className="breakdown-table__num tabular" title={r.target ? `${r.done} of ${r.target}` : 'No queue'}>
-                {percent(r.completion)}
-              </td>
-              <td className="breakdown-table__trend">
-                <Sparkline values={r.trend} peak={peak} />
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                  )}
+                </th>
+                <td className={`breakdown-table__num tabular${r.posts === 0 ? ' breakdown-table__zero' : ''}`}>{r.posts}</td>
+                <td className={`breakdown-table__num tabular${r.pending === 0 ? ' breakdown-table__zero' : ''}`}>{r.pending}</td>
+                <td className={`breakdown-table__num tabular${r.missed === 0 ? ' breakdown-table__zero' : ' breakdown-table__missed'}`}>
+                  {r.missed}
+                </td>
+                <td className="breakdown-table__num tabular" title={r.target ? `${r.done} of ${r.target}` : 'No queue'}>
+                  {percent(r.completion)}
+                </td>
+                <td className="breakdown-table__trend">
+                  <Sparkline values={r.trend} peak={peak} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <Pagination {...paged.pagination} className="breakdown__pages" />
+    </>
   );
 }
 

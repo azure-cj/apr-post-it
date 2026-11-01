@@ -1,11 +1,11 @@
 import { useDeferredValue, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Button, Pill, SearchBox } from '../../components';
+import { Button, PAGE_SIZE, Pagination, Pill, SearchBox, usePaged } from '../../components';
 import { whoPosted, type WhoPostedMatch } from '@/core/records';
 import { initials, type PostLogEntry } from '@/core/types';
 import { lastPostWords } from './InternsParts';
 
-/** How many answers show before "Show all". */
-export const WHO_POSTED_LIMIT = 6;
+/** How many answers show a page. */
+export const WHO_POSTED_LIMIT = PAGE_SIZE;
 
 export interface WhoPostedProps {
   readonly posts: readonly PostLogEntry[];
@@ -22,18 +22,14 @@ export interface WhoPostedProps {
  */
 export function WhoPosted({ posts, today, onOpenLink }: WhoPostedProps) {
   const [query, setQuery] = useState('');
-  const [all, setAll] = useState(false);
   const deferred = useDeferredValue(query);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsId = useId();
   const matches = useMemo(() => whoPosted(posts, deferred), [posts, deferred]);
   const q = query.trim();
-  const shown = all ? matches : matches.slice(0, WHO_POSTED_LIMIT);
+  const paged = usePaged(matches, WHO_POSTED_LIMIT, deferred.trim());
 
-  const change = (value: string) => {
-    setQuery(value);
-    setAll(false);
-  };
+  const change = (value: string) => setQuery(value);
 
   // Escape from anywhere in the answers clears the search, back in the box.
   const onResultsKey = (event: KeyboardEvent) => {
@@ -64,17 +60,13 @@ export function WhoPosted({ posts, today, onOpenLink }: WhoPostedProps) {
                 : `${matches.length.toLocaleString('en-PH')} posts`}
           </p>
           {matches.length > 0 ? (
-            <ul className="who-posted__list">
-              {shown.map((match, index) => (
+            <ul className="who-posted__list" ref={paged.topRef} aria-label="Posts">
+              {paged.items.map((match, index) => (
                 <Answer key={`${index}-${match.date}-${match.time}-${match.intern}`} match={match} today={today} onOpenLink={onOpenLink} />
               ))}
             </ul>
           ) : null}
-          {matches.length > WHO_POSTED_LIMIT ? (
-            <Button variant="link" className="who-posted__more" aria-expanded={all} onClick={() => setAll((a) => !a)}>
-              {all ? 'Show fewer' : `Show all ${matches.length.toLocaleString('en-PH')}`}
-            </Button>
-          ) : null}
+          <Pagination {...paged.pagination} label="Posts, pages" className="who-posted__pages" />
         </div>
       ) : null}
     </section>

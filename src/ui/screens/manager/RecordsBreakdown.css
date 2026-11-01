@@ -284,3 +284,9 @@
   font-weight: var(--weight-heading);
   text-align: end;
 }
+
+.breakdown__pages {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--border-soft);
+}

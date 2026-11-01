@@ -1,5 +1,5 @@
-import { forwardRef, useId, useMemo, useState, type KeyboardEvent } from 'react';
-import { Button, Icon } from '../../components';
+import { forwardRef, useId, useMemo, type KeyboardEvent } from 'react';
+import { Button, Icon, PAGE_SIZE, Pagination, usePaged } from '../../components';
 import { isDate, lastPostOf, samePerson, shortDate, weekProgress, type TeamWeekRow } from '@/core/summary';
 import { addWeeks, assignmentWeek, isWeekOver, weekLabel, weekOf } from '@/core/week';
 import { initials, queueStatus, type Assignment, type PostLogEntry } from '@/core/types';
@@ -25,8 +25,8 @@ export interface InternPanelProps {
 type Group = 'Not shared' | 'Pending' | 'Posted' | 'Missed';
 const GROUPS: readonly Group[] = ['Not shared', 'Pending', 'Posted', 'Missed'];
 
-/** How many of a group show before "Show all". */
-export const GROUP_LIMIT = 5;
+/** How many of a group show a page. */
+export const GROUP_LIMIT = PAGE_SIZE;
 
 interface Item {
   readonly name: string;
@@ -154,8 +154,7 @@ function ItemGroup({
 }) {
   const titleId = useId();
   const listId = useId();
-  const [all, setAll] = useState(false);
-  const shown = all ? items : items.slice(0, GROUP_LIMIT);
+  const paged = usePaged(items, GROUP_LIMIT);
   return (
     <section className={`panel-group panel-group--${GROUP_CLASS[group]}`} aria-labelledby={titleId}>
       <h3 id={titleId} className="panel-group__title">
@@ -163,8 +162,8 @@ function ItemGroup({
         {group}{' '}
         <span className="panel-group__count tabular">{items.length}</span>
       </h3>
-      <ul className="panel-group__list" id={listId}>
-        {shown.map((item, index) => {
+      <ul className="panel-group__list" id={listId} ref={paged.topRef} aria-labelledby={titleId}>
+        {paged.items.map((item, index) => {
           const link = item.post?.postLink.trim() ?? '';
           return (
             <li key={`${index}-${item.name}`} className="panel-item">
@@ -178,11 +177,7 @@ function ItemGroup({
           );
         })}
       </ul>
-      {items.length > GROUP_LIMIT ? (
-        <Button variant="link" className="panel-group__more" aria-controls={listId} aria-expanded={all} onClick={() => setAll((a) => !a)}>
-          {all ? 'Show fewer' : `Show all ${items.length}`}
-        </Button>
-      ) : null}
+      <Pagination {...paged.pagination} compact label={`${group}, pages`} className="panel-group__pages" />
     </section>
   );
 }

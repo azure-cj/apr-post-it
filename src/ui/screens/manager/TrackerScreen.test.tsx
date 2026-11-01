@@ -204,7 +204,7 @@ describe('TrackerScreen', () => {
     expect(within(card).queryByRole('list', { name: 'No separator' })).toBeNull();
   });
 
-  it('counts the empty-above and unreadable kinds, and shows a long group twelve at a time', async () => {
+  it('counts the empty-above and unreadable kinds, and pages a long group ten at a time', async () => {
     const many = Array.from({ length: 14 }, (_, i) => listing(`s${i}`, `Separator ${String(i).padStart(2, '0')}`, NO_SEPARATOR, `doc${i}`));
     renderTracker({
       properties: [
@@ -222,9 +222,21 @@ describe('TrackerScreen', () => {
     ]);
     await userEvent.click(toggles[0]!);
     const list = within(card).getByRole('list', { name: 'No separator' });
-    expect(within(list).getAllByRole('listitem')).toHaveLength(12);
-    await userEvent.click(within(card).getByRole('button', { name: 'Show all 14' }));
-    expect(within(list).getAllByRole('listitem')).toHaveLength(14);
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10);
+    const pages = within(card).getByRole('navigation', { name: 'No separator, pages' });
+    expect(pages.closest('.pagination')!.textContent).toContain('1–10 of 14');
+    await userEvent.click(within(pages).getByRole('button', { name: 'Page 2' }));
+    expect(within(list).getAllByRole('listitem').map((li) => li.querySelector('.docs-item__name')!.textContent)).toEqual([
+      'Separator 10',
+      'Separator 11',
+      'Separator 12',
+      'Separator 13',
+    ]);
+    // The list's top takes focus, so the next Tab is its first link.
+    expect(document.activeElement).toBe(list);
+    // A short group has no pages.
+    await userEvent.click(within(card).getByRole('button', { name: /Empty above separator/ }));
+    expect(within(card).queryByRole('navigation', { name: 'Empty above separator, pages' })).toBeNull();
   });
 
   it('says so in one line when every document is OK', () => {

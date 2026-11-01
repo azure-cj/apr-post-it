@@ -1,12 +1,12 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Button, CategoryDot, Chip, Icon, SearchBox, categoryLabel, type CategoryKind } from '../../components';
+import { Button, CategoryDot, Chip, Icon, PAGE_SIZE, Pagination, SearchBox, categoryLabel, usePaged, type CategoryKind } from '../../components';
 import { MenuButton } from './AssignMenu';
 import { plural } from '@/core/summary';
 import type { Property } from '@/core/types';
 import { byPriority, lastPostedWords, placeWords, type ListingState } from './assignListing';
 
-/** Rows shown at a time; "Show more" adds as many again. */
-export const RESULT_LIMIT = 40;
+/** Rows a page. */
+export const RESULT_LIMIT = PAGE_SIZE;
 
 export type CategoryTab = 'all' | CategoryKind;
 
@@ -22,6 +22,9 @@ export interface LibraryPanelProps {
   readonly onAdd: (property: Property) => void;
   readonly tab: CategoryTab;
   readonly onTab: (tab: CategoryTab) => void;
+  /** The page shown, when it is kept outside (the URL's ?page=). */
+  readonly page?: number | undefined;
+  readonly onPageChange?: ((page: number) => void) | undefined;
 }
 
 const KIND_ORDER: readonly CategoryKind[] = ['warehouse', 'commercial', 'office', 'condo', 'unsorted'];
@@ -48,13 +51,14 @@ export function LibraryPanel({
   onAdd,
   tab,
   onTab,
+  page,
+  onPageChange,
 }: LibraryPanelProps) {
   const [query, setQuery] = useState('');
   const [fresh, setFresh] = useState(false);
   const [due, setDue] = useState(false);
   const [showOff, setShowOff] = useState(false);
-  const [limit, setLimit] = useState(RESULT_LIMIT);
-  const listRef = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
 
   const counts = useMemo(() => {
     const map = new Map<CategoryKind, number>();
@@ -88,9 +92,15 @@ export function LibraryPanel({
     return out.sort(byPriority);
   }, [states, tab, showOff, fresh, due, matched, inQueue, keyOf]);
 
-  const resetPage = () => setLimit(RESULT_LIMIT);
-  const shown = rows.slice(0, limit);
+  // A new tab, search or filter starts at its first page.
+  const resetKey = [tab, query.trim(), fresh, due, showOff].join('|');
+  const paged = usePaged(rows, RESULT_LIMIT, resetKey, page !== undefined && onPageChange ? { page, onPageChange } : undefined);
+  const shown = paged.items;
   const scope = tabLabel(tab, states);
+  const attachList = (el: HTMLUListElement | null) => {
+    listRef.current = el;
+    paged.topRef(el);
+  };
 
   // Up and Down move between the rows' buttons.
   const onListKey = (event: KeyboardEvent<HTMLUListElement>) => {
@@ -108,7 +118,7 @@ export function LibraryPanel({
   return (
     <div className="lib">
       <div className="lib__tabs" role="group" aria-label="Category">
-        <Chip selected={tab === 'all'} count={counts.all} onSelectedChange={() => { onTab('all'); resetPage(); }}>
+        <Chip selected={tab === 'all'} count={counts.all} onSelectedChange={() => onTab('all')}>
           All
         </Chip>
         {counts.kinds.map((kind) => (
@@ -117,10 +127,7 @@ export function LibraryPanel({
             selected={tab === kind}
             leading={<CategoryDot kind={kind} />}
             count={counts.map.get(kind) ?? 0}
-            onSelectedChange={() => {
-              onTab(kind);
-              resetPage();
-            }}
+            onSelectedChange={() => onTab(kind)}
           >
             {tabLabel(kind, states)}
           </Chip>
@@ -132,18 +139,15 @@ export function LibraryPanel({
           label="Search listings"
           placeholder="Search name, city or building"
           value={query}
-          onValueChange={(v) => {
-            setQuery(v);
-            resetPage();
-          }}
+          onValueChange={setQuery}
         />
         <MenuButton label="Filter" count={[fresh, due, showOff].filter(Boolean).length} className="lib__filter">
           {() => (
             <fieldset className="menu__group">
               <legend className="visually-hidden">Filter</legend>
-              <FilterCheck label="Fresh" checked={fresh} onChange={(on) => { setFresh(on); resetPage(); }} />
-              <FilterCheck label="Due for repost" checked={due} onChange={(on) => { setDue(on); resetPage(); }} />
-              <FilterCheck label="Show unavailable" checked={showOff} onChange={(on) => { setShowOff(on); resetPage(); }} />
+              <FilterCheck label="Fresh" checked={fresh} onChange={setFresh} />
+              <FilterCheck label="Due for repost" checked={due} onChange={setDue} />
+              <FilterCheck label="Show unavailable" checked={showOff} onChange={setShowOff} />
             </fieldset>
           )}
         </MenuButton>
@@ -162,7 +166,7 @@ export function LibraryPanel({
               : `Nothing free in ${scope}.`}
         </p>
       ) : (
-        <ul className="lib__list" ref={listRef} onKeyDown={onListKey} aria-label={`${scope} listings`}>
+        <ul className="lib__list" ref={attachList} onKeyDown={onListKey} aria-label={`${scope} listings`}>
           {shown.map((state) => (
             <LibraryRow
               key={state.property.id || state.property.name}
@@ -176,19 +180,10 @@ export function LibraryPanel({
         </ul>
       )}
 
-      {rows.length > 0 ? (
-        <div className="lib__more">
-          <span className="assign__quiet tabular">
-            {rows.length > shown.length
-              ? `${shown.length} of ${rows.length.toLocaleString('en-PH')}`
-              : plural(rows.length, 'listing', 'listings')}
-          </span>
-          {rows.length > shown.length ? (
-            <Button size="small" variant="quiet" onClick={() => setLimit((l) => l + RESULT_LIMIT)}>
-              Show {Math.min(RESULT_LIMIT, rows.length - shown.length)} more
-            </Button>
-          ) : null}
-        </div>
+      {rows.length > RESULT_LIMIT ? (
+        <Pagination {...paged.pagination} className="lib__pages" />
+      ) : rows.length > 0 ? (
+        <p className="lib__count assign__quiet tabular">{plural(rows.length, 'listing', 'listings')}</p>
       ) : null}
     </div>
   );

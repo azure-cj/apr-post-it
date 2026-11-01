@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from 'react';
-import { Button, Card, Icon, Notice, Pill, Spinner } from '../../components';
+import { Button, Card, Icon, Notice, PAGE_SIZE, Pagination, Pill, Spinner, usePaged } from '../../components';
 import { clockTime } from '@/core/records';
 import {
   activeInterns,
@@ -63,8 +63,8 @@ export interface TrackerScreenProps {
 
 /** How many of the day's posts show before "See all in Records". */
 export const POSTS_LIMIT = 8;
-/** How many listings a document group shows before "Show all": four rows of three. */
-export const LIST_LIMIT = 12;
+/** How many listings a document group shows a page. */
+export const LIST_LIMIT = PAGE_SIZE;
 
 /**
  * The day at a glance: four numbers, the day's posts, the week's pace and the
@@ -364,10 +364,9 @@ function DocGroup({
   readonly onOpenLink?: ((url: string) => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
-  const [all, setAll] = useState(false);
   const listId = useId();
   const count = items.length;
-  const shown = all ? items : items.slice(0, LIST_LIMIT);
+  const paged = usePaged(items, LIST_LIMIT);
   const hint = DOC_HINT[kind];
   return (
     <li className={`docs-group${open ? ' docs-group--open' : ''}`}>
@@ -395,8 +394,8 @@ function DocGroup({
       </button>
       {open ? (
         <div id={listId} className="docs-group__body">
-          <ul className="docs-group__list" aria-label={DOC_LABEL[kind]}>
-            {shown.map((item) => {
+          <ul className="docs-group__list" aria-label={DOC_LABEL[kind]} ref={paged.topRef}>
+            {paged.items.map((item) => {
               const fix = fixLink(kind, item);
               return (
                 <li key={item.id} className="docs-item">
@@ -417,11 +416,7 @@ function DocGroup({
               );
             })}
           </ul>
-          {count > LIST_LIMIT ? (
-            <Button variant="link" className="docs-group__all" aria-expanded={all} onClick={() => setAll((a) => !a)}>
-              {all ? 'Show fewer' : `Show all ${count.toLocaleString('en-PH')}`}
-            </Button>
-          ) : null}
+          <Pagination {...paged.pagination} label={`${DOC_LABEL[kind]}, pages`} className="docs-group__pages" />
         </div>
       ) : null}
     </li>

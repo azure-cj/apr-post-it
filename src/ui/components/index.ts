@@ -9,6 +9,7 @@ export { CheckList, type CheckListProps } from './CheckList';
 export { Chip, type ChipProps } from './Chip';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { Icon, type IconName, type IconProps } from './Icon';
+export { MenuButton, type MenuButtonProps } from './MenuButton';
 export { Notice, type NoticeProps, type NoticeTone } from './Notice';
 export {
   Badge,
@@ -23,6 +24,18 @@ export {
   type PillProps,
   type Tone,
 } from './Pill';
+export {
+  PAGE_SIZE,
+  Pagination,
+  pageCountOf,
+  pageSlots,
+  rangeLabel,
+  usePaged,
+  type PageControl,
+  type PageSlot,
+  type Paged,
+  type PaginationProps,
+} from './Pagination';
 export { SearchBox, type SearchBoxProps } from './SearchBox';
 export { Spinner, type SpinnerProps } from './Spinner';
 export { TextInput, type TextInputProps } from './TextInput';

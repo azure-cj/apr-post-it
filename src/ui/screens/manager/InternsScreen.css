@@ -134,8 +134,8 @@
   text-align: center;
 }
 
-.who-posted__more {
-  margin-top: var(--space-3);
+.who-posted__pages {
+  margin-top: var(--space-6);
 }
 
 @container shell (width < 900px) {
@@ -494,8 +494,8 @@
   flex: none;
 }
 
-.panel-group__more {
-  margin-top: var(--space-2);
+.panel-group__pages {
+  margin-top: var(--space-3);
 }
 
 @container shell (width < 900px) {

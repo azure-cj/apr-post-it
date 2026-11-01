@@ -62,6 +62,10 @@ export interface Property {
   readonly size?: string;
   /** The checker's Deal type: "Sale", "Lease". */
   readonly dealType?: string;
+  /** The checker's "Building / street", for search. */
+  readonly building?: string;
+  /** When the checker first indexed the folder (its Created), as yyyy-MM-dd: for Find's "Newest". */
+  readonly created?: string;
   /** The checker's Status. Blank when the checker has no row for this folder. */
   readonly availability?: Availability;
   /** True when the checker's index has this folder at all. */

@@ -11,6 +11,7 @@ import {
   EmptyState,
   Icon,
   Notice,
+  Pagination,
   Pill,
   SearchBox,
   Spinner,
@@ -354,6 +355,10 @@ export default function KitScreen() {
           </Card>
         </div>
 
+        <Card title="Pagination" description="Ten a page. Hidden when everything fits on one; the current page is selected, so gold.">
+          <KitPages />
+        </Card>
+
         <Card title="Cards" description="Raised by a gradient and a top-lit edge. No shadow.">
           <div className="kit__grid">
             <Card headingLevel={3} title="Verdant Hills Lot 12" description="Lot · Tagaytay · 320 sqm" actions={<Button size="small">Open</Button>}>
@@ -367,6 +372,19 @@ export default function KitScreen() {
       </div>
 
       <ToastRegion toasts={toasts.toasts} onDismiss={toasts.dismiss} />
+    </div>
+  );
+}
+
+function KitPages() {
+  const [page, setPage] = useState(5);
+  const [side, setSide] = useState(2);
+  return (
+    <div className="kit__stack">
+      <Pagination page={page} total={1474} onPageChange={setPage} />
+      <div className="kit__narrow">
+        <Pagination page={side} total={24} onPageChange={setSide} compact label="Compact pages" />
+      </div>
     </div>
   );
 }

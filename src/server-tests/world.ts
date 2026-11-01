@@ -146,6 +146,8 @@ export interface CheckerRow {
   readonly dealType?: string;
   readonly status?: string;
   readonly path?: string;
+  readonly building?: string;
+  readonly created?: string;
 }
 
 /** The checker's Index as its published CSV: every field quoted where it must be. */
@@ -155,12 +157,12 @@ export function checkerCsv(rows: readonly CheckerRow[], headers: readonly string
     'Folder name': r.name,
     City: r.city ?? '',
     'Size (sqm)': r.size ?? '',
-    'Building / street': '',
+    'Building / street': r.building ?? '',
     Category: 'CONDO',
     'Deal type': r.dealType ?? '',
     Status: r.status ?? 'Available',
     'Group folder': '',
-    Created: '2026-01-05',
+    Created: r.created ?? '2026-01-05',
     Modified: '2026-02-01',
     Link: `https://drive.google.com/drive/folders/${r.id}`,
     Keywords: '',

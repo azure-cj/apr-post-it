@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-01.4';
+const SERVER_VERSION = '2026-11-01.5';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -674,7 +674,8 @@ function coordinate_(value) {
 
 /**
  * Adds the checker's fields for folder `id` to `out`: city, size, deal type,
- * availability and inChecker. Nothing when the join is off or the index could
+ * building, created (yyyy-MM-dd, or '' when unreadable), availability and
+ * inChecker. Nothing when the join is off or the index could
  * not be read (`checker` null), so the fields are then absent.
  */
 function joinChecker_(out, checker, id) {
@@ -683,6 +684,8 @@ function joinChecker_(out, checker, id) {
   out.city = c ? c.city : '';
   out.size = c ? c.size : '';
   out.dealType = c ? c.dealType : '';
+  out.building = c ? textOf_(c.building) : '';
+  out.created = c ? checkerDay_(c.created) : '';
   out.availability = c ? availabilityOf_(c.status) : '';
   out.inChecker = !!c;
   return out;
@@ -700,6 +703,8 @@ const CHECKER_COLUMNS = {
   city:     'City',
   size:     'Size (sqm)',
   dealType: 'Deal type',
+  building: 'Building / street',
+  created:  'Created',
   status:   'Status',
   path:     'Path',
 };
@@ -755,6 +760,19 @@ function fetchCheckerIndex_(url) {
   } catch (e) {
     return null;
   }
+}
+
+/**
+ * The checker's Created as a yyyy-MM-dd day: "2026-01-05", "2026-01-05 09:30"
+ * or "1/5/2026" (month first, as the published sheet shows it). '' otherwise.
+ */
+function checkerDay_(text) {
+  var t = textOf_(text).trim();
+  var iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+  var us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t);
+  if (us) return us[3] + '-' + ('0' + us[1]).slice(-2) + '-' + ('0' + us[2]).slice(-2);
+  return '';
 }
 
 /** The checker's Status as the app reads it: 'Available', 'Sold', or '' for anything else. */
