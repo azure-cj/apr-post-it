@@ -13,6 +13,12 @@ export interface QueueRowProps {
   readonly rules: AssignRules | null;
   /** Added in this draft: not saved yet. */
   readonly isNew: boolean;
+  /** Put in by quick fill and not kept yet: shown highlighted until saved or undone. */
+  readonly preview?: boolean | undefined;
+  /** The server refused it on save: why, in a few words. */
+  readonly refusal?: string | undefined;
+  /** Moved from an earlier day's queue: "28 Oct". */
+  readonly movedFrom?: string | undefined;
   readonly dragging: boolean;
   readonly dropMark: 'before' | 'after' | null;
   readonly onMove: (by: number, role: string) => void;
@@ -27,7 +33,7 @@ export interface QueueRowProps {
 }
 
 export const QueueRow = forwardRef<HTMLLIElement, QueueRowProps>(function QueueRow(
-  { entry, index, count, rules, isNew, dragging, dropMark, onMove, onRemove, onDragOver, onDrop, handle },
+  { entry, index, count, rules, isNew, preview, refusal, movedFrom, dragging, dropMark, onMove, onRemove, onDragOver, onDrop, handle },
   ref,
 ) {
   const status = rules?.statusOf(entry.key);
@@ -50,6 +56,8 @@ export const QueueRow = forwardRef<HTMLLIElement, QueueRowProps>(function QueueR
       ref={ref}
       className={[
         'queue-row',
+        preview ? 'queue-row--preview' : null,
+        refusal ? 'queue-row--refused' : null,
         dragging ? 'queue-row--dragging' : null,
         dropMark ? `queue-row--drop-${dropMark}` : null,
       ]
@@ -81,11 +89,19 @@ export const QueueRow = forwardRef<HTMLLIElement, QueueRowProps>(function QueueR
             <Pill tone="ok" dot>
               Posted
             </Pill>
-          ) : isNew ? (
+          ) : movedFrom ? (
+            <Pill tone="info">Moved from {movedFrom}</Pill>
+          ) : isNew && !preview ? (
             <Pill tone="neutral">Not saved</Pill>
           ) : null}
         </div>
-        {warning ? (
+        {refusal ? (
+          <p className="assign-refusal">
+            <Icon name="fail" size={16} className="assign-warning__icon" />
+            <span>{refusal}</span>
+          </p>
+        ) : null}
+        {warning && !refusal ? (
           <p className="assign-warning">
             <Icon name="warn" size={16} className="assign-warning__icon" />
             <span>{warning}</span>

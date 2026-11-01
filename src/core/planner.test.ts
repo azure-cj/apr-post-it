@@ -1,4 +1,4 @@
-import { planQueues, type PlanInput } from './planner';
+import { planForIntern, planQueues, type PlanForInternInput, type PlanInput } from './planner';
 import type { DirectoryRow } from './summary';
 import type { Assignment, PostLogEntry } from './types';
 
@@ -84,7 +84,7 @@ describe('planning queues', () => {
     expect(result.skipped).toEqual([
       { reason: 'sold', count: 1 },
       { reason: 'noSeparator', count: 1 },
-      { reason: 'queued', count: 2 },
+      { reason: 'held', count: 2 },
       { reason: 'cooldown', count: 1 },
     ]);
     expect(ids(result.queues.get('Jan'))).toEqual(['flagged', 'fresh', 'old']);
@@ -167,7 +167,7 @@ describe('planning queues', () => {
     const assignments = [
       queuedFor('Jan', 'P5', { status: 'Posted' }),
       queuedFor('Jan', 'P7'),
-      queuedFor('Jan', 'P1', { date: '2026-11-01' }), // another day: no effect
+      queuedFor('Jan', 'P1', { date: '2026-11-01', status: 'Posted' }), // another day, posted: no effect
     ];
     const kept = plan({ properties, assignments, perIntern: 4, keepExisting: true });
     expect(kept.queues.get('Jan')).toEqual([
@@ -243,5 +243,101 @@ describe('planning queues', () => {
 
   it('refuses a date that is not yyyy-MM-dd', () => {
     expect(() => plan({ date: '11/2/2026' })).toThrow();
+  });
+});
+
+describe('held listings in the plan (v5)', () => {
+  it('skips a listing held by anyone on any date, the intern being planned included, as held', () => {
+    const properties = ['A', 'B', 'C', 'D', 'E', 'F'].map((id) => prop(id));
+    const result = plan({
+      properties,
+      interns: ['Jan'],
+      assignments: [
+        queuedFor('Bea', 'A', { date: '2026-10-20' }), // Bea's, weeks ago, still open
+        queuedFor('Jan', 'B', { date: '2026-11-05' }), // Jan's own, another day
+        queuedFor('Bea', '', { propertyName: 'listing c', date: '2026-10-01', status: 'To post' as Assignment['status'] }),
+        queuedFor('Bea', 'D', { date: '2026-10-20', status: 'Posted' }), // released
+        queuedFor('Bea', 'E', { date: '2026-10-20', status: 'Pending' }), // released
+      ],
+    });
+
+    expect(ids(result.queues.get('Jan'))).toEqual(['D', 'E', 'F']);
+    expect(result.skipped).toEqual([{ reason: 'held', count: 3 }]);
+  });
+
+  it("frees the planned intern's own rows for the date when they are replaced, not when kept", () => {
+    const properties = [prop('A'), prop('B')];
+    const assignments = [queuedFor('Jan', 'A')];
+
+    expect(ids(plan({ properties, assignments, perIntern: 2 }).queues.get('Jan'))).toEqual(['A', 'B']);
+    const kept = plan({ properties, assignments, perIntern: 2, keepExisting: true });
+    expect(ids(kept.queues.get('Jan'))).toEqual(['A', 'B']);
+    expect(kept.skipped).toEqual([{ reason: 'held', count: 1 }]);
+  });
+});
+
+describe('planForIntern (Assign 20)', () => {
+  function forIntern(over: Partial<PlanForInternInput>) {
+    return planForIntern({
+      properties: [],
+      posts: [],
+      assignments: [],
+      intern: 'Jan',
+      count: 20,
+      date: DATE,
+      rules: RULES,
+      ...over,
+    });
+  }
+
+  const properties = [
+    prop('c1', { category: 'CONDO' }),
+    prop('c2', { category: 'CONDO' }),
+    prop('c3', { category: 'CONDO' }),
+    prop('w1', { category: 'WAREHOUSE' }),
+    prop('w2', { category: 'Warehouse' }),
+    prop('l1', { category: 'LOT' }),
+  ];
+  const posts = [
+    posted('c1', '2026-09-01'),
+    posted('w1', '2026-08-01'),
+    posted('l1', '2026-10-01'),
+    posted('c3', '2026-10-30'), // in cooldown
+  ];
+
+  it('puts never posted first, then the longest since posted, with a mix of categories', () => {
+    const picked = forIntern({ properties, posts });
+
+    // Categories by their best listing: CONDO (c2, never), WAREHOUSE (w2, never), LOT.
+    expect(ids(picked)).toEqual(['c2', 'w2', 'l1', 'c1', 'w1']);
+    expect(picked[0]).toEqual({ propertyName: 'Listing c2', propertyId: 'c2' });
+  });
+
+  it('takes at most count', () => {
+    expect(ids(forIntern({ properties, posts, count: 2 }))).toEqual(['c2', 'w2']);
+    expect(forIntern({ properties, posts, count: 0 })).toEqual([]);
+  });
+
+  it('takes one category alone, in priority order, compared as names are', () => {
+    expect(ids(forIntern({ properties, posts, category: 'warehouse' }))).toEqual(['w2', 'w1']);
+    expect(ids(forIntern({ properties, posts, category: 'Condo', count: 1 }))).toEqual(['c2']);
+  });
+
+  it('skips held listings, the day\'s other queues, its own queue and what is excluded', () => {
+    const picked = forIntern({
+      properties,
+      posts,
+      assignments: [
+        queuedFor('Bea', 'c2', { date: '2026-10-01' }), // held by Bea
+        queuedFor('Mia', 'w2', { status: 'Posted' }), // in Mia's queue that day
+        queuedFor('Jan', 'l1', { status: 'Pending' }), // already in Jan's queue that day
+      ],
+      exclude: [{ propertyName: 'Listing c1' }], // on screen, not saved yet
+    });
+    expect(ids(picked)).toEqual(['w1']);
+  });
+
+  it('refuses a date that is not yyyy-MM-dd', () => {
+    expect(() => forIntern({ date: '11/2/2026' })).toThrow();
   });
 });

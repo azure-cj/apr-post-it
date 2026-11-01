@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-01.1';
+const SERVER_VERSION = '2026-11-01.2';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -1302,11 +1302,22 @@ function saveQueue_(req, me) {
   requireAll_(req, ['date', 'assignedTo']);
   var items = req.items || [];
   if (typeof items === 'string') items = JSON.parse(items);
+  var queue = {
+    assignedTo: String(req.assignedTo),
+    items: (Array.isArray(items) ? items : []).map(function (it) {
+      it = it || {};
+      return {
+        property:   textOf_(it.property !== undefined ? it.property : it.propertyName),
+        propertyId: textOf_(it.propertyId).trim(),
+        status:     it.status,
+      };
+    }),
+  };
 
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    return { ok: true, saved: replaceQueues_(String(req.date), [{ assignedTo: String(req.assignedTo), items: items }]) };
+    return saveHeldChecked_(String(req.date), [queue]);
   } finally {
     lock.releaseLock();
   }
@@ -1358,10 +1369,92 @@ function saveQueues_(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
   try {
-    return { ok: true, saved: replaceQueues_(date, clean) };
+    return saveHeldChecked_(date, clean);
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---------------------------------------------------------------- held listings
+//
+// The owner's rule: a listing assigned to an intern is held by that intern
+// until it is posted. An open Assignments row (Not Shared, or the older
+// "To post"), on ANY date, holds the listing for its assignee; Posted and
+// Pending release it. Nobody else may be given a held listing, and the same
+// intern may not be given it again on another date. Re-saving the same
+// intern's queue for the same date is a replace, so their own rows for that
+// date hold nothing; and taking an item out of a queue releases it.
+
+/**
+ * Saves the queues when nothing in them is held, all or none. The caller
+ * holds the lock, so the check and the writing see the same rows.
+ */
+function saveHeldChecked_(date, queues) {
+  // Each item's folder id, found once: the check and the rows written agree.
+  queues.forEach(function (q) {
+    q.items.forEach(function (it) { it.propertyId = it.propertyId || idOf_(it.property); });
+  });
+  var held = heldItems_(date, queues);
+  if (held.length) {
+    return { ok: false, error: 'held', held: held, message: heldMessage_(held) };
+  }
+  return { ok: true, saved: replaceQueues_(date, queues) };
+}
+
+/**
+ * The items in `queues` that someone holds: [{ propertyName, propertyId,
+ * heldBy, date }], in request order, one per item. Matched the way every
+ * tracker row is (sameProperty_): by folder id when both have one, else by
+ * name as the app normalises it. A listing sent in two of the queues is held
+ * by the first of them.
+ */
+function heldItems_(date, queues) {
+  var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
+  var values = sh.getDataRange().getValues();
+  var col = values.length ? columnsIn_(values[0], ASSIGN_FIELDS, sh.getName()) : null;
+  var tz = zoneOf_(sh);
+  var replaced = {};
+  queues.forEach(function (q) { replaced[q.assignedTo] = true; });
+
+  var open = [];
+  for (var r = 1; col && r < values.length; r++) {
+    if (!values[r].join('')) continue;
+    var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
+    if (queueStatus_(a.status) !== NOT_SHARED) continue;
+    // The rows this save replaces (replaceQueues_ deletes exactly these) hold nothing.
+    if (a.date === date && Object.prototype.hasOwnProperty.call(replaced, a.assignedTo)) continue;
+    open.push({ propertyId: a.propertyId, property: a.property, heldBy: a.assignedTo, date: sheetDay_(a.date) || a.date });
+  }
+
+  var held = [];
+  var given = [];   // what this request gives out, so no listing goes to two of its queues
+  queues.forEach(function (q) {
+    q.items.forEach(function (it) {
+      var key = normalizeName_(it.property) || null;   // a blank name finds no row by name
+      var holder = null;
+      for (var i = 0; i < open.length && !holder; i++) {
+        if (sameProperty_(open[i].propertyId, open[i].property, it.propertyId, key)) holder = open[i];
+      }
+      for (var g = 0; g < given.length && !holder; g++) {
+        if (given[g].heldBy !== q.assignedTo &&
+            sameProperty_(given[g].propertyId, given[g].property, it.propertyId, key)) holder = given[g];
+      }
+      if (holder) {
+        held.push({ propertyName: it.property, propertyId: it.propertyId || '', heldBy: holder.heldBy, date: holder.date });
+      } else {
+        given.push({ propertyId: it.propertyId, property: it.property, heldBy: q.assignedTo, date: date });
+      }
+    });
+  });
+  return held;
+}
+
+/** "Casa Amara is already with Ana Reyes. Remove it from their queue first.", naming the first. */
+function heldMessage_(held) {
+  var first = held[0];
+  var more = held.length > 1 ? ' ' + (held.length - 1) + ' more ' + (held.length === 2 ? 'is' : 'are') + ' held too.' : '';
+  return first.propertyName + ' is already with ' + first.heldBy + ' (queue for ' + first.date + '). ' +
+         'Remove it from their queue first.' + more;
 }
 
 /**

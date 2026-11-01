@@ -138,8 +138,8 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | `updatePerson` | Admin | `{ name, fbAccounts?, fbProfileLink? }`: changes only the fields sent (blank clears), with `addPerson`'s checks, replying `{ person }`. Name, role and key never change. The cached Team tab is cleared, so the log step's account check uses the new broker name at once. |
 | `setActive` | Admin | `{ name, active }`: revokes or restores a person, replying `{ person }`. Nobody can deactivate themselves (`'self'`). |
 | `newKey` | Admin | `{ name }`: gives the person a new key, replying `{ key }`. The old one stops working at once. |
-| `saveQueue` | Admin | Replaces one person's queue for one date. |
-| `saveQueues` | Admin | `{ date, queues: [{ assignedTo, items: [{ propertyName, propertyId?, status? }] }] }`: replaces several interns' queues for one date, all or none, under one lock, replying `{ saved }`. Every `assignedTo` must be an active Intern on the Team tab (`'bad-intern'`). |
+| `saveQueue` | Admin | Replaces one person's queue for one date. Refuses held listings, as `saveQueues` does (below). |
+| `saveQueues` | Admin | `{ date, queues: [{ assignedTo, items: [{ propertyName, propertyId?, status? }] }] }`: replaces several interns' queues for one date, all or none, under one lock, replying `{ saved }`. Every `assignedTo` must be an active Intern on the Team tab (`'bad-intern'`). Refuses held listings with `'held'` (below). |
 | `setRules` | Admin | `{ cooldownDays?, repostDueDays?, perIntern? }`: changes only the rules sent, each a whole number (cooldown 1–60 days, repost 1–120 days, per intern 1–100), else `'bad-rules'` (with `field`) and nothing is written. Replies `{ rules }`, all three as they now are. |
 | `rebuildDirectory` | Admin | Schedules `BuildDirectory.gs`'s `RESTART` on a one-off trigger (`RESTART_FROM_APP`) about 10 seconds later and replies `{ started: true }` at once. `'busy'` while a build is running or already scheduled; `'no-builder'` when `BuildDirectory.gs` is not in the project. |
 | `directoryStatus` | Admin | `{ running, done, total, builtAt }`: whether a build is scheduled or under way, how many listings it has written of how many, and when the last one finished (ISO, Manila; `''` before the first). |
@@ -154,6 +154,30 @@ Two things in a reply come from the key, never from the request:
   intern's behalf by sending `postedBy`; from an intern it is ignored.
 * **A key** is in the reply of `addPerson` and `newKey` only. No other reply, `team`,
   `updatePerson` and `setActive` included, ever carries one.
+
+### Held listings
+
+The owner's rule: **a listing assigned to an intern is held by that intern until it is
+posted.** An Assignments row whose Status is `Not Shared` (or the older `To post`), on any
+date, holds its listing for its assignee. `Pending` and `Posted` release it, and the cooldown
+then applies as usual. Rows are matched to a listing the way every tracker row is: by folder
+id when both have one, otherwise by name as the app normalises it.
+
+`saveQueue` and `saveQueues` check every item under the lock, before anything is written. An
+item is refused when an open row holds it for a different intern, or for the same intern on
+another date. The rows the save replaces (the named interns' rows for that date) hold
+nothing, so re-saving a queue still works, and an item taken out of a queue is free at once.
+The same listing sent in two of `saveQueues`' queues is held by the first. A refusal writes
+nothing and replies:
+
+```json
+{ "ok": false, "error": "held",
+  "held": [{ "propertyName": "Casa Amara", "propertyId": "F1", "heldBy": "Ana Reyes", "date": "2026-03-09" }],
+  "message": "Casa Amara is already with Ana Reyes (queue for 2026-03-09). Remove it from their queue first." }
+```
+
+To move a held listing, remove it from the first intern's queue and save that, then add it
+to the other's.
 
 ### `withheld`
 

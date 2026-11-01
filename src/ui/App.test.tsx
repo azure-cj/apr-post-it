@@ -271,11 +271,11 @@ describe("the manager's screens", () => {
 
   it("save a queue through the tracker, as the intern's on the day shown", async () => {
     const platform = fakeServer({ assignments: QUEUED, saveQueue: { ok: true, saved: 2 } });
-    renderApp({ platform, user: manager, path: '/assign' });
-    // Opens on tomorrow, on the first intern the tracker knows.
-    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search the library' }), 'Kapitolyo');
+    renderApp({ platform, user: manager, path: `/assign?intern=${encodeURIComponent(intern.name)}` });
+    // Opens on tomorrow, on the intern in the link.
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search listings' }), 'Kapitolyo');
     await userEvent.click(await screen.findByRole('button', { name: /^Add Kapitolyo/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'Save queue' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Save queue/ }));
 
     await waitFor(() => expect(platform.posts.map((p) => p.action)).toContain('saveQueue'));
     const save = platform.posts.find((p) => p.action === 'saveQueue')!.body as Record<string, unknown>;
@@ -285,16 +285,16 @@ describe("the manager's screens", () => {
   });
 
   it('ask before leaving Assign with unsaved changes, and staying keeps them', async () => {
-    renderApp({ platform: fakeServer({ assignments: QUEUED }), user: manager, path: '/assign' });
-    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search the library' }), 'Kapitolyo');
+    renderApp({ platform: fakeServer({ assignments: QUEUED }), user: manager, path: `/assign?intern=${encodeURIComponent(intern.name)}` });
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search listings' }), 'Kapitolyo');
     await userEvent.click(await screen.findByRole('button', { name: /^Add Kapitolyo/ }));
 
     await userEvent.click(screen.getByRole('link', { name: 'Tracker' }));
     const dialog = screen.getByRole('dialog', { name: 'Leave without saving?' });
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Keep editing' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Keep editing' }));
-    expect(heading()).toBe('Assign');
-    expect(screen.getByRole('button', { name: 'Save queue' })).toBeTruthy();
+    expect(heading()).toBe(intern.name);
+    expect(screen.getByRole('button', { name: /^Save queue/ })).toBeTruthy();
 
     // The brand link asks too; leaving drops the changes.
     await userEvent.click(screen.getByRole('link', { name: /APG Post-It/ }));
@@ -387,8 +387,8 @@ describe("the window's own controls", () => {
         ],
       },
     });
-    renderApp({ platform, user: manager, path: '/assign' });
-    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search the library' }), 'Kapitolyo');
+    renderApp({ platform, user: manager, path: `/assign?intern=${encodeURIComponent(intern.name)}` });
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Search listings' }), 'Kapitolyo');
     await userEvent.click(await screen.findByRole('button', { name: /^Add Kapitolyo/ }));
 
     act(() => platform.closeFromOutside());

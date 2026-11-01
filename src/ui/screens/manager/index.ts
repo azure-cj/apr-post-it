@@ -4,7 +4,7 @@
  * platform() or the backend. The arithmetic is core/summary's.
  */
 export { AssignScreen, type AssignScreenProps, type QueueSave } from './AssignScreen';
-export { RESULT_LIMIT } from './AssignSearch';
+export { RESULT_LIMIT } from './AssignLibrary';
 export { DayPicker, type DayPickerProps, type QuickDay } from './DayPicker';
 export { InternsScreen, lastPostWords, type InternsScreenProps } from './InternsScreen';
 export { SETTINGS_TABS, SettingsScreen, settingsTab, type SettingsScreenProps, type SettingsTab } from './SettingsScreen';

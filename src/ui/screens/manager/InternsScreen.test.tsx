@@ -142,14 +142,13 @@ describe('the Interns screen', () => {
     renderApp({ platform: server(), user: admin, path: '/interns' });
     const mika = await rowOf('Mika Reyes');
     await userEvent.click(within(mika).getByRole('button', { name: 'Open queue of Mika Reyes' }));
-    expect(heading()).toBe('Assign');
-    const picker = await screen.findByRole('group', { name: 'Intern' });
-    await waitFor(() => expect(within(picker).getByRole('button', { name: 'Mika Reyes' }).getAttribute('aria-pressed')).toBe('true'));
+    // Straight to step two: Mika's queue for the day shown.
+    expect(heading()).toBe('Mika Reyes');
     expect(screen.getByRole('group', { name: 'Day' }).textContent).toContain('Sat 31 Oct 2026');
 
     await userEvent.click(screen.getByRole('link', { name: 'Interns' }));
     await userEvent.click(within(await rowOf(intern.name)).getByRole('button', { name: `Plan tomorrow for ${intern.name}` }));
-    expect(heading()).toBe('Assign');
+    expect(heading()).toBe(intern.name);
     expect(screen.getByRole('group', { name: 'Day' }).textContent).toContain('Sun 1 Nov 2026');
   });
 

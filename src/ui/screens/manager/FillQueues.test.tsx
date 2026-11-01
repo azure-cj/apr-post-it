@@ -35,8 +35,8 @@ describe('Assign → Fill queues', () => {
   it('previews a plan for every active intern, then saves all of it at once', async () => {
     const platform = fakeServer({ team: TEAM, posts: POSTS, saveQueues: (body) => ({ ok: true, saved: 4, echo: body }) });
     renderApp({ platform, user: admin, path: '/assign' });
-    // The per-intern Assign screen is still there.
-    expect(await screen.findByRole('region', { name: 'Add listings' })).toBeTruthy();
+    // Step one, choosing an intern, is still there.
+    expect(await screen.findByRole('region', { name: 'Choose an intern' })).toBeTruthy();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Fill queues' }));
     const dialog = screen.getByRole('dialog', { name: 'Fill queues' });

@@ -316,7 +316,14 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   Copy and "You won't see this again." The side pane holds a compact Listings check
   (two count tiles, then Only in Directory / Only in checker / Sold as folded lists),
   the Rules and the web app link.
-- **Assign** keeps the per-intern builder; **Fill queues** in its header opens a wide
+- **Assign** is two steps. With no `?intern=`, a grid of the active interns (initials,
+  name, FB broker name, "n not shared" and on which days, today's progress) with a name
+  search. With one, two panes: the library by category (chips with what's free in each,
+  a search, Fresh / Due for repost / Show unavailable; unavailable rows are hidden, or
+  greyed with their reason, never addable) with "Add 20 for posting" and Paste a list in
+  its header; and the queue for the day, with "Still not shared from earlier (n)" folded
+  at its top (Move to this day, Remove). Quick fill's rows are tinted info until saved or
+  undone. Save queue (n) is the one gold button. **Fill queues** in step one's header opens a wide
   dialog: per intern, date, keep existing queue, the active interns as ticks, then
   Preview (one line per intern with a green fill bar against "per intern", opening to
   the list; how many short; the skipped reasons as neutral pills) and Save all, the

@@ -12,7 +12,10 @@
  *   BuildDirectory.gs writes it ("No separator line — …", "No document"). A
  *   row with only `hasIssues` cannot say which issue it has, and is not
  *   skipped for it;
- * - queued: already in someone's queue for that date;
+ * - held: held by an intern (summary.heldListings: a Not Shared row on any
+ *   date, the intern being planned included), or in someone else's queue for
+ *   that date. A planned intern's own rows for that date are replaced unless
+ *   `keepExisting`, and then hold nothing;
  * - cooldown: posted (or pending) within the cooldown, by cooldown.ts.
  *
  * What comes first: listings never posted, then the longest since last
@@ -22,14 +25,14 @@
 
 import { cooldown } from './cooldown';
 import { normalize } from './matcher';
-import { readIssues, type DirectoryRow, type Rules } from './summary';
+import { readIssues, samePerson, type DirectoryRow, type Rules } from './summary';
 import type { QueueItemInput } from './tracker';
 import { DEFAULT_RULES, queueStatus, type Assignment, type PostLogEntry } from './types';
 
-export type SkipReason = 'sold' | 'noSeparator' | 'noDocument' | 'queued' | 'cooldown';
+export type SkipReason = 'sold' | 'noSeparator' | 'noDocument' | 'held' | 'cooldown';
 
 /** The order reasons are checked and reported in. A listing is counted under its first. */
-export const SKIP_REASONS: readonly SkipReason[] = ['sold', 'noSeparator', 'noDocument', 'queued', 'cooldown'];
+export const SKIP_REASONS: readonly SkipReason[] = ['sold', 'noSeparator', 'noDocument', 'held', 'cooldown'];
 
 export interface PlanInput {
   /** The Directory rows. A row's `issues`, when present, is read for "no separator". */
@@ -140,40 +143,36 @@ function byPriority(a: Candidate, b: Candidate): number {
     if (b.last === undefined) return 1;
     return a.last < b.last ? -1 : 1;
   }
-  if (a.nameKey !== b.nameKey) return a.nameKey < b.nameKey ? -1 : 1;
-  if (a.row.name !== b.row.name) return a.row.name < b.row.name ? -1 : 1;
+  if (a.nameKey !== b.nameKey) return naturalCompare(a.nameKey, b.nameKey);
+  if (a.row.name !== b.row.name) return naturalCompare(a.row.name, b.row.name);
   return a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0;
 }
 
-export function planQueues(input: PlanInput): Plan {
-  const { date, rules } = input;
-  if (!isDay(date)) throw new Error(`Expected a yyyy-MM-dd date, got "${date}".`);
-  const perIntern = perInternOf(input);
-
-  const interns: string[] = [];
-  for (const name of input.interns) if (name.trim() && !interns.includes(name)) interns.push(name);
-  const planned = new Set(interns);
-
-  // That date's queues: the planned interns' own (kept, or about to be
-  // replaced) and everyone else's (always taken).
-  const existing = new Map<string, QueueItemInput[]>();
-  const queued = new Lookup<true>(() => true);
-  for (const a of input.assignments) {
-    if (a.date !== date) continue;
-    if (planned.has(a.assignedTo)) {
-      if (!input.keepExisting) continue;
-      let list = existing.get(a.assignedTo);
-      if (!list) existing.set(a.assignedTo, (list = []));
-      list.push({
-        propertyName: a.propertyName,
-        ...(a.propertyId.trim() ? { propertyId: a.propertyId } : {}),
-        // "To post", in older rows, is Not Shared.
-        status: queueStatus(a.status),
-      });
+/**
+ * Who has the listings: everything held by anyone (a Not Shared row on any
+ * date, summary.heldListings' rule), and everything in a queue for `date`
+ * that this plan does not replace. `replaced`: the interns whose rows for
+ * `date` are about to be replaced, and so hold nothing.
+ */
+function takenOf(assignments: readonly Assignment[], date: string, replaced: (name: string) => boolean): Lookup<true> {
+  const taken = new Lookup<true>(() => true);
+  for (const a of assignments) {
+    if (a.date === date) {
+      if (replaced(a.assignedTo)) continue;
+    } else if (queueStatus(a.status) !== 'Not Shared') {
+      continue;
     }
-    queued.add(a.propertyId.trim(), a.propertyName, true);
+    taken.add(a.propertyId.trim(), a.propertyName, true);
   }
+  return taken;
+}
 
+/** The listings that may be planned, in priority order, and what was left out. */
+function candidatesOf(
+  input: Pick<PlanInput, 'properties' | 'posts' | 'date' | 'rules'>,
+  taken: Lookup<true>,
+): { candidates: Candidate[]; counts: Map<SkipReason, number> } {
+  const { date, rules } = input;
   // Each listing's last post, one pass over the posts.
   const lastPosted = new Lookup<string>((a, b) => (a > b ? a : b));
   for (const post of input.posts) {
@@ -209,8 +208,8 @@ export function planQueues(input: PlanInput): Plan {
       skip('noDocument');
       continue;
     }
-    if (queued.get(id, row.name)) {
-      skip('queued');
+    if (taken.get(id, row.name)) {
+      skip('held');
       continue;
     }
     const last = lastPosted.get(id, row.name);
@@ -221,8 +220,11 @@ export function planQueues(input: PlanInput): Plan {
     candidates.push({ row, last, nameKey: lastPosted.key(row.name) });
   }
   candidates.sort(byPriority);
+  return { candidates, counts };
+}
 
-  // One bucket per category, in priority order; categories ordered by their best listing.
+/** One bucket per category, in priority order; categories ordered by their best listing. */
+function bucketsOf(candidates: readonly Candidate[]): Candidate[][] {
   const bucketOf = new Map<string, Candidate[]>();
   const buckets: Candidate[][] = [];
   for (const c of candidates) {
@@ -234,6 +236,41 @@ export function planQueues(input: PlanInput): Plan {
     }
     bucket.push(c);
   }
+  return buckets;
+}
+
+function itemOf(c: Candidate): QueueItemInput {
+  return { propertyName: c.row.name, ...(c.row.id.trim() ? { propertyId: c.row.id } : {}) };
+}
+
+export function planQueues(input: PlanInput): Plan {
+  const { date } = input;
+  if (!isDay(date)) throw new Error(`Expected a yyyy-MM-dd date, got "${date}".`);
+  const perIntern = perInternOf(input);
+
+  const interns: string[] = [];
+  for (const name of input.interns) if (name.trim() && !interns.includes(name)) interns.push(name);
+  const planned = new Set(interns);
+
+  // The planned interns' own queues for that date: kept first, or replaced.
+  const existing = new Map<string, QueueItemInput[]>();
+  if (input.keepExisting) {
+    for (const a of input.assignments) {
+      if (a.date !== date || !planned.has(a.assignedTo)) continue;
+      let list = existing.get(a.assignedTo);
+      if (!list) existing.set(a.assignedTo, (list = []));
+      list.push({
+        propertyName: a.propertyName,
+        ...(a.propertyId.trim() ? { propertyId: a.propertyId } : {}),
+        // "To post", in older rows, is Not Shared.
+        status: queueStatus(a.status),
+      });
+    }
+  }
+
+  const taken = takenOf(input.assignments, date, (name) => !input.keepExisting && planned.has(name));
+  const { candidates, counts } = candidatesOf(input, taken);
+  const buckets = bucketsOf(candidates);
   const heads = buckets.map(() => 0);
   let left = candidates.length;
 
@@ -263,7 +300,7 @@ export function planQueues(input: PlanInput): Plan {
       left--;
       cursor[i] = (b + 1) % buckets.length;
       need[i]!--;
-      queues.get(interns[i]!)!.push({ propertyName: pick.row.name, ...(pick.row.id.trim() ? { propertyId: pick.row.id } : {}) });
+      queues.get(interns[i]!)!.push(itemOf(pick));
       if (need[i]! > 0) wanting = true;
     }
   }
@@ -276,4 +313,86 @@ export function planQueues(input: PlanInput): Plan {
       count: counts.get(reason)!,
     })),
   };
+}
+
+export interface PlanForInternInput extends Pick<PlanInput, 'properties' | 'posts' | 'assignments' | 'date' | 'rules'> {
+  /** Whose queue, exactly as the Team tab has the name. */
+  readonly intern: string;
+  /** How many to pick at most: "Assign 20". */
+  readonly count: number;
+  /** Only this category (compared as names are, case and punctuation aside). Blank or missing: a mix. */
+  readonly category?: string | undefined;
+  /**
+   * What the intern's queue for `date` already holds on screen, saved or not:
+   * none of it is picked again. Their saved rows for that date are left out
+   * whether or not they are listed here.
+   */
+  readonly exclude?: readonly Pick<QueueItemInput, 'propertyName' | 'propertyId'>[] | undefined;
+}
+
+/**
+ * "Assign 20": up to `count` listings for one intern's queue on `date`, in the
+ * planner's order (never posted first, then the longest since posted), drawn
+ * from the categories in turn so the queue gets a mix, or from `category`
+ * alone. Skipped as planQueues skips: sold, no separator, no document, held by
+ * anyone (the intern included), in anyone's queue that date, in its cooldown.
+ * Pure. New items carry no status: they are Not Shared when saved.
+ */
+export function planForIntern(input: PlanForInternInput): QueueItemInput[] {
+  const { date, intern } = input;
+  if (!isDay(date)) throw new Error(`Expected a yyyy-MM-dd date, got "${date}".`);
+  const count = Number.isFinite(input.count) ? Math.max(0, Math.floor(input.count)) : 0;
+  if (count === 0 || !intern.trim()) return [];
+
+  // Nothing replaced: the intern's own rows for that date are already in the queue.
+  const taken = takenOf(input.assignments, date, () => false);
+  for (const item of input.exclude ?? []) taken.add((item.propertyId ?? '').trim(), item.propertyName, true);
+  // samePerson is how the screens read a queue's owner; the server matches exactly.
+  for (const a of input.assignments) {
+    if (a.date === date && samePerson(a.assignedTo, intern)) taken.add(a.propertyId.trim(), a.propertyName, true);
+  }
+
+  let { candidates } = candidatesOf(input, taken);
+  const category = normalize(input.category ?? '');
+  if (category) candidates = candidates.filter((c) => normalize(c.row.category) === category);
+
+  const buckets = bucketsOf(candidates);
+  const heads = buckets.map(() => 0);
+  const picked: QueueItemInput[] = [];
+  let b = 0;
+  while (picked.length < count && picked.length < candidates.length) {
+    for (let tries = 0; tries < buckets.length && heads[b]! >= buckets[b]!.length; tries++) {
+      b = (b + 1) % buckets.length;
+    }
+    picked.push(itemOf(buckets[b]![heads[b]!]!));
+    heads[b] = heads[b]! + 1;
+    b = (b + 1) % buckets.length;
+  }
+  return picked;
+}
+
+/**
+ * Plain code-point order, except runs of digits compare as numbers, so
+ * "Warehouse 57" comes before "Warehouse 101". No locale: the same on every PC.
+ */
+export function naturalCompare(a: string, b: string): number {
+  const re = /(\d+)|(\D+)/g;
+  const pa = a.match(re) ?? [];
+  const pb = b.match(re) ?? [];
+  for (let i = 0; i < Math.min(pa.length, pb.length); i++) {
+    const x = pa[i]!;
+    const y = pb[i]!;
+    if (x === y) continue;
+    const dx = /^\d/.test(x);
+    const dy = /^\d/.test(y);
+    if (dx && dy) {
+      const nx = x.replace(/^0+/, '');
+      const ny = y.replace(/^0+/, '');
+      if (nx.length !== ny.length) return nx.length - ny.length;
+      if (nx !== ny) return nx < ny ? -1 : 1;
+      continue;
+    }
+    return x < y ? -1 : 1;
+  }
+  return pa.length - pb.length;
 }

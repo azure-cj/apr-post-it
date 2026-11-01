@@ -153,3 +153,22 @@ Theme:
   Absent when the listing has no good position or the sheet cannot be found. Read only.
 - `Property` gains `lat?` and `lng?`; the directory keeps them, on disk too.
 - `SERVER_VERSION` / `EXPECTED_SERVER_VERSION` `2026-11-01.1`.
+
+## v5: Assign redesign and listings held by one intern
+
+**The rule (the owner's): a listing assigned to an intern is held by that intern until it is posted.**
+
+- **Held:** an Assignments row with status "Not Shared" (or the older "To post"), on ANY date, holds the listing for its assignee. Posted and Pending (posted, waiting for approval) release it, and the cooldown then applies as usual.
+- No one else can be assigned a held listing.
+- The same intern can't get it twice either, on any date.
+- **Moving it:** an admin moves a held listing explicitly, by removing it from the first intern's queue. Then it's free.
+
+Server:
+- `saveQueue` and `saveQueues` refuse any item held by a different intern, with `error:'held'`, `held:[{ propertyName, propertyId, heldBy, date }]` and a message naming the first one. Nothing is written.
+- Items already in this intern's open queue on another date are refused the same way, with `heldBy` being that intern, unless the request is that same date's queue, which is a replace.
+- Re-saving the same intern and date replaces it as before.
+
+Core:
+- `summary.heldListings(assignments) → Map<propertyKey, { heldBy, date }>` covers open rows only, keyed by id, else by normalised name.
+- `planQueues` skips held listings, with skip reason `held` replacing `queued`. A listing held by the intern being planned isn't re-added.
+- `planForIntern(input & { intern, count, category? }) → QueueItemInput[]` is the "Assign 20" quick fill for one intern. It follows the same order: never posted first, then the longest since posted, with a mix of categories unless one category is chosen.

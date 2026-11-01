@@ -130,12 +130,26 @@ export type BackendErrorCode =
   | 'bad-accounts'
   | 'name-required'
   | 'bad-rules'
+  // saveQueue(s): a listing is held by an intern until it is posted.
+  | 'held'
   // rebuildDirectory: BuildDirectory.gs is not in the Apps Script project.
   | 'no-builder'
   // The listing checker's index (indexCheck): not a failure of ours, nothing to fix here.
   | 'checker-off'
   | 'checker-unavailable'
   | 'server';
+
+/** One queue item the server refused because an intern holds it (`error:'held'`). */
+export interface HeldItem {
+  /** As the request named it. */
+  readonly propertyName: string;
+  /** Its folder id; blank when unknown. */
+  readonly propertyId: string;
+  /** Who holds it, as the Team tab spells the name. */
+  readonly heldBy: string;
+  /** The date of the queue that holds it, yyyy-MM-dd. */
+  readonly date: string;
+}
 
 /** A failed call. The message is the sentence to show; `code` says which way it failed. */
 export class BackendError extends UserFacingError {
@@ -144,19 +158,44 @@ export class BackendError extends UserFacingError {
   /** For a cooldown refusal, the server's own dates (yyyy-MM-dd). Blank otherwise. */
   readonly lastPosted: string;
   readonly nextAllowed: string;
+  /** For a `held` refusal, every item refused, in request order. Empty otherwise. */
+  readonly held: readonly HeldItem[];
 
   constructor(
     code: BackendErrorCode,
     action: Action,
     message: string,
-    extra: { readonly cause?: unknown; readonly lastPosted?: string; readonly nextAllowed?: string } = {},
+    extra: {
+      readonly cause?: unknown;
+      readonly lastPosted?: string;
+      readonly nextAllowed?: string;
+      readonly held?: readonly HeldItem[];
+    } = {},
   ) {
     super(message, extra.cause);
     this.code = code;
     this.action = action;
     this.lastPosted = extra.lastPosted ?? '';
     this.nextAllowed = extra.nextAllowed ?? '';
+    this.held = extra.held ?? [];
   }
+}
+
+/** A `held` reply's list, read leniently: entries without a listing or a holder are dropped. */
+function readHeld(value: unknown): HeldItem[] {
+  const out: HeldItem[] = [];
+  for (const entry of asList(value) ?? []) {
+    const row = asRecord(entry);
+    if (!row) continue;
+    const item: HeldItem = {
+      propertyName: asText(row['propertyName']).trim(),
+      propertyId: asText(row['propertyId']).trim(),
+      heldBy: asText(row['heldBy']).trim(),
+      date: asText(row['date']).trim(),
+    };
+    if ((item.propertyName || item.propertyId) && item.heldBy) out.push(item);
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ reading replies
@@ -454,6 +493,15 @@ function refusal(reply: Reply, action: Action): BackendError {
     case 'no-builder':
       return new BackendError('no-builder', action,
         theirs('BuildDirectory.gs is missing from the Apps Script project, so the directory cannot be rebuilt from here.'));
+    case 'held': {
+      // Ours, naming the first: the screen marks every row from `held`.
+      const held = readHeld(reply['held']);
+      const first = held[0];
+      const text = first
+        ? `${first.propertyName || 'That listing'} is already with ${first.heldBy}. Remove it from their queue first.`
+        : theirs("A listing in this queue is already in another intern's queue. Remove it from their queue first.");
+      return new BackendError('held', action, text, { held });
+    }
     case 'checker-off':
       return new BackendError('checker-off', action, 'The listings check is turned off.');
     case 'checker-unavailable':

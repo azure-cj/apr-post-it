@@ -75,11 +75,15 @@ describe('the sidebar', () => {
 
   it("feeds the team to Assign's intern picker", async () => {
     renderApp({ platform: server(), user: admin, path: '/assign' });
-    // The team's active interns, by name, though Mika is first in the reply; it opens on the first.
-    const picker = await screen.findByRole('group', { name: 'Intern' });
-    await waitFor(() => expect(within(picker).getAllByRole('button').map((b) => b.textContent)).toEqual([intern.name, 'Mika Reyes']));
-    expect(within(picker).getByRole('button', { name: intern.name }).getAttribute('aria-pressed')).toBe('true');
-    expect(within(picker).queryByRole('button', { name: manager.name })).toBeNull();
+    // The team's active interns, by name, though Mika is first in the reply. No one is chosen yet.
+    const picker = await screen.findByRole('list', { name: 'Interns' });
+    await waitFor(() =>
+      expect(within(picker).getAllByRole('button').map((b) => b.querySelector('.assign-pick__name')?.textContent)).toEqual([
+        intern.name,
+        'Mika Reyes',
+      ]),
+    );
+    expect(within(picker).queryByText(manager.name)).toBeNull();
   });
 
   it('collapses and expands by its button and by Ctrl+B, and remembers which', async () => {

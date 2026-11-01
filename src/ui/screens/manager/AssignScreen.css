@@ -1,33 +1,3 @@
-/* ---- who and when ---------------------------------------------------------- */
-
-.assign__controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-8) var(--space-20);
-  margin-bottom: var(--space-12);
-}
-
-.assign__control {
-  display: grid;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.assign__label {
-  color: var(--text-label);
-  font-family: var(--heading-font);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-  font-weight: var(--weight-label);
-}
-
-.assign__interns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
 .assign__notice {
   margin-bottom: var(--space-12);
 }
@@ -133,54 +103,6 @@
 
 .button.assign-added:active {
   transform: none;
-}
-
-/* ---- search results ---------------------------------------------------------- */
-
-.assign-results {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.assign-result {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-6) 0;
-  border-bottom: var(--border-width) solid var(--border-soft);
-}
-
-.assign-result:last-child {
-  border-bottom: 0;
-}
-
-.assign-result__name {
-  color: var(--text);
-  font-size: var(--text-name);
-  line-height: var(--lh-name);
-  font-weight: var(--weight-heading);
-  overflow-wrap: anywhere;
-}
-
-.assign-result--blocked .assign-result__name {
-  color: var(--text-label);
-}
-
-.assign-result__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-6);
-  margin-top: var(--space-2);
-}
-
-.assign-result__reason {
-  margin-top: var(--space-2);
-  color: var(--danger-text);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
 }
 
 /* ---- paste a list ------------------------------------------------------------ */
@@ -543,4 +465,501 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
+}
+
+/* ---- step one: whose queue ------------------------------------------------- */
+
+.assign-pick .card__actions {
+  flex: 0 1 320px;
+}
+
+.assign-pick__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assign-pick__none {
+  padding: var(--space-6) 0;
+}
+
+/* A whole intern, one target: who, their FB name, what's open, today. */
+.assign-pick__card {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4) var(--space-6);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-7) var(--space-8);
+  border: var(--border-width) solid var(--border-soft);
+  border-radius: var(--radius-row);
+  background: var(--inset);
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.assign-pick__card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.assign-pick__card:hover::before {
+  opacity: 1;
+}
+
+.assign-pick__card:hover {
+  border-color: var(--border);
+}
+
+.assign-pick__card:active {
+  transform: scale(var(--press-scale));
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.assign-pick__avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-heading);
+  line-height: 1;
+}
+
+.assign-pick__who {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+}
+
+.assign-pick__name {
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-name);
+  line-height: var(--lh-name);
+  font-weight: var(--weight-heading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assign-pick__fb {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assign-pick__open,
+.assign-pick__today {
+  grid-column: 1 / -1;
+}
+
+.assign-pick__open {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.assign-pick__open--some {
+  color: var(--text-label);
+}
+
+.assign-pick__today {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.assign-pick__today-words {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+/* Posted on a neutral track; the words carry it. */
+.assign-pick__bar {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+}
+
+.assign-pick__bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--ok-strong);
+  transform-origin: left center;
+}
+
+/* ---- step two: the header ----------------------------------------------------- */
+
+.page-header.assign__header--queue {
+  align-items: flex-end;
+}
+
+.assign__who {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.button.assign__back {
+  margin-inline-start: calc(var(--space-5) * -1);
+  margin-bottom: var(--space-2);
+}
+
+.assign__fb {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+/* ---- the library ------------------------------------------------------------ */
+
+.lib {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.lib__tabs,
+.lib__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.lib__find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+}
+
+.lib__find > :first-child {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.assign__add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4) var(--space-6);
+}
+
+.lib__fill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.field__input.lib__fill-count {
+  width: 76px;
+  text-align: center;
+}
+
+.lib__none {
+  padding: var(--space-8) 0;
+}
+
+.lib__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lib-row {
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+
+.lib-row:last-child {
+  border-bottom: 0;
+}
+
+.lib-row__button,
+.lib-row--off {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-5) var(--space-4);
+}
+
+.lib-row__button {
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.lib-row__button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.lib-row__button:hover::before {
+  opacity: 1;
+}
+
+.lib-row--added .lib-row__button {
+  cursor: default;
+}
+
+.lib-row--added .lib-row__button::before {
+  opacity: 0;
+}
+
+.lib-row__body {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.lib-row__name {
+  color: var(--text);
+  font-weight: var(--weight-heading);
+  overflow-wrap: anywhere;
+}
+
+.lib-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.lib-row__cat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.lib-row__fresh,
+.lib-row__due {
+  color: var(--info-text);
+}
+
+/* "Add" stays quiet until the row is pointed at or focused. */
+.lib-row__act {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 64px;
+  justify-content: flex-end;
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-label);
+}
+
+.lib-row__button:hover .lib-row__act,
+.lib-row__button:focus-visible .lib-row__act {
+  color: var(--text);
+}
+
+.lib-row--added .lib-row__act {
+  color: var(--ok-text);
+}
+
+/* Can't go in: greyed, with the reason in words. */
+.lib-row--off .lib-row__name {
+  color: var(--placeholder);
+  font-weight: var(--weight-label);
+}
+
+.lib-row__reason {
+  color: var(--text-label);
+}
+
+.lib-row__off-icon {
+  color: var(--placeholder);
+}
+
+.lib__more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--border-soft);
+  font-size: var(--text-caption);
+}
+
+/* ---- the queue pane --------------------------------------------------------- */
+
+/* The queue stays in view while the library scrolls past it. */
+.assign__queue {
+  position: sticky;
+  top: var(--space-24);
+  max-height: calc(100vh - var(--space-24) - 104px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@container shell (width < 900px) {
+  .assign__queue {
+    position: static;
+    max-height: none;
+  }
+}
+
+.carried {
+  margin-bottom: var(--space-6);
+  border: var(--border-width) solid var(--border-soft);
+  border-radius: var(--radius-row);
+  background: var(--inset);
+}
+
+.carried__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  border-radius: inherit;
+  color: var(--warn-text);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-label);
+  cursor: pointer;
+  list-style: none;
+}
+
+.carried__summary::-webkit-details-marker {
+  display: none;
+}
+
+.carried__summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-inline: var(--space-1) var(--space-2);
+  border-right: 1.75px solid currentColor;
+  border-bottom: 1.75px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.carried[open] > .carried__summary::before {
+  transform: rotate(45deg);
+}
+
+.carried__list {
+  margin: 0;
+  padding: 0 var(--space-6) var(--space-3);
+  list-style: none;
+}
+
+.carried__row {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
+  border-top: var(--border-width) solid var(--border-soft);
+}
+
+.carried__name {
+  color: var(--text);
+  font-weight: var(--weight-heading);
+  overflow-wrap: anywhere;
+}
+
+.carried__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.carried__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.assign__released {
+  margin: calc(var(--space-3) * -1) 0 var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+/* Quick fill's batch: said once, with its Undo. */
+.assign-fill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-6);
+  border: var(--border-width) solid var(--info-edge);
+  border-radius: var(--radius-row);
+  background: var(--info-bg);
+  color: var(--info-text);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  animation: rise-in var(--dur-enter) var(--ease-out) both;
+}
+
+.queue-row--preview {
+  border-color: var(--info-edge);
+  background: var(--info-bg);
+}
+
+.queue-row--refused {
+  border-color: var(--danger-edge);
+  background: var(--danger-bg);
+}
+
+.assign-refusal {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  color: var(--danger-text);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.assign__add .card__header {
+  align-items: center;
 }

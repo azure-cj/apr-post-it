@@ -773,22 +773,30 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
 
   const asked = params.get('date') ?? '';
   const date = isDate(asked) ? asked : addDays(today, 1);
-  const intern = params.get('intern') || interns[0] || null;
+  // No intern in the link: the screen asks whose queue first.
+  const intern = params.get('intern') || null;
+  const team = useTeam({ maxAgeMs: 300_000 });
 
   // Gone from the screen: nothing left unsaved to guard.
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
 
-  const set = (changes: { intern?: string; date?: string }) => {
+  const set = (changes: { intern?: string | null; date?: string }) => {
     const next = new URLSearchParams(params);
-    if (changes.intern !== undefined) next.set('intern', changes.intern);
-    else if (intern) next.set('intern', intern);
+    const who = changes.intern !== undefined ? changes.intern : intern;
+    if (who) next.set('intern', who);
+    else next.delete('intern');
     next.set('date', changes.date ?? date);
-    setParams(next, { replace: true });
+    // Choosing an intern is a step forward, so Back returns to the list; a day is not.
+    setParams(next, { replace: changes.intern === undefined });
   };
 
   const { tracker, directory } = app;
   const onSave = useCallback(
-    (save: QueueSave) => tracker.saveQueue(save.date, save.assignedTo, save.items),
+    async (save: QueueSave) => {
+      // Earlier days first: that frees what moved here, so this day's save isn't refused.
+      for (const earlier of save.releases ?? []) await tracker.saveQueue(earlier.date, earlier.assignedTo, earlier.items);
+      return tracker.saveQueue(save.date, save.assignedTo, save.items);
+    },
     [tracker],
   );
   const notify = useNotify();
@@ -803,6 +811,7 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
       posts={rows.posts.data ?? []}
       assignments={rows.assignments.data ?? []}
       settings={app.settings}
+      team={team.data ?? undefined}
       onInternChange={(name) => set({ intern: name })}
       onDateChange={(day) => set({ date: day })}
       onSave={onSave}

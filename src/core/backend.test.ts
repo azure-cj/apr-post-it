@@ -218,6 +218,36 @@ describe('a refusal from the server', () => {
     expect(error.message).toBe('This property was posted too recently. It can be posted again on 2026-01-08.');
   });
 
+  it('for a held listing, names the first and who has it, and carries every item', async () => {
+    const { post } = scripted({
+      ok: false,
+      error: 'held',
+      message: 'Casa Amara is already with Ana Reyes (queue for 2026-03-08). Remove it from their queue first.',
+      held: [
+        { propertyName: 'Casa Amara', propertyId: 'F1', heldBy: 'Ana Reyes', date: '2026-03-08' },
+        { propertyName: '1201', propertyId: '', heldBy: 'Jan Dela Cruz', date: '2026-03-10' },
+        { propertyName: 'No holder' },
+        'junk',
+      ],
+    });
+    const error = await failure(backendOver(post).call('saveQueues', { date: '2026-03-09' }), 'held');
+
+    expect(error.message).toBe('Casa Amara is already with Ana Reyes. Remove it from their queue first.');
+    expect(error.held).toEqual([
+      { propertyName: 'Casa Amara', propertyId: 'F1', heldBy: 'Ana Reyes', date: '2026-03-08' },
+      { propertyName: '1201', propertyId: '', heldBy: 'Jan Dela Cruz', date: '2026-03-10' },
+    ]);
+  });
+
+  it('for a held listing with no list, keeps a sentence; other refusals carry no held items', async () => {
+    const error = await failure(backendOver(scripted({ ok: false, error: 'held' }).post).call('saveQueue'), 'held');
+    expect(error.message).toMatch(/already in another intern's queue/);
+    expect(error.held).toEqual([]);
+
+    const other = await failure(backendOver(scripted({ ok: false, error: 'busy' }).post).call('saveQueue'), 'busy');
+    expect(other.held).toEqual([]);
+  });
+
   it('for an unknown key, says what to do about it', async () => {
     const { post } = scripted({ ok: false, error: 'unauthorized' });
     const error = await failure(backendOver(post).call('posts'), 'unauthorized');

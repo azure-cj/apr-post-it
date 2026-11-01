@@ -28,7 +28,7 @@ export const SKIP_WORDS: Record<SkipReason, string> = {
   sold: 'Sold or not available',
   noSeparator: 'No separator',
   noDocument: 'No document',
-  queued: 'Already queued that day',
+  held: 'Held by another intern',
   cooldown: 'In cooldown',
 };
 

@@ -233,6 +233,61 @@ function holderOf(holders: Holders, property: Pick<Property, 'id' | 'name'>): As
   return holders.byId.get(property.id) ?? holders.byNameWithoutId.get(name);
 }
 
+// ------------------------------------------------------------------ held listings
+
+/** Who holds a listing, by the owner's rule: an open queue row on any date. */
+export interface HeldListing {
+  /** The assignee, as the sheet has the name. */
+  readonly heldBy: string;
+  /** The queue's date, as the row has it. */
+  readonly date: string;
+  /** The row's own spelling of the listing, and its folder id ('' when none). */
+  readonly propertyName: string;
+  readonly propertyId: string;
+}
+
+/**
+ * Every listing held by an intern: a Not Shared (or older "To post") row, on
+ * any date, holds its listing for its assignee until it is posted; Pending and
+ * Posted release it. Keyed as keyOf keys a listing: "id:" and the folder id,
+ * else "name:" and the normalised name for a row with no id. When rows
+ * disagree, the earliest date wins, then sheet order. Look a listing up with
+ * heldBy(), which also finds a row with no id for a listing that has one.
+ */
+export function heldListings(assignments: readonly Assignment[]): Map<string, HeldListing> {
+  const held = new Map<string, HeldListing>();
+  for (const row of assignments) {
+    if (queueStatus(row.status) !== 'Not Shared') continue;
+    const id = row.propertyId.trim();
+    const name = normalize(row.propertyName);
+    if (!id && !name) continue;
+    const key = id ? `id:${id}` : `name:${name}`;
+    const had = held.get(key);
+    if (had && had.date <= row.date) continue;
+    held.set(key, { heldBy: row.assignedTo, date: row.date, propertyName: row.propertyName, propertyId: id });
+  }
+  return held;
+}
+
+/**
+ * Who holds the listing in `held` (from heldListings), if anyone: by its folder
+ * id, else by name among rows with no id. A listing with no id of its own is
+ * matched by name against every row, as cooldown.lastPostedOn matches posts.
+ */
+export function heldBy(
+  held: ReadonlyMap<string, HeldListing>,
+  property: Pick<Property, 'id' | 'name'>,
+): HeldListing | undefined {
+  const id = property.id.trim();
+  const name = normalize(property.name);
+  if (id) return held.get(`id:${id}`) ?? (name ? held.get(`name:${name}`) : undefined);
+  if (!name) return undefined;
+  const direct = held.get(`name:${name}`);
+  if (direct) return direct;
+  for (const entry of held.values()) if (normalize(entry.propertyName) === name) return entry;
+  return undefined;
+}
+
 // ------------------------------------------------------------------ the day
 
 /** A person on the Team tab, as an admin may see them. Never the key. */
