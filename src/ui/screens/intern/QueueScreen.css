@@ -20,14 +20,71 @@
   min-height: 36px;
 }
 
-.queue__sub {
+/* The week: "This week · 12 of 40" and when it is due, a bar, three counts. */
+.queue__week {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.queue__week-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
+  justify-content: space-between;
   gap: var(--space-2) var(--space-12);
 }
 
-/* The day in three numbers, on one line. */
+.queue__week-title {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+  font-weight: var(--weight-heading);
+}
+
+.queue__week-count {
+  color: var(--text-label);
+}
+
+.queue__due {
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+  white-space: nowrap;
+}
+
+/* Friday: the deadline is today. Amber, the word says it too. */
+.queue__due--today {
+  padding: 0 var(--space-5);
+  border: var(--border-width) solid var(--warn-edge);
+  border-radius: var(--radius-pill);
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  font-weight: var(--weight-heading);
+}
+
+/* Posted, then pending, on a neutral track. The counts below carry it. */
+.queue__bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+}
+
+.queue__bar-posted {
+  background: var(--ok-strong);
+}
+
+.queue__bar-pending {
+  background: var(--warn-text);
+}
+
+/* The week in three numbers, on one line. */
 .queue__counts {
   display: flex;
   flex-wrap: wrap;

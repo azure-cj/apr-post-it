@@ -40,3 +40,8 @@
   flex-wrap: wrap;
   gap: var(--space-3);
 }
+
+/* "26 Oct – 30 Oct" is the widest a week gets, so the arrows don't move. */
+.day-picker__date.week-picker__label {
+  min-width: 8.4em;
+}

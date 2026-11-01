@@ -12,7 +12,8 @@ import { DEFAULT_RULES, RULE_LIMITS } from '../core/types';
 import { loadProject, PROJECT_FILES, readServerFile, type Project } from './harness';
 import { CASA, createWorld, DIRECTORY_ID, type World } from './world';
 
-const DEFAULTS = { cooldownDays: 7, repostDueDays: 14, perIntern: 20 };
+// v6: perWeek (40) replaces perIntern, which is still sent, equal to it, for an older app.
+const DEFAULTS = { cooldownDays: 7, repostDueDays: 14, perWeek: 40, perIntern: 40 };
 
 // ------------------------------------------------------------------ the version
 
@@ -50,6 +51,7 @@ describe('the rules', () => {
     expect(w.project.evaluate('rules_()')).toEqual(DEFAULTS);
     const specs = w.project.evaluate('ruleSpecs_()') as Record<string, { min: number; max: number; fallback: number }>;
     for (const [name, limits] of Object.entries(RULE_LIMITS)) {
+      if (name === 'perIntern') continue; // the app's alias of perWeek: the server has one spec
       expect(specs[name], name).toMatchObject({ min: limits.min, max: limits.max });
     }
     // Reading them writes nothing: there is no Settings tab until one is saved.
@@ -60,18 +62,19 @@ describe('the rules', () => {
     const w = createWorld();
 
     expect(w.call('maria', 'setRules', { cooldownDays: 3 })).toEqual({ ok: true, rules: { ...DEFAULTS, cooldownDays: 3 } });
-    expect(w.call('maria', 'setRules', { perIntern: '12' })).toEqual({
+    expect(w.call('maria', 'setRules', { perWeek: '120' })).toEqual({
       ok: true,
-      rules: { cooldownDays: 3, repostDueDays: 14, perIntern: 12 },
+      rules: { cooldownDays: 3, repostDueDays: 14, perWeek: 120, perIntern: 120 },
     });
 
     const tab = w.admin.sheet('Settings');
-    expect(tab.show()).toEqual([['Key', 'Value'], ['cooldownDays', '3'], ['perIntern', '12']]);
+    expect(tab.show()).toEqual([['Key', 'Value'], ['cooldownDays', '3'], ['Per week', '120']]);
     expect(tab.formats(2)).toEqual(['@', '@']);
     // Changed again: the same row, not a second one.
     w.call('maria', 'setRules', { cooldownDays: 5 });
-    expect(tab.show()).toEqual([['Key', 'Value'], ['cooldownDays', '5'], ['perIntern', '12']]);
-    expect(w.call('ana', 'ping')['rules']).toEqual({ cooldownDays: 5, repostDueDays: 14, perIntern: 12 });
+    w.call('maria', 'setRules', { perWeek: 35 });
+    expect(tab.show()).toEqual([['Key', 'Value'], ['cooldownDays', '5'], ['Per week', '35']]);
+    expect(w.call('ana', 'ping')['rules']).toEqual({ cooldownDays: 5, repostDueDays: 14, perWeek: 35, perIntern: 35 });
   });
 
   it('are the admin\'s alone', () => {
@@ -85,10 +88,13 @@ describe('the rules', () => {
     [{ cooldownDays: 0 }, 'cooldownDays'],
     [{ cooldownDays: 61 }, 'cooldownDays'],
     [{ repostDueDays: 121 }, 'repostDueDays'],
-    [{ perIntern: 2.5 }, 'perIntern'],
-    [{ perIntern: 'ten' }, 'perIntern'],
-    [{ perIntern: -1 }, 'perIntern'],
-    [{ cooldownDays: 3, perIntern: 101 }, 'perIntern'],
+    [{ perWeek: 2.5 }, 'perWeek'],
+    [{ perWeek: 'ten' }, 'perWeek'],
+    [{ perWeek: 0 }, 'perWeek'],
+    [{ perWeek: -1 }, 'perWeek'],
+    [{ cooldownDays: 3, perWeek: 201 }, 'perWeek'],
+    // perIntern, perWeek's old name, is checked as perWeek.
+    [{ perIntern: 201 }, 'perWeek'],
   ])('refuse %j, and write nothing', (fields, field) => {
     const w = createWorld();
 
@@ -111,9 +117,64 @@ describe('the rules', () => {
   it('fall back to the default for a cell that is not a whole number in range', () => {
     const w = createWorld();
     const tab = w.admin.addSheet('Settings', ['Key', 'Value']);
-    tab.type(['cooldownDays', 'soon'], ['repostDueDays', '500'], ['perIntern', '8'], ['somethingElse', '3']);
+    tab.type(['cooldownDays', 'soon'], ['repostDueDays', '500'], ['Per week', '201'], ['somethingElse', '3']);
 
-    expect(w.call('jan', 'ping')['rules']).toEqual({ cooldownDays: 7, repostDueDays: 14, perIntern: 8 });
+    expect(w.call('jan', 'ping')['rules']).toEqual(DEFAULTS);
+  });
+
+  describe('per week (v6)', () => {
+    it('reads the old "Per intern" key when there is no "Per week"', () => {
+      const w = createWorld();
+      w.admin.addSheet('Settings', ['Key', 'Value']).type(['Per intern', '25']);
+
+      expect(w.call('jan', 'ping')['rules']).toEqual({ ...DEFAULTS, perWeek: 25, perIntern: 25 });
+    });
+
+    it('reads the key the v4 app wrote, "perIntern", as the old key too', () => {
+      const w = createWorld();
+      w.admin.addSheet('Settings', ['Key', 'Value']).type(['perIntern', '20']);
+
+      expect(w.call('jan', 'ping')['rules']).toMatchObject({ perWeek: 20 });
+    });
+
+    it('prefers "Per week" to "Per intern", whichever row comes first, and falls back when it is bad', () => {
+      const w = createWorld();
+      const tab = w.admin.addSheet('Settings', ['Key', 'Value']);
+      tab.type(['Per intern', '20'], ['per week', '45']);
+      expect(w.call('jan', 'ping')['rules']).toMatchObject({ perWeek: 45, perIntern: 45 });
+
+      const v = createWorld();
+      v.admin.addSheet('Settings', ['Key', 'Value']).type(['Per week', 'lots'], ['Per intern', '30']);
+      expect(v.call('jan', 'ping')['rules']).toMatchObject({ perWeek: 30 });
+    });
+
+    it('writes "Per week" beside an old "Per intern" row, which is then no longer read', () => {
+      const w = createWorld();
+      const tab = w.admin.addSheet('Settings', ['Key', 'Value']);
+      tab.type(['Per intern', '20']);
+
+      expect(w.call('maria', 'setRules', { perWeek: 50 })).toMatchObject({ ok: true, rules: { perWeek: 50 } });
+      expect(tab.show()).toEqual([['Key', 'Value'], ['Per intern', '#number 20'], ['Per week', '50']]);
+      w.project.clock.advance(31_000);
+      expect(w.call('jan', 'ping')['rules']).toMatchObject({ perWeek: 50 });
+    });
+
+    it('accepts perIntern from an older app as perWeek, and perWeek wins when both are sent', () => {
+      const w = createWorld();
+
+      expect(w.call('maria', 'setRules', { perIntern: 30 })).toMatchObject({ ok: true, rules: { perWeek: 30, perIntern: 30 } });
+      expect(w.call('maria', 'setRules', { perIntern: 30, perWeek: 60 })).toMatchObject({ ok: true, rules: { perWeek: 60 } });
+      expect(w.admin.sheet('Settings').show()).toEqual([['Key', 'Value'], ['Per week', '60']]);
+    });
+
+    it('is set from the app\'s client, perIntern included as an alias', async () => {
+      const w = createWorld();
+      const admin = w.app('maria').tracker;
+
+      await expect(admin.setRules({ perWeek: 80 })).resolves.toEqual({ ...DEFAULTS, perWeek: 80, perIntern: 80 });
+      await expect(admin.setRules({ perIntern: 70 })).resolves.toMatchObject({ perWeek: 70, perIntern: 70 });
+      await expect(admin.setRules({ perWeek: 201 })).rejects.toThrow('Listings per week must be a whole number from 1 to 200.');
+    });
   });
 
   it('drive the server\'s own cooldown', () => {

@@ -11,10 +11,12 @@
  */
 
 import { cooldown, daysLeft, isDueForRepost } from './cooldown';
+import { addDays, DAY_MS, dayOf, daysBetween, isDate, MONTHS, mustDay, WEEKDAYS } from './dates';
 import { folderLine, normalizeForSearch } from './directory';
 import { matchName, normalize } from './matcher';
 import type { QueueItemInput } from './tracker';
 import { queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry, type Property, type Role, type Settings } from './types';
+import { assignmentWeek, isWeekOver, weekDays, weekdaysElapsed, weekdaysLeft, weekLabel, weekOf } from './week';
 
 /**
  * A listing as the directory list gives it, with its Issues text when the
@@ -25,38 +27,17 @@ export type DirectoryRow = Property & { readonly issues?: string | undefined };
 
 /**
  * The rules: the server's (ServerRules, from ping), or AppSettings and
- * Settings, which all fit. `perIntern` is the planner's default; without it
- * the planner uses DEFAULT_PER_INTERN.
+ * Settings, which all fit. `perWeek` is the planner's and the quick fill's
+ * default; `perIntern` is its old name, read when `perWeek` is missing;
+ * without either the planner uses DEFAULT_PER_WEEK.
  */
 export type Rules = Pick<Settings, 'cooldownDays' | 'repostDueDays'> & {
+  readonly perWeek?: number | undefined;
+  /** @deprecated The old name of perWeek. */
   readonly perIntern?: number | undefined;
 };
 
 // ------------------------------------------------------------------ dates
-
-const DAY_MS = 86_400_000;
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
-
-/** Whole days since 1970 in UTC, or undefined when `date` is not a real yyyy-MM-dd day. */
-function dayOf(date: string): number | undefined {
-  const m = ISO_DATE.exec(date);
-  if (!m) return undefined;
-  const day = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / DAY_MS;
-  // Date.UTC rolls 2026-02-30 into March and reads years below 100 as 19xx.
-  return isoOf(day) === date ? day : undefined;
-}
-
-function mustDay(date: string): number {
-  const day = dayOf(date);
-  if (day === undefined) throw new Error(`Expected a yyyy-MM-dd date, got "${date}".`);
-  return day;
-}
-
-function isoOf(day: number): string {
-  return new Date(day * DAY_MS).toISOString().slice(0, 10);
-}
 
 function parts(date: string): { readonly weekday: string; readonly day: number; readonly month: string; readonly year: number } {
   const d = new Date(mustDay(date) * DAY_MS);
@@ -68,20 +49,7 @@ function parts(date: string): { readonly weekday: string; readonly day: number; 
   };
 }
 
-/** A real yyyy-MM-dd day: not "2026-02-30", not "30/10/2026". */
-export function isDate(value: string): boolean {
-  return dayOf(value) !== undefined;
-}
-
-/** "2026-10-29" plus 1 → "2026-10-30". Whole calendar days, across months and years. */
-export function addDays(date: string, days: number): string {
-  return isoOf(mustDay(date) + days);
-}
-
-/** Days from `from` to `to`: positive when `to` is later. */
-export function daysBetween(from: string, to: string): number {
-  return mustDay(to) - mustDay(from);
-}
+export { isDate, addDays, daysBetween };
 
 /** "Thu 29 Oct 2026". English whatever the PC's regional settings. */
 export function longDate(date: string): string {
@@ -235,36 +203,44 @@ function holderOf(holders: Holders, property: Pick<Property, 'id' | 'name'>): As
 
 // ------------------------------------------------------------------ held listings
 
-/** Who holds a listing, by the owner's rule: an open queue row on any date. */
+/** Who holds a listing, by the owner's rule: an open queue row in a week that is not over. */
 export interface HeldListing {
   /** The assignee, as the sheet has the name. */
   readonly heldBy: string;
-  /** The queue's date, as the row has it. */
+  /** The row's Date, as it has it: a week key, or the day of a row written before v6. */
   readonly date: string;
+  /** The queue's week, as its Monday (week.assignmentWeek). */
+  readonly week: string;
   /** The row's own spelling of the listing, and its folder id ('' when none). */
   readonly propertyName: string;
   readonly propertyId: string;
 }
 
 /**
- * Every listing held by an intern: a Not Shared (or older "To post") row, on
- * any date, holds its listing for its assignee until it is posted; Pending and
- * Posted release it. Keyed as keyOf keys a listing: "id:" and the folder id,
- * else "name:" and the normalised name for a row with no id. When rows
- * disagree, the earliest date wins, then sheet order. Look a listing up with
- * heldBy(), which also finds a row with no id for a listing that has one.
+ * Every listing held by an intern on `today` (v6): a Not Shared (or older
+ * "To post") row holds its listing for its assignee while the row's week is
+ * not over (week.isWeekOver; Manila's today). Once that Friday has passed the
+ * row is Missed and holds nothing. Pending and Posted release it at once. A
+ * row whose date can't be read holds nothing. Keyed as keyOf keys a listing:
+ * "id:" and the folder id, else "name:" and the normalised name for a row
+ * with no id. When rows disagree, the earliest week wins, then sheet order.
+ * Look a listing up with heldBy(), which also finds a row with no id for a
+ * listing that has one.
  */
-export function heldListings(assignments: readonly Assignment[]): Map<string, HeldListing> {
+export function heldListings(assignments: readonly Assignment[], today: string): Map<string, HeldListing> {
+  mustDay(today);
   const held = new Map<string, HeldListing>();
   for (const row of assignments) {
     if (queueStatus(row.status) !== 'Not Shared') continue;
+    const week = assignmentWeek(row);
+    if (!week || isWeekOver(week, today)) continue;
     const id = row.propertyId.trim();
     const name = normalize(row.propertyName);
     if (!id && !name) continue;
     const key = id ? `id:${id}` : `name:${name}`;
     const had = held.get(key);
-    if (had && had.date <= row.date) continue;
-    held.set(key, { heldBy: row.assignedTo, date: row.date, propertyName: row.propertyName, propertyId: id });
+    if (had && had.week <= week) continue;
+    held.set(key, { heldBy: row.assignedTo, date: row.date, week, propertyName: row.propertyName, propertyId: id });
   }
   return held;
 }
@@ -314,23 +290,25 @@ export interface RepostItem {
   readonly lastPostedBy?: string | undefined;
   /** Days from that post to the day shown. */
   readonly daysSince?: number | undefined;
-  /** Whose queue has it on the day shown, if anyone's. */
+  /** Whose queue has it in the week of the day shown, if anyone's. */
   readonly queuedFor?: string | undefined;
 }
 
 export interface DaySummary {
   readonly date: string;
+  /** The week the day belongs to (weekOf): whose queues `interns` counts. */
+  readonly week: string;
   /** Posts dated that day that are live. */
   readonly postedToday: number;
   /** Every post waiting for the group admin's approval, whatever its date. */
   readonly pending: number;
-  /** People with a queue that day who have finished it. */
+  /** People with a queue that week who have finished it. */
   readonly internsDone: number;
-  /** People with a queue that day. */
+  /** People with a queue that week. */
   readonly internsAssigned: number;
   /** That day's Posts rows, newest first. */
   readonly posts: readonly PostLogEntry[];
-  /** Every intern on the team, and anyone else with a queue that day: assigned first, then by name. */
+  /** Every intern on the team, and anyone else with a queue that week: assigned first, then by name. */
   readonly interns: readonly InternProgress[];
   /** Not posted for repostDueDays or more: longest since first, then by name. */
   readonly dueForRepost: readonly RepostItem[];
@@ -368,11 +346,15 @@ function progressOf(name: string, day: readonly Assignment[]): InternProgress {
   return { name, total, posted, pending, toPost, done: total > 0 && toPost === 0 && pending === 0 };
 }
 
-/** The tracker's numbers for one day. */
+/**
+ * The tracker's numbers for one day. Queues are weekly (v6): the interns'
+ * progress and "queued for" are their queues for the week the day is in.
+ */
 export function summarizeDay(input: DayInput): DaySummary {
   const { date, posts, assignments, properties, settings } = input;
   const today = mustDay(date);
-  const day = assignments.filter((a) => a.date === date);
+  const week = weekOf(date);
+  const day = assignments.filter((a) => assignmentWeek(a) === week);
 
   const names: string[] = [];
   const add = (name: string): void => {
@@ -409,6 +391,7 @@ export function summarizeDay(input: DayInput): DaySummary {
 
   return {
     date,
+    week,
     postedToday: posts.filter((p) => p.date === date && p.status === 'Posted').length,
     pending: posts.filter((p) => p.status === 'Pending').length,
     internsDone: interns.filter((i) => i.done).length,
@@ -452,17 +435,17 @@ export type AssignBlock = 'cooldown' | 'otherQueue';
 /** May this listing go into this queue, and if not, why not. */
 export interface AssignCheck {
   readonly canAdd: boolean;
-  /** Why not: in its cooldown on the queue's day, or in someone else's queue that day. */
+  /** Why not: in its cooldown on the week's reference day (weekReferenceDay), or in someone else's queue that week. */
   readonly block?: AssignBlock | undefined;
   /** Its latest Posted or Pending row. Missing: never posted. */
   readonly lastPost?: PostLogEntry | undefined;
-  /** Not posted for repostDueDays or more by the queue's day. Never posted counts. */
+  /** Not posted for repostDueDays or more by the week's reference day. Never posted counts. */
   readonly due: boolean;
   /** In its cooldown: the first day it may be queued. */
   readonly nextAllowed?: string | undefined;
-  /** In its cooldown: days from the queue's day to nextAllowed. 0 otherwise. */
+  /** In its cooldown: days from the week's reference day to nextAllowed. 0 otherwise. */
   readonly daysLeft: number;
-  /** In someone else's queue that day: their name, as the sheet has it. */
+  /** In someone else's queue that week: their name, as the sheet has it. */
   readonly holder?: string | undefined;
   /** Why it can't be added, as a sentence that says what to do next. Blank when it can. */
   readonly reason: string;
@@ -489,8 +472,14 @@ export interface QueueValidation {
 export interface AssignInput {
   /** Whose queue: exactly as the sheet has the name. */
   readonly intern: string;
-  /** The queue's day. The cooldown is judged against it, not against today. */
-  readonly date: string;
+  /**
+   * The queue's week (v6), as its Monday; any day of it is read with weekOf.
+   * The cooldown is judged on the week's first day still to come: `today`
+   * inside the week, its Monday before it, its Friday after it.
+   */
+  readonly week?: string | undefined;
+  /** @deprecated A day, read as weekOf(date): the week it is in. Give `week`. */
+  readonly date?: string | undefined;
   /** Today, for "posted 2 days ago". */
   readonly today: string;
   readonly posts: readonly PostLogEntry[];
@@ -501,6 +490,9 @@ export interface AssignInput {
 
 export interface AssignRules {
   readonly intern: string;
+  /** The queue's week, as its Monday. */
+  readonly week: string;
+  /** @deprecated The same as `week`. */
   readonly date: string;
   /** The saved queue as a draft starts: Pending first, then Not Shared in sheet order, then Posted. */
   readonly saved: readonly QueueEntry[];
@@ -559,13 +551,31 @@ export function keyOf(property: Pick<Property, 'id' | 'name'>): string {
 
 const STATUS_ORDER: readonly AssignmentStatus[] = ['Pending', 'Not Shared', 'Posted'];
 
-/** What can go in one person's queue for one day, judged from the rows as read. */
+/**
+ * The day a week's queue is judged on (the cooldown, "due for repost"): today
+ * while the week is under way, its Monday before it starts, its Friday once it
+ * is over.
+ */
+export function weekReferenceDay(week: string, today: string): string {
+  const [monday, , , , friday] = weekDays(week) as [string, string, string, string, string];
+  return today < monday ? monday : today > friday ? friday : today;
+}
+
+/** The week a planner or assign input names: `week`, else the week of `date`. Throws when neither is a day. */
+export function inputWeek(input: { readonly week?: string | undefined; readonly date?: string | undefined }): string {
+  const given = input.week ?? input.date;
+  if (given === undefined || !isDate(given)) throw new Error(`Expected a week (its Monday, yyyy-MM-dd), got "${String(given)}".`);
+  return weekOf(given);
+}
+
+/** What can go in one person's queue for one week, judged from the rows as read. */
 export function assignRules(input: AssignInput): AssignRules {
-  const { intern, date, today, posts, assignments, properties, settings } = input;
-  mustDay(date);
+  const { intern, today, posts, assignments, properties, settings } = input;
+  const week = inputWeek(input);
   mustDay(today);
+  const date = weekReferenceDay(week, today);
   const directory = directoryOf(properties);
-  const day = assignments.filter((a) => a.date === date);
+  const day = assignments.filter((a) => assignmentWeek(a) === week);
   const others = holdersOf(day.filter((a) => !samePerson(a.assignedTo, intern)));
   const mine = day.filter((a) => samePerson(a.assignedTo, intern));
 
@@ -613,7 +623,7 @@ export function assignRules(input: AssignInput): AssignRules {
         due,
         daysLeft: 0,
         holder: holder.assignedTo,
-        reason: `Already in ${holderName(holder.assignedTo, intern)}'s queue for ${shortDate(date)}.`,
+        reason: `Already in ${holderName(holder.assignedTo, intern)}'s queue for the week of ${weekLabel(week)}.`,
       };
     }
     return { canAdd: true, ...(lastPost ? { lastPost } : {}), due, daysLeft: 0, reason: '' };
@@ -662,7 +672,8 @@ export function assignRules(input: AssignInput): AssignRules {
 
   return {
     intern,
-    date,
+    week,
+    date: week,
     saved,
     statusOf: (key) => {
       const row = savedRows.get(key);
@@ -891,10 +902,10 @@ export function activeInterns(team: readonly Pick<TeamMember, 'name' | 'role' | 
   return names.sort((a, b) => byName.compare(a, b));
 }
 
-/** One intern's day at a glance: their queue's progress and posts still waiting for approval. */
+/** One intern's day at a glance: their week's queue progress and posts still waiting for approval. */
 export interface InternDay {
   readonly name: string;
-  /** Items in their queue on the day. */
+  /** Items in their queue for the week the day is in. */
   readonly total: number;
   /** Of those, posted. */
   readonly posted: number;
@@ -902,14 +913,15 @@ export interface InternDay {
   readonly pendingPosts: number;
 }
 
-/** Every active intern on the team, by name, with their queue's progress on `date`. */
+/** Every active intern on the team, by name, with their queue's progress for the week `date` is in. */
 export function internDays(
   team: readonly Pick<TeamMember, 'name' | 'role' | 'active'>[],
   assignments: readonly Assignment[],
   posts: readonly PostLogEntry[],
   date: string,
 ): InternDay[] {
-  const day = assignments.filter((a) => a.date === date);
+  const week = weekOf(date);
+  const day = assignments.filter((a) => assignmentWeek(a) === week);
   return activeInterns(team).map((name) => {
     const progress = progressOf(name, day);
     return {
@@ -931,4 +943,145 @@ export function lastPostBy(posts: readonly PostLogEntry[], name: string): PostLo
     (p) => (p.status === 'Posted' || p.status === 'Pending') && dayOf(p.date) !== undefined && samePerson(p.postedBy, name),
   );
   return newestFirst(theirs)[0];
+}
+
+// ------------------------------------------------------------------ the week (v6)
+
+/** How an intern's week is going (CONTRACT-v3, v6: Pace). */
+export type Pace = 'done' | 'on-track' | 'behind' | 'not-started' | 'missed';
+
+export interface WeekProgress {
+  /** Items in their queue for the week: what they are to post by Friday. 0: no queue. */
+  readonly target: number;
+  /** Of those, live. */
+  readonly posted: number;
+  /** Posted in a group, waiting for its admin's approval. Counts toward the target. */
+  readonly pending: number;
+  /** Not posted yet. */
+  readonly notShared: number;
+  /** Not posted when the week ended: notShared once it is over, else 0. Never written as a status. */
+  readonly missed: number;
+  /** Weekdays left to post in, today included: 5 before the week starts, 0 once it is over. */
+  readonly daysLeft: number;
+  /** ceil(target × weekdays elapsed ÷ 5), today counted when it is a weekday. */
+  readonly expectedByToday: number;
+  readonly pace: Pace;
+}
+
+/**
+ * One intern's week (v6). The queue is their Assignments rows of `week`
+ * (daily rows written before v6 included, by weekOf their date), counted by
+ * status. A Not Shared row also counts as posted (or pending) when their own
+ * post of that listing is dated in that week: the tracker's own row may lag.
+ *
+ * pace, the first that fits:
+ * - done: posted + pending ≥ target (a queue of at least one);
+ * - missed: the week is over with items left;
+ * - not-started: nothing posted and it is past Monday;
+ * - behind: posted + pending < expectedByToday;
+ * - on-track: everything else, a week with no queue included (target 0).
+ */
+export function weekProgress(
+  intern: string,
+  week: string,
+  assignments: readonly Assignment[],
+  posts: readonly PostLogEntry[],
+  today: string,
+): WeekProgress {
+  const monday = weekOf(week);
+  mustDay(today);
+  const rows = assignments.filter((a) => samePerson(a.assignedTo, intern) && assignmentWeek(a) === monday);
+  const theirs = posts.filter(
+    (p) => (p.status === 'Posted' || p.status === 'Pending') && samePerson(p.postedBy, intern) && isDate(p.date) && weekOf(p.date) === monday,
+  );
+
+  let posted = 0;
+  let pending = 0;
+  let notShared = 0;
+  for (const row of rows) {
+    let status = queueStatus(row.status);
+    if (status === 'Not Shared') {
+      const post = lastPostOf(theirs, { id: row.propertyId.trim(), name: row.propertyName });
+      if (post) status = post.status;
+    }
+    if (status === 'Posted') posted++;
+    else if (status === 'Pending') pending++;
+    else notShared++;
+  }
+
+  const target = rows.length;
+  const over = isWeekOver(monday, today);
+  const elapsed = weekdaysElapsed(monday, today);
+  const expectedByToday = Math.ceil((target * elapsed) / 5);
+  const started = posted + pending;
+  let pace: Pace;
+  if (target > 0 && started >= target) pace = 'done';
+  else if (over && notShared > 0) pace = 'missed';
+  else if (target > 0 && started === 0 && today > monday) pace = 'not-started';
+  else if (started < expectedByToday) pace = 'behind';
+  else pace = 'on-track';
+
+  return {
+    target,
+    posted,
+    pending,
+    notShared,
+    missed: over ? notShared : 0,
+    daysLeft: weekdaysLeft(monday, today),
+    expectedByToday,
+    pace,
+  };
+}
+
+/**
+ * The intern's posts (Posted and Pending) on each weekday of `week`, Monday
+ * to Friday: five counts. A weekend post belongs to no weekday and is left out.
+ */
+export function weekPostsByDay(intern: string, week: string, posts: readonly PostLogEntry[]): number[] {
+  const days = weekDays(week);
+  const counts = days.map(() => 0);
+  for (const p of posts) {
+    if (p.status !== 'Posted' && p.status !== 'Pending') continue;
+    if (!samePerson(p.postedBy, intern)) continue;
+    const i = days.indexOf(p.date);
+    if (i !== -1) counts[i]!++;
+  }
+  return counts;
+}
+
+/** One row of the weekly monitor. */
+export interface TeamWeekRow extends WeekProgress {
+  readonly name: string;
+  /** Their posts on Monday … Friday (weekPostsByDay). */
+  readonly byDay: readonly number[];
+}
+
+const PACE_ORDER: readonly Pace[] = ['missed', 'not-started', 'behind', 'on-track', 'done'];
+
+/**
+ * The weekly monitor: weekProgress for every intern named, worst first —
+ * missed, not started, behind, on track, done — then the furthest behind
+ * (expectedByToday less posted and pending), then by name. A blank name, or
+ * one already listed (any case), is left out.
+ */
+export function teamWeek(
+  interns: readonly string[],
+  week: string,
+  assignments: readonly Assignment[],
+  posts: readonly PostLogEntry[],
+  today: string,
+): TeamWeekRow[] {
+  const names: string[] = [];
+  for (const name of interns) if (name.trim() && !names.some((n) => samePerson(n, name))) names.push(name);
+  const short = (r: WeekProgress): number => r.expectedByToday - r.posted - r.pending;
+  return names
+    .map((name): TeamWeekRow => ({
+      name,
+      ...weekProgress(name, week, assignments, posts, today),
+      byDay: weekPostsByDay(name, week, posts),
+    }))
+    .sort(
+      (a, b) =>
+        PACE_ORDER.indexOf(a.pace) - PACE_ORDER.indexOf(b.pace) || short(b) - short(a) || byName.compare(a.name, b.name),
+    );
 }

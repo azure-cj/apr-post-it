@@ -15,6 +15,7 @@ import {
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { BUILT_IN_SCRIPT_URL } from '@/config';
 import { activeInterns, addDays, isDate, peopleIn, samePerson } from '@/core/summary';
+import { assignmentWeek, weekOf } from '@/core/week';
 import { canManage, DEFAULT_RULES, isAdmin, UserFacingError, type Role, type User } from '@/core/types';
 import {
   Button,
@@ -30,7 +31,7 @@ import {
 import { SignInScreen } from './screens/SignInScreen';
 import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
-import { AssignScreen, InternsScreen, RecordsScreen, SettingsScreen, settingsTab, TrackerScreen, type QueueSave } from './screens/manager';
+import { AssignScreen, InternsScreen, monitorWeek, RecordsScreen, SettingsScreen, settingsTab, TrackerScreen, type QueueSave } from './screens/manager';
 import { useTheme } from './state/theme';
 import { Launch } from './startup/Launch';
 import type { Platform } from '@/platform';
@@ -306,7 +307,7 @@ export function AppShell({ signInNote }: AppProps) {
     href: `#${item.path}`,
     icon: item.icon,
     ...(item.key === 'queue' && queueCount > 0
-      ? { count: queueCount, countLabel: `${queueCount} left in your queue today` }
+      ? { count: queueCount, countLabel: `${queueCount} left in your queue this week` }
       : {}),
   }));
 
@@ -540,7 +541,7 @@ function useSidebarState(platform: Platform) {
 }
 
 /**
- * How much of an intern's queue is left today, for the count beside My queue.
+ * How much of an intern's queue is left this week, for the count beside My queue.
  * Read on sign-in and every two minutes; the queue screen reads it more often
  * while it is up, and every save reads it again.
  */
@@ -558,8 +559,9 @@ function useQueueCount(user: User | null): number {
   }, [intern, assignments]);
 
   if (!intern || !snapshot.data) return 0;
-  const today = app.today();
-  return snapshot.data.filter((a) => a.date === today && a.assignedTo === user.name && a.status !== 'Posted').length;
+  // The week's queue: this week, and from Saturday the coming one.
+  const week = weekOf(app.today());
+  return snapshot.data.filter((a) => assignmentWeek(a) === week && samePerson(a.assignedTo, user.name) && a.status !== 'Posted').length;
 }
 
 /** A wait before anything can be shown, said in words. */
@@ -723,11 +725,14 @@ function ConfirmDialog({ title, body, cancelLabel, confirmLabel, busyLabel, fail
 
 // ------------------------------------------------------------------ the manager's screens
 
-/** Where Assign opens: whose queue, which day. Tracker links here with both. */
-export function assignPath(intern: string | null, date: string): string {
+/**
+ * Where Assign opens: whose queue, which week. `day` is any day of the week
+ * (its Monday, or a day the Tracker shows); the link names the week's Monday.
+ */
+export function assignPath(intern: string | null, day: string): string {
   const params = new URLSearchParams();
   if (intern) params.set('intern', intern);
-  params.set('date', date);
+  params.set('week', isDate(day) ? weekOf(day) : day);
   return `${paths.assign}?${params.toString()}`;
 }
 
@@ -771,59 +776,54 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
   const interns = useInterns(rows, me);
   const today = app.today();
 
-  const asked = params.get('date') ?? '';
-  const date = isDate(asked) ? asked : addDays(today, 1);
+  // ?week= (any day of it reads as its Monday); an older link's ?date= too. Missing: this
+  // week, which from Saturday is the coming one (weekOf).
+  const asked = params.get('week') ?? params.get('date') ?? '';
+  const week = weekOf(isDate(asked) ? asked : today);
   // No intern in the link: the screen asks whose queue first.
   const intern = params.get('intern') || null;
-  const team = useTeam({ maxAgeMs: 300_000 });
 
   // Gone from the screen: nothing left unsaved to guard.
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
 
-  const set = (changes: { intern?: string | null; date?: string }) => {
+  const set = (changes: { intern?: string | null; week?: string }) => {
     const next = new URLSearchParams(params);
     const who = changes.intern !== undefined ? changes.intern : intern;
     if (who) next.set('intern', who);
     else next.delete('intern');
-    next.set('date', changes.date ?? date);
-    // Choosing an intern is a step forward, so Back returns to the list; a day is not.
+    next.delete('date');
+    next.set('week', changes.week ?? week);
+    // Choosing an intern is a step forward, so Back returns to the list; a week is not.
     setParams(next, { replace: changes.intern === undefined });
   };
 
-  const { tracker, directory } = app;
-  const onSave = useCallback(
-    async (save: QueueSave) => {
-      // Earlier days first: that frees what moved here, so this day's save isn't refused.
-      for (const earlier of save.releases ?? []) await tracker.saveQueue(earlier.date, earlier.assignedTo, earlier.items);
-      return tracker.saveQueue(save.date, save.assignedTo, save.items);
-    },
-    [tracker],
-  );
+  const { tracker, directory, platform } = app;
+  const onSave = useCallback((save: QueueSave) => tracker.saveQueue(save.week, save.assignedTo, save.items), [tracker]);
   const notify = useNotify();
 
   return (
     <AssignScreen
       interns={interns}
       intern={intern}
-      date={date}
+      week={week}
       today={today}
       properties={rows.properties}
       posts={rows.posts.data ?? []}
       assignments={rows.assignments.data ?? []}
       settings={app.settings}
-      team={team.data ?? undefined}
       onInternChange={(name) => set({ intern: name })}
-      onDateChange={(day) => set({ date: day })}
+      onWeekChange={(monday) => set({ week: monday })}
       onSave={onSave}
       onDirtyChange={onDirtyChange}
       loading={rows.loading}
       error={rows.error}
       search={directory.search}
-      onSaveQueues={(day, queues) => tracker.saveQueues(day, queues)}
+      onSaveQueues={(monday, queues) => tracker.saveQueues(monday, queues)}
       onQueuesSaved={(note) => {
         rows.assignments.reload();
         notify(note, 'ok');
       }}
+      onOpenLink={(url) => void platform.open(url)}
     />
   );
 }
@@ -872,8 +872,10 @@ function InternsRoute() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const today = app.today();
-  const asked = params.get('date') ?? '';
-  const date = isDate(asked) ? asked : today;
+  // The week shown: ?week= (any day of it), else the work week now under way.
+  const opening = monitorWeek(today);
+  const asked = params.get('week') ?? '';
+  const week = isDate(asked) ? weekOf(asked) : opening;
   const team = useTeam({ maxAgeMs: 300_000, pollMs: 600_000 });
   const posts = usePosts({ pollMs: 120_000 });
   const assignments = useAssignments({ pollMs: 120_000 });
@@ -881,12 +883,12 @@ function InternsRoute() {
 
   return (
     <InternsScreen
-      date={date}
+      week={week}
       today={today}
       team={team.data}
       posts={posts.data ?? []}
       assignments={assignments.data ?? []}
-      onDateChange={(day) => setParams(day === today ? {} : { date: day }, { replace: true })}
+      onWeekChange={(next) => setParams(next === opening ? {} : { week: next }, { replace: true })}
       onRefresh={() => {
         team.reload();
         posts.reload();
@@ -895,7 +897,7 @@ function InternsRoute() {
       refreshing={team.loading || posts.loading || assignments.loading}
       error={team.error ?? posts.error ?? assignments.error}
       updatedAt={loadedAt === null ? null : manilaTime(loadedAt)}
-      onOpenQueue={(intern, day) => navigate(assignPath(intern, day))}
+      onOpenQueue={(intern, monday) => navigate(assignPath(intern, monday))}
       onOpenLink={(url) => void app.platform.open(url)}
     />
   );
@@ -945,10 +947,14 @@ function SettingsRoute() {
   const theme = useTheme();
   const me = useUser();
   // The version and rules as the server says them now, not as at sign-in.
+  // Once on arrival: keyed on refreshServer (stable for the window), never on
+  // `app`, which is a new object whenever the ping's answer changes the
+  // settings, and would ask again forever.
+  const { refreshServer } = app;
   const [asked, setAsked] = useState(false);
   useEffect(() => {
-    void app.refreshServer().finally(() => setAsked(true));
-  }, [app]);
+    void refreshServer().finally(() => setAsked(true));
+  }, [refreshServer]);
   const copy = (text: string) =>
     platform.copyText(text).then(
       () => notify('Copied.', 'ok'),
@@ -959,7 +965,7 @@ function SettingsRoute() {
   const rules =
     server.rules ??
     (server.known || asked
-      ? { cooldownDays: app.settings.cooldownDays, repostDueDays: app.settings.repostDueDays, perIntern: DEFAULT_RULES.perIntern }
+      ? { cooldownDays: app.settings.cooldownDays, repostDueDays: app.settings.repostDueDays, perWeek: DEFAULT_RULES.perWeek }
       : null);
   return (
     <SettingsScreen

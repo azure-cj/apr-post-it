@@ -10,13 +10,14 @@ import { CASA, createWorld, LOT_9, TOWER } from './world';
 const DAY = '2026-03-09';
 
 describe('saveQueues', () => {
-  it('replaces each named intern\'s queue for the date, and leaves everyone and every other day alone', () => {
+  it('replaces each named intern\'s queue for the week, and leaves everyone and every other week alone', () => {
     const w = createWorld();
     w.assignments.writeText(
       [DAY, 'Jan Dela Cruz', 'Old Jan item', 'To post', ''],
       [DAY, 'Ana Reyes', 'Old Ana item', 'To post', ''],
       [DAY, 'Former Intern', 'Someone else\'s', 'To post', ''],
-      ['2026-03-10', 'Jan Dela Cruz', 'Tomorrow', 'To post', ''],
+      ['2026-03-10', 'Jan Dela Cruz', 'Tuesday, the same week', 'To post', ''],
+      ['2026-03-16', 'Jan Dela Cruz', 'Next week', 'To post', ''],
     );
 
     const reply = w.call('maria', 'saveQueues', {
@@ -30,7 +31,7 @@ describe('saveQueues', () => {
     expect(reply).toEqual({ ok: true, saved: 3 });
     expect(w.assignments.show().slice(1)).toEqual([
       [DAY, 'Former Intern', 'Someone else\'s', 'To post', ''],
-      ['2026-03-10', 'Jan Dela Cruz', 'Tomorrow', 'To post', ''],
+      ['2026-03-16', 'Jan Dela Cruz', 'Next week', 'To post', ''],
       [DAY, 'Jan Dela Cruz', 'Casa Amara', 'Not Shared', CASA.id],
       [DAY, 'Jan Dela Cruz', '1201', 'Not Shared', TOWER.id],
       // As the Team tab spells the name, so the intern's own queue finds it.
@@ -51,7 +52,7 @@ describe('saveQueues', () => {
     w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Jan Dela Cruz', items: [{ propertyName: CASA.name }] }] });
 
     expect(w.call('jan', 'assignments')['assignments']).toEqual([
-      { date: DAY, assignedTo: 'Jan Dela Cruz', property: 'Casa Amara', status: 'Not Shared', propertyId: CASA.id },
+      { date: DAY, week: DAY, assignedTo: 'Jan Dela Cruz', property: 'Casa Amara', status: 'Not Shared', propertyId: CASA.id },
     ]);
   });
 

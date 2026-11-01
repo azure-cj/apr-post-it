@@ -36,7 +36,7 @@ describe('Assign → Fill queues', () => {
     const platform = fakeServer({ team: TEAM, posts: POSTS, saveQueues: (body) => ({ ok: true, saved: 4, echo: body }) });
     renderApp({ platform, user: admin, path: '/assign' });
     // Step one, choosing an intern, is still there.
-    expect(await screen.findByRole('region', { name: 'Choose an intern' })).toBeTruthy();
+    expect(await screen.findByRole('list', { name: 'Interns' })).toBeTruthy();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Fill queues' }));
     const dialog = screen.getByRole('dialog', { name: 'Fill queues' });
@@ -44,10 +44,12 @@ describe('Assign → Fill queues', () => {
     expect((within(dialog).getByRole('checkbox', { name: intern.name }) as HTMLInputElement).checked).toBe(true);
     expect((within(dialog).getByRole('checkbox', { name: 'Mika Reyes' }) as HTMLInputElement).checked).toBe(true);
     expect(within(dialog).queryByRole('checkbox', { name: 'Carlo Mendoza' })).toBeNull();
-    expect((within(dialog).getByRole('checkbox', { name: 'Keep existing queue' }) as HTMLInputElement).checked).toBe(true);
-    expect(within(dialog).getByText('Sun 1 Nov', { exact: false })).toBeTruthy();
+    expect((within(dialog).getByRole('checkbox', { name: 'Keep existing queues' }) as HTMLInputElement).checked).toBe(true);
+    // Saturday: the week is the coming one, and the target is the week's.
+    expect(within(dialog).getByText('2–6 Nov')).toBeTruthy();
+    expect((within(dialog).getByLabelText('Per week') as HTMLInputElement).value).toBe('40');
 
-    const per = within(dialog).getByLabelText('Per intern');
+    const per = within(dialog).getByLabelText('Per week');
     await userEvent.clear(per);
     await userEvent.type(per, '2');
     expect(within(dialog).getByRole('button', { name: 'Save all' }).hasAttribute('disabled')).toBe(true);
@@ -63,14 +65,14 @@ describe('Assign → Fill queues', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save all' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     const sent = platform.posts.find((p) => p.action === 'saveQueues')!.body as {
-      date: string;
+      week: string;
       queues: { assignedTo: string; items: { propertyName: string }[] }[];
     };
-    expect(sent.date).toBe('2026-11-01');
+    expect(sent.week).toBe('2026-11-02');
     expect(sent.queues.map((q) => q.assignedTo).sort()).toEqual([intern.name, 'Mika Reyes']);
     expect(sent.queues.every((q) => q.items.length === 2)).toBe(true);
     expect(sent.queues.flatMap((q) => q.items.map((i) => i.propertyName))).not.toContain('Kapitolyo Ground Floor Retail, Pasig');
-    expect(await screen.findByText(/Saved 2 queues for/)).toBeTruthy();
+    expect(await screen.findByText(/Saved 2 queues for 2–6 Nov/)).toBeTruthy();
     // The assignments are read again.
     await waitFor(() => {
       const actions = platform.posts.map((p) => p.action);
@@ -85,7 +87,7 @@ describe('Assign → Fill queues', () => {
     const dialog = screen.getByRole('dialog', { name: 'Fill queues' });
     await waitFor(() => expect(within(dialog).getAllByRole('checkbox')).toHaveLength(3));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Preview' }));
-    // 5 listings for 2 interns at 20 each.
-    expect(within(dialog).getByText(/35 listings short of 20 each/)).toBeTruthy();
+    // 5 listings for 2 interns at 40 each.
+    expect(within(dialog).getByText(/75 listings short of 40 each/)).toBeTruthy();
   });
 });

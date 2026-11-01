@@ -1,8 +1,8 @@
 /**
- * What the Assign screen says about one listing for one intern's queue on one
- * day: free to add, or why not, in a few words. Built from core/summary's
- * rules (cooldown, someone else's queue that day) and its held rule (a Not
- * Shared row on any date holds the listing for its assignee).
+ * What the Assign screen says about one listing for one intern's queue for one
+ * week: free to add, or why not, in a few words. Built from core/summary's
+ * rules (cooldown, someone else's queue that week) and its held rule (a Not
+ * Shared row holds the listing for its assignee until its week is over).
  */
 
 import { categoryKind, type CategoryKind } from '../../components';
@@ -18,6 +18,7 @@ import {
   type HeldListing,
 } from '@/core/summary';
 import { normalize } from '@/core/matcher';
+import { weekLabel, weekOf } from '@/core/week';
 import type { PostLogEntry } from '@/core/types';
 
 export type UnavailableKind = 'sold' | 'noSeparator' | 'noDocument' | 'held' | 'mine' | 'cooldown' | 'otherQueue';
@@ -30,7 +31,7 @@ export interface ListingState {
   readonly lastPost?: PostLogEntry | undefined;
   /** Never posted. */
   readonly fresh: boolean;
-  /** Posted before, and not for repostDueDays by the queue's day. */
+  /** Posted before, and not for repostDueDays by the week's reference day. */
   readonly due: boolean;
 }
 
@@ -42,24 +43,36 @@ export function dayMonth(date: string): string {
   return `${Number(d)} ${months[Number(m) - 1] ?? ''}`;
 }
 
-/** Why a held listing can't be added, for whoever is looking: "With Mika since 28 Oct". */
-export function heldWords(hold: Pick<HeldListing, 'heldBy' | 'date'>, intern: string, date: string): string {
+/** The week a held listing (or a refusal) names, as its Monday. */
+function weekOfHold(hold: Pick<HeldListing, 'date'> & { readonly week?: string | undefined }): string {
+  if (hold.week) return hold.week;
+  return /^\d{4}-\d{2}-\d{2}$/.test(hold.date) ? weekOf(hold.date) : '';
+}
+
+/** Why a held listing can't be added, for whoever is looking: "With Mika, 2–6 Nov". */
+export function heldWords(
+  hold: Pick<HeldListing, 'heldBy' | 'date'> & { readonly week?: string | undefined },
+  intern: string,
+): string {
+  const week = weekOfHold(hold);
+  const when = week ? `, ${weekLabel(week)}` : '';
   if (hold.heldBy.trim().toLowerCase() !== intern.trim().toLowerCase()) {
-    return `With ${holderName(hold.heldBy, intern)} since ${dayMonth(hold.date)}`;
+    return `With ${holderName(hold.heldBy, intern)}${when}`;
   }
-  return hold.date < date ? `Still not shared from ${dayMonth(hold.date)}` : `In this queue for ${dayMonth(hold.date)}`;
+  return `Queued${when}`;
 }
 
 export interface StateInput {
   readonly rules: AssignRules;
   readonly held: ReadonlyMap<string, HeldListing>;
   readonly intern: string;
-  readonly date: string;
+  /** The queue's week, as its Monday. */
+  readonly week: string;
   readonly today: string;
 }
 
 /** One listing's state, by the rules in the order they're checked. */
-export function listingState(property: DirectoryRow, { rules, held, intern, date, today }: StateInput): ListingState {
+export function listingState(property: DirectoryRow, { rules, held, intern, week, today }: StateInput): ListingState {
   const check: AssignCheck = rules.check(property);
   const lastPost = check.lastPost;
   const base = {
@@ -76,15 +89,15 @@ export function listingState(property: DirectoryRow, { rules, held, intern, date
   if (problem === 'noSeparator') return no('noSeparator', 'No separator');
   if (problem === 'noDocument') return no('noDocument', 'No document');
   const hold = heldBy(held, property);
-  if (hold && !(hold.date === date && hold.heldBy.trim().toLowerCase() === intern.trim().toLowerCase())) {
-    const mine = hold.heldBy.trim().toLowerCase() === intern.trim().toLowerCase();
-    return no(mine ? 'mine' : 'held', heldWords(hold, intern, date));
+  const mine = hold ? hold.heldBy.trim().toLowerCase() === intern.trim().toLowerCase() : false;
+  if (hold && !(mine && weekOfHold(hold) === week)) {
+    return no(mine ? 'mine' : 'held', heldWords(hold, intern));
   }
   if (check.block === 'cooldown' && lastPost) {
     return no('cooldown', `Posted ${ago(Math.max(0, daysBetween(lastPost.date, today)))}`);
   }
   if (check.block === 'otherQueue' && check.holder) {
-    return no('otherQueue', `In ${holderName(check.holder, intern)}'s queue that day`);
+    return no('otherQueue', `In ${holderName(check.holder, intern)}'s queue`);
   }
   return base;
 }

@@ -1,7 +1,7 @@
 /**
- * Plans a day's queues for many interns at once (CONTRACT-v3). Pure: the
- * caller passes the rows it read and the date; the same plan comes out every
- * time, in a test, in the app and on a server.
+ * Plans a week's queues for many interns at once (CONTRACT-v3, v6: weekly
+ * queues). Pure: the caller passes the rows it read, the week and today; the
+ * same plan comes out every time, in a test, in the app and on a server.
  *
  * What is left out, each with its reason counted:
  * - sold: the checker's index says Sold;
@@ -12,11 +12,14 @@
  *   BuildDirectory.gs writes it ("No separator line — …", "No document"). A
  *   row with only `hasIssues` cannot say which issue it has, and is not
  *   skipped for it;
- * - held: held by an intern (summary.heldListings: a Not Shared row on any
- *   date, the intern being planned included), or in someone else's queue for
- *   that date. A planned intern's own rows for that date are replaced unless
- *   `keepExisting`, and then hold nothing;
- * - cooldown: posted (or pending) within the cooldown, by cooldown.ts.
+ * - held: held by an intern (summary.heldListings: a Not Shared row in a week
+ *   that is not over on `today`, the intern being planned included), or
+ *   already in anyone's queue for that week, whatever its status. A planned
+ *   intern's own Not Shared rows for that week are replaced unless
+ *   `keepExisting`, and then hold nothing; their started ones (Posted,
+ *   Pending) always stay;
+ * - cooldown: posted (or pending) within the cooldown, by cooldown.ts, judged
+ *   on summary.weekReferenceDay: today inside the week, its Monday before it.
  *
  * What comes first: listings never posted, then the longest since last
  * posted, ties by name. Each intern draws from the categories in turn,
@@ -25,9 +28,10 @@
 
 import { cooldown } from './cooldown';
 import { normalize } from './matcher';
-import { readIssues, samePerson, type DirectoryRow, type Rules } from './summary';
+import { inputWeek, readIssues, samePerson, weekReferenceDay, type DirectoryRow, type Rules } from './summary';
 import type { QueueItemInput } from './tracker';
 import { DEFAULT_RULES, queueStatus, type Assignment, type PostLogEntry } from './types';
+import { assignmentWeek, isWeekOver } from './week';
 
 export type SkipReason = 'sold' | 'noSeparator' | 'noDocument' | 'held' | 'cooldown';
 
@@ -41,40 +45,69 @@ export interface PlanInput {
   readonly assignments: readonly Assignment[];
   /** Exactly as the Team tab has them: queues are matched with ===. */
   readonly interns: readonly string[];
-  /** Default: the rules' `perIntern` (the server's, from ping), else DEFAULT_PER_INTERN. */
+  /** Default: the rules' `perWeek` (the server's, from ping), else DEFAULT_PER_WEEK. */
+  readonly perWeek?: number | undefined;
+  /** @deprecated perWeek's old name, read when perWeek is missing. */
   readonly perIntern?: number | undefined;
-  /** yyyy-MM-dd */
-  readonly date: string;
+  /** The week planned, as its Monday (yyyy-MM-dd); any day of it is read with weekOf. */
+  readonly week?: string | undefined;
+  /** @deprecated A day: the week it is in (weekOf) is planned. Give `week`. */
+  readonly date?: string | undefined;
+  /**
+   * Today, Manila's yyyy-MM-dd: a Not Shared row holds its listing only while
+   * its week is not over on this day. Missing: `date` when given, else the
+   * week's Monday (right for this week; pass it when planning ahead).
+   */
+  readonly today?: string | undefined;
   readonly rules: Rules;
   /**
-   * True: an intern's queue for that date is kept, first and as it is, and
-   * counts toward `perIntern`. False: it is replaced, and its listings are
-   * free to plan again.
+   * True: an intern's queue for that week is kept, first and as it is, and
+   * counts toward `perWeek`. False: its Not Shared items are replaced, and
+   * those listings are free to plan again; started items (Posted, Pending)
+   * are kept either way.
    */
   readonly keepExisting: boolean;
 }
 
 export interface Plan {
+  /** The week planned, as its Monday: what to pass to Tracker.saveQueues. */
+  readonly week: string;
   /**
-   * Every intern's whole queue for the date, in posting order: with
-   * `keepExisting`, their existing items first. Ready for Tracker.saveQueues.
+   * Every intern's whole queue for the week, in posting order: their kept
+   * items first. Ready for Tracker.saveQueues.
    */
   readonly queues: Map<string, QueueItemInput[]>;
-  /** How many items short of `perIntern` per intern the plan fell, in total. */
+  /** How many items short of `perWeek` per intern the plan fell, in total. */
   readonly shortBy: number;
   /** Only reasons that left something out, in SKIP_REASONS order. */
   readonly skipped: { readonly reason: SkipReason; readonly count: number }[];
 }
 
-/** Used only when neither the input nor the rules say: the rules' own default. */
-export const DEFAULT_PER_INTERN = DEFAULT_RULES.perIntern;
+/** Used only when neither the input nor the rules say: the rules' own default, 40. */
+export const DEFAULT_PER_WEEK = DEFAULT_RULES.perWeek;
+/** @deprecated DEFAULT_PER_WEEK's old name. */
+export const DEFAULT_PER_INTERN = DEFAULT_PER_WEEK;
 
-/** How many items per intern a plan aims for: the input's, else the rules', else the default. */
-export function perInternOf(input: Pick<PlanInput, 'perIntern' | 'rules'>): number {
-  for (const value of [input.perIntern, input.rules.perIntern]) {
+/**
+ * How many listings per intern a week's plan aims for: the input's perWeek
+ * (or perIntern), else the rules' perWeek (or perIntern), else the default.
+ */
+export function perWeekOf(input: Pick<PlanInput, 'perWeek' | 'perIntern' | 'rules'>): number {
+  for (const value of [input.perWeek, input.perIntern, input.rules.perWeek, input.rules.perIntern]) {
     if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value));
   }
-  return DEFAULT_PER_INTERN;
+  return DEFAULT_PER_WEEK;
+}
+
+/** @deprecated perWeekOf's old name. */
+export const perInternOf = perWeekOf;
+
+/** The week, today and the cooldown's reference day an input names. Throws on a bad day. */
+function whenOf(input: Pick<PlanInput, 'week' | 'date' | 'today'>): { week: string; today: string; ref: string } {
+  const week = inputWeek(input);
+  const today = input.today ?? input.date ?? week;
+  if (!isDay(today)) throw new Error(`Expected today as a yyyy-MM-dd date, got "${today}".`);
+  return { week, today, ref: weekReferenceDay(week, today) };
 }
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -149,17 +182,25 @@ function byPriority(a: Candidate, b: Candidate): number {
 }
 
 /**
- * Who has the listings: everything held by anyone (a Not Shared row on any
- * date, summary.heldListings' rule), and everything in a queue for `date`
- * that this plan does not replace. `replaced`: the interns whose rows for
- * `date` are about to be replaced, and so hold nothing.
+ * Who has the listings: everything held by anyone (a Not Shared row in a
+ * week not over on `today`, summary.heldListings' rule), and everything in
+ * anyone's queue for `week`, whatever its status, that this plan does not
+ * replace. `replaced`: the interns whose Not Shared rows for `week` are about
+ * to be replaced, and so hold nothing.
  */
-function takenOf(assignments: readonly Assignment[], date: string, replaced: (name: string) => boolean): Lookup<true> {
+function takenOf(
+  assignments: readonly Assignment[],
+  week: string,
+  today: string,
+  replaced: (name: string) => boolean,
+): Lookup<true> {
   const taken = new Lookup<true>(() => true);
   for (const a of assignments) {
-    if (a.date === date) {
-      if (replaced(a.assignedTo)) continue;
-    } else if (queueStatus(a.status) !== 'Not Shared') {
+    const rowWeek = assignmentWeek(a);
+    const open = queueStatus(a.status) === 'Not Shared';
+    if (rowWeek === week) {
+      if (open && replaced(a.assignedTo)) continue;
+    } else if (!open || !rowWeek || isWeekOver(rowWeek, today)) {
       continue;
     }
     taken.add(a.propertyId.trim(), a.propertyName, true);
@@ -169,10 +210,11 @@ function takenOf(assignments: readonly Assignment[], date: string, replaced: (na
 
 /** The listings that may be planned, in priority order, and what was left out. */
 function candidatesOf(
-  input: Pick<PlanInput, 'properties' | 'posts' | 'date' | 'rules'>,
+  input: Pick<PlanInput, 'properties' | 'posts' | 'rules'>,
+  date: string,
   taken: Lookup<true>,
 ): { candidates: Candidate[]; counts: Map<SkipReason, number> } {
-  const { date, rules } = input;
+  const { rules } = input;
   // Each listing's last post, one pass over the posts.
   const lastPosted = new Lookup<string>((a, b) => (a > b ? a : b));
   for (const post of input.posts) {
@@ -244,32 +286,31 @@ function itemOf(c: Candidate): QueueItemInput {
 }
 
 export function planQueues(input: PlanInput): Plan {
-  const { date } = input;
-  if (!isDay(date)) throw new Error(`Expected a yyyy-MM-dd date, got "${date}".`);
-  const perIntern = perInternOf(input);
+  const { week, today, ref } = whenOf(input);
+  const perWeek = perWeekOf(input);
 
   const interns: string[] = [];
   for (const name of input.interns) if (name.trim() && !interns.includes(name)) interns.push(name);
   const planned = new Set(interns);
 
-  // The planned interns' own queues for that date: kept first, or replaced.
+  // The planned interns' own queues for that week: kept first, or replaced.
+  // Started items (Posted, Pending) are kept either way: they have happened.
   const existing = new Map<string, QueueItemInput[]>();
-  if (input.keepExisting) {
-    for (const a of input.assignments) {
-      if (a.date !== date || !planned.has(a.assignedTo)) continue;
-      let list = existing.get(a.assignedTo);
-      if (!list) existing.set(a.assignedTo, (list = []));
-      list.push({
-        propertyName: a.propertyName,
-        ...(a.propertyId.trim() ? { propertyId: a.propertyId } : {}),
-        // "To post", in older rows, is Not Shared.
-        status: queueStatus(a.status),
-      });
-    }
+  for (const a of input.assignments) {
+    if (!planned.has(a.assignedTo) || assignmentWeek(a) !== week) continue;
+    if (!input.keepExisting && queueStatus(a.status) === 'Not Shared') continue;
+    let list = existing.get(a.assignedTo);
+    if (!list) existing.set(a.assignedTo, (list = []));
+    list.push({
+      propertyName: a.propertyName,
+      ...(a.propertyId.trim() ? { propertyId: a.propertyId } : {}),
+      // "To post", in older rows, is Not Shared.
+      status: queueStatus(a.status),
+    });
   }
 
-  const taken = takenOf(input.assignments, date, (name) => !input.keepExisting && planned.has(name));
-  const { candidates, counts } = candidatesOf(input, taken);
+  const taken = takenOf(input.assignments, week, today, (name) => !input.keepExisting && planned.has(name));
+  const { candidates, counts } = candidatesOf(input, ref, taken);
   const buckets = bucketsOf(candidates);
   const heads = buckets.map(() => 0);
   let left = candidates.length;
@@ -280,7 +321,7 @@ export function planQueues(input: PlanInput): Plan {
   interns.forEach((name, i) => {
     const kept = existing.get(name) ?? [];
     queues.set(name, [...kept]);
-    need.push(Math.max(0, perIntern - kept.length));
+    need.push(Math.max(0, perWeek - kept.length));
     cursor.push(buckets.length === 0 ? 0 : i % buckets.length);
   });
 
@@ -306,6 +347,7 @@ export function planQueues(input: PlanInput): Plan {
   }
 
   return {
+    week,
     queues,
     shortBy: need.reduce((sum, n) => sum + n, 0),
     skipped: SKIP_REASONS.filter((reason) => counts.has(reason)).map((reason) => ({
@@ -315,44 +357,47 @@ export function planQueues(input: PlanInput): Plan {
   };
 }
 
-export interface PlanForInternInput extends Pick<PlanInput, 'properties' | 'posts' | 'assignments' | 'date' | 'rules'> {
+export interface PlanForInternInput
+  extends Pick<PlanInput, 'properties' | 'posts' | 'assignments' | 'week' | 'date' | 'today' | 'rules'> {
   /** Whose queue, exactly as the Team tab has the name. */
   readonly intern: string;
-  /** How many to pick at most: "Assign 20". */
-  readonly count: number;
+  /** How many to pick at most: "Add 40 for posting". Default: the rules' perWeek (perWeekOf). */
+  readonly count?: number | undefined;
   /** Only this category (compared as names are, case and punctuation aside). Blank or missing: a mix. */
   readonly category?: string | undefined;
   /**
-   * What the intern's queue for `date` already holds on screen, saved or not:
-   * none of it is picked again. Their saved rows for that date are left out
-   * whether or not they are listed here.
+   * What the intern's queue for the week already holds on screen, saved or
+   * not: none of it is picked again. Their saved rows for that week are left
+   * out whether or not they are listed here.
    */
   readonly exclude?: readonly Pick<QueueItemInput, 'propertyName' | 'propertyId'>[] | undefined;
 }
 
 /**
- * "Assign 20": up to `count` listings for one intern's queue on `date`, in the
- * planner's order (never posted first, then the longest since posted), drawn
- * from the categories in turn so the queue gets a mix, or from `category`
- * alone. Skipped as planQueues skips: sold, no separator, no document, held by
- * anyone (the intern included), in anyone's queue that date, in its cooldown.
- * Pure. New items carry no status: they are Not Shared when saved.
+ * "Add 40 for posting": up to `count` (default the rules' perWeek) listings
+ * for one intern's queue for `week`, in the planner's order (never posted
+ * first, then the longest since posted), drawn from the categories in turn so
+ * the queue gets a mix, or from `category` alone. Skipped as planQueues skips:
+ * sold, no separator, no document, held by anyone in a week not over (the
+ * intern included), in anyone's queue that week, in its cooldown. Pure. New
+ * items carry no status: they are Not Shared when saved.
  */
 export function planForIntern(input: PlanForInternInput): QueueItemInput[] {
-  const { date, intern } = input;
-  if (!isDay(date)) throw new Error(`Expected a yyyy-MM-dd date, got "${date}".`);
-  const count = Number.isFinite(input.count) ? Math.max(0, Math.floor(input.count)) : 0;
+  const { intern } = input;
+  const { week, today, ref } = whenOf(input);
+  const asked = input.count ?? perWeekOf({ rules: input.rules });
+  const count = Number.isFinite(asked) ? Math.max(0, Math.floor(asked)) : 0;
   if (count === 0 || !intern.trim()) return [];
 
-  // Nothing replaced: the intern's own rows for that date are already in the queue.
-  const taken = takenOf(input.assignments, date, () => false);
+  // Nothing replaced: the intern's own rows for that week are already in the queue.
+  const taken = takenOf(input.assignments, week, today, () => false);
   for (const item of input.exclude ?? []) taken.add((item.propertyId ?? '').trim(), item.propertyName, true);
   // samePerson is how the screens read a queue's owner; the server matches exactly.
   for (const a of input.assignments) {
-    if (a.date === date && samePerson(a.assignedTo, intern)) taken.add(a.propertyId.trim(), a.propertyName, true);
+    if (assignmentWeek(a) === week && samePerson(a.assignedTo, intern)) taken.add(a.propertyId.trim(), a.propertyName, true);
   }
 
-  let { candidates } = candidatesOf(input, taken);
+  let { candidates } = candidatesOf(input, ref, taken);
   const category = normalize(input.category ?? '');
   if (category) candidates = candidates.filter((c) => normalize(c.row.category) === category);
 

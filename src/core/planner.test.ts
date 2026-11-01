@@ -167,7 +167,7 @@ describe('planning queues', () => {
     const assignments = [
       queuedFor('Jan', 'P5', { status: 'Posted' }),
       queuedFor('Jan', 'P7'),
-      queuedFor('Jan', 'P1', { date: '2026-11-01', status: 'Posted' }), // another day, posted: no effect
+      queuedFor('Jan', 'P1', { date: '2026-10-30', status: 'Posted' }), // last week, posted: no effect
     ];
     const kept = plan({ properties, assignments, perIntern: 4, keepExisting: true });
     expect(kept.queues.get('Jan')).toEqual([
@@ -177,9 +177,15 @@ describe('planning queues', () => {
       { propertyName: 'Listing P1', propertyId: 'P1' },
     ]);
 
+    // v6: replacing a week's queue replaces its Not Shared items; what was posted stays.
     const replaced = plan({ properties, assignments, perIntern: 4, keepExisting: false });
-    expect(ids(replaced.queues.get('Jan'))).toEqual(['P0', 'P1', 'P2', 'P3']);
-    expect(replaced.skipped).toEqual([]);
+    expect(replaced.queues.get('Jan')).toEqual([
+      { propertyName: 'Listing P5', propertyId: 'P5', status: 'Posted' },
+      { propertyName: 'Listing P0', propertyId: 'P0' },
+      { propertyName: 'Listing P1', propertyId: 'P1' },
+      { propertyName: 'Listing P2', propertyId: 'P2' },
+    ]);
+    expect(replaced.skipped).toEqual([{ reason: 'held', count: 1 }]);
   });
 
   it('keeps an older "To post" item as Not Shared, the same thing', () => {
@@ -246,23 +252,53 @@ describe('planning queues', () => {
   });
 });
 
-describe('held listings in the plan (v5)', () => {
-  it('skips a listing held by anyone on any date, the intern being planned included, as held', () => {
-    const properties = ['A', 'B', 'C', 'D', 'E', 'F'].map((id) => prop(id));
+describe('held listings in the plan (v5, weekly in v6)', () => {
+  it('skips a listing held in a week not over, by anyone, the intern being planned included, as held', () => {
+    const properties = ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((id) => prop(id));
+    const result = plan({
+      properties,
+      interns: ['Jan'],
+      // Wednesday of this week, planning next week.
+      week: '2026-11-09',
+      date: undefined,
+      today: '2026-11-04',
+      assignments: [
+        queuedFor('Bea', 'A', { date: '2026-11-02' }), // Bea's, this week, still open: held
+        queuedFor('Jan', 'B', { date: '2026-11-16' }), // Jan's own, the week after: held
+        queuedFor('Bea', '', { propertyName: 'listing c', date: '2026-10-20', status: 'To post' as Assignment['status'] }), // missed: free
+        queuedFor('Bea', 'D', { date: '2026-11-02', status: 'Posted' }), // released
+        queuedFor('Bea', 'E', { date: '2026-11-03', status: 'Pending' }), // released
+        queuedFor('Bea', 'G', { date: '2026-10-30' }), // an old daily row of a week that is over: missed, free
+      ],
+    });
+
+    expect(result.week).toBe('2026-11-09');
+    expect(ids(result.queues.get('Jan'))).toEqual(['C', 'D', 'E', 'F', 'G']);
+    expect(result.skipped).toEqual([{ reason: 'held', count: 2 }]);
+  });
+
+  it('lets go of a held listing once its Friday has passed', () => {
+    const properties = [prop('A')];
+    const assignments = [queuedFor('Bea', 'A', { date: '2026-11-02' })];
+    const at = (today: string) => ids(plan({ properties, assignments, week: '2026-11-09', date: undefined, today }).queues.get('Jan'));
+
+    expect(at('2026-11-06')).toEqual([]);
+    expect(at('2026-11-07')).toEqual(['A']);
+  });
+
+  it('skips what is already in anyone\'s queue that week, whatever its status, old daily rows included', () => {
+    const properties = [prop('A'), prop('B'), prop('C')];
     const result = plan({
       properties,
       interns: ['Jan'],
       assignments: [
-        queuedFor('Bea', 'A', { date: '2026-10-20' }), // Bea's, weeks ago, still open
-        queuedFor('Jan', 'B', { date: '2026-11-05' }), // Jan's own, another day
-        queuedFor('Bea', '', { propertyName: 'listing c', date: '2026-10-01', status: 'To post' as Assignment['status'] }),
-        queuedFor('Bea', 'D', { date: '2026-10-20', status: 'Posted' }), // released
-        queuedFor('Bea', 'E', { date: '2026-10-20', status: 'Pending' }), // released
+        queuedFor('Bea', 'A', { date: '2026-11-04', status: 'Posted' }),
+        queuedFor('Mia', 'B', { date: '2026-11-06', status: 'Pending' }),
       ],
     });
 
-    expect(ids(result.queues.get('Jan'))).toEqual(['D', 'E', 'F']);
-    expect(result.skipped).toEqual([{ reason: 'held', count: 3 }]);
+    expect(ids(result.queues.get('Jan'))).toEqual(['C']);
+    expect(result.skipped).toEqual([{ reason: 'held', count: 2 }]);
   });
 
   it("frees the planned intern's own rows for the date when they are replaced, not when kept", () => {
@@ -328,9 +364,10 @@ describe('planForIntern (Assign 20)', () => {
       properties,
       posts,
       assignments: [
-        queuedFor('Bea', 'c2', { date: '2026-10-01' }), // held by Bea
-        queuedFor('Mia', 'w2', { status: 'Posted' }), // in Mia's queue that day
-        queuedFor('Jan', 'l1', { status: 'Pending' }), // already in Jan's queue that day
+        queuedFor('Bea', 'c2', { date: '2026-11-10' }), // held by Bea, next week
+        queuedFor('Mia', 'w2', { date: '2026-11-05', status: 'Posted' }), // in Mia's queue this week
+        queuedFor('Jan', 'l1', { status: 'Pending' }), // already in Jan's queue this week
+        queuedFor('Bea', 'w1', { date: '2026-10-26' }), // missed last week: free
       ],
       exclude: [{ propertyName: 'Listing c1' }], // on screen, not saved yet
     });
@@ -339,5 +376,68 @@ describe('planForIntern (Assign 20)', () => {
 
   it('refuses a date that is not yyyy-MM-dd', () => {
     expect(() => forIntern({ date: '11/2/2026' })).toThrow();
+    expect(() => forIntern({ date: undefined, week: undefined })).toThrow();
+    expect(() => forIntern({ week: DATE, today: 'today' })).toThrow();
+  });
+
+  it('fills to the rules\' perWeek when no count is given, and the old perIntern when that is all there is', () => {
+    const many = Array.from({ length: 60 }, (_, i) => prop(`M${i}`));
+    expect(forIntern({ properties: many, count: undefined })).toHaveLength(40);
+    expect(forIntern({ properties: many, count: undefined, rules: { ...RULES, perWeek: 45 } })).toHaveLength(45);
+    expect(forIntern({ properties: many, count: undefined, rules: { ...RULES, perIntern: 12 } })).toHaveLength(12);
+    expect(forIntern({ properties: many, count: undefined, rules: { ...RULES, perWeek: 5, perIntern: 12 } })).toHaveLength(5);
+  });
+
+  it('judges the cooldown on the week\'s first day still to come: planning ahead, its Monday', () => {
+    // Posted Friday 30 Oct, cooldown 7 days: allowed again from Friday 6 Nov.
+    const p = [posted('c1', '2026-10-30')];
+    const one = [prop('c1')];
+    expect(ids(forIntern({ properties: one, posts: p, week: '2026-11-02', date: undefined, today: '2026-11-02' }))).toEqual([]);
+    expect(ids(forIntern({ properties: one, posts: p, week: '2026-11-09', date: undefined, today: '2026-11-02' }))).toEqual(['c1']);
+    // Thursday of that week: still in it. Friday: free.
+    expect(ids(forIntern({ properties: one, posts: p, week: '2026-11-02', date: undefined, today: '2026-11-05' }))).toEqual([]);
+    expect(ids(forIntern({ properties: one, posts: p, week: '2026-11-02', date: undefined, today: '2026-11-06' }))).toEqual(['c1']);
+  });
+});
+
+describe('the week planned (v6)', () => {
+  const properties = [prop('A'), prop('B')];
+
+  it.each([
+    ['a Monday', '2026-11-02', '2026-11-02'],
+    ['a Wednesday', '2026-11-04', '2026-11-02'],
+    ['a Saturday: the next week', '2026-11-07', '2026-11-09'],
+    ['a Sunday across a month boundary', '2026-11-01', '2026-11-02'],
+    ['a Friday across a month boundary', '2026-10-30', '2026-10-26'],
+  ])('reads %s, as `week` or as the old `date`, as its week', (_, day, week) => {
+    expect(plan({ properties, week: day, date: undefined }).week).toBe(week);
+    expect(plan({ properties, date: day }).week).toBe(week);
+  });
+
+  it('prefers `week` to `date`', () => {
+    expect(plan({ properties, week: '2026-11-09', date: '2026-11-02' }).week).toBe('2026-11-09');
+  });
+
+  it('keeps an intern\'s queue for the week, old daily rows of it included, and leaves other weeks\' alone', () => {
+    const assignments = [
+      queuedFor('Jan', 'A', { date: '2026-11-04' }), // Wednesday's row, from before v6
+      queuedFor('Jan', 'B', { date: '2026-11-09' }), // next week: held, not this week's queue
+    ];
+    const kept = plan({ properties: [...properties, prop('C')], assignments, perWeek: 3, keepExisting: true });
+    expect(kept.queues.get('Jan')).toEqual([
+      { propertyName: 'Listing A', propertyId: 'A', status: 'Not Shared' },
+      { propertyName: 'Listing C', propertyId: 'C' },
+    ]);
+    expect(kept.shortBy).toBe(1);
+  });
+
+  it("aims for perWeek, else the old perIntern, else the rules'", () => {
+    const many = Array.from({ length: 60 }, (_, i) => prop(`M${i}`));
+    const size = (over: Partial<PlanInput>) => plan({ properties: many, perIntern: undefined, ...over }).queues.get('Jan')?.length;
+    expect(size({})).toBe(40);
+    expect(size({ perWeek: 7 })).toBe(7);
+    expect(size({ perIntern: 9 })).toBe(9);
+    expect(size({ perWeek: 7, perIntern: 9 })).toBe(7);
+    expect(size({ rules: { ...RULES, perWeek: 11 } })).toBe(11);
   });
 });

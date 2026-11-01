@@ -1,15 +1,16 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Badge, Button, Card, CategoryTag, Icon, Notice, Pill, Spinner } from '../../components';
 import {
-  addDays,
+  activeInterns,
   docHealth,
   firstName,
   isBlocking,
+  peopleIn,
   plural,
   shortDate,
   summarizeDay,
+  teamWeek,
   type HealthGroup,
-  type InternProgress,
   type IssueKind,
   type DirectoryRow,
   type RepostItem,
@@ -17,7 +18,9 @@ import {
   type TeamMember,
 } from '@/core/summary';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
+import { assignmentWeek, weekLabel } from '@/core/week';
 import { DayPicker } from './DayPicker';
+import { isBehind, monitorWeek, PacePill, WeekBar } from './InternsParts';
 import { Stat } from './Stat';
 import './TrackerScreen.css';
 
@@ -51,7 +54,7 @@ export interface TrackerScreenProps {
   readonly onOpenLink?: ((url: string) => void) | undefined;
   /** Open a listing in the app. Without it, names are plain text. */
   readonly onOpenProperty?: ((id: string) => void) | undefined;
-  /** Go to Assign for this intern (null: whoever comes first) and day. */
+  /** Go to Assign for this intern (null: whoever comes first) and day. Kept for callers; the card links to Interns. */
   readonly onAssign?: ((intern: string | null, date: string) => void) | undefined;
   /** Where the Interns screen is: "See all interns" links there. Without it, no link. */
   readonly internsHref?: string | undefined;
@@ -83,7 +86,6 @@ export function TrackerScreen({
   updatedAt,
   onOpenLink,
   onOpenProperty,
-  onAssign,
   internsHref,
   onOpenInterns,
 }: TrackerScreenProps) {
@@ -94,9 +96,21 @@ export function TrackerScreen({
   );
   const health = useMemo(() => docHealth(properties), [properties]);
 
+  // The Interns card is weekly: the work week of the day shown (on a weekend, the one just ended).
+  const week = monitorWeek(date);
+  const pace = useMemo(() => {
+    const names = team
+      ? activeInterns(team)
+      : peopleIn(
+          assignments.filter((a) => assignmentWeek(a) === week),
+          [],
+        );
+    return teamWeek(names, week, assignments, posts, today);
+  }, [team, week, assignments, posts, today]);
+  const behind = pace.filter(isBehind).length;
+
   const isToday = date === today;
   const day = shortDate(date);
-  const nextDay = addDays(date, 1);
   const waiting = loading && posts.length === 0 && assignments.length === 0 && properties.length === 0;
 
   const openName = (id: string, name: string): ReactNode =>
@@ -154,12 +168,7 @@ export function TrackerScreen({
           <dl className="tracker-stats">
             <Stat label={isToday ? 'Posted today' : `Posted ${day}`} value={summary.postedToday} />
             <Stat label="Pending" value={summary.pending} note="Waiting for group approval" />
-            <Stat
-              label="Interns done"
-              value={summary.internsDone}
-              of={summary.internsAssigned}
-              note={summary.internsAssigned === 0 ? `No queues for ${day}` : undefined}
-            />
+            <Stat label="Interns behind" value={behind} of={pace.length} note={weekLabel(week)} />
             <Stat label="Due for repost" value={summary.dueForRepost.length} note={`Not posted for ${repostDueDays}+ days`} />
             <Stat label="Never posted" value={summary.neverPosted.length} />
           </dl>
@@ -176,7 +185,7 @@ export function TrackerScreen({
             <Card
               className="tracker__interns"
               title="Interns"
-              description={`Queues for ${day}`}
+              description={weekLabel(week)}
               actions={
                 internsHref ? (
                   <a
@@ -193,27 +202,25 @@ export function TrackerScreen({
                 ) : undefined
               }
             >
-              {summary.interns.length === 0 ? (
-                <p className="tracker__quiet">Nobody has a queue for {day}.</p>
+              {pace.length === 0 ? (
+                <p className="tracker__quiet">No active interns.</p>
               ) : (
                 <ul className="intern-list">
-                  {summary.interns.map((progress) => (
-                    <InternRow
-                      key={progress.name}
-                      progress={progress}
-                      day={day}
-                      onAssign={onAssign ? () => onAssign(progress.name, date) : undefined}
-                    />
+                  {pace.map((row) => (
+                    <li key={row.name} className="intern-row">
+                      <span className="avatar" aria-hidden="true">
+                        {initials(row.name)}
+                      </span>
+                      <WeekBar progress={row} label={
+                          <span className="intern-row__name" title={row.name}>
+                            {row.name}
+                          </span>
+                        } />
+                      <PacePill progress={row} />
+                    </li>
                   ))}
                 </ul>
               )}
-              {onAssign ? (
-                <div className="tracker__plan">
-                  <Button size="small" onClick={() => onAssign(null, nextDay)}>
-                    Plan queues for {shortDate(nextDay)}
-                  </Button>
-                </div>
-              ) : null}
             </Card>
           </div>
 
@@ -337,58 +344,6 @@ function PostsTable({ posts, day, onOpenLink }: PostsTableProps) {
         </tbody>
       </table>
     </div>
-  );
-}
-
-// ------------------------------------------------------------------ interns
-
-interface InternRowProps {
-  readonly progress: InternProgress;
-  readonly day: string;
-  readonly onAssign?: (() => void) | undefined;
-}
-
-function InternRow({ progress, day, onAssign }: InternRowProps) {
-  const { name, total, posted, pending, toPost, done } = progress;
-  const left = [pending > 0 ? `${pending} pending` : null, toPost > 0 ? `${toPost} not shared` : null].filter(Boolean);
-  return (
-    <li className="intern-row">
-      <span className="intern-row__avatar" aria-hidden="true">
-        {initials(name)}
-      </span>
-      <div className="intern-row__body">
-        <div className="intern-row__top">
-          <span className="intern-row__name">{name}</span>
-          {total > 0 ? (
-            <span className="intern-row__count tabular">
-              {posted} of {total} posted
-            </span>
-          ) : null}
-        </div>
-        {total > 0 ? (
-          <div className="intern-row__bar" aria-hidden="true">
-            <span className="intern-row__posted" style={{ width: `${(posted / total) * 100}%` }} />
-            <span className="intern-row__pending" style={{ width: `${(pending / total) * 100}%` }} />
-          </div>
-        ) : null}
-        <div className="intern-row__detail">
-          {total === 0 ? (
-            <span>No queue for {day}</span>
-          ) : done ? (
-            <Pill tone="ok" dot>
-              Done
-            </Pill>
-          ) : (
-            <span>{left.join(' · ')}</span>
-          )}
-          {onAssign ? (
-            <Button variant="link" onClick={onAssign} aria-label={total === 0 ? `Build ${firstName(name)}'s queue` : `Open ${firstName(name)}'s queue`}>
-              {total === 0 ? 'Build a queue' : 'Open queue'}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </li>
   );
 }
 

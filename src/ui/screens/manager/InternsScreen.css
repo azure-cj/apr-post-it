@@ -1,20 +1,16 @@
-/* The Interns screen: the header and numbers as on the Tracker, then one
-   table of active interns, and the revoked folded away below it. */
+/* The Interns screen: the weekly monitor. The header and the week; "Who
+   posted?" across the top; four numbers; one table, worst first, with the
+   open intern's week beside it; the revoked folded away below. */
 
 .interns__header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-8) var(--space-12);
 }
 
-.interns__heading {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.interns__day {
+.interns__controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -40,52 +36,147 @@
   color: var(--text-muted);
 }
 
-.interns__quiet,
-.interns__muted {
+.interns__quiet {
   color: var(--text-muted);
 }
 
-/* The search sits in the card's heading row, and takes the row below it
-   when the heading needs the width. */
-.interns__search {
-  width: min(280px, 100%);
+/* ---- who posted? ---------------------------------------------------------- */
+
+.who-posted {
+  margin-bottom: var(--space-12);
 }
 
-.interns__search .searchbox__input {
+/* The one search on the screen, and the first thing to reach for. */
+.who-posted__search .searchbox__input {
   width: 100%;
+  height: 52px;
+  font-size: var(--text-name);
 }
 
-/* The input's own preferred width would leave the box short of the edge. */
-.interns .card__actions:has(.interns__search) {
+.who-posted__results {
+  margin-top: var(--space-4);
+  padding: var(--space-6) var(--space-8) var(--space-4);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-row);
+  background: var(--surface);
+}
+
+.who-posted__count {
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.who-posted__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Listing | who | when | FB account | status and Open, on one line. */
+.who-answer {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-8);
+  min-height: 52px;
+  padding-block: var(--space-3);
+  border-top: var(--border-width) solid var(--border-soft);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.who-answer__listing {
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-label);
+  overflow-wrap: anywhere;
+}
+
+.who-answer__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.who-answer__name {
+  color: var(--text);
+  font-weight: var(--weight-heading);
+}
+
+.who-answer__when {
+  white-space: nowrap;
+}
+
+.who-answer__account {
+  overflow-wrap: anywhere;
+}
+
+.who-answer__end {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--space-6);
+}
+
+.who-answer__end .pill {
+  min-width: 84px;
+  justify-content: center;
+}
+
+.who-answer__nolink {
+  min-width: 64px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.who-posted__more {
+  margin-top: var(--space-3);
 }
 
 @container shell (width < 900px) {
-  .interns .card__header:has(.interns__search) {
-    flex-wrap: wrap;
+  .who-answer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-block: var(--space-5);
   }
 
-  .interns .card__actions:has(.interns__search) {
-    flex: 1 1 100%;
+  .who-answer__listing {
+    grid-column: 1 / -1;
   }
 
-  .interns__search {
-    width: 100%;
+  .who-answer__end {
+    grid-column: 2;
+    grid-row: 2 / span 3;
   }
 }
 
-/* ---- the table ------------------------------------------------------------ */
+/* ---- the table and the open intern's week ---------------------------------- */
 
-.interns-table__wrap {
+.interns__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-compact);
+  align-items: start;
+}
+
+.interns__body--panel {
+  grid-template-columns: minmax(0, 1fr) var(--pane-compact);
+}
+
+.week-table__wrap {
   overflow-x: auto;
 }
 
-.interns-table {
+.week-table {
   width: 100%;
   border-collapse: collapse;
 }
 
-.interns-table thead th {
+.week-table thead th {
   padding: 0 var(--space-8) var(--space-4) 0;
   border-bottom: var(--border-width) solid var(--border);
   color: var(--text-muted);
@@ -97,9 +188,22 @@
   white-space: nowrap;
 }
 
-.interns-table tbody th,
-.interns-table td {
-  padding: var(--space-6) var(--space-8) var(--space-6) 0;
+/* The letters sit over the five bars below them. */
+.week-table__days {
+  display: grid;
+  grid-template-columns: repeat(5, 14px);
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.week-table__today {
+  color: var(--text);
+  font-weight: var(--weight-heading);
+}
+
+.week-table tbody th,
+.week-table td {
+  padding: var(--space-5) var(--space-8) var(--space-5) 0;
   border-bottom: var(--border-width) solid var(--border-soft);
   color: var(--text-label);
   font-size: var(--text-meta);
@@ -108,96 +212,312 @@
   vertical-align: middle;
 }
 
-.interns-table tbody tr:last-child th,
-.interns-table tbody tr:last-child td {
+.week-table th:first-child,
+.week-table td:first-child {
+  padding-inline-start: var(--space-4);
+}
+
+.week-table th:last-child,
+.week-table td:last-child {
+  padding-inline-end: var(--space-4);
+}
+
+.week-table tbody tr:last-child th,
+.week-table tbody tr:last-child td {
   border-bottom: 0;
 }
 
-.interns-table th:last-child,
-.interns-table td:last-child {
-  padding-inline-end: 0;
+/* The whole row opens the intern's week: the name's button covers it. A
+   pseudo-element on a row would become a cell of its own, so the wash is
+   painted on the cells. */
+.week-table__row {
+  position: relative;
 }
 
-/* The row's name: avatar and name, never wrapped apart. The columns are
-   sized so the whole row, actions included, fits a 1366px window with the
-   sidebar open; narrower than that, the table scrolls sideways. */
-.interns-table__who {
+.week-table__row:hover > * {
+  background-color: var(--row-hover);
+}
+
+/* Open: the selected wash and mark, gold's third job. */
+.week-table__row--open > *,
+.week-table__row--open:hover > * {
+  background-color: var(--gold-soft);
+}
+
+.week-table__row--open > th:first-child {
+  background-image: linear-gradient(var(--gold), var(--gold));
+  background-position: left;
+  background-size: 3px 100%;
+  background-repeat: no-repeat;
+}
+
+.week-table__open {
   display: flex;
   align-items: center;
   gap: var(--space-6);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
   white-space: nowrap;
+  cursor: pointer;
 }
 
-.interns-table__avatar {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface-raised);
-  color: var(--text-label);
-  font-family: var(--heading-font);
-  font-size: var(--text-caption);
-  line-height: 1;
-  font-weight: var(--weight-heading);
+.week-table__open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
 }
 
-.interns-table__name {
+.week-table__open:focus-visible {
+  outline: none;
+}
+
+.week-table__open:focus-visible::after {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-row);
+}
+
+.week-table__name {
   color: var(--text);
-  font-family: var(--body-font);
   font-size: var(--text-body);
   line-height: var(--lh-body);
   font-weight: var(--weight-heading);
 }
 
-.interns-table__last {
+.week-table__last {
   white-space: nowrap;
 }
 
-.interns-table__accounts {
-  min-width: 8rem;
+/* With the panel open, Last post makes room for it. */
+.interns__body--panel .week-table__last {
+  display: none;
 }
 
-.interns-table td.interns-table__actions {
-  white-space: nowrap;
-  text-align: end;
-}
+/* ---- the open intern's week ------------------------------------------------- */
 
-.interns-table__actions .button--link + .button--link {
-  margin-inline-start: var(--space-6);
-}
-
-/* ---- a queue's progress ---------------------------------------------------- */
-
-.interns-progress {
+.intern-panel {
+  position: sticky;
+  top: calc(32px + var(--space-8));
   display: grid;
-  gap: var(--space-3);
-  min-width: 9.5rem;
-  max-width: 11rem;
+  gap: var(--space-10);
+  max-height: calc(100vh - 32px - var(--space-14) - var(--space-8));
+  overflow-y: auto;
+  padding: var(--space-8);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-card);
+  background:
+    var(--card-bg) padding-box,
+    var(--card-edge) border-box;
+  overscroll-behavior: contain;
+  animation: panel-in var(--dur-enter) var(--ease-out);
 }
 
-.interns-progress__count {
-  color: var(--text);
-  white-space: nowrap;
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--rise));
+  }
 }
 
-/* Posted on a neutral track. The words above carry the meaning; the bar only
-   shows the share at a glance. */
-.interns-progress__bar {
+.intern-panel__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.intern-panel__name {
+  margin: 0;
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+  overflow-wrap: anywhere;
+}
+
+.intern-panel__name:focus {
+  outline: none;
+}
+
+.intern-panel__close {
+  width: 36px;
+  padding: 0;
+  gap: 0;
+}
+
+.intern-panel__close .button__icon {
+  margin: 0;
+}
+
+.intern-panel__week {
   display: flex;
-  height: 6px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.intern-panel__week .week-bar {
+  flex: 1;
+}
+
+.intern-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.intern-panel__label {
+  margin: 0 0 var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+.intern-panel__quiet {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* Last 4 weeks: four short columns, the share on top, the Monday below. */
+.history {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history__week {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+}
+
+.history__value {
+  color: var(--text);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  font-weight: var(--weight-heading);
+}
+
+.history__track {
+  display: flex;
+  align-items: flex-end;
+  width: 28px;
+  height: 40px;
   overflow: hidden;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   background: var(--neutral-soft);
 }
 
-.interns-progress__posted {
+.history__fill {
+  width: 100%;
+  background: var(--neutral-strong);
+}
+
+.history__fill--done {
   background: var(--ok-strong);
 }
 
-/* ---- revoked ---------------------------------------------------------------- */
+.history__label {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  white-space: nowrap;
+}
+
+/* A group of the week's queue: a dot, the word and a count, then the names. */
+.panel-group__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-heading);
+}
+
+.panel-group__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-strong);
+}
+
+.panel-group--pending .panel-group__dot {
+  background: var(--warn-text);
+}
+
+.panel-group--posted .panel-group__dot {
+  background: var(--ok-strong);
+}
+
+.panel-group--missed .panel-group__dot {
+  background: var(--danger-strong);
+}
+
+.panel-group__count {
+  color: var(--text-muted);
+  font-weight: var(--weight-label);
+}
+
+.panel-group__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.panel-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-height: 36px;
+  padding-block: var(--space-2);
+  border-top: var(--border-width) solid var(--border-soft);
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.panel-item__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel-item__open {
+  flex: none;
+}
+
+.panel-group__more {
+  margin-top: var(--space-2);
+}
+
+@container shell (width < 900px) {
+  .interns__body--panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Stacked: the open week comes first, where the click was answered. */
+  .intern-panel {
+    position: static;
+    order: -1;
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intern-panel {
+    animation: none;
+  }
+}
+
+/* ---- revoked ------------------------------------------------------------------ */
 
 .interns__revoked {
   margin-top: var(--space-12);
@@ -206,6 +526,10 @@
 /* Folded: the heading row is all there is. */
 .interns__revoked .card__header:last-child {
   margin-bottom: 0;
+}
+
+.interns__revoked .card__header {
+  align-items: center;
 }
 
 .interns-revoked {
@@ -221,16 +545,7 @@
   align-items: center;
   gap: var(--space-2) var(--space-6);
   padding: var(--space-5) 0;
-  border-bottom: var(--border-width) solid var(--border-soft);
-}
-
-.interns-revoked__row:first-child {
-  padding-top: 0;
-}
-
-.interns-revoked__row:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
+  border-top: var(--border-width) solid var(--border-soft);
 }
 
 .interns-revoked__name {
@@ -243,8 +558,4 @@
   color: var(--text-muted);
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
-}
-
-.interns-table__profile {
-  margin-inline-start: var(--space-6);
 }

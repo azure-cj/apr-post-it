@@ -234,14 +234,31 @@ describe('the assignments', () => {
     });
     const rows = await trackerOver(post).assignments();
 
+    // No `week` from a server before v6: the week of the date (Thursday 2 Apr: the week of 30 Mar).
+    const week = '2026-03-30';
     expect(rows).toEqual([
-      { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: '1AbC', status: 'Not Shared' },
-      { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 3', propertyId: '', status: 'Not Shared' },
+      { date: '2026-04-02', week, assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: '1AbC', status: 'Not Shared' },
+      { date: '2026-04-02', week, assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 3', propertyId: '', status: 'Not Shared' },
       // Manila's midnight on Apr 2 is 16:00 on Apr 1 in UTC.
-      { date: '2026-04-02', assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 9', propertyId: '', status: 'Pending' },
-      { date: '2026-04-02', assignedTo: 'Bea Lim', propertyName: 'Silang 40', propertyId: '', status: 'Posted' },
-      { date: '', assignedTo: 'Bea Lim', propertyName: 'Mabini', propertyId: '', status: 'Not Shared' },
+      { date: '2026-04-02', week, assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 9', propertyId: '', status: 'Pending' },
+      { date: '2026-04-02', week, assignedTo: 'Bea Lim', propertyName: 'Silang 40', propertyId: '', status: 'Posted' },
+      { date: '', week: '', assignedTo: 'Bea Lim', propertyName: 'Mabini', propertyId: '', status: 'Not Shared' },
     ]);
+  });
+
+  it('take the server\'s week (v6), and ignore one that is not a Monday', async () => {
+    const { post } = scripted({
+      ok: true,
+      assignments: [
+        { date: '2026-04-08', week: '2026-04-06', assignedTo: 'Jan', property: 'A', status: 'Not Shared' },
+        // A Saturday's row belongs to the next week.
+        { date: '2026-04-04', week: '', assignedTo: 'Jan', property: 'B', status: 'Not Shared' },
+        { date: '2026-04-08', week: '2026-04-08', assignedTo: 'Jan', property: 'C', status: 'Not Shared' },
+      ],
+    });
+    const rows = await trackerOver(post).assignments();
+
+    expect(rows.map((r) => r.week)).toEqual(['2026-04-06', '2026-04-06', '2026-04-06']);
   });
 
   it('that do not arrive as a list are a sentence', async () => {
@@ -550,7 +567,9 @@ describe('saving a queue', () => {
     ]);
 
     const body = sent[0]!.body;
-    expect(body['date']).toBe('2026-04-02');
+    // v6: the week, as its Monday. Thursday 2 Apr is in the week of 30 Mar.
+    expect(body['week']).toBe('2026-03-30');
+    expect(body['date']).toBeUndefined();
     expect(body['assignedTo']).toBe('Jan Dela Cruz');
     const items = body['items'] as Wire[];
     expect(items[0]!['property']).toBe('Casa Amara');
@@ -581,9 +600,9 @@ describe('saving a queue', () => {
   });
 
   it.each([
-    ['no date', '', 'Jan Dela Cruz', 'Pick a date for the queue.'],
-    ['a date the server would not match', '2026-4-2', 'Jan Dela Cruz', 'Pick a date for the queue.'],
-    ['a day that does not exist', '2026-02-30', 'Jan Dela Cruz', 'Pick a date for the queue.'],
+    ['no week', '', 'Jan Dela Cruz', 'Pick a week for the queue.'],
+    ['a date the server would not match', '2026-4-2', 'Jan Dela Cruz', 'Pick a week for the queue.'],
+    ['a day that does not exist', '2026-02-30', 'Jan Dela Cruz', 'Pick a week for the queue.'],
     ['nobody to give it to', '2026-04-02', '  ', 'Choose who the queue is for.'],
   ])('with %s is refused before asking', async (_, date, who, message) => {
     const { post, sent } = scripted({ ok: true, saved: 1 });
@@ -728,6 +747,23 @@ describe('logging a post (v3)', () => {
   });
 });
 
+describe('saving a queue for a week (v6)', () => {
+  it.each([
+    ['a Monday', '2026-11-02', '2026-11-02'],
+    ['a Friday', '2026-11-06', '2026-11-02'],
+    ['a Saturday: the next week', '2026-11-07', '2026-11-09'],
+    ['a Sunday: the next week', '2026-11-01', '2026-11-02'],
+    ['a day across a month boundary', '2026-10-30', '2026-10-26'],
+    ['a Sunday across a month boundary', '2026-05-31', '2026-06-01'],
+  ])('sends %s as its week', async (_, day, week) => {
+    const { post, sent } = scripted({ ok: true, saved: 0 });
+    await trackerOver(post).saveQueue(day, 'Jan', []);
+    await trackerOver(post).saveQueues(day, [{ assignedTo: 'Jan', items: [] }]);
+
+    expect(sent.map((s) => s.body['week'])).toEqual([week, week]);
+  });
+});
+
 describe('saving several queues', () => {
   it('sends every queue in one request and returns what was saved', async () => {
     const { post, sent } = scripted({ ok: true, saved: 3 });
@@ -740,7 +776,7 @@ describe('saving several queues', () => {
     expect(saved).toBe(3);
     expect(sent).toHaveLength(1);
     expect(sent[0]!.body).toEqual({
-      date: '2026-04-02',
+      week: '2026-03-30',
       queues: [
         {
           assignedTo: 'Jan',

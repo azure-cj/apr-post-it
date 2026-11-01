@@ -18,7 +18,9 @@
  * a Cloud Function.
  */
 
+import { isDate } from './dates';
 import { UserFacingError } from './types';
+import { isWeekKey, weekOf } from './week';
 
 /** What Code.gs answers to. Anything else it refuses as an "unknown action". */
 export type Action =
@@ -125,6 +127,8 @@ export type BackendErrorCode =
   | 'bad-intern'
   | 'bad-queues'
   | 'bad-date'
+  // saveQueue(s), v6: the week must be a Monday.
+  | 'bad-week'
   | 'bad-role'
   | 'bad-active'
   | 'bad-accounts'
@@ -147,8 +151,10 @@ export interface HeldItem {
   readonly propertyId: string;
   /** Who holds it, as the Team tab spells the name. */
   readonly heldBy: string;
-  /** The date of the queue that holds it, yyyy-MM-dd. */
+  /** The Date of the queue row that holds it, yyyy-MM-dd: a week key, or an older row's day. */
   readonly date: string;
+  /** v6: the week of the queue that holds it, as its Monday. '' when the server sent neither. */
+  readonly week: string;
 }
 
 /** A failed call. The message is the sentence to show; `code` says which way it failed. */
@@ -187,11 +193,15 @@ function readHeld(value: unknown): HeldItem[] {
   for (const entry of asList(value) ?? []) {
     const row = asRecord(entry);
     if (!row) continue;
+    const date = asText(row['date']).trim();
+    const sent = asText(row['week']).trim();
     const item: HeldItem = {
       propertyName: asText(row['propertyName']).trim(),
       propertyId: asText(row['propertyId']).trim(),
       heldBy: asText(row['heldBy']).trim(),
-      date: asText(row['date']).trim(),
+      date,
+      // A server before v6 sends no week: the date's.
+      week: isWeekKey(sent) ? sent : isDate(date) ? weekOf(date) : '',
     };
     if ((item.propertyName || item.propertyId) && item.heldBy) out.push(item);
   }
@@ -481,6 +491,8 @@ function refusal(reply: Reply, action: Action): BackendError {
       return new BackendError('bad-accounts', action, theirs("The FB accounts couldn't be read. Check them and try again."));
     case 'bad-date':
       return new BackendError('bad-date', action, 'Pick a valid date.');
+    case 'bad-week':
+      return new BackendError('bad-week', action, 'Pick a week: its Monday, written yyyy-MM-dd.');
     case 'bad-role':
       return new BackendError('bad-role', action, 'Choose Intern or Admin.');
     case 'bad-active':

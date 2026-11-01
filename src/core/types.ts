@@ -141,9 +141,20 @@ export function queueStatus(value: unknown): AssignmentStatus {
   return NOT_SHARED;
 }
 
-/** A row of the Assignments tab. Row order is posting order. */
+/**
+ * A row of the Assignments tab. Row order is posting order. Queues are weekly
+ * (v6): the Date column holds the week key (its Monday); rows written before
+ * v6 hold a day, and are read as the week that day is in.
+ */
 export interface Assignment {
-  readonly date: string;      // yyyy-MM-dd
+  /** The Date cell as written, yyyy-MM-dd: a week key, or an older row's day. */
+  readonly date: string;
+  /**
+   * The queue's week, as its Monday: tracker.assignments() always sets it
+   * ('' when the date can't be read). For rows built elsewhere, read the week
+   * with week.assignmentWeek(row), which falls back to weekOf(date).
+   */
+  readonly week?: string | undefined;
   readonly assignedTo: string;
   readonly propertyName: string;
   readonly propertyId: string;
@@ -165,7 +176,9 @@ export interface Settings {
   readonly scriptKey: string;
   readonly cooldownDays: number;
   readonly repostDueDays: number;
-  /** How many items the planner fills each intern's queue with by default. */
+  /** How many listings the planner and the quick fill give each intern for a week by default. */
+  readonly perWeek: number;
+  /** @deprecated The old name of perWeek, kept equal to it while the screens switch. */
   readonly perIntern: number;
 }
 
@@ -174,7 +187,8 @@ export const defaultSettings: Settings = {
   scriptKey: '',
   cooldownDays: 7,
   repostDueDays: 14,
-  perIntern: 20,
+  perWeek: 40,
+  perIntern: 40,
 };
 
 /**
@@ -187,7 +201,9 @@ export interface ServerRules {
   readonly cooldownDays: number;
   /** Days without a post after which a listing is due for a repost. */
   readonly repostDueDays: number;
-  /** The planner's default number of items per intern. */
+  /** v6: the planner's and the quick fill's default number of listings per intern per week. */
+  readonly perWeek: number;
+  /** @deprecated The old name of perWeek: the same value, kept while the screens switch. */
   readonly perIntern: number;
 }
 
@@ -195,7 +211,8 @@ export interface ServerRules {
 export const DEFAULT_RULES: ServerRules = Object.freeze({
   cooldownDays: defaultSettings.cooldownDays,
   repostDueDays: defaultSettings.repostDueDays,
-  perIntern: defaultSettings.perIntern,
+  perWeek: defaultSettings.perWeek,
+  perIntern: defaultSettings.perWeek,
 });
 
 /** The whole numbers each rule may be, inclusive. Code.gs's ruleSpecs_ holds the same. */
@@ -203,7 +220,9 @@ export const RULE_LIMITS: Readonly<Record<keyof ServerRules, { readonly min: num
   Object.freeze({
     cooldownDays: { min: 1, max: 60, label: 'The cooldown' },
     repostDueDays: { min: 1, max: 120, label: 'The repost age' },
-    perIntern: { min: 1, max: 100, label: 'Items per intern' },
+    perWeek: { min: 1, max: 200, label: 'Listings per week' },
+    /** @deprecated perWeek's old name: the same limits. */
+    perIntern: { min: 1, max: 200, label: 'Listings per week' },
   });
 
 /** How the server's version compares with the one this app was built for. */

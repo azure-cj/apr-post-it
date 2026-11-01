@@ -5,16 +5,23 @@ import { useState } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UserFacingError, type Assignment, type PostLogEntry } from '@/core/types';
-import type { DirectoryRow } from '@/core/summary';
+import type { DirectoryRow, TeamWeekRow } from '@/core/summary';
 import { AppShell, routerFuture } from '../../App';
 import { AppStateProvider } from '../../state/AppState';
-import { EXEC, NOW, fakeServer, intern as janUser, manager } from '../../state/testing';
+import { EXEC, fakeServer, intern as janUser, manager } from '../../state/testing';
 import { AssignScreen, type AssignScreenProps, type QueueSave } from './index';
+import { cardOrder, cardStatus } from './AssignPicker';
+import { stepCount } from './AssignLibrary';
 
-const TODAY = '2026-10-29';
-const TOMORROW = '2026-10-30';
+// Wednesday of the week 26–30 Oct.
+const TODAY = '2026-10-28';
+const WEEK = '2026-10-26';
+const LAST_WEEK = '2026-10-19';
+const NEXT_WEEK = '2026-11-02';
 const JAN = 'Jan Dela Cruz';
 const MIKA = 'Mika Reyes';
+const BEA = 'Bea Lim';
+const DANA = 'Dana Uy';
 
 function listing(id: string, name: string, category: string, extra: Partial<DirectoryRow> = {}): DirectoryRow {
   return { id, name, category, listingType: 'FOR SALE', subCategory: '', photoCount: 5, hasIssues: false, ...extra };
@@ -32,33 +39,30 @@ const LIBRARY: readonly DirectoryRow[] = [
   listing('w3', 'Calamba Warehouse C', 'WAREHOUSE'),
   listing('o1', 'BGC Office 18F', 'OFFICE SPACE'),
   listing('o2', 'Ortigas Office 9F', 'OFFICE SPACE'),
+  listing('o3', 'Alabang Office 3F', 'OFFICE SPACE'),
   listing('k1', 'Kapitolyo Retail', 'COMMERCIAL SPACE', { availability: 'Sold' }),
   listing('k2', 'Makati Retail', 'COMMERCIAL SPACE', { hasIssues: true, issues: 'No separator line' }),
 ];
 
-function post(date: string, title: string, propertyId: string): PostLogEntry {
-  return {
-    date,
-    time: '14:20',
-    type: 'Warehouse',
-    title,
-    status: 'Posted',
-    fbAccount: 'APG Main',
-    postLink: 'https://www.facebook.com/groups/x/posts/1/',
-    postedBy: JAN,
-    propertyId,
-  };
+const link = (n: number) => `https://www.facebook.com/groups/x/posts/${n}/`;
+
+function post(date: string, title: string, propertyId: string, status: PostLogEntry['status'] = 'Posted', n = 1): PostLogEntry {
+  return { date, time: '14:20', type: 'Warehouse', title, status, fbAccount: 'APG Main', postLink: link(n), postedBy: JAN, propertyId };
 }
 
 const POSTS: readonly PostLogEntry[] = [
-  // Three days before tomorrow's queue: in its cooldown until 3 Nov.
-  post('2026-10-27', 'Verdant Hills Lot 7', 'f2'),
+  // Yesterday, waiting for the group's approval: in its cooldown.
+  post('2026-10-27', 'Verdant Hills Lot 7', 'f2', 'Pending', 7),
+  post('2026-10-27', 'Ortigas Office 9F', 'o2', 'Posted', 9),
   // Long ago: due for repost.
-  post('2026-10-01', 'Calamba Warehouse C', 'w3'),
+  post('2026-10-01', 'Calamba Warehouse C', 'w3', 'Posted', 3),
+  // Last week, eight days ago: out of its cooldown.
+  post('2026-10-20', 'Valenzuela Warehouse A', 'w1', 'Posted', 1),
 ];
 
-const row = (date: string, assignedTo: string, propertyName: string, propertyId: string, status: Assignment['status'] = 'Not Shared'): Assignment => ({
-  date,
+const row = (week: string, assignedTo: string, propertyName: string, propertyId: string, status: Assignment['status'] = 'Not Shared'): Assignment => ({
+  date: week,
+  week,
   assignedTo,
   propertyName,
   propertyId,
@@ -66,46 +70,46 @@ const row = (date: string, assignedTo: string, propertyName: string, propertyId:
 });
 
 const ASSIGNMENTS: readonly Assignment[] = [
-  row(TOMORROW, MIKA, 'Seaside Residences 2BR', 'f4'),
-  row('2026-10-28', MIKA, 'BGC Office 18F', 'o1'),
-  row(TOMORROW, JAN, 'Verdant Hills Lot 12', 'f1'),
-  row(TOMORROW, JAN, 'Sta. Rosa Lot 22', 'f5'),
-  // Still not shared from Wednesday: carried over.
-  row('2026-10-28', JAN, 'Ortigas Office 9F', 'o2'),
-  row('2026-10-28', JAN, 'Calamba Warehouse C', 'w3', 'Posted'),
+  row(WEEK, MIKA, 'Seaside Residences 2BR', 'f4'),
+  row(WEEK, MIKA, 'BGC Office 18F', 'o1'),
+  row(WEEK, JAN, 'Verdant Hills Lot 12', 'f1'),
+  row(WEEK, JAN, 'Sta. Rosa Lot 22', 'f5'),
+  row(WEEK, JAN, 'Verdant Hills Lot 7', 'f2', 'Pending'),
+  row(WEEK, JAN, 'Ortigas Office 9F', 'o2', 'Posted'),
+  row(WEEK, DANA, 'Alabang Office 3F', 'o3', 'Posted'),
+  // Last week: one posted, two missed. Missed rows hold nothing any more.
+  row(LAST_WEEK, JAN, 'Valenzuela Warehouse A', 'w1', 'Posted'),
+  row(LAST_WEEK, JAN, 'Meycauayan Warehouse B', 'w2'),
+  row(LAST_WEEK, JAN, 'Calamba Warehouse C', 'w3'),
 ];
 
 type Overrides = Partial<AssignScreenProps>;
 
-/** The screen as the shell would hold it: intern and day are the shell's. */
+/** The screen as the shell would hold it: intern and week are the shell's. */
 function Harness(props: Overrides & { onSaveSpy?: (save: QueueSave) => void }) {
   const [intern, setIntern] = useState<string | null>(props.intern === undefined ? JAN : props.intern);
-  const [date, setDate] = useState(props.date ?? TOMORROW);
+  const [week, setWeek] = useState(props.week ?? WEEK);
   return (
     <AssignScreen
-      interns={[JAN, MIKA]}
+      interns={[DANA, BEA, MIKA, JAN]}
       today={TODAY}
       properties={LIBRARY}
       posts={POSTS}
       assignments={ASSIGNMENTS}
-      settings={{ cooldownDays: 7, repostDueDays: 14, perIntern: 20 }}
-      team={[
-        { name: JAN, role: 'Intern', fbAccounts: ['APG Main'] },
-        { name: MIKA, role: 'Intern', fbAccounts: [] },
-      ]}
+      settings={{ cooldownDays: 7, repostDueDays: 14, perWeek: 40 }}
       onSave={async (save) => {
         props.onSaveSpy?.(save);
       }}
       {...props}
       intern={intern}
-      date={date}
+      week={week}
       onInternChange={(name) => {
         props.onInternChange?.(name);
         setIntern(name);
       }}
-      onDateChange={(day) => {
-        props.onDateChange?.(day);
-        setDate(day);
+      onWeekChange={(monday) => {
+        props.onWeekChange?.(monday);
+        setWeek(monday);
       }}
     />
   );
@@ -113,84 +117,158 @@ function Harness(props: Overrides & { onSaveSpy?: (save: QueueSave) => void }) {
 
 const queueNames = () =>
   Array.from(document.querySelectorAll('.assign-queue .queue-row__name')).map((n) => n.textContent);
+const groupNames = (name: string) =>
+  Array.from(screen.getByRole('region', { name }).querySelectorAll('.queue-row__name')).map((n) => n.textContent);
 const listNames = () =>
   Array.from(document.querySelectorAll('.lib__list .lib-row__name')).map((n) => n.textContent?.replace("Can't add: ", ''));
 const libRow = (name: string) =>
   Array.from(document.querySelectorAll('.lib__list .lib-row')).find((li) => li.querySelector('.lib-row__name')?.textContent?.endsWith(name)) as HTMLElement;
 const chip = (name: RegExp | string) => within(screen.getByRole('group', { name: 'Category' })).getByRole('button', { name });
+const weekShown = () => document.querySelector('.week-picker__label')?.textContent;
+
+async function filter(name: string) {
+  await userEvent.click(screen.getByRole('button', { name: /^Filter/ }));
+  await userEvent.click(screen.getByRole('checkbox', { name }));
+  await userEvent.keyboard('{Escape}');
+}
 
 afterEach(cleanup);
 
-describe('Assign, step one: choose an intern', () => {
-  it('lists the interns with their FB name, what they have open and today, and moves to step two on a pick', async () => {
+describe('Assign, step one: the interns this week', () => {
+  it('shows each intern with the week’s progress and one word, those behind first', async () => {
     const onInternChange = vi.fn();
     render(<Harness intern={null} onInternChange={onInternChange} />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Assign');
-    const list = screen.getByRole('list', { name: 'Interns' });
-    const jan = within(list).getByRole('button', { name: /Jan Dela Cruz/ });
-    expect(jan.textContent).toContain('APG Main');
-    expect(jan.textContent).toContain('3 not shared · 28 Oct, 30 Oct');
-    expect(jan.textContent).toContain('No queue today');
-    expect(within(list).getByRole('button', { name: /Mika Reyes/ }).textContent).toContain('Any FB account');
+    expect(weekShown()).toBe('26–30 Oct');
 
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search interns' }), 'mik');
-    expect(within(list).getAllByRole('button')).toHaveLength(1);
-    await userEvent.clear(screen.getByRole('searchbox', { name: 'Search interns' }));
+    const cards = within(screen.getByRole('list', { name: 'Interns' })).getAllByRole('button');
+    expect(cards.map((c) => c.querySelector('.assign-pick__name')?.textContent)).toEqual([JAN, MIKA, BEA, DANA]);
+    expect(cards.map((c) => c.querySelector('.pill')?.textContent)).toEqual(['Behind', 'Not started', 'No queue', 'Done']);
+    // Posted and pending against the week's queue: Ortigas posted, Lot 7 pending, two to go.
+    expect(cards[0]?.querySelector('.assign-pick__count')?.textContent).toContain('2 / 4');
+    expect(cards[3]?.querySelector('.assign-pick__count')?.textContent).toContain('1 / 1');
+    // Nothing else is said on a card.
+    expect(cards[0]?.textContent).not.toMatch(/FB|not shared|today/i);
 
-    await userEvent.click(within(screen.getByRole('list', { name: 'Interns' })).getByRole('button', { name: /Jan Dela Cruz/ }));
+    await userEvent.click(cards[0]!);
     expect(onInternChange).toHaveBeenCalledWith(JAN);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(JAN);
-    expect(queueNames()).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22']);
   });
 
-  it('puts the chosen intern in the link, and All interns goes back', async () => {
+  it('sorts every status: behind, not started, missed, no queue, on track, done', () => {
+    const r = (name: string, pace: TeamWeekRow['pace'], target = 5): TeamWeekRow => ({
+      name,
+      pace,
+      target,
+      posted: 0,
+      pending: 0,
+      notShared: target,
+      missed: 0,
+      daysLeft: 3,
+      expectedByToday: 3,
+      byDay: [0, 0, 0, 0, 0],
+    });
+    const rows = [r('a', 'done'), r('b', 'on-track'), r('c', 'on-track', 0), r('d', 'missed'), r('e', 'not-started'), r('f', 'behind')];
+    expect(cardOrder(rows).map(cardStatus)).toEqual(['behind', 'not-started', 'missed', 'no-queue', 'on-track', 'done']);
+  });
+
+  it('shows the cards for another week', async () => {
+    render(<Harness intern={null} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
+    expect(weekShown()).toBe('19–23 Oct');
+    const cards = within(screen.getByRole('list', { name: 'Interns' })).getAllByRole('button');
+    expect(cards[0]?.querySelector('.assign-pick__name')?.textContent).toBe(JAN);
+    expect(cards[0]?.querySelector('.pill')?.textContent).toBe('Missed');
+  });
+});
+
+describe('Assign, the week picker and the link', () => {
+  function Spy({ onPath }: { onPath: (path: string) => void }) {
+    const location = useLocation();
+    onPath(location.pathname + location.search);
+    return null;
+  }
+  const week = (path: string) => new URLSearchParams(path.split('?')[1]).get('week');
+
+  function renderShell(now: number, at = '/assign') {
     let path = '';
-    function Spy() {
-      const location = useLocation();
-      path = location.pathname + location.search;
-      return null;
-    }
     render(
-      <AppStateProvider platform={fakeServer()} initialUser={manager} initialSettings={{ scriptUrl: EXEC }} now={() => NOW}>
-        <MemoryRouter initialEntries={['/assign']} future={routerFuture}>
+      <AppStateProvider platform={fakeServer()} initialUser={manager} initialSettings={{ scriptUrl: EXEC }} now={() => now}>
+        <MemoryRouter initialEntries={[at]} future={routerFuture}>
           <AppShell />
-          <Spy />
+          <Spy onPath={(p) => (path = p)} />
         </MemoryRouter>
       </AppStateProvider>,
     );
+    return () => path;
+  }
+
+  it('opens on this week on a weekday, and keeps the week and the intern in the link', async () => {
+    // Wednesday 28 Oct, 10:00 in Manila.
+    const path = renderShell(Date.parse('2026-10-28T02:00:00Z'));
     const list = await screen.findByRole('list', { name: 'Interns' });
+    expect(weekShown()).toBe('26–30 Oct');
+    expect(screen.getByRole('button', { name: 'This week' }).getAttribute('aria-pressed')).toBe('true');
+
     await userEvent.click(await within(list).findByRole('button', { name: new RegExp(janUser.name) }));
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(janUser.name);
-    expect(new URLSearchParams(path.split('?')[1]).get('intern')).toBe(janUser.name);
+    expect(new URLSearchParams(path().split('?')[1]).get('intern')).toBe(janUser.name);
+    expect(week(path())).toBe(WEEK);
+    expect(screen.getByText('Due Fri 30 Oct')).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    expect(week(path())).toBe(NEXT_WEEK);
+    expect(weekShown()).toBe('2–6 Nov');
+    await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
+    expect(week(path())).toBe(WEEK);
 
     await userEvent.click(screen.getByRole('button', { name: 'All interns' }));
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Assign');
-    expect(path).not.toContain('intern=');
+    expect(path()).not.toContain('intern=');
+    expect(week(path())).toBe(WEEK);
+  });
+
+  it('opens on next week from Saturday: the reset has happened', async () => {
+    // Saturday 31 Oct, 10:00 in Manila.
+    renderShell(Date.parse('2026-10-31T02:00:00Z'));
+    await screen.findByRole('list', { name: 'Interns' });
+    expect(weekShown()).toBe('2–6 Nov');
+    expect(screen.getByRole('button', { name: 'This week' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('reads a week from the link, and an older link’s day as its week', async () => {
+    const at = `/assign?intern=${encodeURIComponent(janUser.name)}&date=2026-10-21`;
+    renderShell(Date.parse('2026-10-28T02:00:00Z'), at);
+    await screen.findByRole('heading', { level: 1, name: janUser.name });
+    expect(weekShown()).toBe('19–23 Oct');
+    expect(screen.getByText('Ended Fri 23 Oct')).toBeTruthy();
   });
 });
 
 describe('Assign, step two: the library by category', () => {
-  it('counts what can go in, per category, and filters by tab, Fresh and Due for repost', async () => {
+  it('counts what can go in, per category, and filters by tab and the Filter menu', async () => {
     render(<Harness />);
-    // Lot 12 and Sta. Rosa are in the queue already; Casa Amara is free. Lot 7 is in its cooldown, Seaside is Mika's.
+    expect(screen.getByText('Due Fri 30 Oct')).toBeTruthy();
+    // Lot 12 and Sta. Rosa are Jan's this week; Casa Amara is free. Lot 7 is cooling, Seaside is Mika's.
     expect(chip(/^All/).textContent).toContain('6');
     expect(chip(/Warehouse/).textContent).toContain('3');
     expect(chip(/Condo/).textContent).toContain('3');
     expect(chip(/Office space/).textContent).toContain('0');
-    expect(chip(/Commercial space/).textContent).toContain('0');
 
     await userEvent.click(chip(/Warehouse/));
     expect(chip(/Warehouse/).getAttribute('aria-pressed')).toBe('true');
-    // Never posted first, then the longest since posted.
-    expect(listNames()).toEqual(['Meycauayan Warehouse B', 'Valenzuela Warehouse A', 'Calamba Warehouse C']);
-    expect(libRow('Calamba Warehouse C').textContent).toContain('Posted 28 days ago');
+    // Never posted first, then the longest since posted. Last week's missed ones are free again.
+    expect(listNames()).toEqual(['Meycauayan Warehouse B', 'Calamba Warehouse C', 'Valenzuela Warehouse A']);
+    expect(libRow('Calamba Warehouse C').textContent).toContain('Posted 27 days ago');
     expect(libRow('Meycauayan Warehouse B').textContent).toContain('Never posted');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Due for repost' }));
+    await filter('Due for repost');
     expect(listNames()).toEqual(['Calamba Warehouse C']);
-    await userEvent.click(screen.getByRole('button', { name: 'Due for repost' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Fresh' }));
-    expect(listNames()).toEqual(['Meycauayan Warehouse B', 'Valenzuela Warehouse A']);
+    expect(screen.getByRole('button', { name: 'Filter, 1 on' })).toBeTruthy();
+    await filter('Due for repost');
+    await filter('Fresh');
+    expect(listNames()).toEqual(['Meycauayan Warehouse B']);
+    await filter('Fresh');
 
     // Adding: a click (or Enter), and the row says it's in.
     await userEvent.click(screen.getByRole('button', { name: 'Add Valenzuela Warehouse A' }));
@@ -212,35 +290,30 @@ describe('Assign, step two: the library by category', () => {
   it('hides what can’t go in, and shows it greyed with the reason on request, without an Add', async () => {
     render(<Harness />);
     expect(listNames()).not.toContain('Seaside Residences 2BR');
-    expect(listNames()).not.toContain('Verdant Hills Lot 7');
+    expect(listNames()).not.toContain('Alabang Office 3F');
+    // Started this week, so in the queue: it says so rather than hiding.
+    expect(screen.getByRole('button', { name: 'Verdant Hills Lot 7, in the queue' })).toBeTruthy();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Show unavailable' }));
-    expect(libRow('Seaside Residences 2BR').textContent).toContain('With Mika since 30 Oct');
-    expect(libRow('BGC Office 18F').textContent).toContain('With Mika since 28 Oct');
-    expect(libRow('Verdant Hills Lot 7').textContent).toContain('Posted 2 days ago');
+    await filter('Show unavailable');
+    expect(libRow('Seaside Residences 2BR').textContent).toContain('With Mika, 26–30 Oct');
+    expect(libRow('BGC Office 18F').textContent).toContain('With Mika, 26–30 Oct');
+    expect(libRow('Alabang Office 3F').textContent).toContain("In Dana's queue");
     expect(libRow('Kapitolyo Retail').textContent).toContain('Sold');
     expect(libRow('Makati Retail').textContent).toContain('No separator');
-    expect(libRow('Ortigas Office 9F').textContent).toContain('Still not shared from 28 Oct');
-    for (const name of ['Seaside Residences 2BR', 'BGC Office 18F', 'Verdant Hills Lot 7', 'Kapitolyo Retail']) {
+    for (const name of ['Seaside Residences 2BR', 'BGC Office 18F', 'Alabang Office 3F', 'Kapitolyo Retail']) {
       expect(screen.queryByRole('button', { name: `Add ${name}` })).toBeNull();
       expect(libRow(name).classList.contains('lib-row--off')).toBe(true);
     }
-    // Where they'd be in posting order: never posted first, so a posted one comes after.
-    expect(listNames().indexOf('Seaside Residences 2BR')).toBeLessThan(listNames().indexOf('Verdant Hills Lot 7'));
   });
 });
 
 describe('Assign, quick fill', () => {
-  it('adds N from the chosen category, never posted first, highlighted, with Undo', async () => {
-    render(<Harness />);
+  it('offers the week’s target, from the chosen category, tinted, with Undo', async () => {
+    render(<Harness settings={{ cooldownDays: 7, repostDueDays: 14, perWeek: 2 }} />);
     await userEvent.click(chip(/Warehouse/));
-    const count = screen.getByRole('spinbutton', { name: 'How many to add from Warehouse' });
-    expect((count as HTMLInputElement).value).toBe('20');
-    await userEvent.clear(count);
-    await userEvent.type(count, '2');
-    await userEvent.click(screen.getByRole('button', { name: 'Add 2 for posting' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add 2 from Warehouse' }));
 
-    expect(queueNames()).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22', 'Meycauayan Warehouse B', 'Valenzuela Warehouse A']);
+    expect(queueNames()).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22', 'Meycauayan Warehouse B', 'Calamba Warehouse C']);
     expect(document.querySelectorAll('.queue-row--preview')).toHaveLength(2);
     expect(screen.getByText('Added 2 from Warehouse.')).toBeTruthy();
 
@@ -248,57 +321,95 @@ describe('Assign, quick fill', () => {
     expect(queueNames()).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22']);
   });
 
+  it('starts at perWeek, and − and + change it', async () => {
+    render(<Harness />);
+    expect(screen.getByRole('button', { name: 'Add 40' })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByRole('button', { name: 'Add 45' })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Fewer' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Fewer' }));
+    expect(screen.getByRole('button', { name: 'Add 35' })).toBeTruthy();
+    expect([stepCount(5, -1), stepCount(4, 1), stepCount(37, 1), stepCount(1, -1)]).toEqual([4, 5, 40, 1]);
+  });
+
   it('never adds a held, sold or cooling listing, and says when it ran out', async () => {
     render(<Harness />);
-    await userEvent.click(screen.getByRole('button', { name: 'Add 20 for posting' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add 40' }));
     const names = queueNames();
     expect(names).toEqual(expect.arrayContaining(['Casa Amara House & Lot', 'Meycauayan Warehouse B', 'Valenzuela Warehouse A', 'Calamba Warehouse C']));
-    for (const no of ['Seaside Residences 2BR', 'BGC Office 18F', 'Verdant Hills Lot 7', 'Kapitolyo Retail', 'Makati Retail', 'Ortigas Office 9F']) {
+    for (const no of ['Seaside Residences 2BR', 'BGC Office 18F', 'Verdant Hills Lot 7', 'Kapitolyo Retail', 'Makati Retail', 'Alabang Office 3F']) {
       expect(names).not.toContain(no);
     }
     expect(screen.getByText("Added 4. That's all that's free.")).toBeTruthy();
   });
+
+  it('an empty week says so, and offers the fill', async () => {
+    render(<Harness week={NEXT_WEEK} />);
+    expect(screen.getByText('Nothing queued.')).toBeTruthy();
+    const add = within(screen.getByRole('region', { name: 'Queue' })).getByRole('button', { name: 'Add 40' });
+    await userEvent.click(add);
+    expect(queueNames().length).toBeGreaterThan(0);
+  });
 });
 
-describe('Assign, still not shared from earlier', () => {
-  it('moves an earlier item to this day, and frees it from its old day on save', async () => {
-    const onSaveSpy = vi.fn();
-    render(<Harness onSaveSpy={onSaveSpy} />);
-    const carried = screen.getByText('Still not shared from earlier', { exact: false }).closest('details')!;
-    expect(carried.textContent).toContain('(1)');
-    await userEvent.click(within(carried).getByText('Still not shared from earlier', { exact: false }));
-    await userEvent.click(within(carried).getByRole('button', { name: 'Move Ortigas Office 9F to this day' }));
-    expect(queueNames()).toContain('Ortigas Office 9F');
-    expect(screen.getByText('Moved from 28 Oct')).toBeTruthy();
-    expect(screen.queryByText('Still not shared from earlier', { exact: false })).toBeNull();
-
-    await userEvent.click(screen.getByRole('button', { name: /^Save queue/ }));
-    const save = onSaveSpy.mock.calls[0]?.[0] as QueueSave;
-    expect(save.items.map((i) => i.propertyName)).toContain('Ortigas Office 9F');
-    // Wednesday's queue is saved again without it; the posted row stays.
-    expect(save.releases).toEqual([
-      { date: '2026-10-28', assignedTo: JAN, items: [{ propertyName: 'Calamba Warehouse C', propertyId: 'w3', status: 'Posted' }] },
-    ]);
+describe('Assign, the week’s queue by status', () => {
+  it('groups it as Not shared, Pending and Posted, with a link to each post, and no Missed while the week runs', () => {
+    render(<Harness onOpenLink={vi.fn()} />);
+    expect(groupNames('Not shared')).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22']);
+    expect(groupNames('Pending')).toEqual(['Verdant Hills Lot 7']);
+    expect(groupNames('Posted')).toEqual(['Ortigas Office 9F']);
+    expect(screen.queryByRole('region', { name: 'Missed' })).toBeNull();
+    const open = within(screen.getByRole('region', { name: 'Posted' })).getByRole('link', { name: 'Open the post of Ortigas Office 9F' });
+    expect(open.getAttribute('href')).toBe(link(9));
+    // Only what isn't shared yet can be moved or removed.
+    expect(screen.queryByRole('button', { name: 'Remove Ortigas Office 9F' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove Verdant Hills Lot 7' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Remove Sta. Rosa Lot 22' })).toBeTruthy();
   });
 
-  it('removes an earlier item, releasing it on save', async () => {
+  it('opens a post through the app', async () => {
+    const onOpenLink = vi.fn();
+    render(<Harness onOpenLink={onOpenLink} />);
+    await userEvent.click(screen.getByRole('link', { name: 'Open the post of Ortigas Office 9F' }));
+    expect(onOpenLink).toHaveBeenCalledWith(link(9));
+  });
+
+  it('shows a week that is over read only: what was posted and what was missed', () => {
+    render(<Harness week={LAST_WEEK} />);
+    expect(screen.getByText('Ended Fri 23 Oct')).toBeTruthy();
+    expect(document.querySelector('.assign-review__sum')?.textContent).toBe('1 posted · 2 missed');
+    expect(groupNames('Missed')).toEqual(['Meycauayan Warehouse B', 'Calamba Warehouse C']);
+    expect(groupNames('Posted')).toEqual(['Valenzuela Warehouse A']);
+    expect(screen.queryByRole('region', { name: 'Not shared' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Save queue/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Remove/ })).toBeNull();
+    expect(screen.queryByRole('searchbox', { name: 'Search listings' })).toBeNull();
+  });
+
+  it('copies what was missed to next week, ready to save', async () => {
     const onSaveSpy = vi.fn();
-    render(<Harness onSaveSpy={onSaveSpy} />);
-    await userEvent.click(screen.getByText('Still not shared from earlier', { exact: false }));
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Ortigas Office 9F from 28 Oct' }));
-    expect(screen.getByText('1 earlier listing will be freed on save.')).toBeTruthy();
-    expect(queueNames()).not.toContain('Ortigas Office 9F');
+    const onWeekChange = vi.fn();
+    render(<Harness week={LAST_WEEK} onSaveSpy={onSaveSpy} onWeekChange={onWeekChange} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Copy missed to next week' }));
+    expect(onWeekChange).toHaveBeenCalledWith(WEEK);
+    expect(weekShown()).toBe('26–30 Oct');
+    await waitFor(() => expect(document.querySelector('.assign-fill')?.textContent).toContain('Copied 2 from 19–23 Oct.'));
+    expect(queueNames()).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22', 'Meycauayan Warehouse B', 'Calamba Warehouse C']);
+    expect(document.querySelectorAll('.queue-row--preview')).toHaveLength(2);
+
     await userEvent.click(screen.getByRole('button', { name: /^Save queue/ }));
     const save = onSaveSpy.mock.calls[0]?.[0] as QueueSave;
-    expect(save.items.map((i) => i.propertyName)).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22']);
-    expect(save.releases?.[0]?.items.map((i) => i.propertyName)).toEqual(['Calamba Warehouse C']);
+    expect(save.week).toBe(WEEK);
+    expect(save.items.map((i) => i.propertyName)).toEqual(
+      expect.arrayContaining(['Meycauayan Warehouse B', 'Calamba Warehouse C']),
+    );
   });
 });
 
 describe('Assign, saving', () => {
   it('marks the rows a held refusal names, keeps the rest, and removes them on request', async () => {
     const refusal = Object.assign(new UserFacingError('Casa Amara House & Lot is with Bea.'), {
-      held: [{ propertyName: 'Casa Amara House & Lot', propertyId: 'f3', heldBy: 'Bea Lim', date: '2026-10-29' }],
+      held: [{ propertyName: 'Casa Amara House & Lot', propertyId: 'f3', heldBy: BEA, date: WEEK }],
     });
     const onSave = vi.fn().mockRejectedValue(refusal);
     render(<Harness onSave={onSave} />);
@@ -309,37 +420,38 @@ describe('Assign, saving', () => {
     await screen.findByText('One listing is held by another intern. Remove it, then save again.');
     const refused = document.querySelector('.queue-row--refused')!;
     expect(refused.textContent).toContain('Casa Amara House & Lot');
-    expect(refused.textContent).toContain('With Bea since 29 Oct');
+    expect(refused.textContent).toContain('With Bea, 26–30 Oct');
     expect(queueNames()).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22', 'Casa Amara House & Lot', 'Meycauayan Warehouse B']);
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove it' }));
     expect(queueNames()).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22', 'Meycauayan Warehouse B']);
   });
 
-  it('saves the queue in its new order, and the button says how many', async () => {
+  it('saves the week’s queue in its new order, keeping what was started', async () => {
     const onSaveSpy = vi.fn();
     render(<Harness onSaveSpy={onSaveSpy} />);
+    expect(screen.queryByText('Unsaved changes')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Move Sta. Rosa Lot 22 up' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Save queue (2)' }));
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Save queue (4)' }));
     expect(onSaveSpy).toHaveBeenCalledTimes(1);
     const save = onSaveSpy.mock.calls[0]?.[0] as QueueSave;
-    expect(save.date).toBe(TOMORROW);
+    expect(save.week).toBe(WEEK);
     expect(save.assignedTo).toBe(JAN);
-    expect(save.items.map((i) => i.propertyName)).toEqual(['Sta. Rosa Lot 22', 'Verdant Hills Lot 12']);
-    expect(save.releases).toBeUndefined();
-    expect(await screen.findByText('Saved. Jan has 2 listings for Fri 30 Oct.')).toBeTruthy();
+    expect(save.items.map((i) => [i.propertyName, i.status])).toEqual([
+      ['Verdant Hills Lot 7', 'Pending'],
+      ['Sta. Rosa Lot 22', 'Not Shared'],
+      ['Verdant Hills Lot 12', 'Not Shared'],
+      ['Ortigas Office 9F', 'Posted'],
+    ]);
+    expect(await screen.findByText('Saved')).toBeTruthy();
   });
 });
 
 describe('Assign, kept from before', () => {
-  it("opens on the intern's saved queue for the day", () => {
+  it('matches a pasted list from the More menu, offers a suggestion for a typo, and adds it once accepted', async () => {
     render(<Harness />);
-    expect(queueNames()).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22']);
-    expect(screen.getByText(`Jan's queue for Fri 30 Oct is saved.`, { exact: false })).toBeTruthy();
-  });
-
-  it('matches a pasted list, offers a suggestion for a typo, and adds it once accepted', async () => {
-    render(<Harness />);
+    await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
     await userEvent.click(screen.getByRole('button', { name: 'Paste a list' }));
     const box = screen.getByRole('textbox', { name: 'Paste a list' });
     fireEvent.change(box, { target: { value: '1. Casa Amara House & Lot\n2. Verdnt Hills Lot 12\n- Nowhere Plaza' } });
@@ -354,12 +466,13 @@ describe('Assign, kept from before', () => {
     expect(screen.getByRole('searchbox', { name: 'Search listings' })).toBeTruthy();
   });
 
-  it('a pasted listing another intern holds is refused, and says whose it is', async () => {
+  it('a pasted listing another intern has this week is refused, and says whose it is', async () => {
     render(<Harness />);
+    await userEvent.click(screen.getByRole('button', { name: 'More actions' }));
     await userEvent.click(screen.getByRole('button', { name: 'Paste a list' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Paste a list' }), { target: { value: 'BGC Office 18F' } });
     await userEvent.click(screen.getByRole('button', { name: 'Match to the library' }));
-    expect(screen.getByRole('region', { name: 'Matches' }).textContent).toContain('With Mika since 28 Oct.');
+    expect(screen.getByRole('region', { name: 'Matches' }).textContent).toContain("Mika's queue");
   });
 
   it('reorders from the keyboard, keeping the focus on the arrow that moved', async () => {
@@ -389,7 +502,7 @@ describe('Assign, kept from before', () => {
     const back = screen.getByRole('button', { name: 'All interns' });
     await userEvent.click(back);
     expect(onInternChange).not.toHaveBeenCalled();
-    expect(screen.getByText("Unsaved changes to Jan's queue for Fri 30 Oct")).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Unsaved changes');
     const keep = screen.getByRole('button', { name: 'Keep editing' });
     expect(document.activeElement).toBe(keep);
 
@@ -399,18 +512,21 @@ describe('Assign, kept from before', () => {
     expect(document.activeElement).toBe(back);
 
     await userEvent.click(back);
-    await userEvent.click(screen.getByRole('button', { name: 'Discard and choose an intern' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(onInternChange).toHaveBeenCalledWith(null);
     expect(screen.getByRole('list', { name: 'Interns' })).toBeTruthy();
   });
 
-  it('asks before switching day too, and moves on once discarded', async () => {
-    render(<Harness />);
+  it('asks before switching week too, and moves on once discarded', async () => {
+    const onWeekChange = vi.fn();
+    render(<Harness onWeekChange={onWeekChange} />);
     await userEvent.click(screen.getByRole('button', { name: 'Remove Sta. Rosa Lot 22' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Today' }));
-    await userEvent.click(screen.getByRole('button', { name: /Discard and open Thu 29 Oct/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    expect(onWeekChange).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(onWeekChange).toHaveBeenCalledWith(NEXT_WEEK);
     expect(queueNames()).toEqual([]);
-    expect(screen.getByText('Nothing queued for Thu 29 Oct yet.')).toBeTruthy();
+    expect(screen.getByText('Nothing queued.')).toBeTruthy();
   });
 
   it('tells the shell when there are unsaved changes, so it can guard leaving', async () => {

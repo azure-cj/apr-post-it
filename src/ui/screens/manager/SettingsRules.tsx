@@ -7,7 +7,7 @@ import { sentence } from './SettingsShared';
 export interface RuleValues {
   readonly cooldownDays: number;
   readonly repostDueDays: number;
-  readonly perIntern: number;
+  readonly perWeek: number;
 }
 
 type RuleKey = keyof RuleValues;
@@ -21,13 +21,13 @@ interface RuleDef {
   readonly max: number;
 }
 
-const { cooldownDays, repostDueDays, perIntern } = RULE_LIMITS;
+const { cooldownDays, repostDueDays, perWeek } = RULE_LIMITS;
 
 /** The ranges are the server's (RULE_LIMITS, as Code.gs holds them). */
 export const RULES: readonly RuleDef[] = [
   { key: 'cooldownDays', label: 'Cooldown', what: 'Days before a listing can be posted again.', unit: ['day', 'days'], min: cooldownDays.min, max: cooldownDays.max },
   { key: 'repostDueDays', label: 'Due for repost', what: 'Days without a post before a listing is due again.', unit: ['day', 'days'], min: repostDueDays.min, max: repostDueDays.max },
-  { key: 'perIntern', label: 'Default listings per intern', what: 'How many Fill queues gives each intern.', unit: ['listing', 'listings'], min: perIntern.min, max: perIntern.max },
+  { key: 'perWeek', label: 'Listings per week', what: 'Each intern’s weekly target. Due Friday.', unit: ['listing', 'listings'], min: perWeek.min, max: perWeek.max },
 ];
 
 /** The problem with a typed value, or null. */
@@ -65,7 +65,7 @@ export function SettingsRules({ rules, onSave }: SettingsRulesProps) {
 }
 
 function RulesForm({ saved, onSave }: { readonly saved: RuleValues; readonly onSave?: ((rules: RuleValues) => Promise<RuleValues>) | undefined }) {
-  const asText = (r: RuleValues) => ({ cooldownDays: String(r.cooldownDays), repostDueDays: String(r.repostDueDays), perIntern: String(r.perIntern) });
+  const asText = (r: RuleValues) => ({ cooldownDays: String(r.cooldownDays), repostDueDays: String(r.repostDueDays), perWeek: String(r.perWeek) });
   /** What the server holds: the props at first, then what each Save kept. */
   const [base, setBase] = useState(saved);
   const [values, setValues] = useState<Record<RuleKey, string>>(asText(saved));
@@ -99,7 +99,7 @@ function RulesForm({ saved, onSave }: { readonly saved: RuleValues; readonly onS
       const kept = await onSave({
         cooldownDays: Number(values.cooldownDays),
         repostDueDays: Number(values.repostDueDays),
-        perIntern: Number(values.perIntern),
+        perWeek: Number(values.perWeek),
       });
       setBase(kept);
       setValues(asText(kept));

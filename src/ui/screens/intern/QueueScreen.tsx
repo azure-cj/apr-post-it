@@ -2,7 +2,9 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { postLinkProblem } from '@/core/links';
 import { normalize } from '@/core/matcher';
-import type { Assignment, AssignmentStatus, PostLogEntry, Property } from '@/core/types';
+import { isDate, samePerson, weekProgress } from '@/core/summary';
+import { queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry, type Property } from '@/core/types';
+import { assignmentWeek, weekdaysElapsed, weekFriday, weekOf } from '@/core/week';
 import { Button, CategoryDot, EmptyState, Notice, Pill, TextInput, categoryKind, categoryLabel } from '../../components';
 import {
   manilaTime,
@@ -16,7 +18,7 @@ import {
   useUser,
   type FromList,
 } from '../../state';
-import { longDate } from './format';
+import { shortDate } from './format';
 import { Waiting } from './shared';
 import './QueueScreen.css';
 
@@ -26,8 +28,10 @@ interface Item {
   readonly assignment: Assignment;
   /** The listing in the directory, when it is still there. */
   readonly property: Property | undefined;
-  /** Today's post of it by you: the pending one, or the live one. */
+  /** Your post of it this week: the pending one, or the live one. */
   readonly post: PostLogEntry | undefined;
+  /** Where it is: its own status, or your post's when the queue's row lags. */
+  readonly status: AssignmentStatus;
 }
 
 // The interns' own word for a slot not posted yet, in sentence case.
@@ -35,8 +39,9 @@ const STATUS_WORD: Record<AssignmentStatus, string> = { 'Not Shared': 'Not share
 const STATUS_TONE = { 'Not Shared': 'neutral', Pending: 'warn', Posted: 'ok' } as const;
 
 /**
- * Today's queue, in the order the admin set. The next one to post sits on top
- * with the screen's one gold button; every row opens its listing in one click.
+ * This week's queue, in the order the admin set, due Friday. From Saturday it
+ * is next week's (the week resets after Friday). The next one to post sits on
+ * top with the screen's one gold button; every row opens its listing in one click.
  */
 export function QueueScreen() {
   const app = useApp();
@@ -47,28 +52,41 @@ export function QueueScreen() {
   const list = useDirectoryList();
   const today = app.today();
 
+  // Saturday and Sunday belong to the coming week.
+  const week = weekOf(today);
+  const upcoming = weekdaysElapsed(week, today) === 0;
+
   const items = useMemo((): readonly Item[] => {
-    const mine = (queue.data ?? []).filter((a) => a.date === today && a.assignedTo === user.name);
-    const todays = (posts.data ?? []).filter((p) => p.date === today && p.postedBy === user.name);
+    const mine = (queue.data ?? []).filter((a) => assignmentWeek(a) === week && samePerson(a.assignedTo, user.name));
+    const thisWeek = (posts.data ?? []).filter((p) => isDate(p.date) && weekOf(p.date) === week && samePerson(p.postedBy, user.name));
     // A queue item names its listing by folder id, and by name when an older row has no id.
     const byName = new Map((list ?? []).map((p) => [normalize(p.name), p]));
     const rows = mine.map((assignment): Item => {
       const property =
         (assignment.propertyId ? app.directory.get(assignment.propertyId) : undefined) ??
         byName.get(normalize(assignment.propertyName));
-      return { assignment, property, post: latestPostOf(todays, assignment) };
+      const own = queueStatus(assignment.status);
+      const post = latestPostOf(thisWeek, assignment, own);
+      // Posted on Facebook, and the queue's row not yet told: count it as the tracker does.
+      const status = own === 'Not Shared' && post ? post.status : own;
+      return { assignment, property, post, status };
     });
     // Pending first (one click once approved), then what is left, then what is done: each in the admin's order.
     const rank = { Pending: 0, 'Not Shared': 1, Posted: 2 } as const;
     return rows
       .map((row, index) => ({ row, index }))
-      .sort((a, b) => rank[a.row.assignment.status] - rank[b.row.assignment.status] || a.index - b.index)
+      .sort((a, b) => rank[a.row.status] - rank[b.row.status] || a.index - b.index)
       .map(({ row }) => row);
-  }, [queue.data, posts.data, list, today, user.name, app.directory]);
+  }, [queue.data, posts.data, list, week, user.name, app.directory]);
 
-  const toPost = items.filter((i) => i.assignment.status === 'Not Shared');
-  const pending = items.filter((i) => i.assignment.status === 'Pending');
-  const posted = items.filter((i) => i.assignment.status === 'Posted');
+  const progress = useMemo(
+    () => weekProgress(user.name, week, queue.data ?? [], posts.data ?? [], today),
+    [user.name, week, queue.data, posts.data, today],
+  );
+
+  const toPost = items.filter((i) => i.status === 'Not Shared');
+  const pending = items.filter((i) => i.status === 'Pending');
+  const posted = items.filter((i) => i.status === 'Posted');
   const next = toPost.find((i) => openable(i, list !== null));
   const rest = items.filter((i) => i !== next);
 
@@ -97,22 +115,17 @@ export function QueueScreen() {
             ) : null}
           </div>
         </div>
-        <div className="queue__sub">
-          <span className="meta">{longDate(today)}</span>
-          {items.length > 0 ? (
-            <ul className="queue__counts" aria-label="Today's counts">
-              <li>
-                <span className="tabular">{toPost.length}</span> not shared
-              </li>
-              <li className="queue__count--pending">
-                <span className="tabular">{pending.length}</span> pending
-              </li>
-              <li className="queue__count--posted">
-                <span className="tabular">{posted.length}</span> posted
-              </li>
-            </ul>
-          ) : null}
-        </div>
+        {queue.data !== null && items.length > 0 ? (
+          <WeekHeader
+            upcoming={upcoming}
+            week={week}
+            today={today}
+            done={progress.posted + progress.pending}
+            posted={progress.posted}
+            pending={progress.pending}
+            target={progress.target}
+          />
+        ) : null}
       </header>
 
       {queue.data === null ? (
@@ -130,10 +143,13 @@ export function QueueScreen() {
             {queue.error}
           </Notice>
         ) : (
-          <Waiting className="queue__loading">Loading today's queue…</Waiting>
+          <Waiting className="queue__loading">Loading your queue…</Waiting>
         )
       ) : items.length === 0 ? (
-        <EmptyState title="Nothing in your queue today" action={<Button onClick={() => navigate(paths.find)}>Find a property</Button>}>
+        <EmptyState
+          title={upcoming ? 'Next week isn’t assigned yet' : 'Nothing in your queue this week'}
+          action={<Button onClick={() => navigate(paths.find)}>Find a property</Button>}
+        >
           You can still find a listing and post it.
         </EmptyState>
       ) : (
@@ -148,16 +164,16 @@ export function QueueScreen() {
           {next ? (
             <NextUp item={next} />
           ) : toPost.length === 0 && pending.length === 0 ? (
-            <Notice tone="ok" title="Queue done">
+            <Notice tone="ok" title="Week done">
               All {items.length} posted.
             </Notice>
           ) : null}
 
           {rest.length > 0 ? (
-            <ol className="queue__list" aria-label={next ? 'The rest of today' : 'Today'}>
+            <ol className="queue__list" aria-label={next ? 'The rest of the week' : 'This week'}>
               {rest.map((item) => (
                 <Row
-                  key={`${item.assignment.propertyId || item.assignment.propertyName}-${item.assignment.status}`}
+                  key={`${item.assignment.propertyId || item.assignment.propertyName}-${item.status}`}
                   item={item}
                   listLoaded={list !== null}
                   onChanged={reload}
@@ -203,8 +219,7 @@ function NextUp({ item }: { readonly item: Item }) {
 
 /** One queue item: name, category, status. The name's link covers the row, so one click opens it. */
 function Row({ item, listLoaded, onChanged }: { readonly item: Item; readonly listLoaded: boolean; readonly onChanged: () => void }) {
-  const { assignment, property, post } = item;
-  const { status } = assignment;
+  const { assignment, property, post, status } = item;
   const canOpen = openable(item, listLoaded);
   const name = property?.name ?? assignment.propertyName;
 
@@ -346,17 +361,70 @@ function ViewPost({ link }: { readonly link: string }) {
   );
 }
 
-/** Today's post of this queue item: by folder id where both have one, else by name. The latest wins. */
-function latestPostOf(todays: readonly PostLogEntry[], assignment: Assignment): PostLogEntry | undefined {
+/** Your post of this queue item this week: by folder id where both have one, else by name. The latest wins. */
+function latestPostOf(posts: readonly PostLogEntry[], assignment: Assignment, status: AssignmentStatus): PostLogEntry | undefined {
   const key = normalize(assignment.propertyName);
-  const wanted = assignment.status === 'Pending' ? 'Pending' : 'Posted';
+  const wanted = status === 'Pending' ? ['Pending'] : status === 'Posted' ? ['Posted'] : ['Posted', 'Pending'];
   let found: PostLogEntry | undefined;
-  for (const post of todays) {
+  for (const post of posts) {
     const same =
       assignment.propertyId !== '' && post.propertyId !== ''
         ? post.propertyId === assignment.propertyId
         : normalize(post.title) === key;
-    if (same && post.status === wanted) found = post;
+    if (same && wanted.includes(post.status)) found = post;
   }
   return found;
+}
+
+interface WeekHeaderProps {
+  /** The weekend: the queue shown is the coming week's. */
+  readonly upcoming: boolean;
+  readonly week: string;
+  readonly today: string;
+  /** Posted and pending: what counts toward the week. */
+  readonly done: number;
+  readonly posted: number;
+  readonly pending: number;
+  readonly target: number;
+}
+
+/** "This week · 12 of 40", a bar, and when it is due: Friday, today, or (at the weekend) when it starts. */
+function WeekHeader({ upcoming, week, today, done, posted, pending, target }: WeekHeaderProps) {
+  const friday = weekFriday(week);
+  const share = (n: number) => `${target === 0 ? 0 : Math.min(100, (n / target) * 100)}%`;
+  return (
+    <div className="queue__week">
+      <div className="queue__week-row">
+        <p className="queue__week-title">
+          {upcoming ? 'Next week' : 'This week'}
+          <span className="queue__week-count tabular">
+            {' · '}
+            {done} of {target}
+          </span>
+        </p>
+        {upcoming ? (
+          <span className="queue__due">Starts {shortDate(week)}</span>
+        ) : today === friday ? (
+          <span className="queue__due queue__due--today">Due today</span>
+        ) : (
+          <span className="queue__due">Due {shortDate(friday)}</span>
+        )}
+      </div>
+      <div className="queue__bar" aria-hidden="true">
+        <span className="queue__bar-posted" style={{ width: share(posted) }} />
+        <span className="queue__bar-pending" style={{ width: share(pending) }} />
+      </div>
+      <ul className="queue__counts" aria-label="This week's counts">
+        <li className="queue__count--posted">
+          <span className="tabular">{posted}</span> posted
+        </li>
+        <li className="queue__count--pending">
+          <span className="tabular">{pending}</span> pending
+        </li>
+        <li>
+          <span className="tabular">{Math.max(0, target - done)}</span> not shared
+        </li>
+      </ul>
+    </div>
+  );
 }

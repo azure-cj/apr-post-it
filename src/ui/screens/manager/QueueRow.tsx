@@ -1,24 +1,21 @@
-import { forwardRef, type DragEvent, type KeyboardEvent } from 'react';
-import { CategoryTag, Icon, Pill } from '../../components';
+import { forwardRef, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
+import { CategoryDot, Icon, Pill, categoryKind } from '../../components';
 import type { AssignRules, QueueEntry } from '@/core/summary';
 import { PostingWarning, blockSentence } from './AssignParts';
 import { ManagerIcon } from './ManagerIcon';
 
-// ------------------------------------------------------------------ a queue row
+// ------------------------------------------------------------------ a Not shared row
 
 export interface QueueRowProps {
   readonly entry: QueueEntry;
+  /** Its place among the Not shared rows (the list is ordered: its number is read with it). */
   readonly index: number;
   readonly count: number;
   readonly rules: AssignRules | null;
-  /** Added in this draft: not saved yet. */
-  readonly isNew: boolean;
-  /** Put in by quick fill and not kept yet: shown highlighted until saved or undone. */
+  /** Put in by quick fill (or copied from last week) and not kept yet: tinted until saved or undone. */
   readonly preview?: boolean | undefined;
   /** The server refused it on save: why, in a few words. */
   readonly refusal?: string | undefined;
-  /** Moved from an earlier day's queue: "28 Oct". */
-  readonly movedFrom?: string | undefined;
   readonly dragging: boolean;
   readonly dropMark: 'before' | 'after' | null;
   readonly onMove: (by: number, role: string) => void;
@@ -32,14 +29,13 @@ export interface QueueRowProps {
   };
 }
 
+/** One listing still to be shared: it can be dragged, moved with Alt+Up/Down, or removed. */
 export const QueueRow = forwardRef<HTMLLIElement, QueueRowProps>(function QueueRow(
-  { entry, index, count, rules, isNew, preview, refusal, movedFrom, dragging, dropMark, onMove, onRemove, onDragOver, onDrop, handle },
+  { entry, index, count, rules, preview, refusal, dragging, dropMark, onMove, onRemove, onDragOver, onDrop, handle },
   ref,
 ) {
-  const status = rules?.statusOf(entry.key);
-  const started = rules?.isStarted(entry.key) ?? false;
-  // A Not Shared item that has since become unpostable on this day: say so.
-  const check = !started && entry.property && rules ? rules.check(entry.property) : null;
+  // A listing that has since become unpostable this week: say so.
+  const check = entry.property && rules ? rules.check(entry.property) : null;
   const warning = check && !check.canAdd ? blockSentence(check, rules?.intern ?? null) : null;
   const first = index === 0;
   const last = index === count - 1;
@@ -67,34 +63,19 @@ export const QueueRow = forwardRef<HTMLLIElement, QueueRowProps>(function QueueR
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <span className="queue-row__handle" title="Drag to change the order" aria-hidden="true" {...handle}>
+      <span className="queue-row__handle" title="Drag to reorder" aria-hidden="true" {...handle}>
         <ManagerIcon name="grip" size={18} />
       </span>
-      <span className="queue-row__number tabular" aria-hidden="true">
-        {index + 1}
-      </span>
       <div className="queue-row__body">
-        <p className="queue-row__name">{entry.propertyName}</p>
-        <div className="queue-row__meta">
-          {entry.property ? (
-            <CategoryTag category={entry.property.category} />
-          ) : (
-            <Pill tone="danger">Folder not found</Pill>
-          )}
-          {status === 'Pending' ? (
-            <Pill tone="warn" dot>
-              Pending
-            </Pill>
-          ) : status === 'Posted' ? (
-            <Pill tone="ok" dot>
-              Posted
-            </Pill>
-          ) : movedFrom ? (
-            <Pill tone="info">Moved from {movedFrom}</Pill>
-          ) : isNew && !preview ? (
-            <Pill tone="neutral">Not saved</Pill>
-          ) : null}
-        </div>
+        <p className="queue-row__name">
+          {entry.property ? <CategoryDot kind={categoryKind(entry.property.category)} /> : null}
+          <span>{entry.propertyName}</span>
+        </p>
+        {!entry.property ? (
+          <div className="queue-row__meta">
+            <Pill tone="danger">Not in the library</Pill>
+          </div>
+        ) : null}
         {refusal ? (
           <p className="assign-refusal">
             <Icon name="fail" size={16} className="assign-warning__icon" />
@@ -107,13 +88,7 @@ export const QueueRow = forwardRef<HTMLLIElement, QueueRowProps>(function QueueR
             <span>{warning}</span>
           </p>
         ) : null}
-        {!entry.property && !started ? (
-          <p className="assign-warning">
-            <Icon name="warn" size={16} className="assign-warning__icon" />
-            <span>Its folder isn&rsquo;t in the library any more. Remove it, then add the listing again under its new name.</span>
-          </p>
-        ) : null}
-        {entry.property && !started ? <PostingWarning property={entry.property} className="assign-warning" /> : null}
+        {entry.property ? <PostingWarning property={entry.property} className="assign-warning" /> : null}
       </div>
       <div className="queue-row__move">
         <button
@@ -145,20 +120,55 @@ export const QueueRow = forwardRef<HTMLLIElement, QueueRowProps>(function QueueR
           <ManagerIcon name="chevronDown" size={18} />
         </button>
       </div>
-      {started ? (
-        <span className="queue-row__kept" aria-hidden="true" />
-      ) : (
-        <button
-          type="button"
-          className="queue-row__remove"
-          data-role="remove"
-          aria-label={`Remove ${entry.propertyName}`}
-          title="Remove from the queue"
-          onClick={onRemove}
-        >
-          <Icon name="close" size={18} />
-        </button>
-      )}
+      <button
+        type="button"
+        className="queue-row__remove"
+        data-role="remove"
+        aria-label={`Remove ${entry.propertyName}`}
+        title="Remove"
+        onClick={onRemove}
+      >
+        <Icon name="close" size={18} />
+      </button>
     </li>
   );
 });
+
+// ------------------------------------------------------------------ a read-only row
+
+export interface DoneRowProps {
+  readonly entry: QueueEntry;
+  /** The post on Facebook, when the Posts tab has its link. */
+  readonly link?: string | undefined;
+  /** Opens the link (the desktop app opens it in the browser). Default: the link's own behaviour. */
+  readonly onOpenLink?: ((url: string) => void) | undefined;
+}
+
+/** Pending, Posted or Missed: the listing, and for a post its link. Nothing to change. */
+export function DoneRow({ entry, link, onOpenLink }: DoneRowProps) {
+  const open = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!onOpenLink || !link) return;
+    event.preventDefault();
+    onOpenLink(link);
+  };
+  return (
+    <li className="done-row">
+      <p className="queue-row__name done-row__name">
+        {entry.property ? <CategoryDot kind={categoryKind(entry.property.category)} /> : null}
+        <span>{entry.propertyName}</span>
+      </p>
+      {link ? (
+        <a
+          className="done-row__link"
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          onClick={open}
+          aria-label={`Open the post of ${entry.propertyName}`}
+        >
+          Open post
+        </a>
+      ) : null}
+    </li>
+  );
+}

@@ -193,23 +193,53 @@ describe('Settings → Rules', () => {
 
     await userEvent.clear(cooldown);
     await userEvent.type(cooldown, '10');
-    await userEvent.click(screen.getByRole('button', { name: 'More: Default listings per intern' }));
+    await userEvent.click(screen.getByRole('button', { name: 'More: Listings per week' }));
     await userEvent.click(screen.getByRole('button', { name: 'Fewer: Due for repost' }));
     await userEvent.click(save);
 
     expect(await screen.findByText('Saved')).toBeTruthy();
-    expect(platform.posts.find((p) => p.action === 'setRules')!.body).toMatchObject({ cooldownDays: 10, repostDueDays: 13, perIntern: 21 });
+    expect(platform.posts.find((p) => p.action === 'setRules')!.body).toMatchObject({ cooldownDays: 10, repostDueDays: 13, perWeek: 21 });
     expect(save).toHaveProperty('disabled', true);
   });
 
   it('resets to what is saved', async () => {
     renderApp({ platform: fakeServer({ ping: ping(EXPECTED_SERVER_VERSION) }), user: admin, path: '/settings?tab=rules' });
-    const per = (await screen.findByLabelText('Default listings per intern')) as HTMLInputElement;
+    const per = (await screen.findByLabelText('Listings per week')) as HTMLInputElement;
     await waitFor(() => expect(per.value).toBe('20'));
     await userEvent.clear(per);
     await userEvent.type(per, '35');
     await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
     expect(per.value).toBe('20');
+  });
+
+  it('reads perWeek from a v6 server, and saves it under that name', async () => {
+    const V6 = { cooldownDays: 7, repostDueDays: 14, perWeek: 40 };
+    const platform = fakeServer({
+      ping: ping(EXPECTED_SERVER_VERSION, V6),
+      setRules: (body) => ({ ok: true, rules: { ...V6, ...body } }),
+    });
+    renderApp({ platform, user: admin, path: '/settings?tab=rules' });
+    const per = (await screen.findByLabelText('Listings per week')) as HTMLInputElement;
+    await waitFor(() => expect(per.value).toBe('40'));
+    expect(screen.getByText('Each intern’s weekly target. Due Friday.')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Fewer: Listings per week' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Saved')).toBeTruthy();
+    expect(platform.posts.find((p) => p.action === 'setRules')!.body).toMatchObject({ perWeek: 39 });
+    expect(per.value).toBe('39');
+  });
+
+  it('asks the server once on arrival, even when its rules differ from the kept ones', async () => {
+    // An old server's perIntern (20) is not the kept default (40): the settings
+    // the app hands out change when the ping lands, and must not ask again.
+    const platform = fakeServer({ ping: ping(EXPECTED_SERVER_VERSION) });
+    renderApp({ platform, user: admin, path: '/settings?tab=rules' });
+    const per = (await screen.findByLabelText('Listings per week')) as HTMLInputElement;
+    await waitFor(() => expect(per.value).toBe('20'));
+    const pings = actionsOf(platform).filter((a) => a === 'ping').length;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(actionsOf(platform).filter((a) => a === 'ping').length).toBe(pings);
+    expect(pings).toBeLessThanOrEqual(2);
   });
 
   it('shows the rules read-only when the web app sends none', async () => {

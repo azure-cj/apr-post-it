@@ -1,5 +1,6 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Button, CategoryDot, Chip, Icon, SearchBox, categoryLabel, type CategoryKind } from '../../components';
+import { MenuButton } from './AssignMenu';
 import { plural } from '@/core/summary';
 import type { Property } from '@/core/types';
 import { byPriority, lastPostedWords, placeWords, type ListingState } from './assignListing';
@@ -34,8 +35,9 @@ export function tabLabel(tab: CategoryTab, states: readonly ListingState[]): str
 }
 
 /**
- * The library for one queue: category tabs with what's free in each, a search,
- * Fresh / Due for repost, and what can't be added hidden unless asked for.
+ * The library for one queue: category chips with what's free in each, a
+ * search, and a Filter menu (Fresh, Due for repost, Show unavailable). What
+ * can't be added is hidden unless asked for.
  */
 export function LibraryPanel({
   states,
@@ -128,24 +130,23 @@ export function LibraryPanel({
       <div className="lib__find">
         <SearchBox
           label="Search listings"
-          placeholder="Search by name, city or building"
+          placeholder="Search name, city or building"
           value={query}
           onValueChange={(v) => {
             setQuery(v);
             resetPage();
           }}
         />
-        <div className="lib__filters" role="group" aria-label="Filters">
-          <Chip selected={fresh} onSelectedChange={(on) => { setFresh(on); resetPage(); }}>
-            Fresh
-          </Chip>
-          <Chip selected={due} onSelectedChange={(on) => { setDue(on); resetPage(); }}>
-            Due for repost
-          </Chip>
-          <Chip selected={showOff} onSelectedChange={(on) => { setShowOff(on); resetPage(); }}>
-            Show unavailable
-          </Chip>
-        </div>
+        <MenuButton label="Filter" count={[fresh, due, showOff].filter(Boolean).length} className="lib__filter">
+          {() => (
+            <fieldset className="menu__group">
+              <legend className="visually-hidden">Filter</legend>
+              <FilterCheck label="Fresh" checked={fresh} onChange={(on) => { setFresh(on); resetPage(); }} />
+              <FilterCheck label="Due for repost" checked={due} onChange={(on) => { setDue(on); resetPage(); }} />
+              <FilterCheck label="Show unavailable" checked={showOff} onChange={(on) => { setShowOff(on); resetPage(); }} />
+            </fieldset>
+          )}
+        </MenuButton>
       </div>
 
       <p className="visually-hidden" role="status">
@@ -155,10 +156,10 @@ export function LibraryPanel({
       {rows.length === 0 ? (
         <p className="assign__quiet lib__none">
           {query.trim() !== ''
-            ? `No listing matches “${query.trim()}”${tab === 'all' ? '' : ` in ${scope}`}.`
+            ? `No match for “${query.trim()}”${tab === 'all' ? '' : ` in ${scope}`}.`
             : fresh || due
-              ? 'Nothing here matches those filters.'
-              : `Nothing in ${scope} can go in this queue.`}
+              ? 'Nothing matches the filter.'
+              : `Nothing free in ${scope}.`}
         </p>
       ) : (
         <ul className="lib__list" ref={listRef} onKeyDown={onListKey} aria-label={`${scope} listings`}>
@@ -179,9 +180,8 @@ export function LibraryPanel({
         <div className="lib__more">
           <span className="assign__quiet tabular">
             {rows.length > shown.length
-              ? `${shown.length} of ${plural(rows.length, 'listing', 'listings')}`
-              : plural(rows.length, 'listing', 'listings')}{' '}
-            · never posted first
+              ? `${shown.length} of ${rows.length.toLocaleString('en-PH')}`
+              : plural(rows.length, 'listing', 'listings')}
           </span>
           {rows.length > shown.length ? (
             <Button size="small" variant="quiet" onClick={() => setLimit((l) => l + RESULT_LIMIT)}>
@@ -273,41 +273,64 @@ function LibraryRow({ state, added, today, showCategory, onAdd }: LibraryRowProp
   );
 }
 
+function FilterCheck({ label, checked, onChange }: { readonly label: string; readonly checked: boolean; readonly onChange: (on: boolean) => void }) {
+  return (
+    <label className="menu__check">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+export const FILL_MAX = 200;
+
+/** One step of the quick fill's stepper: by 5, by 1 below 5. */
+export function stepCount(n: number, by: 1 | -1): number {
+  const step = (by > 0 ? n : n - 1) < 5 ? 1 : 5;
+  const next = by > 0 ? Math.floor(n / step) * step + step : Math.ceil(n / step) * step - step;
+  return Math.max(1, Math.min(FILL_MAX, next));
+}
+
 export interface QuickFillProps {
-  readonly count: string;
-  readonly onCount: (text: string) => void;
-  /** The tab's name, for the field's label: "Warehouse", "All". */
+  readonly count: number;
+  readonly onCount: (n: number) => void;
+  /** The tab's name, for the button's accessible name: "Warehouse", "All". */
   readonly scope: string;
   readonly onFill: (count: number) => void;
   readonly disabled: boolean;
 }
 
-/** "Add 20 for posting": how many, from the tab shown. */
+/** "Add 40" from the tab shown, with − and + either side to change how many. */
 export function QuickFill({ count, onCount, scope, onFill, disabled }: QuickFillProps) {
-  const id = useId();
-  const n = Number.parseInt(count, 10);
-  const valid = Number.isFinite(n) && n > 0 ? Math.min(n, 100) : 0;
   return (
-    <div className="lib__fill">
-      <label className="visually-hidden" htmlFor={id}>
-        How many to add from {scope}
-      </label>
-      <input
-        id={id}
-        className="field__input lib__fill-count tabular"
-        type="number"
-        inputMode="numeric"
-        min={1}
-        max={100}
-        value={count}
-        onChange={(event) => onCount(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && valid > 0 && !disabled) onFill(valid);
-        }}
-      />
-      <Button icon={<Icon name="assign" size={18} />} disabled={valid === 0 || disabled} onClick={() => onFill(valid)}>
-        {valid > 0 ? `Add ${valid} for posting` : 'Add for posting'}
+    <div className="quick-fill" role="group" aria-label="Quick fill">
+      <button
+        type="button"
+        className="quick-fill__step"
+        aria-label="Fewer"
+        disabled={disabled || count <= 1}
+        onClick={() => onCount(stepCount(count, -1))}
+      >
+        <span aria-hidden="true">−</span>
+      </button>
+      <Button
+        size="small"
+        className="quick-fill__add tabular"
+        disabled={disabled}
+        aria-label={scope === 'All' ? `Add ${count}` : `Add ${count} from ${scope}`}
+        onClick={() => onFill(count)}
+      >
+        Add {count}
       </Button>
+      <button
+        type="button"
+        className="quick-fill__step"
+        aria-label="More"
+        disabled={disabled || count >= FILL_MAX}
+        onClick={() => onCount(stepCount(count, 1))}
+      >
+        <span aria-hidden="true">+</span>
+      </button>
     </div>
   );
 }

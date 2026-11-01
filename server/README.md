@@ -79,8 +79,8 @@ read rather than hundreds of Drive calls.
      `CFG.SHEET_ID` must name the same spreadsheet.
    * `POSTS_TAB` / `ASSIGNMENTS_TAB`: **must match the real tab names.**
    * `SHARED_KEY`: a long random string, used only until the Team tab has its first row.
-   * `COOLDOWN_DAYS`, `REPOST_DUE_DAYS` and `PER_INTERN`: the rules' **defaults** only
-     (7, 14 and 20). The live values are set from the app and kept on the Settings tab
+   * `COOLDOWN_DAYS`, `REPOST_DUE_DAYS` and `PER_WEEK`: the rules' **defaults** only
+     (7, 14 and 40). The live values are set from the app and kept on the Settings tab
      (below). `TZ`: Manila's calendar.
    * `CHECKER_INDEX_CSV_URL`: leave it as it is, the listing checker's published Index CSV
      (below). `''` switches the join off.
@@ -125,11 +125,11 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 
 | Action | Who | What it does |
 |---|---|---|
-| `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`; also `version` (`SERVER_VERSION` at the top of `Code.gs`) and `rules`: `{ cooldownDays, repostDueDays, perIntern }`, the live values (below). |
+| `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`; also `version` (`SERVER_VERSION` at the top of `Code.gs`) and `rules`: `{ cooldownDays, repostDueDays, perWeek, perIntern }`, the live values (below); `perIntern` is `perWeek` again, under its old name, for an app built before v6. |
 | `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. With the geocoding sheet joined on by FolderId (below): `lat` and `lng`, numbers, only for a listing that has a good position. |
 | `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. The checker's fields too, joined as for `properties`. |
 | `posts` | everyone | The Posts tab as rows, every value text. An intern gets only their own. |
-| `assignments` | everyone | The Assignments tab as rows, every value text. An intern gets only their own. |
+| `assignments` | everyone | The Assignments tab as rows, every value text. An intern gets only their own. Each row also has `week`: the Monday of the week its Date is in (`''` when the date can't be read), with `date` kept as written, so a daily row from before v6 reads as its week (below). |
 | `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` (`HH:mm`), `type` (the Property type written) and `postedBy`. `postLink` is required, an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com`, `fb.com` or `fb.me` (`error: 'link-required'` or `'bad-link'`), and so is `status`, `Posted` or `Pending` (`'bad-status'`); Pending means posted in a group and awaiting its admin's approval. Refuses with `'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the poster's Team row. An Admin may send `postedBy`: that person must be on the Team tab and active (`'unknown-person'`), and the account must be one of theirs. |
 | `addLink` | everyone | Turns a Pending row into Posted with its link: `notfound` when there is no such row. An intern can complete only their own. Kept for old rows logged without a link. |
 | `setStatus` | everyone | Moves one queue item's status (`Not Shared`, `Pending` or `Posted`; an older app's `To post` is written `Not Shared`): `notfound` when no open item matches. An intern can move only their own. With `Posted`, also marks the assignee's newest Pending post of that listing Posted (by id, else by name), keeping its link. |
@@ -138,9 +138,9 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | `updatePerson` | Admin | `{ name, fbAccounts?, fbProfileLink? }`: changes only the fields sent (blank clears), with `addPerson`'s checks, replying `{ person }`. Name, role and key never change. The cached Team tab is cleared, so the log step's account check uses the new broker name at once. |
 | `setActive` | Admin | `{ name, active }`: revokes or restores a person, replying `{ person }`. Nobody can deactivate themselves (`'self'`). |
 | `newKey` | Admin | `{ name }`: gives the person a new key, replying `{ key }`. The old one stops working at once. |
-| `saveQueue` | Admin | Replaces one person's queue for one date. Refuses held listings, as `saveQueues` does (below). |
-| `saveQueues` | Admin | `{ date, queues: [{ assignedTo, items: [{ propertyName, propertyId?, status? }] }] }`: replaces several interns' queues for one date, all or none, under one lock, replying `{ saved }`. Every `assignedTo` must be an active Intern on the Team tab (`'bad-intern'`). Refuses held listings with `'held'` (below). |
-| `setRules` | Admin | `{ cooldownDays?, repostDueDays?, perIntern? }`: changes only the rules sent, each a whole number (cooldown 1–60 days, repost 1–120 days, per intern 1–100), else `'bad-rules'` (with `field`) and nothing is written. Replies `{ rules }`, all three as they now are. |
+| `saveQueue` | Admin | `{ week, assignedTo, items }`: replaces one person's queue for one week. `week` and `date` as for `saveQueues`. Refuses held listings, as `saveQueues` does (below). |
+| `saveQueues` | Admin | `{ week, queues: [{ assignedTo, items: [{ propertyName, propertyId?, status? }] }] }`: replaces several interns' queues for one week, all or none, under one lock, replying `{ saved }`. `week` must be a Monday, yyyy-MM-dd (`'bad-week'`). An older app's `date` is still accepted, any day, and saved as its week (a Saturday or Sunday as the next week's); `week` wins when both are sent. Every `assignedTo` must be an active Intern on the Team tab (`'bad-intern'`). Refuses held listings with `'held'` (below). |
+| `setRules` | Admin | `{ cooldownDays?, repostDueDays?, perWeek? }`: changes only the rules sent, each a whole number (cooldown 1–60 days, repost 1–120 days, per week 1–200), else `'bad-rules'` (with `field`) and nothing is written. `perIntern`, from an app built before v6, is read as `perWeek` when `perWeek` is not sent. Replies `{ rules }`, as `ping` sends them. |
 | `rebuildDirectory` | Admin | Schedules `BuildDirectory.gs`'s `RESTART` on a one-off trigger (`RESTART_FROM_APP`) about 10 seconds later and replies `{ started: true }` at once. `'busy'` while a build is running or already scheduled; `'no-builder'` when `BuildDirectory.gs` is not in the project. |
 | `directoryStatus` | Admin | `{ running, done, total, builtAt }`: whether a build is scheduled or under way, how many listings it has written of how many, and when the last one finished (ISO, Manila; `''` before the first). |
 | `indexCheck` | Admin | Compares the directory with the checker's index, read fresh: `checkedAt`, `directoryCount`, `checkerCount`, `directoryOnly` and `sold` (`{ id, name }`), and `checkerOnly` (`{ id, name, path }`). `'checker-off'` or `'checker-unavailable'` when it cannot. |
@@ -155,25 +155,49 @@ Two things in a reply come from the key, never from the request:
 * **A key** is in the reply of `addPerson` and `newKey` only. No other reply, `team`,
   `updatePerson` and `setActive` included, ever carries one.
 
+### Weekly queues (v6)
+
+The owner: "assign per week only, e.g. 40 listings per week; Friday is the final day before
+the reset."
+
+* **The work week** runs **Monday to Friday**, and **Friday is the deadline**. A week is
+  named by its Monday, `yyyy-MM-dd` on Manila's calendar: the **week key**.
+* **The reset** happens after Friday: **Saturday and Sunday belong to the next week**. A date
+  maps to its week as `weekOf_` (Code.gs) and `weekOf` (the app's `src/core/week.ts`) map it:
+  Monday to Friday to that Monday, Saturday and Sunday to the next Monday.
+* **One queue per intern per week.** An Assignments row's `Date` holds the week key. Rows
+  written before v6 hold a day; they are read as the week that day is in, so the past still
+  shows correctly, and nothing in the sheet has to be rewritten.
+* **Saving** a week's queue replaces that intern's rows of that week: every row whose Date
+  is in it, the week key or an older day alike. The new rows are written with the week key.
+* **Missed.** When a week is over (Manila's today is past its Friday), the rows still
+  `Not Shared` are **Missed**. Missed is shown in the app's reports and on the intern's
+  monitor; it is never written as a status, and a Missed row holds nothing (below). A late
+  post still moves it to Posted as usual.
+
 ### Held listings
 
 The owner's rule: **a listing assigned to an intern is held by that intern until it is
-posted.** An Assignments row whose Status is `Not Shared` (or the older `To post`), on any
-date, holds its listing for its assignee. `Pending` and `Posted` release it, and the cooldown
-then applies as usual. Rows are matched to a listing the way every tracker row is: by folder
+posted, or until its week is over.** An Assignments row whose Status is `Not Shared` (or the
+older `To post`) holds its listing for its assignee while its week is not over on Manila's
+today. After that Friday it is Missed and holds nothing. `Pending` and `Posted` release it at
+once, and the cooldown then applies as usual. A row whose Date can't be read belongs to no
+week and holds nothing. Rows are matched to a listing the way every tracker row is: by folder
 id when both have one, otherwise by name as the app normalises it.
 
 `saveQueue` and `saveQueues` check every item under the lock, before anything is written. An
-item is refused when an open row holds it for a different intern, or for the same intern on
-another date. The rows the save replaces (the named interns' rows for that date) hold
-nothing, so re-saving a queue still works, and an item taken out of a queue is free at once.
-The same listing sent in two of `saveQueues`' queues is held by the first. A refusal writes
-nothing and replies:
+item is refused when an open row in a week not over holds it for a different intern, or for
+the same intern in another week. The rows the save replaces (the named interns' rows of that
+week) hold nothing, so re-saving a week's queue still works, and an item taken out of a queue
+is free at once. The same listing sent in two of `saveQueues`' queues is held by the first. A
+refusal writes nothing and replies, `date` being the holding row's Date as a day and `week`
+its week:
 
 ```json
 { "ok": false, "error": "held",
-  "held": [{ "propertyName": "Casa Amara", "propertyId": "F1", "heldBy": "Ana Reyes", "date": "2026-03-09" }],
-  "message": "Casa Amara is already with Ana Reyes (queue for 2026-03-09). Remove it from their queue first." }
+  "held": [{ "propertyName": "Casa Amara", "propertyId": "F1", "heldBy": "Ana Reyes",
+             "date": "2026-03-09", "week": "2026-03-09" }],
+  "message": "Casa Amara is already with Ana Reyes (queue for the week of 9–13 Mar). Remove it from their queue first." }
 ```
 
 To move a held listing, remove it from the first intern's queue and save that, then add it
@@ -269,7 +293,8 @@ The older spellings are still read, so an existing tab keeps working: `Type` / `
 
 A tab the script creates gets `Date`, `Assigned To`, `Property`, `Status` and `PropertyId`
 (also read as `Assigned to` / `Intern`, `Title` / `Property Name`, `Property Id` /
-`Folder Id`). **Status** is one of:
+`Folder Id`). **Date** is the queue's week key, its Monday (v6); an older row's day is read
+as its week (Weekly queues, above). **Status** is one of:
 
 * **`Not Shared`**: assigned, not posted yet. The interns' own word for it. Rows written
   before it say `To post`, which is read as the same thing everywhere (`setStatus`,
@@ -293,10 +318,14 @@ Three rules are the admin's to set, from the app's Settings page (`setRules`):
 |---|---|---|---|
 | cooldownDays | Days before a listing may be posted again. The server's own check uses it. | 7 | 1–60 |
 | repostDueDays | Days without a post after which a listing is due for a repost. | 14 | 1–120 |
-| perIntern | How many items the planner fills each intern's queue with by default. | 20 | 1–100 |
+| Per week | How many listings the planner and "Add 40 for posting" give each intern for a week by default (`perWeek`). | 40 | 1–200 |
 
 They are kept on the **Settings** tab of the private admin sheet, two columns, `Key` and
-`Value`, one row per rule, written as text. The tab is made the first time a rule is saved.
+`Value`, one row per rule, written as text: the Keys `cooldownDays`, `repostDueDays` and
+`Per week`. Keys are compared ignoring case, spaces and underscores (`Per week`, `perWeek`
+and `per_week` are one key). v6's `Per week` replaces the old `Per intern` (written by
+earlier versions as `perIntern`), which is still read when there is no good `Per week` row;
+a save writes `Per week` and leaves the old row, which is then no longer read. The tab is made the first time a rule is saved.
 Every reader, `ping` and the cooldown check alike, reads them through one function, cached
 for 30 seconds; a save clears that cache, so it holds from the next call. A rule the tab does
 not have, or has as anything other than a whole number in its range, is CONFIG's default.

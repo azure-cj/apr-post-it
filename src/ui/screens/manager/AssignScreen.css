@@ -23,9 +23,9 @@
 }
 
 /* Mirrors --bp-compact and --bp-stack: container queries can't read tokens. */
+/* The queue keeps the regular pane at 1366: a listing's name fits on one line. */
 @container shell (width < 1100px) {
   .assign__panes {
-    grid-template-columns: minmax(0, 1fr) var(--pane-compact);
     gap: var(--gap-compact);
   }
 }
@@ -58,14 +58,6 @@
 
 .assign__quiet {
   color: var(--text-muted);
-}
-
-.assign__empty {
-  padding: var(--space-6) var(--space-2);
-}
-
-.assign__empty:focus {
-  outline: none;
 }
 
 .assign__count {
@@ -236,7 +228,7 @@
 .queue-row {
   position: relative;
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-3) var(--space-4) var(--space-1);
@@ -304,8 +296,8 @@
 
 .queue-row__name {
   color: var(--text);
-  font-size: var(--text-body);
-  line-height: var(--lh-body);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
   font-weight: var(--weight-heading);
   overflow-wrap: anywhere;
 }
@@ -413,30 +405,32 @@
 
 /* ---- the save bar: stays at the bottom of the window while the page scrolls -- */
 
+/* The queue's foot: what's unsaved, Undo and Save. */
 .assign-savebar {
-  position: sticky;
-  bottom: var(--space-6);
-  z-index: 5;
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6) var(--space-12);
-  margin-top: var(--space-12);
-  padding: var(--space-5) var(--space-5) var(--space-5) var(--space-10);
-  border: var(--border-width) solid transparent;
-  border-radius: var(--radius-card);
-  background:
-    linear-gradient(var(--surface-raised), var(--surface-raised)) padding-box,
-    var(--card-edge) border-box;
+  justify-content: flex-end;
+  gap: var(--space-4) var(--space-6);
+  margin-top: var(--space-8);
+  padding-top: var(--space-8);
+  border-top: var(--border-width) solid var(--border-soft);
 }
 
 .assign-savebar__state {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   min-width: 0;
   color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.assign-savebar__state:empty {
+  display: none;
 }
 
 .assign-savebar__icon {
@@ -453,7 +447,6 @@
 
 .assign-savebar__actions {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-4);
   margin-inline-start: auto;
 }
@@ -469,13 +462,25 @@
 
 /* ---- step one: whose queue ------------------------------------------------- */
 
-.assign-pick .card__actions {
-  flex: 0 1 320px;
+.assign__header-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6) var(--space-12);
+}
+
+.assign-pick {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.assign-pick__search {
+  max-width: 320px;
 }
 
 .assign-pick__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: var(--space-6);
   margin: 0;
   padding: 0;
@@ -486,16 +491,15 @@
   padding: var(--space-6) 0;
 }
 
-/* A whole intern, one target: who, their FB name, what's open, today. */
+/* A whole intern, one target: the name and its one word, then the week's bar. */
 .assign-pick__card {
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-4) var(--space-6);
+  gap: var(--space-6);
   width: 100%;
   height: 100%;
-  padding: var(--space-7) var(--space-8);
+  padding: var(--space-8);
   border: var(--border-width) solid var(--border-soft);
   border-radius: var(--radius-row);
   background: var(--inset);
@@ -529,24 +533,11 @@
   transition: transform var(--dur-press) var(--ease-out);
 }
 
-.assign-pick__avatar {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface-raised);
-  color: var(--text-label);
-  font-family: var(--heading-font);
-  font-size: var(--text-caption);
-  font-weight: var(--weight-heading);
-  line-height: 1;
-}
-
-.assign-pick__who {
-  display: grid;
-  align-content: center;
+.assign-pick__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
   min-width: 0;
 }
 
@@ -561,55 +552,42 @@
   white-space: nowrap;
 }
 
-.assign-pick__fb {
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.assign-pick__pill {
+  flex: none;
 }
 
-.assign-pick__open,
-.assign-pick__today {
-  grid-column: 1 / -1;
-}
-
-.assign-pick__open {
-  color: var(--text-muted);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-}
-
-.assign-pick__open--some {
-  color: var(--text-label);
-}
-
-.assign-pick__today {
+.assign-pick__progress {
   display: grid;
-  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
 }
 
-.assign-pick__today-words {
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-}
-
-/* Posted on a neutral track; the words carry it. */
+/* Posted green, then pending amber, on a neutral track; the number says it in words. */
 .assign-pick__bar {
-  display: block;
-  height: 6px;
+  display: flex;
+  height: 8px;
   overflow: hidden;
   border-radius: var(--radius-pill);
   background: var(--neutral-soft);
 }
 
-.assign-pick__bar-fill {
-  display: block;
-  height: 100%;
+.assign-pick__bar-posted {
   background: var(--ok-strong);
-  transform-origin: left center;
+}
+
+.assign-pick__bar-pending {
+  background: var(--warn-text);
+}
+
+.assign-pick__count {
+  min-width: 4.5em;
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-heading);
+  text-align: end;
 }
 
 /* ---- step two: the header ----------------------------------------------------- */
@@ -630,7 +608,7 @@
   margin-bottom: var(--space-2);
 }
 
-.assign__fb {
+.assign__due {
   color: var(--text-muted);
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
@@ -643,22 +621,30 @@
   gap: var(--space-6);
 }
 
-.lib__tabs,
-.lib__filters {
+/* The categories on one line; more than fit scroll sideways, never wrap. */
+.lib__tabs {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-3);
+  margin-inline: calc(var(--space-2) * -1);
+  padding: var(--space-2) var(--space-20) var(--space-2) var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* The row fades at its end, so more chips read as "scroll", not as cut off. */
+  mask-image: linear-gradient(to right, var(--text) calc(100% - var(--space-20)), transparent);
+}
+
+.lib__tabs > .chip {
+  flex: none;
 }
 
 .lib__find {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4) var(--space-6);
+  gap: var(--space-4);
 }
 
 .lib__find > :first-child {
-  flex: 1 1 100%;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -670,15 +656,148 @@
   gap: var(--space-4) var(--space-6);
 }
 
-.lib__fill {
-  display: flex;
+/* "− Add 40 +": the number lives in the button; the steps sit either side. */
+.quick-fill {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-1);
 }
 
-.field__input.lib__fill-count {
-  width: 76px;
-  text-align: center;
+.button.quick-fill__add {
+  min-width: 92px;
+}
+
+.quick-fill__step {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-title);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.quick-fill__step::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.quick-fill__step:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.quick-fill__step:disabled {
+  color: var(--zero-text);
+  cursor: default;
+}
+
+/* ---- menus: Filter and More ----------------------------------------------------- */
+
+.menu {
+  position: relative;
+  flex: none;
+}
+
+.button.menu__button--icon {
+  width: 36px;
+  padding: 0;
+  gap: 0;
+}
+
+.button.menu__button--icon .button__icon {
+  margin: 0;
+}
+
+.menu__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-inline-start: var(--space-3);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+  color: var(--text);
+  font-size: var(--text-caption);
+  line-height: 1;
+}
+
+.menu__panel {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 220px;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-row);
+  background: var(--tip-bg);
+  animation: rise-in var(--dur-enter) var(--ease-out) both;
+}
+
+.menu__group {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.menu__check,
+.menu__item {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+
+.menu__check::before,
+.menu__item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--neutral-bg);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.menu__check:hover::before,
+.menu__item:hover::before {
+  opacity: 1;
+}
+
+.menu__check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--gold);
 }
 
 .lib__none {
@@ -825,11 +944,23 @@
 
 /* ---- the queue pane --------------------------------------------------------- */
 
-/* The queue stays in view while the library scrolls past it. */
+/* The queue stays in view while the library scrolls past it: its rows scroll
+   inside it, and Save stays at its foot. */
 .assign__queue {
   position: sticky;
-  top: var(--space-24);
-  max-height: calc(100vh - var(--space-24) - 104px);
+  top: var(--space-12);
+  display: flex;
+  flex-direction: column;
+  /* Short enough that Save shows below the page's header on first view (≈168px above it). */
+  max-height: calc(100vh - 168px);
+  min-height: 320px;
+}
+
+.assign-queue__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-inline: calc(var(--space-4) * -1);
+  padding-inline: var(--space-4);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -839,88 +970,6 @@
     position: static;
     max-height: none;
   }
-}
-
-.carried {
-  margin-bottom: var(--space-6);
-  border: var(--border-width) solid var(--border-soft);
-  border-radius: var(--radius-row);
-  background: var(--inset);
-}
-
-.carried__summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-5) var(--space-6);
-  border-radius: inherit;
-  color: var(--warn-text);
-  font-family: var(--heading-font);
-  font-size: var(--text-meta);
-  font-weight: var(--weight-label);
-  cursor: pointer;
-  list-style: none;
-}
-
-.carried__summary::-webkit-details-marker {
-  display: none;
-}
-
-.carried__summary::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  margin-inline: var(--space-1) var(--space-2);
-  border-right: 1.75px solid currentColor;
-  border-bottom: 1.75px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform var(--dur-fast) var(--ease-out);
-}
-
-.carried[open] > .carried__summary::before {
-  transform: rotate(45deg);
-}
-
-.carried__list {
-  margin: 0;
-  padding: 0 var(--space-6) var(--space-3);
-  list-style: none;
-}
-
-.carried__row {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-5) 0;
-  border-top: var(--border-width) solid var(--border-soft);
-}
-
-.carried__name {
-  color: var(--text);
-  font-weight: var(--weight-heading);
-  overflow-wrap: anywhere;
-}
-
-.carried__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-6);
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
-}
-
-.carried__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.assign__released {
-  margin: calc(var(--space-3) * -1) 0 var(--space-6);
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  line-height: var(--lh-caption);
 }
 
 /* Quick fill's batch: said once, with its Undo. */
@@ -962,4 +1011,148 @@
 
 .assign__add .card__header {
   align-items: center;
+}
+
+/* ---- the week's queue, grouped by status ------------------------------------------ */
+
+.qgroup + .qgroup,
+.assign__all-out + .qgroup {
+  margin-top: var(--space-10);
+}
+
+.qgroup__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-heading);
+}
+
+.qgroup__count {
+  color: var(--text-muted);
+  font-weight: var(--weight-label);
+}
+
+.qgroup__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+}
+
+.qgroup__dot--neutral {
+  background: var(--neutral-strong);
+}
+
+.qgroup__dot--warn {
+  background: var(--warn-text);
+}
+
+.qgroup__dot--ok {
+  background: var(--ok-strong);
+}
+
+.qgroup__dot--danger {
+  background: var(--danger-strong);
+}
+
+.queue-row__name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+.queue-row__name .category-dot {
+  flex: none;
+  transform: translateY(-1px);
+}
+
+.done-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.done-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+
+.done-row:last-child {
+  border-bottom: 0;
+}
+
+.queue-row__name.done-row__name {
+  min-width: 0;
+  color: var(--text-label);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
+/* A column of links on their own: the colour finds them, the underline comes on hover. */
+.done-row__link {
+  flex: none;
+  color: var(--info-text);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.done-row__link:hover {
+  text-decoration: underline;
+}
+
+.assign__empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-2);
+}
+
+.assign__all-out {
+  padding: var(--space-2);
+}
+
+.assign__all-out:focus,
+.assign__empty p:focus {
+  outline: none;
+}
+
+/* ---- a week that is over: what happened, read only -------------------------------- */
+
+.assign__review {
+  max-width: 760px;
+}
+
+.assign-review__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6) var(--space-12);
+  margin-bottom: var(--space-10);
+  padding-bottom: var(--space-8);
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+
+.assign-review__sum {
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-title);
+  line-height: var(--lh-title);
+  font-weight: var(--weight-heading);
+}
+
+.assign-review__missed {
+  color: var(--danger-text);
 }

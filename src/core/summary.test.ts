@@ -34,6 +34,8 @@ import type { Assignment, AssignmentStatus, PostLogEntry, PostStatus, Property }
 // TestApp.Today in the C# tests: Thu 29 Oct 2026.
 const TODAY = '2026-10-29';
 const TOMORROW = '2026-10-30';
+// Queues are weekly (v6): TODAY's week is 26–30 Oct; the next starts Monday 2 Nov.
+const NEXT_WEEK = '2026-11-02';
 const JAN = 'Jan Dela Cruz';
 const MIKA = 'Mika Reyes';
 const BEA = 'Bea Lim';
@@ -176,13 +178,14 @@ describe('summarizeDay — ported from TrackerServiceTests', () => {
     const assignments = [
       ...queue(JAN, TODAY, ['Casa Amara House & Lot', 'Pending'], ['Verdant Hills Lot 3', 'Posted'], ['Seaside Residences 2BR', 'Not Shared']),
       ...queue(MIKA, TODAY, ['Antipolo Ridge Lot 18', 'Posted']),
-      ...queue(BEA, TOMORROW, ['Sta. Rosa Lot 22', 'Not Shared']),
+      ...queue(BEA, NEXT_WEEK, ['Sta. Rosa Lot 22', 'Not Shared']),
     ];
     const team = [...TEAM, { name: BEA, role: 'Intern' as const }, { name: 'Aaron Idle', role: 'Intern' as const }];
 
     const d = summarizeDay({ date: TODAY, posts, assignments, properties, team, settings: RULES });
 
     expect(d.date).toBe(TODAY);
+    expect(d.week).toBe('2026-10-26');
     expect(d.postedToday).toBe(2);
     expect(d.pending).toBe(2); // every Pending row, any date
     expect(d.posts.map((p) => p.time).join(',')).toBe('11:36,10:31,10:17');
@@ -197,7 +200,7 @@ describe('summarizeDay — ported from TrackerServiceTests', () => {
     // Never posted first by name, with whose queue has it; then due, longest since first.
     expect(d.neverPosted.map((a) => `${a.property.name}|${a.queuedFor ?? 'not assigned'}`)).toEqual([
       'Seaside Residences 2BR|Jan Dela Cruz',
-      'Sta. Rosa Lot 22|not assigned', // Bea has it tomorrow, not today
+      'Sta. Rosa Lot 22|not assigned', // Bea has it next week, not this week
     ]);
     expect(d.dueForRepost.map((a) => `${a.property.name}|${a.daysSince}`)).toEqual([
       'Mabini Commercial Space|32',
@@ -304,7 +307,9 @@ describe('summarizeDay — the tracker screen (TrackerViewModelTests)', () => {
     const yesterday = day('2026-10-28', [post('Mabini Commercial Space', 1, { time: '16:05', by: MIKA })]);
     expect(yesterday.posts.map((p) => p.time)).toEqual(['16:05']);
     expect(yesterday.postedToday).toBe(1);
-    expect(yesterday.internsAssigned).toBe(0);
+    // Queues are weekly: yesterday is in the same week as today's queues.
+    expect(yesterday.internsAssigned).toBe(day(TODAY).internsAssigned);
+    expect(day('2026-10-23').internsAssigned).toBe(0); // last week's Friday
 
     const tomorrow = day(TOMORROW);
     expect(tomorrow.posts).toEqual([]);
@@ -358,7 +363,9 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
     expect(r.saved[3]?.property).toBeUndefined(); // its folder has gone
     expect(r.saved.map((e) => r.statusOf(e.key))).toEqual(['Pending', 'Not Shared', 'Not Shared', 'Not Shared', 'Posted']);
     expect(r.saved.map((e) => r.isStarted(e.key))).toEqual([true, false, false, false, true]);
-    expect(rules(JAN, TOMORROW, assignments).saved).toEqual([]);
+    expect(rules(JAN, TOMORROW, assignments).saved).toHaveLength(5); // the same week: the same queue
+    expect(rules(JAN, NEXT_WEEK, assignments).saved).toEqual([]);
+    expect(rules(JAN, TODAY, assignments)).toMatchObject({ week: '2026-10-26', date: '2026-10-26' });
   });
 
   it('explains why a listing can or cannot be added', () => {
@@ -382,24 +389,48 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
 
     const taken = r.check(named('Seaside Residences 2BR'));
     expect(taken).toMatchObject({ canAdd: false, block: 'otherQueue', holder: MIKA });
-    expect(taken.reason).toBe("Already in Mika's queue for Thu 29 Oct.");
+    expect(taken.reason).toBe("Already in Mika's queue for the week of 26–30 Oct.");
 
     expect(rules(MIKA, TODAY, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared'])).check(named('Seaside Residences 2BR')).canAdd).toBe(true); // her own queue
-    expect(rules(JAN, TOMORROW, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared'])).check(named('Seaside Residences 2BR')).canAdd).toBe(true); // another day
+    expect(rules(JAN, TOMORROW, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared'])).check(named('Seaside Residences 2BR')).canAdd).toBe(false); // the same week
+    expect(rules(JAN, NEXT_WEEK, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared'])).check(named('Seaside Residences 2BR')).canAdd).toBe(true); // another week
   });
 
-  it("judges the cooldown against the queue's day, and says when it was posted against today", () => {
-    const fourDaysOn = rules(JAN, addDays(TODAY, 4)).check(named('Verdant Hills Lot 7'));
-    expect(fourDaysOn).toMatchObject({ canAdd: false, nextAllowed: '2026-11-03', daysLeft: 1 });
-    expect(fourDaysOn.reason).toBe('Posted 2 days ago by Jan. It can go in a queue from Tue 3 Nov.');
+  it("judges the cooldown on the week's first day still to come, and says when it was posted against today", () => {
+    // Next week, judged on its Monday, 2 Nov: a day short.
+    const nextWeek = rules(JAN, NEXT_WEEK).check(named('Verdant Hills Lot 7'));
+    expect(nextWeek).toMatchObject({ canAdd: false, nextAllowed: '2026-11-03', daysLeft: 1 });
+    expect(nextWeek.reason).toBe('Posted 2 days ago by Jan. It can go in a queue from Tue 3 Nov.');
+    // Any day of a week names that week: Thursday 5 Nov is still the week of 2 Nov.
+    expect(rules(JAN, '2026-11-05').check(named('Verdant Hills Lot 7'))).toMatchObject({ canAdd: false, daysLeft: 1 });
 
-    const free = rules(JAN, addDays(TODAY, 5)).check(named('Verdant Hills Lot 7'));
-    expect(free).toMatchObject({ canAdd: true, due: false, reason: '' });
+    const weekAfter = rules(JAN, '2026-11-09').check(named('Verdant Hills Lot 7'));
+    expect(weekAfter).toMatchObject({ canAdd: true, due: false, reason: '' });
+
+    // Inside the week, judged on today: from Tuesday 3 Nov it may go in.
+    const tuesday = assignRules({ intern: JAN, week: NEXT_WEEK, today: '2026-11-03', posts: HISTORY, assignments: [], properties: LISTINGS, settings: RULES });
+    expect(tuesday.check(named('Verdant Hills Lot 7')).canAdd).toBe(true);
+    expect(tuesday.check(named('Verdant Hills Lot 7')).reason).toBe('');
+  });
+
+  it('needs a week or a date, and a real today', () => {
+    const input = { intern: JAN, today: TODAY, posts: HISTORY, assignments: [], properties: LISTINGS, settings: RULES };
+    expect(() => assignRules(input)).toThrow();
+    expect(() => assignRules({ ...input, week: '30/10/2026' })).toThrow();
+    expect(() => assignRules({ ...input, week: NEXT_WEEK, today: 'today' })).toThrow();
+    // A weekend names the next week; `week` wins over `date`.
+    expect(assignRules({ ...input, date: '2026-10-31' }).week).toBe(NEXT_WEEK);
+    expect(assignRules({ ...input, week: NEXT_WEEK, date: TODAY }).week).toBe(NEXT_WEEK);
+  });
+
+  it('reads an old daily row of the week as part of its queue', () => {
+    const daily = [...queue(JAN, '2026-10-27', ['Verdant Hills Lot 12', 'Not Shared']), ...queue(JAN, TOMORROW, ['Seaside Residences 2BR', 'Posted'])];
+    expect(rules(JAN, '2026-10-26', daily).saved.map((e) => e.propertyName)).toEqual(['Verdant Hills Lot 12', 'Seaside Residences 2BR']);
   });
 
   it("names the other intern in full when they share a first name with this one's", () => {
     const r = rules(JAN, TODAY, queue('Jan Reyes', TODAY, ['Seaside Residences 2BR', 'Not Shared']));
-    expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Jan Reyes's queue for Thu 29 Oct.");
+    expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Jan Reyes's queue for the week of 26–30 Oct.");
   });
 
   it('gives search results with their check', () => {
@@ -472,7 +503,7 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
       "Verdant Hills Lot 7 can't go in this queue. Posted 2 days ago by Jan. It can go in a queue from Tue 3 Nov.",
     ]);
     expect(r.validate([r.entryNamed('Seaside Residences 2BR')]).problems).toEqual([
-      "Seaside Residences 2BR can't go in this queue. Already in Mika's queue for Thu 29 Oct.",
+      "Seaside Residences 2BR can't go in this queue. Already in Mika's queue for the week of 26–30 Oct.",
     ]);
   });
 
@@ -486,11 +517,12 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
 });
 
 describe('the draft — ported from AssignViewModelTests', () => {
-  it("judges a candidate against the queue's day: tomorrow by default", () => {
+  it('judges a candidate on its week: this week from today, the next from its Monday', () => {
     const r = rules(JAN, TOMORROW, queue(MIKA, TOMORROW, ['Seaside Residences 2BR', 'Not Shared']));
-    expect(r.check(named('Verdant Hills Lot 7'))).toMatchObject({ canAdd: false, daysLeft: 4, nextAllowed: '2026-11-03' });
-    expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Mika's queue for Fri 30 Oct.");
-    expect(rules(JAN, '2026-10-31').check(named('Verdant Hills Lot 7')).daysLeft).toBe(3);
+    expect(r.check(named('Verdant Hills Lot 7'))).toMatchObject({ canAdd: false, daysLeft: 5, nextAllowed: '2026-11-03' });
+    expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Mika's queue for the week of 26–30 Oct.");
+    // Saturday 31 Oct is next week's: judged on Monday 2 Nov.
+    expect(rules(JAN, '2026-10-31').check(named('Verdant Hills Lot 7')).daysLeft).toBe(1);
   });
 
   it('reorders with up and down, and never past either end', () => {
@@ -631,7 +663,7 @@ describe('the team, for the Interns screen', () => {
   it("counts each intern's queue on the day and their posts waiting for approval", () => {
     const assignments = [
       ...queue(JAN, TODAY, ['A', 'Posted'], ['B', 'Posted'], ['C', 'Pending'], ['D', 'Not Shared'], ['E', 'Not Shared']),
-      ...queue(MIKA, TOMORROW, ['F', 'Not Shared']),
+      ...queue(MIKA, NEXT_WEEK, ['F', 'Not Shared']), // next week's
       ...queue('paolo reyes', TODAY, ['G', 'Posted']),
     ];
     const posts = [
@@ -644,6 +676,9 @@ describe('the team, for the Interns screen', () => {
       { name: JAN, total: 5, posted: 2, pendingPosts: 1 },
       { name: MIKA, total: 0, posted: 0, pendingPosts: 1 },
     ]);
+    // Weekly: any day of the week counts the week's queue; a weekend, the next week's.
+    expect(internDays(team, assignments, posts, '2026-10-26').find((d) => d.name === JAN)?.total).toBe(5);
+    expect(internDays(team, assignments, posts, '2026-10-31').find((d) => d.name === MIKA)?.total).toBe(1);
   });
 
   it("finds a person's latest post on any day, a pending one included", () => {

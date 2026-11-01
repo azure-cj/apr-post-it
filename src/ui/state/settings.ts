@@ -20,7 +20,9 @@ export interface AppSettings {
   readonly cooldownDays: number;
   /** Days without a post after which a listing is due for a repost. The server's rule, as cooldownDays. */
   readonly repostDueDays: number;
-  /** The planner's default items per intern. The server's rule, as cooldownDays. */
+  /** v6: the planner's and the quick fill's default listings per intern per week. The server's rule, as cooldownDays. */
+  readonly perWeek: number;
+  /** @deprecated perWeek's old name: always the same value, kept while the screens switch. */
   readonly perIntern: number;
 }
 
@@ -31,7 +33,8 @@ export const defaultAppSettings: AppSettings = Object.freeze({
   scriptUrl: defaultSettings.scriptUrl,
   cooldownDays: defaultSettings.cooldownDays,
   repostDueDays: defaultSettings.repostDueDays,
-  perIntern: defaultSettings.perIntern,
+  perWeek: defaultSettings.perWeek,
+  perIntern: defaultSettings.perWeek,
 });
 
 /**
@@ -45,11 +48,18 @@ export function withServerRules(settings: AppSettings, rules: ServerRules | null
   if (
     settings.cooldownDays === rules.cooldownDays &&
     settings.repostDueDays === rules.repostDueDays &&
-    settings.perIntern === rules.perIntern
+    settings.perWeek === rules.perWeek &&
+    settings.perIntern === rules.perWeek
   ) {
     return settings;
   }
-  return { ...settings, cooldownDays: rules.cooldownDays, repostDueDays: rules.repostDueDays, perIntern: rules.perIntern };
+  return {
+    ...settings,
+    cooldownDays: rules.cooldownDays,
+    repostDueDays: rules.repostDueDays,
+    perWeek: rules.perWeek,
+    perIntern: rules.perWeek,
+  };
 }
 
 /**
@@ -74,11 +84,16 @@ export function parseSettings(text: string | null | undefined): AppSettings {
   } catch {
     // A damaged file is no settings: the defaults, and sign in again.
   }
+  // v6: perWeek; a file kept before it has only perIntern, its old name.
+  const perWeek =
+    inRange(saved['perWeek'], RULE_LIMITS.perWeek, NaN) ||
+    inRange(saved['perIntern'], RULE_LIMITS.perWeek, defaultAppSettings.perWeek);
   return withBuiltInLink({
     scriptUrl: typeof saved['scriptUrl'] === 'string' ? saved['scriptUrl'].trim() : defaultAppSettings.scriptUrl,
     cooldownDays: wholeDays(saved['cooldownDays'], defaultAppSettings.cooldownDays),
     repostDueDays: wholeDays(saved['repostDueDays'], defaultAppSettings.repostDueDays),
-    perIntern: inRange(saved['perIntern'], RULE_LIMITS.perIntern, defaultAppSettings.perIntern),
+    perWeek,
+    perIntern: perWeek,
   });
 }
 
@@ -87,7 +102,7 @@ export function serializeSettings(settings: AppSettings): string {
     scriptUrl: settings.scriptUrl,
     cooldownDays: settings.cooldownDays,
     repostDueDays: settings.repostDueDays,
-    perIntern: settings.perIntern,
+    perWeek: settings.perWeek,
   });
 }
 

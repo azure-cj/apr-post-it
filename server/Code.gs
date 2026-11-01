@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-01.2';
+const SERVER_VERSION = '2026-11-01.3';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -47,7 +47,7 @@ const CONFIG = {
   // these apply only to a rule that tab does not have.
   COOLDOWN_DAYS: 7,
   REPOST_DUE_DAYS: 14,
-  PER_INTERN: 20,
+  PER_WEEK: 40,
   TZ: 'Asia/Manila',
 
   // The listing checker's published Index CSV (File > Share > Publish to web).
@@ -117,7 +117,7 @@ function route_(req) {
       case 'indexCheck':  return json_(indexCheck_());
       case 'property':    return json_({ ok: true, property: getProperty_(req.id, me.canSeeInternal) });
       case 'posts':       return json_({ ok: true, posts: mine_(me, readRows_(CONFIG.POSTS_TAB, POST_FIELDS), 'postedBy') });
-      case 'assignments': return json_({ ok: true, assignments: mine_(me, readRows_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS), 'assignedTo') });
+      case 'assignments': return json_({ ok: true, assignments: withWeeks_(mine_(me, readRows_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS), 'assignedTo')) });
       case 'team':        return json_({ ok: true, team: teamList_() });
       case 'addPerson':   return json_(addPerson_(req, me));
       case 'setActive':   return json_(setActive_(req, me));
@@ -1296,10 +1296,85 @@ function days_(n) { return n === 1 ? '1 day' : n + ' days'; }
 function ago_(n) { return n === 0 ? 'today' : days_(n) + ' ago'; }
 function pad2_(n) { return n < 10 ? '0' + n : String(n); }
 
+// ---------------------------------------------------------------- the work week (v6)
+//
+// Queues are weekly: Monday to Friday, and Friday is the deadline. A week is
+// named by its Monday, yyyy-MM-dd on Manila's calendar (the "week key"), and
+// an Assignments row's Date holds it. Saturday and Sunday belong to the NEXT
+// week: the reset happens after Friday. The app's src/core/week.ts is the
+// same rule.
+
+/** The week key of a yyyy-MM-dd day: Mon–Fri give that Monday, Sat and Sun the next. '' for anything else. */
+function weekOf_(iso) {
+  var text = textOf_(iso).trim();
+  if (!TRACKER_DAY.test(text) || !calendarDay_(+text.slice(0, 4), +text.slice(5, 7), +text.slice(8, 10))) return '';
+  var day = dayNumber_(text);
+  var weekday = new Date(day * DAY_MS).getUTCDay();   // 0 Sun … 6 Sat
+  if (weekday === 0) return isoDay_(day + 1);
+  if (weekday === 6) return isoDay_(day + 2);
+  return isoDay_(day - (weekday - 1));
+}
+
+/** True for a real yyyy-MM-dd day that is a Monday. */
+function isMonday_(iso) {
+  var text = textOf_(iso).trim();
+  return text !== '' && weekOf_(text) === text;   // a weekend maps to a later day, never itself
+}
+
+/** Manila's date now, yyyy-MM-dd: the server's "today" for the held rule. */
+function today_() {
+  return Utilities.formatDate(new Date(), CONFIG.TZ, 'yyyy-MM-dd');
+}
+
+/** True once `today` is past the week's Friday: its open rows are Missed and hold nothing. */
+function isWeekOver_(week, today) {
+  return dayNumber_(today) > dayNumber_(week) + 4;
+}
+
+/** "2–6 Nov", or "30 Oct – 3 Nov" across months, for a week key. */
+function weekLabel_(week) {
+  var mon = new Date(dayNumber_(week) * DAY_MS);
+  var fri = new Date((dayNumber_(week) + 4) * DAY_MS);
+  if (mon.getUTCMonth() === fri.getUTCMonth()) {
+    return mon.getUTCDate() + '\u2013' + fri.getUTCDate() + ' ' + TRACKER_MONTHS[fri.getUTCMonth()];
+  }
+  return mon.getUTCDate() + ' ' + TRACKER_MONTHS[mon.getUTCMonth()] + ' \u2013 ' +
+         fri.getUTCDate() + ' ' + TRACKER_MONTHS[fri.getUTCMonth()];
+}
+
+/**
+ * The week a saveQueue(s) request names: `week`, which must be a Monday, else
+ * `date`, any day, read as its week (an app written for daily queues).
+ * Returns { week } or a refusal.
+ */
+function requestWeek_(req) {
+  var week = textOf_(req.week).trim();
+  if (week) {
+    if (!isMonday_(week)) {
+      return { refusal: { ok: false, error: 'bad-week', message: 'The week must be a Monday written yyyy-MM-dd, not "' + week + '".' } };
+    }
+    return { week: week };
+  }
+  var date = textOf_(req.date).trim();
+  if (!date) return { refusal: { ok: false, error: 'missing: week' } };
+  var fromDate = weekOf_(date);
+  if (!fromDate) return { refusal: { ok: false, error: 'bad-date', message: 'The date must be a day written yyyy-MM-dd.' } };
+  return { week: fromDate };
+}
+
+/** Assignments rows as the reply gives them: each with its `week`, the Date kept as written. */
+function withWeeks_(rows) {
+  return rows.map(function (a) {
+    return Object.assign({}, a, { week: weekOf_(sheetDay_(a.date)) });
+  });
+}
+
 // ---------------------------------------------------------------- queues
 
 function saveQueue_(req, me) {
-  requireAll_(req, ['date', 'assignedTo']);
+  requireAll_(req, ['assignedTo']);
+  var when = requestWeek_(req);
+  if (when.refusal) return when.refusal;
   var items = req.items || [];
   if (typeof items === 'string') items = JSON.parse(items);
   var queue = {
@@ -1317,23 +1392,21 @@ function saveQueue_(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    return saveHeldChecked_(String(req.date), [queue]);
+    return saveHeldChecked_(when.week, [queue]);
   } finally {
     lock.releaseLock();
   }
 }
 
 /**
- * Several interns' queues for one date, all or none: everything is checked
+ * Several interns' queues for one week, all or none: everything is checked
  * before anything is written, and the writing is done under one hold of the
- * lock, so nobody sees half a day's plan or saves into the middle of it.
+ * lock, so nobody sees half a week's plan or saves into the middle of it.
  */
 function saveQueues_(req, me) {
-  requireAll_(req, ['date']);
-  var date = textOf_(req.date).trim();
-  if (!TRACKER_DAY.test(date) || !calendarDay_(+date.slice(0, 4), +date.slice(5, 7), +date.slice(8, 10))) {
-    return { ok: false, error: 'bad-date', message: 'The date must be a day written yyyy-MM-dd.' };
-  }
+  var when = requestWeek_(req);
+  if (when.refusal) return when.refusal;
+  var week = when.week;
   var queues = req.queues;
   if (typeof queues === 'string') {
     try { queues = JSON.parse(queues); } catch (e) { queues = null; }
@@ -1349,7 +1422,7 @@ function saveQueues_(req, me) {
                message: textOf_(queue.assignedTo).trim() + ' is not an active intern on the Team tab.' };
     }
     if (seen[person.name]) {
-      return { ok: false, error: 'bad-queues', message: person.name + ' has two queues for ' + date + '. Send one.' };
+      return { ok: false, error: 'bad-queues', message: person.name + ' has two queues for the week of ' + weekLabel_(week) + '. Send one.' };
     }
     seen[person.name] = true;
     var items = queue.items || [];
@@ -1369,7 +1442,7 @@ function saveQueues_(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
   try {
-    return saveHeldChecked_(date, clean);
+    return saveHeldChecked_(week, clean);
   } finally {
     lock.releaseLock();
   }
@@ -1378,41 +1451,46 @@ function saveQueues_(req, me) {
 // ---------------------------------------------------------------- held listings
 //
 // The owner's rule: a listing assigned to an intern is held by that intern
-// until it is posted. An open Assignments row (Not Shared, or the older
-// "To post"), on ANY date, holds the listing for its assignee; Posted and
-// Pending release it. Nobody else may be given a held listing, and the same
-// intern may not be given it again on another date. Re-saving the same
-// intern's queue for the same date is a replace, so their own rows for that
-// date hold nothing; and taking an item out of a queue releases it.
+// until it is posted, or until the week of that queue is over (v6). An open
+// Assignments row (Not Shared, or the older "To post") holds the listing for
+// its assignee while its week (weekOf_ its Date) is not over on Manila's
+// today; after that Friday it is Missed and holds nothing. Posted and Pending
+// release it. Nobody else may be given a held listing, and the same intern
+// may not be given it again in another week. Re-saving the same intern's
+// queue for the same week is a replace, so their own rows of that week hold
+// nothing; and taking an item out of a queue releases it. A row whose date
+// can't be read belongs to no week and holds nothing.
 
 /**
  * Saves the queues when nothing in them is held, all or none. The caller
  * holds the lock, so the check and the writing see the same rows.
  */
-function saveHeldChecked_(date, queues) {
+function saveHeldChecked_(week, queues) {
   // Each item's folder id, found once: the check and the rows written agree.
   queues.forEach(function (q) {
     q.items.forEach(function (it) { it.propertyId = it.propertyId || idOf_(it.property); });
   });
-  var held = heldItems_(date, queues);
+  var held = heldItems_(week, queues);
   if (held.length) {
     return { ok: false, error: 'held', held: held, message: heldMessage_(held) };
   }
-  return { ok: true, saved: replaceQueues_(date, queues) };
+  return { ok: true, saved: replaceQueues_(week, queues) };
 }
 
 /**
  * The items in `queues` that someone holds: [{ propertyName, propertyId,
- * heldBy, date }], in request order, one per item. Matched the way every
+ * heldBy, date, week }], in request order, one per item. `date` is the
+ * holding row's Date as a day, `week` its week. Matched the way every
  * tracker row is (sameProperty_): by folder id when both have one, else by
  * name as the app normalises it. A listing sent in two of the queues is held
  * by the first of them.
  */
-function heldItems_(date, queues) {
+function heldItems_(week, queues) {
   var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
   var values = sh.getDataRange().getValues();
   var col = values.length ? columnsIn_(values[0], ASSIGN_FIELDS, sh.getName()) : null;
   var tz = zoneOf_(sh);
+  var today = today_();
   var replaced = {};
   queues.forEach(function (q) { replaced[q.assignedTo] = true; });
 
@@ -1421,9 +1499,13 @@ function heldItems_(date, queues) {
     if (!values[r].join('')) continue;
     var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
     if (queueStatus_(a.status) !== NOT_SHARED) continue;
+    var day = sheetDay_(a.date);
+    var rowWeek = weekOf_(day);
+    // Missed (its week is over), or in no week at all: it holds nothing.
+    if (!rowWeek || isWeekOver_(rowWeek, today)) continue;
     // The rows this save replaces (replaceQueues_ deletes exactly these) hold nothing.
-    if (a.date === date && Object.prototype.hasOwnProperty.call(replaced, a.assignedTo)) continue;
-    open.push({ propertyId: a.propertyId, property: a.property, heldBy: a.assignedTo, date: sheetDay_(a.date) || a.date });
+    if (rowWeek === week && Object.prototype.hasOwnProperty.call(replaced, a.assignedTo)) continue;
+    open.push({ propertyId: a.propertyId, property: a.property, heldBy: a.assignedTo, date: day, week: rowWeek });
   }
 
   var held = [];
@@ -1440,9 +1522,10 @@ function heldItems_(date, queues) {
             sameProperty_(given[g].propertyId, given[g].property, it.propertyId, key)) holder = given[g];
       }
       if (holder) {
-        held.push({ propertyName: it.property, propertyId: it.propertyId || '', heldBy: holder.heldBy, date: holder.date });
+        held.push({ propertyName: it.property, propertyId: it.propertyId || '', heldBy: holder.heldBy,
+                    date: holder.date, week: holder.week });
       } else {
-        given.push({ propertyId: it.propertyId, property: it.property, heldBy: q.assignedTo, date: date });
+        given.push({ propertyId: it.propertyId, property: it.property, heldBy: q.assignedTo, date: week, week: week });
       }
     });
   });
@@ -1453,16 +1536,18 @@ function heldItems_(date, queues) {
 function heldMessage_(held) {
   var first = held[0];
   var more = held.length > 1 ? ' ' + (held.length - 1) + ' more ' + (held.length === 2 ? 'is' : 'are') + ' held too.' : '';
-  return first.propertyName + ' is already with ' + first.heldBy + ' (queue for ' + first.date + '). ' +
+  return first.propertyName + ' is already with ' + first.heldBy + ' (queue for the week of ' + weekLabel_(first.week) + '). ' +
          'Remove it from their queue first.' + more;
 }
 
 /**
- * Replaces each named person's Assignments rows for `date` with their items,
- * and leaves everyone else's alone. The caller holds the lock. Returns the
- * number of rows written.
+ * Replaces each named person's Assignments rows of `week` with their items,
+ * and leaves everyone else's alone. Their rows of that week are the ones whose
+ * Date is in it: the week key, or a day written before v6. The new rows' Date
+ * is the week key. The caller holds the lock. Returns the number of rows
+ * written.
  */
-function replaceQueues_(date, queues) {
+function replaceQueues_(week, queues) {
   var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
   var values = sh.getDataRange().getValues();
   var col = columnsIn_(values[0], ASSIGN_FIELDS, sh.getName());
@@ -1472,13 +1557,13 @@ function replaceQueues_(date, queues) {
 
   for (var r = values.length - 1; r >= 1; r--) {
     var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
-    if (a.date === date && Object.prototype.hasOwnProperty.call(named, a.assignedTo)) sh.deleteRow(r + 1);
+    if (Object.prototype.hasOwnProperty.call(named, a.assignedTo) && weekOf_(sheetDay_(a.date)) === week) sh.deleteRow(r + 1);
   }
   var saved = 0;
   queues.forEach(function (q) {
     q.items.forEach(function (it) {
       appendRow_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS, {
-        date:       date,
+        date:       week,
         assignedTo: q.assignedTo,
         property:   it.property,
         status:     queueStatus_(it.status),
@@ -1817,13 +1902,28 @@ const SETTINGS_HEADERS = ['Key', 'Value'];
 const RULES_CACHE = 'rules';
 const RULES_CACHE_SECONDS = 30;
 
-/** Each rule: its default (CONFIG) and the whole numbers it may be. */
+/**
+ * Each rule: its default (CONFIG), the whole numbers it may be, the Key it is
+ * written under on the Settings tab, and the Keys it is read from, first
+ * found wins. Keys are compared ignoring case, spaces and underscores, so
+ * "Per week", "perWeek" and "per_week" are one key. v6: perWeek, the
+ * listings per intern per week, replaces perIntern; an older tab's
+ * "Per intern" (or "perIntern") is read when there is no good "Per week".
+ */
 function ruleSpecs_() {
   return {
-    cooldownDays:  { fallback: CONFIG.COOLDOWN_DAYS,   min: 1, max: 60,  label: 'The cooldown' },
-    repostDueDays: { fallback: CONFIG.REPOST_DUE_DAYS, min: 1, max: 120, label: 'The repost age' },
-    perIntern:     { fallback: CONFIG.PER_INTERN,      min: 1, max: 100, label: 'Items per intern' },
+    cooldownDays:  { fallback: CONFIG.COOLDOWN_DAYS,   min: 1, max: 60,  label: 'The cooldown',
+                     key: 'cooldownDays',  reads: ['cooldownDays'] },
+    repostDueDays: { fallback: CONFIG.REPOST_DUE_DAYS, min: 1, max: 120, label: 'The repost age',
+                     key: 'repostDueDays', reads: ['repostDueDays'] },
+    perWeek:       { fallback: CONFIG.PER_WEEK,        min: 1, max: 200, label: 'Listings per week',
+                     key: 'Per week',      reads: ['Per week', 'Per intern'] },
   };
+}
+
+/** A Settings tab Key as compared: "Per week" → "perweek". */
+function settingKey_(value) {
+  return textOf_(value).replace(/[\s_]+/g, '').toLowerCase();
 }
 
 /** A whole number, as a number or its digits, or null. */
@@ -1833,7 +1933,11 @@ function wholeNumber_(value) {
   return /^\d{1,6}$/.test(text) ? Number(text) : null;
 }
 
-/** { cooldownDays, repostDueDays, perIntern }: the live rules, cached briefly. */
+/**
+ * { cooldownDays, repostDueDays, perWeek, perIntern }: the live rules, cached
+ * briefly. perIntern is perWeek again, under its old name, for an app built
+ * before v6.
+ */
 function rules_() {
   var cache = CacheService.getScriptCache();
   try {
@@ -1842,35 +1946,47 @@ function rules_() {
   } catch (e) { /* read the tab */ }
 
   var specs = ruleSpecs_();
-  var saved = {};
+  var saved = {};   // settingKey_ → the first value under it
   var sh = adminBook_().getSheetByName(SETTINGS_TAB);
   if (sh && sh.getLastRow() >= 2) {
     sh.getDataRange().getValues().slice(1).forEach(function (r) {
-      var key = textOf_(r[0]).trim();
-      if (Object.prototype.hasOwnProperty.call(specs, key)) saved[key] = r[1];
+      var key = settingKey_(r[0]);
+      if (key && !Object.prototype.hasOwnProperty.call(saved, key)) saved[key] = r[1];
     });
   }
   var out = {};
   Object.keys(specs).forEach(function (k) {
-    var n = wholeNumber_(saved[k]);
-    out[k] = n !== null && n >= specs[k].min && n <= specs[k].max ? n : specs[k].fallback;
+    var spec = specs[k];
+    out[k] = spec.fallback;
+    for (var i = 0; i < spec.reads.length; i++) {
+      var n = wholeNumber_(saved[settingKey_(spec.reads[i])]);
+      if (n !== null && n >= spec.min && n <= spec.max) { out[k] = n; break; }
+    }
   });
+  out.perIntern = out.perWeek;
   try { cache.put(RULES_CACHE, JSON.stringify(out), RULES_CACHE_SECONDS); } catch (e) { /* ignore */ }
   return out;
 }
 
 /**
- * setRules { cooldownDays?, repostDueDays?, perIntern? }: Admin only. Every
- * field sent is checked before any is written; a field left out stays as it
- * is. Written as text on the Settings tab, under the lock. Replies { rules }.
+ * setRules { cooldownDays?, repostDueDays?, perWeek? }: Admin only. perIntern,
+ * perWeek's old name, is read when perWeek is not sent. Every field sent is
+ * checked before any is written; a field left out stays as it is. Written as
+ * text on the Settings tab (perWeek under "Per week"), under the lock.
+ * Replies { rules }.
  */
 function setRules_(req) {
   var specs = ruleSpecs_();
+  var asked = {
+    cooldownDays: req.cooldownDays,
+    repostDueDays: req.repostDueDays,
+    perWeek: blank_(req.perWeek) ? req.perIntern : req.perWeek,
+  };
   var changes = {};
   var problem = null;
   Object.keys(specs).forEach(function (k) {
-    if (problem || req[k] === undefined || req[k] === null || req[k] === '') return;
-    var n = wholeNumber_(req[k]);
+    if (problem || blank_(asked[k])) return;
+    var n = wholeNumber_(asked[k]);
     var spec = specs[k];
     if (n === null || n < spec.min || n > spec.max) {
       problem = { ok: false, error: 'bad-rules', field: k,
@@ -1889,15 +2005,16 @@ function setRules_(req) {
       var sh = plainTab_(SETTINGS_TAB, SETTINGS_HEADERS);
       var values = sh.getDataRange().getValues();
       keys.forEach(function (k) {
+        var key = specs[k].key;
         var row = 0;
         for (var r = 1; r < values.length; r++) {
-          if (textOf_(values[r][0]).trim() === k) { row = r + 1; break; }
+          if (settingKey_(values[r][0]) === settingKey_(key)) { row = r + 1; break; }
         }
         if (row) {
           setText_(sh.getRange(row, 2), String(changes[k]));
         } else {
-          appendText_(sh, [k, String(changes[k])], [0, 1]);
-          values.push([k, String(changes[k])]);
+          appendText_(sh, [key, String(changes[k])], [0, 1]);
+          values.push([key, String(changes[k])]);
         }
       });
     }
@@ -1907,6 +2024,8 @@ function setRules_(req) {
     lock.releaseLock();
   }
 }
+
+function blank_(value) { return value === undefined || value === null || value === ''; }
 
 // ---------------------------------------------------------------- rebuilding the directory from the app
 //

@@ -1,21 +1,20 @@
-import { useId, useMemo, useState } from 'react';
-import { Button, Card, EmptyState, Notice, Pill, SearchBox, Spinner } from '../../components';
-import {
-  addDays,
-  internDays,
-  lastPostBy,
-  samePerson,
-  shortDate,
-  type TeamMember,
-} from '@/core/summary';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Button, Card, EmptyState, Notice, Pill, Spinner } from '../../components';
+import { activeInterns, lastPostBy, samePerson, teamWeek, type TeamMember, type TeamWeekRow } from '@/core/summary';
+import { isWeekOver, weekDays } from '@/core/week';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
-import { DayPicker } from './DayPicker';
+import { DAY_LETTERS, isBehind, lastPostWords, PacePill, WeekBar, WeekDays } from './InternsParts';
+import { InternPanel } from './InternsPanel';
+import { WhoPosted } from './InternsWhoPosted';
 import { Stat } from './Stat';
+import { WeekPicker } from './WeekPicker';
 import './InternsScreen.css';
 
+export { lastPostWords, monitorWeek } from './InternsParts';
+
 export interface InternsScreenProps {
-  /** The day whose queues are shown, yyyy-MM-dd. */
-  readonly date: string;
+  /** The week shown: its Monday, yyyy-MM-dd. */
+  readonly week: string;
   /** Today on the tracker's calendar, yyyy-MM-dd. */
   readonly today: string;
   /** The Team tab without its keys; null until it has been read. */
@@ -24,8 +23,8 @@ export interface InternsScreenProps {
   readonly posts: readonly PostLogEntry[];
   /** Every Assignments row. */
   readonly assignments: readonly Assignment[];
-  /** Show another day. */
-  readonly onDateChange: (date: string) => void;
+  /** Show another week (a Monday). */
+  readonly onWeekChange: (week: string) => void;
   /** Read the team and the rows again: Refresh, and Try again after an error. */
   readonly onRefresh?: (() => void) | undefined;
   readonly refreshing?: boolean | undefined;
@@ -33,36 +32,24 @@ export interface InternsScreenProps {
   readonly error?: string | null | undefined;
   /** When the rows were read, on the tracker's clock: "10:42". */
   readonly updatedAt?: string | null | undefined;
-  /** Open Assign for this intern on this day. Without it, no queue actions. */
-  readonly onOpenQueue?: ((intern: string, date: string) => void) | undefined;
-  /** Opens a link in the browser (platform.open). Without it, profile links are not offered. */
+  /** Open Assign on this intern's queue for this week. Without it, no Open in Assign. */
+  readonly onOpenQueue?: ((intern: string, week: string) => void) | undefined;
+  /** Opens a link in the browser (platform.open). Without it, no Open buttons. */
   readonly onOpenLink?: ((url: string) => void) | undefined;
 }
 
-interface InternLine {
-  readonly name: string;
-  readonly total: number;
-  readonly posted: number;
-  readonly pendingPosts: number;
-  readonly last: PostLogEntry | undefined;
-  /** FB broker name(s): the Facebook account name they post as. */
-  readonly accounts: readonly string[];
-  /** Their Facebook profile's link, '' when none. */
-  readonly profile: string;
-}
-
 /**
- * Everyone on the team who posts, in one place: the day's queue and how far
- * along it is, posts still waiting for approval, when each last posted, and the
- * FB broker name they post as, with their profile. Revoked people are kept apart, folded away.
+ * The weekly monitor: who has posted what this week and who is behind, worst
+ * first, with "Who posted?" on top for inquiries. A row opens that intern's
+ * week beside the list. Revoked people are kept apart, folded away.
  */
 export function InternsScreen({
-  date,
+  week,
   today,
   team,
   posts,
   assignments,
-  onDateChange,
+  onWeekChange,
   onRefresh,
   refreshing = false,
   error,
@@ -70,57 +57,55 @@ export function InternsScreen({
   onOpenQueue,
   onOpenLink,
 }: InternsScreenProps) {
-  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
+  const panelHeading = useRef<HTMLHeadingElement>(null);
+  const opener = useRef<HTMLButtonElement | null>(null);
 
-  const lines = useMemo<readonly InternLine[]>(() => {
-    if (!team) return [];
-    return internDays(team, assignments, posts, date).map((day) => {
-      const member = team.find((m) => samePerson(m.name, day.name));
-      return {
-        ...day,
-        last: lastPostBy(posts, day.name),
-        accounts: member?.fbAccounts ?? [],
-        profile: member?.fbProfileLink?.trim() ?? '',
-      };
-    });
-  }, [team, assignments, posts, date]);
+  const rows = useMemo<readonly TeamWeekRow[]>(
+    () => (team ? teamWeek(activeInterns(team), week, assignments, posts, today) : []),
+    [team, week, assignments, posts, today],
+  );
 
   const revoked = useMemo<readonly TeamMember[]>(() => {
     if (!team) return [];
     const out: TeamMember[] = [];
     for (const member of team) {
       if (member.role !== 'Intern' || member.active !== false || !member.name.trim()) continue;
-      if (lines.some((l) => samePerson(l.name, member.name)) || out.some((m) => samePerson(m.name, member.name))) continue;
+      if (rows.some((r) => samePerson(r.name, member.name)) || out.some((m) => samePerson(m.name, member.name))) continue;
       out.push(member);
     }
     return out.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
-  }, [team, lines]);
+  }, [team, rows]);
 
-  const q = query.trim().toLowerCase();
-  const matches = (name: string) => q === '' || name.toLowerCase().includes(q);
-  const shownLines = lines.filter((l) => matches(l.name));
-  const shownRevoked = revoked.filter((m) => matches(m.name));
+  const openRow = rows.find((r) => open !== null && samePerson(r.name, open));
+  const profileOf = (name: string) => team?.find((m) => samePerson(m.name, name))?.fbProfileLink?.trim() ?? '';
 
-  const isToday = date === today;
-  const day = shortDate(date);
-  const tomorrow = addDays(today, 1);
+  // A newly opened panel takes focus at its heading; closing it goes back to the row.
+  useEffect(() => {
+    if (openRow) panelHeading.current?.focus({ preventScroll: true });
+  }, [openRow?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const close = () => {
+    setOpen(null);
+    opener.current?.focus();
+  };
+
   const waiting = team === null && !error;
-  const nobody = team !== null && lines.length === 0 && revoked.length === 0;
+  const nobody = team !== null && rows.length === 0 && revoked.length === 0;
+  const over = isWeekOver(week, today);
 
-  const withQueue = lines.filter((l) => l.total > 0);
-  const done = withQueue.filter((l) => l.posted === l.total).length;
-  const withPending = lines.filter((l) => l.pendingPosts > 0).length;
+  const sum = (pick: (r: TeamWeekRow) => number) => rows.reduce((n, r) => n + pick(r), 0);
+  const target = sum((r) => r.target);
+  const behind = rows.filter(isBehind).length;
 
   return (
     <div className="page interns">
       <header className="page-header interns__header">
-        <div className="interns__heading">
-          <h1 className="page-header__title" tabIndex={-1}>
-            Interns
-          </h1>
-        </div>
-        <div className="interns__day">
-          <DayPicker date={date} today={today} onChange={onDateChange} label="Day shown" quick={['today', 'tomorrow']} />
+        <h1 className="page-header__title" tabIndex={-1}>
+          Interns
+        </h1>
+        <div className="interns__controls">
+          <WeekPicker week={week} today={today} onChange={onWeekChange} />
           {onRefresh ? (
             <Button size="small" busy={refreshing} onClick={onRefresh}>
               {refreshing ? 'Refreshing…' : 'Refresh'}
@@ -147,6 +132,8 @@ export function InternsScreen({
         </Notice>
       ) : null}
 
+      <WhoPosted posts={posts} today={today} onOpenLink={onOpenLink} />
+
       {waiting ? (
         <div className="interns__waiting">
           <Spinner label="Reading the team" />
@@ -154,219 +141,168 @@ export function InternsScreen({
         </div>
       ) : team === null ? null : nobody ? (
         <Card>
-          <EmptyState title="No interns yet">
-            Add them in Settings → Team.
-          </EmptyState>
+          <EmptyState title="No interns yet">Add them in Settings → Team.</EmptyState>
         </Card>
       ) : (
         <>
-          <dl className="tracker-stats">
-            <Stat label="Active interns" value={lines.length} note={revoked.length > 0 ? `${revoked.length} revoked` : undefined} />
-            <Stat
-              label={isToday ? 'Done today' : `Done ${day}`}
-              value={done}
-              of={withQueue.length}
-              note={withQueue.length === 0 ? `No queues for ${day}` : undefined}
-            />
-            <Stat label="With pending posts" value={withPending} note="Waiting for group approval" />
-            <Stat label={isToday ? 'No queue today' : `No queue ${day}`} value={lines.length - withQueue.length} />
+          <dl className="tracker-stats interns__stats">
+            <Stat label="Posted" value={sum((r) => r.posted)} of={target} />
+            <Stat label="Pending" value={sum((r) => r.pending)} />
+            <Stat label={over ? 'Missed' : 'Left'} value={sum((r) => (over ? r.missed : r.notShared))} />
+            <Stat label="Behind" value={behind} of={rows.length} />
           </dl>
 
-          <Card
-            title="Active interns"
-            description={`Queues for ${isToday ? 'today' : day}`}
-            actions={
-              <SearchBox
-                className="interns__search"
-                label="Search interns by name"
-                placeholder="Search by name"
-                value={query}
-                onValueChange={setQuery}
-              />
-            }
-          >
-            {lines.length === 0 ? (
-              <p className="interns__quiet">No active interns.</p>
-            ) : shownLines.length === 0 ? (
-              <p className="interns__quiet">No active intern&rsquo;s name matches &ldquo;{query.trim()}&rdquo;.</p>
-            ) : (
-              <InternTable
-                lines={shownLines}
-                today={today}
-                queueHeading={isToday ? 'Today’s queue' : `Queue ${day}`}
-                onOpenQueue={onOpenQueue ? (name) => onOpenQueue(name, date) : undefined}
-                onOpenLink={onOpenLink}
-                onPlanTomorrow={onOpenQueue ? (name) => onOpenQueue(name, tomorrow) : undefined}
-              />
-            )}
-          </Card>
+          <div className={`interns__body${openRow ? ' interns__body--panel' : ''}`}>
+            <Card className="interns__list" padding="tight">
+              {rows.length === 0 ? (
+                <p className="interns__quiet">No active interns.</p>
+              ) : (
+                <WeekTable
+                  rows={rows}
+                  week={week}
+                  today={today}
+                  posts={posts}
+                  open={openRow?.name ?? null}
+                  onOpen={(name, button) => {
+                    opener.current = button;
+                    setOpen((now) => (now !== null && samePerson(now, name) ? null : name));
+                  }}
+                />
+              )}
+            </Card>
 
-          {revoked.length > 0 ? <Revoked people={shownRevoked} total={revoked.length} query={query.trim()} /> : null}
+            {openRow ? (
+              <InternPanel
+                ref={panelHeading}
+                key={openRow.name}
+                row={openRow}
+                week={week}
+                today={today}
+                posts={posts}
+                assignments={assignments}
+                profile={profileOf(openRow.name)}
+                onClose={close}
+                onOpenQueue={onOpenQueue ? () => onOpenQueue(openRow.name, week) : undefined}
+                onOpenLink={onOpenLink}
+              />
+            ) : null}
+          </div>
+
+          {revoked.length > 0 ? <Revoked people={revoked} /> : null}
         </>
       )}
     </div>
   );
 }
 
-// ------------------------------------------------------------------ the table
+// ------------------------------------------------------------------ the week's table
 
-interface InternTableProps {
-  readonly lines: readonly InternLine[];
+interface WeekTableProps {
+  readonly rows: readonly TeamWeekRow[];
+  readonly week: string;
   readonly today: string;
-  readonly queueHeading: string;
-  readonly onOpenQueue?: ((name: string) => void) | undefined;
-  readonly onPlanTomorrow?: ((name: string) => void) | undefined;
-  readonly onOpenLink?: ((url: string) => void) | undefined;
+  readonly posts: readonly PostLogEntry[];
+  /** Whose week is open beside the table. */
+  readonly open: string | null;
+  readonly onOpen: (name: string, button: HTMLButtonElement) => void;
 }
 
-function InternTable({ lines, today, queueHeading, onOpenQueue, onPlanTomorrow, onOpenLink }: InternTableProps) {
-  const actions = Boolean(onOpenQueue || onPlanTomorrow);
+function WeekTable({ rows, week, today, posts, open, onOpen }: WeekTableProps) {
+  const days = weekDays(week);
   return (
-    <div className="interns-table__wrap">
-      <table className="interns-table">
+    <div className="week-table__wrap">
+      <table className="week-table">
         <thead>
           <tr>
             <th scope="col">Intern</th>
-            <th scope="col">{queueHeading}</th>
-            <th scope="col">Pending</th>
-            <th scope="col">Last post</th>
-            <th scope="col">FB broker name</th>
-            {actions ? (
-              <th scope="col">
-                <span className="visually-hidden">Actions</span>
-              </th>
-            ) : null}
+            <th scope="col">Progress</th>
+            <th scope="col">
+              <span className="visually-hidden">Mon to Fri</span>
+              <span className="week-table__days" aria-hidden="true">
+                {DAY_LETTERS.map((letter, i) => (
+                  <span key={days[i]} className={days[i] === today ? 'week-table__today' : undefined}>
+                    {letter}
+                  </span>
+                ))}
+              </span>
+            </th>
+            <th scope="col">Pace</th>
+            <th scope="col" className="week-table__last">
+              Last post
+            </th>
           </tr>
         </thead>
         <tbody>
-          {lines.map((line) => (
-            <tr key={line.name}>
-              <th scope="row">
-                <span className="interns-table__who">
-                  <span className="interns-table__avatar" aria-hidden="true">
-                    {initials(line.name)}
-                  </span>
-                  <span className="interns-table__name">{line.name}</span>
-                </span>
-              </th>
-              <td>
-                <Progress line={line} />
-              </td>
-              <td>
-                {line.pendingPosts > 0 ? (
-                  <Pill tone="warn" dot>
-                    {line.pendingPosts} pending
-                  </Pill>
-                ) : (
-                  <span className="interns__muted tabular">None</span>
-                )}
-              </td>
-              <td className="interns-table__last tabular">
-                {line.last ? lastPostWords(line.last, today) : <span className="interns__muted">Never</span>}
-              </td>
-              <td className="interns-table__accounts">
-                {line.accounts.length === 0 ? <span className="interns__muted">Any</span> : line.accounts.join(', ')}
-                {line.profile && onOpenLink ? (
-                  <Button
-                    variant="link"
-                    className="interns-table__profile"
-                    aria-label={`Open ${line.name}'s Facebook profile`}
-                    onClick={() => onOpenLink(line.profile)}
+          {rows.map((row) => {
+            const last = lastPostBy(posts, row.name);
+            const selected = open !== null && samePerson(open, row.name);
+            return (
+              <tr key={row.name} className={selected ? 'week-table__row week-table__row--open' : 'week-table__row'}>
+                <th scope="row">
+                  <button
+                    type="button"
+                    className="week-table__open"
+                    aria-expanded={selected}
+                    onClick={(event) => onOpen(row.name, event.currentTarget)}
                   >
-                    Profile
-                  </Button>
-                ) : null}
-              </td>
-              {actions ? (
-                <td className="interns-table__actions">
-                  {onOpenQueue ? (
-                    <Button variant="link" aria-label={`Open queue of ${line.name}`} onClick={() => onOpenQueue(line.name)}>
-                      Open queue
-                    </Button>
-                  ) : null}
-                  {onPlanTomorrow ? (
-                    <Button
-                      variant="link"
-                      aria-label={`Plan tomorrow for ${line.name}`}
-                      onClick={() => onPlanTomorrow(line.name)}
-                    >
-                      Plan tomorrow
-                    </Button>
-                  ) : null}
+                    <span className="avatar" aria-hidden="true">
+                      {initials(row.name)}
+                    </span>
+                    <span className="week-table__name">{row.name}</span>
+                  </button>
+                </th>
+                <td>
+                  <WeekBar progress={row} />
                 </td>
-              ) : null}
-            </tr>
-          ))}
+                <td>
+                  <WeekDays byDay={row.byDay} week={week} today={today} target={row.target} />
+                </td>
+                <td>
+                  <PacePill progress={row} />
+                </td>
+                <td className="week-table__last tabular">{last ? lastPostWords(last, today) : <span className="interns__quiet">Never</span>}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-/** "2 of 5 posted" over a bar; the words carry it, the bar shows the share. */
-function Progress({ line }: { readonly line: InternLine }) {
-  const { total, posted } = line;
-  if (total === 0) return <span className="interns__muted">No queue</span>;
-  // "5 of 5 posted" already says done; a pill beside it would wrap and make
-  // that row taller than the rest.
-  return (
-    <div className="interns-progress">
-      <span className="interns-progress__count tabular">
-        {posted} of {total} posted
-      </span>
-      <div className="interns-progress__bar" aria-hidden="true">
-        <span className="interns-progress__posted" style={{ width: `${(posted / total) * 100}%` }} />
-      </div>
-    </div>
-  );
-}
-
-/** "Today, 09:41", "Yesterday, 16:02", "Thu 29 Oct, 10:00". */
-export function lastPostWords(post: PostLogEntry, today: string): string {
-  const when = post.date === today ? 'Today' : post.date === addDays(today, -1) ? 'Yesterday' : shortDate(post.date);
-  return post.time ? `${when}, ${post.time}` : when;
-}
-
 // ------------------------------------------------------------------ revoked
 
-function Revoked({ people, total, query }: { readonly people: readonly TeamMember[]; readonly total: number; readonly query: string }) {
+function Revoked({ people }: { readonly people: readonly TeamMember[] }) {
   const [open, setOpen] = useState(false);
   const listId = useId();
   return (
     <Card
       className="interns__revoked"
+      padding="tight"
       title="Revoked"
-      description="Turn them on in Settings → Team."
+      headingLevel={2}
       actions={
-        <Button size="small" aria-expanded={open} aria-controls={open ? listId : undefined} onClick={() => setOpen((o) => !o)}>
-          {open ? 'Hide revoked' : `Show revoked (${total})`}
+        <Button size="small" variant="quiet" aria-expanded={open} aria-controls={open ? listId : undefined} onClick={() => setOpen((o) => !o)}>
+          {open ? 'Hide' : `Show (${people.length})`}
         </Button>
       }
     >
       {open ? (
-        people.length === 0 ? (
-          <p className="interns__quiet" id={listId}>
-            No revoked name matches &ldquo;{query}&rdquo;.
-          </p>
-        ) : (
-          <ul className="interns-revoked" id={listId}>
-            {people.map((member) => {
-              const accounts = member.fbAccounts ?? [];
-              return (
-                <li key={member.name} className="interns-revoked__row">
-                  <span className="interns-table__avatar" aria-hidden="true">
-                    {initials(member.name)}
-                  </span>
-                  <span className="interns-revoked__name">{member.name}</span>
-                  <Pill tone="neutral">Revoked</Pill>
-                  <span className="interns-revoked__accounts">
-                    FB broker name: {accounts.length === 0 ? 'Any' : accounts.join(', ')}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )
+        <ul className="interns-revoked" id={listId}>
+          {people.map((member) => {
+            const accounts = member.fbAccounts ?? [];
+            return (
+              <li key={member.name} className="interns-revoked__row">
+                <span className="avatar" aria-hidden="true">
+                  {initials(member.name)}
+                </span>
+                <span className="interns-revoked__name">{member.name}</span>
+                <Pill tone="neutral">Revoked</Pill>
+                <span className="interns-revoked__accounts">{accounts.length === 0 ? 'Any FB account' : accounts.join(', ')}</span>
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
     </Card>
   );

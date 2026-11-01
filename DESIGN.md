@@ -296,14 +296,23 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   team grows. Collapsed it is a 64px icon rail with tooltips; Ctrl+B toggles it; the
   choice is remembered, and windows under 1000px start collapsed. Width animates only on
   a toggle.
-- **The Interns screen** (`/interns`, Admin only) is laid out like the Tracker: the
-  heading, the day picker and Refresh on the right; a row of
-  number tiles (active interns, done, with pending posts, no queue); then one card with a
-  name search and a table of active interns (initials, name, the day's queue as
-  "2 of 5 posted" over a green bar, pending posts as a warn pill, last post, the FB
-  accounts they may use or "Any", and Open queue / Plan tomorrow as links). Revoked
-  people sit in a folded "Revoked" card below it. The Tracker's Interns card links to it
-  with "See all interns".
+- **The Interns screen** (`/interns`, Admin only) is the weekly monitor. The header holds
+  the heading, the week picker (‹ "2–6 Nov" ›, This week, Next week) and Refresh; on a
+  weekend it opens on the week that just ended. Then "Who posted?", the screen's one big
+  search: a listing name or a pasted Facebook link shows every matching post right below
+  (listing, intern, when, FB account, status, Open), and Escape clears it. Four tiles
+  (Posted of the target, Pending, Left or Missed, Behind of the interns). One table, worst
+  first: initials and name, "12 / 40" over a green and amber bar, Mon–Fri as five small
+  bars (today ringed in neutral grey, days to come dashed), the pace as a pill (Not
+  started and Missed danger, Behind warn, On track neutral, Done ok), and the last post.
+  A row opens that intern's week in a side pane (the row gets the gold selected wash and
+  mark): the bar and pace, Open in Assign and FB profile, the last 4 weeks as small bars,
+  then Not shared / Pending / Posted (with Open) / Missed, five each before "Show all".
+  Escape or Close shuts it. Revoked people sit in a folded "Revoked" card below. The
+  Tracker's Interns card shows the same week as "12 / 40" and the pace, and links here
+  with "See all interns". The intern's My queue heads the week: "This week · 12 of 40", a
+  bar, "Due Fri 6 Nov" (an amber "Due today" on Friday), and from Saturday next week's
+  queue with "Starts Mon 9 Nov".
 - **Sign-in** is one card: a two-segment "Sign in as" control (Intern / Admin, the picked
   segment gold, the last choice remembered on this computer), the key field, Cancel and
   Sign in, and a folded "Where do I get a key?". The choice only states intent: after
@@ -316,18 +325,24 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   Copy and "You won't see this again." The side pane holds a compact Listings check
   (two count tiles, then Only in Directory / Only in checker / Sold as folded lists),
   the Rules and the web app link.
-- **Assign** is two steps. With no `?intern=`, a grid of the active interns (initials,
-  name, FB broker name, "n not shared" and on which days, today's progress) with a name
-  search. With one, two panes: the library by category (chips with what's free in each,
-  a search, Fresh / Due for repost / Show unavailable; unavailable rows are hidden, or
-  greyed with their reason, never addable) with "Add 20 for posting" and Paste a list in
-  its header; and the queue for the day, with "Still not shared from earlier (n)" folded
-  at its top (Move to this day, Remove). Quick fill's rows are tinted info until saved or
-  undone. Save queue (n) is the one gold button. **Fill queues** in step one's header opens a wide
-  dialog: per intern, date, keep existing queue, the active interns as ticks, then
-  Preview (one line per intern with a green fill bar against "per intern", opening to
-  the list; how many short; the skipped reasons as neutral pills) and Save all, the
-  dialog's one gold button.
+- **Assign** is two steps, a week at a time (`?week=` its Monday; this week, or the coming
+  one from Saturday). The header holds the week picker (‹ "2–6 Nov" ›, This week, Next
+  week). With no `?intern=`, a grid of cards, one per active intern and nothing else: the
+  name, one pace pill (Behind warn, Not started and Missed danger, No queue neutral, On
+  track info, Done ok) and "12 / 40" beside a posted-green, pending-amber bar; Behind
+  first. With one, the header says the name and "Due Fri 6 Nov" ("Ended …" for a week that
+  is over), then two panes. Left, Listings: the categories as one row of chips that
+  scrolls sideways (its end fades), a search and a Filter menu (Fresh, Due for repost,
+  Show unavailable, with a count while any is on); "− Add 40 +" (perWeek, stepped by 5)
+  and ⋯ (Paste a list) in its header. Right, the week's Queue, grouped Not shared
+  (drag, Alt+Up/Down, remove), Pending, Posted (Open post); its rows scroll inside it and
+  its foot holds Undo changes and Save queue (n), the one gold button. A week that is over
+  is one read-only card: "32 posted · 8 missed", Copy missed to next week (they arrive
+  tinted, with Undo, unsaved), then Missed, Pending, Posted. Quick fill's rows are tinted
+  info until saved or undone. **Fill queues** in step one's header opens a wide dialog:
+  per week, the week, keep existing queues, the active interns as ticks, then Preview
+  (one line per intern with a green fill bar against "per week", opening to the list;
+  how many short; the skipped reasons) and Save all, the dialog's one gold button.
 - **Records** (`/records`, Admin; nav between Interns and Find): the range as chips
   (Today, 7 days, 30 days) in the header; Posts per day as hand-built CSS bars (posted
   green, pending amber, never gold) beside a compact day table that says the same in

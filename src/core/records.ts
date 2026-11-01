@@ -200,3 +200,83 @@ export function postsCsv(posts: readonly PostLogEntry[]): string {
   );
   return [POST_COLUMNS.join(','), ...rows].join('\r\n') + '\r\n';
 }
+
+// ------------------------------------------------------------------ who posted it (v6)
+
+/** One answer to "who posted this?": a post of the listing, and who made it. */
+export interface WhoPostedMatch {
+  /** Posted by, as the sheet has it. */
+  readonly intern: string;
+  /** yyyy-MM-dd. */
+  readonly date: string;
+  /** HH:mm. */
+  readonly time: string;
+  readonly fbAccount: string;
+  readonly link: string;
+  readonly status: PostStatus;
+  /** The listing, as the post names it, and its folder id ('' when none). */
+  readonly title: string;
+  readonly propertyId: string;
+  /** The row itself. */
+  readonly post: PostLogEntry;
+}
+
+// "https://www.facebook.com/groups/apg/posts/1/" and "facebook.com/groups/apg/posts/1" are one link.
+function linkKey(url: string): string {
+  return url
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z]+:\/\//, '')
+    .replace(/^(?:www|m|web|mbasic)\./, '')
+    .replace(/#.*$/, '')
+    .replace(/\/+(?=\?|$)/, '');
+}
+
+function looksLikeLink(text: string): boolean {
+  return /^[a-z]+:\/\//i.test(text) || /^(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.com|fb\.me)\b/i.test(text);
+}
+
+/**
+ * The quick lookup for an inquiry: every Posted or Pending post that matches
+ * `query`, newest first.
+ * - A link (http… or facebook.com/…) matches the post with that link, give or
+ *   take the scheme, www./m./web., a #fragment and a trailing slash; a link's
+ *   start matches every post under it.
+ * - Otherwise the query matches a post whose folder id is exactly it, or whose
+ *   listing name holds every word of it (case, punctuation and the usual
+ *   abbreviations aside, as Find searches).
+ * Blank: nothing.
+ */
+export function whoPosted(posts: readonly PostLogEntry[], query: string): WhoPostedMatch[] {
+  const text = query.trim();
+  if (!text) return [];
+  let matches: (post: PostLogEntry) => boolean;
+  if (looksLikeLink(text)) {
+    const key = linkKey(text);
+    matches = (post) => {
+      const link = linkKey(post.postLink);
+      return link !== '' && (link === key || link.startsWith(key));
+    };
+  } else {
+    const words = normalizeForSearch(text).split(' ').filter(Boolean);
+    const exact = normalize(text);
+    matches = (post) => {
+      if (post.propertyId.trim() === text) return true;
+      if (exact !== '' && normalize(post.title) === exact) return true;
+      if (words.length === 0) return false;
+      const hay = normalizeForSearch(post.title);
+      return words.every((word) => hay.includes(word));
+    };
+  }
+  return newestFirst(posts.filter((p) => (p.status === 'Posted' || p.status === 'Pending') && matches(p))).map((post) => ({
+    intern: post.postedBy,
+    date: post.date,
+    time: post.time,
+    fbAccount: post.fbAccount,
+    link: post.postLink,
+    status: post.status,
+    title: post.title,
+    propertyId: post.propertyId,
+    post,
+  }));
+}

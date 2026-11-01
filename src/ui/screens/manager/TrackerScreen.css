@@ -181,89 +181,31 @@
 
 .intern-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   gap: var(--space-6);
 }
 
-.intern-row__avatar {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface-raised);
-  color: var(--text-label);
-  font-family: var(--heading-font);
-  font-size: var(--text-caption);
-  line-height: 1;
-  font-weight: var(--weight-heading);
-}
-
-.intern-row__body {
-  display: grid;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.intern-row__top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0 var(--space-4);
-}
-
 .intern-row__name {
+  min-width: 0;
   color: var(--text);
   font-weight: var(--weight-heading);
+  overflow-wrap: anywhere;
 }
 
-.intern-row__count {
-  color: var(--text-label);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-  white-space: nowrap;
-}
-
-/* Posted, then pending, on a neutral track. The words beside it carry the
-   meaning; the bar only shows the share at a glance. */
-.intern-row__bar {
-  display: flex;
-  height: 6px;
+/* One line: a long name gives way to the count, never wraps under it. */
+.intern-row .week-bar__top .intern-row__name {
   overflow: hidden;
-  border-radius: var(--radius-pill);
-  background: var(--neutral-soft);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.intern-row__posted {
-  background: var(--ok-strong);
-}
-
-.intern-row__pending {
-  background: var(--warn-text);
-}
-
-.intern-row__detail {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-6);
-  color: var(--text-muted);
+/* The name and "19 / 40" on one line, the bar under both. */
+.intern-row .week-bar__count {
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
 }
 
-.intern-row__detail .button--link {
-  margin-inline-start: auto;
-}
-
-.tracker__plan {
-  margin-top: var(--space-10);
-  padding-top: var(--space-8);
-  border-top: var(--border-width) solid var(--border-soft);
-}
 
 /* ---- due for repost, never posted, doc health ------------------------------- */
 

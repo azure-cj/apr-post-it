@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Button, Card, Icon, Notice, Spinner } from '../../components';
-import { DEFAULT_PER_INTERN, planForIntern } from '@/core/planner';
+import { Badge, Button, Card, Icon, Notice, Spinner } from '../../components';
+import { planForIntern } from '@/core/planner';
 import { normalize } from '@/core/matcher';
 import {
   assignRules,
@@ -22,31 +22,27 @@ import {
   type Rules,
 } from '@/core/summary';
 import type { QueueItemInput } from '@/core/tracker';
-import { UserFacingError, queueStatus, type Assignment, type PostLogEntry, type Property, type TeamMember } from '@/core/types';
-import { Carried, type CarriedItem } from './AssignCarried';
+import { DEFAULT_RULES, UserFacingError, type Assignment, type PostLogEntry, type Property } from '@/core/types';
+import { addWeeks, isWeekOver, weekFriday, weekLabel, weekOf } from '@/core/week';
+import { MenuButton, MoreIcon } from './AssignMenu';
 import { LibraryPanel, QuickFill, tabLabel, type CategoryTab } from './AssignLibrary';
 import { PastePanel, type Matched } from './AssignPaste';
 import { AssignPicker, NoInterns } from './AssignPicker';
-import { dayMonth, heldWords, listingState, type ListingState } from './assignListing';
-import { DayPicker } from './DayPicker';
+import { heldWords, listingState, type ListingState } from './assignListing';
 import { FillQueues, type FillQueuesProps } from './FillQueues';
 import { ManagerIcon } from './ManagerIcon';
-import { QueueRow } from './QueueRow';
+import { DoneRow, QueueRow } from './QueueRow';
+import { WeekPicker } from './WeekPicker';
 import './AssignScreen.css';
 
-/** What Save hands over: `tracker.saveQueue(save.date, save.assignedTo, save.items)` fits. */
+/** What Save hands over: `tracker.saveQueue(save.week, save.assignedTo, save.items)` fits. */
 export interface QueueSave {
-  /** The queue's day, yyyy-MM-dd. */
-  readonly date: string;
+  /** The queue's week, as its Monday (yyyy-MM-dd). */
+  readonly week: string;
   /** Whose queue, exactly as the `intern` prop spelled it: the server matches names with ===. */
   readonly assignedTo: string;
   /** In posting order. An item already saved keeps its status; a new one is Not Shared. */
   readonly items: readonly QueueItemInput[];
-  /**
-   * Earlier days' queues to save first, each without the items moved to this
-   * day or removed from it: that is what frees them. Missing or empty: none.
-   */
-  readonly releases?: readonly QueueSave[] | undefined;
 }
 
 export interface AssignScreenProps {
@@ -54,24 +50,22 @@ export interface AssignScreenProps {
   readonly interns: readonly string[];
   /** Whose queue is shown, or null: then the screen asks whose. */
   readonly intern: string | null;
-  /** The queue's day, yyyy-MM-dd. */
-  readonly date: string;
+  /** The week shown, as its Monday (yyyy-MM-dd). */
+  readonly week: string;
   /** Today on the tracker's calendar, yyyy-MM-dd. */
   readonly today: string;
   /** Every listing in the directory. With its Issues text, a listing that can't be posted says so. */
   readonly properties: readonly DirectoryRow[];
-  /** Every Posts row: the cooldown is judged from them. */
+  /** Every Posts row: the cooldown, and the links to what was posted. */
   readonly posts: readonly PostLogEntry[];
   /** Every Assignments row: this queue as saved, and who holds what. Read again after a save. */
   readonly assignments: readonly Assignment[];
-  /** The cooldown, repost-due and per-intern rules. */
+  /** The cooldown, repost-due and per-week rules. */
   readonly settings: Rules;
-  /** The Team tab, for each intern's FB broker name. */
-  readonly team?: readonly TeamMember[] | undefined;
   /** Show another intern's queue, or (null) the list of interns. Only called once unsaved changes are saved or discarded. */
   readonly onInternChange: (intern: string | null) => void;
-  /** Show another day. Only called once unsaved changes are saved or discarded. */
-  readonly onDateChange: (date: string) => void;
+  /** Show another week (its Monday). Only called once unsaved changes are saved or discarded. */
+  readonly onWeekChange: (week: string) => void;
   /** Save the queue. Resolve once saved; reject with a UserFacingError to have its sentence shown. */
   readonly onSave: (save: QueueSave) => Promise<unknown>;
   /** Told when the draft gains or loses unsaved changes, so the shell can guard leaving the screen. */
@@ -86,22 +80,23 @@ export interface AssignScreenProps {
   readonly onSaveQueues?: FillQueuesProps['onSave'] | undefined;
   /** Fill queues saved: what to say. */
   readonly onQueuesSaved?: ((note: string) => void) | undefined;
+  /** Opens a post's link. Default: the link opens as links do. */
+  readonly onOpenLink?: ((url: string) => void) | undefined;
 }
 
 type Mode = 'library' | 'paste';
+type Group = 'pending' | 'open' | 'posted';
 
 interface Draft {
-  /** Whose queue and which day these entries are for. */
+  /** Whose queue and which week these entries are for. */
   readonly for: string;
   /** The saved queue they were last compared with. */
   readonly base: readonly QueueEntry[];
   readonly entries: readonly QueueEntry[];
-  /** Keys of earlier days' items to remove from those days on save. */
-  readonly dropped: readonly string[];
 }
 
 interface Pending {
-  readonly kind: 'intern' | 'date';
+  readonly kind: 'intern' | 'week';
   /** For 'intern', '' means the list of interns. */
   readonly value: string;
 }
@@ -111,10 +106,17 @@ interface FocusTarget {
   readonly role: string;
 }
 
-/** Quick fill's last batch, until it's saved or undone. */
+/** Quick fill's (or Copy missed's) last batch, until it's saved or undone. */
 interface Fill {
   readonly for: string;
   readonly keys: readonly string[];
+}
+
+/** Missed listings on their way to another week's queue. */
+interface Seed {
+  readonly for: string;
+  readonly from: string;
+  readonly properties: readonly Property[];
 }
 
 /** One held listing the server refused, as `error.held` carries it. */
@@ -126,7 +128,6 @@ interface HeldRefusal {
 }
 
 const COULD_NOT_SAVE = "Couldn't save the queue. Check your connection, then save again.";
-const NONE: readonly string[] = [];
 
 /** The draft's own copy after a save, until the rows are read again. */
 interface Saved {
@@ -150,39 +151,41 @@ function heldOf(error: unknown): readonly HeldRefusal[] | null {
     }));
 }
 
-/** The rules, plus the held rule: a listing another intern holds can't go in. */
-function withHeld(rules: AssignRules, held: ReadonlyMap<string, HeldListing>, intern: string, date: string): AssignRules {
+/** The rules, plus the held rule: a listing held by another intern, or in this intern's queue for another week, can't go in. */
+function withHeld(rules: AssignRules, held: ReadonlyMap<string, HeldListing>, intern: string, week: string): AssignRules {
   return {
     ...rules,
     check(property) {
       const verdict = rules.check(property);
       if (!verdict.canAdd) return verdict;
       const hold = heldBy(held, property);
-      if (!hold || samePerson(hold.heldBy, intern)) return verdict;
-      return { ...verdict, canAdd: false, block: 'otherQueue', holder: hold.heldBy, reason: `${heldWords(hold, intern, date)}.` };
+      if (!hold || (samePerson(hold.heldBy, intern) && hold.week === week)) return verdict;
+      return { ...verdict, canAdd: false, block: 'otherQueue', holder: hold.heldBy, reason: `${heldWords(hold, intern)}.` };
     },
   };
 }
 
+/** Where a saved status puts a row: Pending, then Not shared, then Posted. */
+const RANK: Record<Group, number> = { pending: 0, open: 1, posted: 2 };
+
 /**
- * Assign, in two steps. First, whose queue: a card per intern with what they
- * have open. Then their queue for a day: the library by category on the left,
- * the queue on the right, with what they still haven't shared from earlier
- * days. A listing held by another intern, in its cooldown, sold or without a
- * separator can't go in. Nothing is written until Save.
+ * Assign, in two steps, a week at a time. First, whose queue: a card per
+ * intern with the week's progress. Then their queue for the week: the library
+ * by category on the left, the queue on the right, grouped Not shared,
+ * Pending, Posted. A week that is over is read only, with what was missed.
+ * Nothing is written until Save.
  */
 export function AssignScreen({
   interns,
   intern,
-  date,
+  week,
   today,
   properties,
   posts,
   assignments,
   settings,
-  team,
   onInternChange,
-  onDateChange,
+  onWeekChange,
   onSave,
   onDirtyChange,
   loading = false,
@@ -190,35 +193,37 @@ export function AssignScreen({
   search,
   onSaveQueues,
   onQueuesSaved,
+  onOpenLink,
 }: AssignScreenProps) {
   const [filling, setFilling] = useState(false);
   const { cooldownDays, repostDueDays } = settings;
-  const held = useMemo(() => heldListings(assignments), [assignments]);
+  const perWeek = settings.perWeek ?? settings.perIntern ?? DEFAULT_RULES.perWeek;
+  const over = isWeekOver(week, today);
+  const held = useMemo(() => heldListings(assignments, today), [assignments, today]);
   const rules = useMemo<AssignRules | null>(() => {
     if (intern === null) return null;
     const base = assignRules({
       intern,
-      date,
+      week,
       today,
       posts,
       assignments,
       properties,
       settings: { cooldownDays, repostDueDays },
     });
-    return withHeld(base, held, intern, date);
-  }, [intern, date, today, posts, assignments, properties, cooldownDays, repostDueDays, held]);
+    return withHeld(base, held, intern, week);
+  }, [intern, week, today, posts, assignments, properties, cooldownDays, repostDueDays, held]);
 
-  const queueFor = `${intern ?? ''}|${date}`;
+  const queueFor = `${intern ?? ''}|${week}`;
   const first = intern === null ? '' : firstName(intern);
-  const day = shortDate(date);
 
   // ---- every listing's state for this queue ------------------------------
 
   const states = useMemo<readonly ListingState[]>(() => {
     if (!rules || intern === null) return [];
-    const input = { rules, held, intern, date, today };
+    const input = { rules, held, intern, week, today };
     return properties.map((p) => listingState(p, input));
-  }, [rules, held, intern, date, today, properties]);
+  }, [rules, held, intern, week, today, properties]);
   const stateByKey = useMemo(() => new Map(states.map((s) => [keyOf(s.property), s])), [states]);
 
   const byId = useMemo(() => {
@@ -227,24 +232,18 @@ export function AssignScreen({
     return map;
   }, [properties]);
 
-  // ---- what's still open from earlier days -------------------------------
-
-  const carried = useMemo<readonly CarriedItem[]>(() => {
-    if (!rules || intern === null) return [];
-    const out: CarriedItem[] = [];
-    const seen = new Set<string>();
-    const rows = assignments
-      .filter((a) => a.date < date && samePerson(a.assignedTo, intern) && queueStatus(a.status) === 'Not Shared')
-      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-    for (const row of rows) {
-      const property = (row.propertyId ? byId.get(row.propertyId) : undefined) ?? rules.entryNamed(row.propertyName).property;
-      const key = property ? keyOf(property) : row.propertyId ? `id:${row.propertyId}` : `name:${normalize(row.propertyName)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ key, propertyName: row.propertyName, propertyId: property?.id ?? row.propertyId, property, date: row.date });
-    }
-    return out;
-  }, [rules, intern, assignments, date, byId]);
+  const groupOf = useCallback(
+    (key: string): Group => {
+      const status = rules?.statusOf(key);
+      return status === 'Pending' ? 'pending' : status === 'Posted' ? 'posted' : 'open';
+    },
+    [rules],
+  );
+  /** Pending first, then Not shared in its order, then Posted, as the rules keep a saved queue. */
+  const ordered = useCallback(
+    (list: readonly QueueEntry[]): QueueEntry[] => [...list].sort((a, b) => RANK[groupOf(a.key)] - RANK[groupOf(b.key)]),
+    [groupOf],
+  );
 
   // ---- the draft, and what it is compared with --------------------------
 
@@ -252,30 +251,29 @@ export function AssignScreen({
   const baseline: readonly QueueEntry[] =
     saved && saved.for === queueFor && saved.assignments === assignments ? saved.entries : (rules?.saved ?? []);
 
-  const [draftState, setDraftState] = useState<Draft>(() => ({ for: queueFor, base: baseline, entries: baseline, dropped: NONE }));
+  const [draftState, setDraftState] = useState<Draft>(() => ({ for: queueFor, base: baseline, entries: baseline }));
   let draft = draftState;
   if (draft.for !== queueFor) {
-    // Another intern or day: start from what is saved there.
-    draft = { for: queueFor, base: baseline, entries: baseline, dropped: NONE };
+    // Another intern or week: start from what is saved there.
+    draft = { for: queueFor, base: baseline, entries: baseline };
     setDraftState(draft);
   } else if (!sameQueue(draft.base, baseline)) {
     // The rows were read again. Untouched, the draft follows them; edited, it is kept.
-    const untouched = sameQueue(draft.entries, draft.base) && draft.dropped.length === 0;
-    draft = { for: queueFor, base: baseline, entries: untouched ? baseline : draft.entries, dropped: draft.dropped };
+    const untouched = sameQueue(draft.entries, draft.base);
+    draft = { for: queueFor, base: baseline, entries: untouched ? baseline : draft.entries };
     setDraftState(draft);
   }
   const entries = draft.entries;
-  const dropped = draft.dropped;
-  const dirty = intern !== null && (!sameQueue(entries, baseline) || dropped.length > 0);
+  const dirty = intern !== null && !over && !sameQueue(entries, baseline);
   const inQueue = useMemo(() => new Set(entries.map((e) => e.key)), [entries]);
+  const open = useMemo(() => entries.filter((e) => groupOf(e.key) === 'open'), [entries, groupOf]);
 
-  const carriedFrom = useMemo(() => new Map(carried.map((c) => [c.key, c.date])), [carried]);
-  const carriedLeft = carried.filter((c) => !inQueue.has(c.key) && !dropped.includes(c.key));
-  const released = carried.filter((c) => inQueue.has(c.key) || dropped.includes(c.key));
-
-  const setEntries = useCallback((change: (entries: readonly QueueEntry[]) => readonly QueueEntry[]) => {
-    setDraftState((d) => ({ ...d, entries: change(d.entries) }));
-  }, []);
+  const setEntries = useCallback(
+    (change: (entries: readonly QueueEntry[]) => readonly QueueEntry[]) => {
+      setDraftState((d) => ({ ...d, entries: ordered(change(d.entries)) }));
+    },
+    [ordered],
+  );
 
   // ---- what the screen says ---------------------------------------------
 
@@ -288,17 +286,17 @@ export function AssignScreen({
   const [saving, setSaving] = useState(false);
   const [problems, setProblems] = useState<readonly string[]>([]);
   const [refused, setRefused] = useState<ReadonlyMap<string, string>>(new Map());
-  const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState(false);
   const [addedNote, setAddedNote] = useState<string | null>(null);
   const [fillNote, setFillNote] = useState<string | null>(null);
   const [fill, setFill] = useState<Fill | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [mode, setMode] = useState<Mode>('library');
   const [tab, setTab] = useState<CategoryTab>('all');
-  const [fillCount, setFillCount] = useState(() => String(settings.perIntern ?? DEFAULT_PER_INTERN));
-  const [carriedOpen, setCarriedOpen] = useState(false);
+  const [fillCount, setFillCount] = useState(perWeek);
   const [pasteText, setPasteText] = useState('');
   const [matched, setMatched] = useState<Matched | null>(null);
+  const [seed, setSeed] = useState<Seed | null>(null);
 
   // A different queue starts clean: its own notes, no matches from the last one.
   const lastQueue = useRef(queueFor);
@@ -307,7 +305,7 @@ export function AssignScreen({
     lastQueue.current = queueFor;
     setProblems([]);
     setRefused(new Map());
-    setSavedNote(null);
+    setSavedNote(false);
     setAddedNote(null);
     setFillNote(null);
     setFill(null);
@@ -316,7 +314,7 @@ export function AssignScreen({
   }, [queueFor]);
 
   useEffect(() => {
-    if (dirty) setSavedNote(null);
+    if (dirty) setSavedNote(false);
   }, [dirty]);
 
   const mounted = useRef(true);
@@ -340,21 +338,19 @@ export function AssignScreen({
   /** What of `picked` may go in now, as entries, in order. */
   const addable = useCallback(
     (picked: readonly Property[]): QueueEntry[] => {
-      if (!rules) return [];
+      if (!rules || over) return [];
       const fresh: QueueEntry[] = [];
       for (const property of picked) {
         const entry = rules.entryFor(property);
         if (inQueue.has(entry.key) || fresh.some((e) => e.key === entry.key)) continue;
-        // An earlier day's own item may come over: that is a move.
         const state = stateByKey.get(entry.key);
-        const mine = carriedFrom.has(entry.key) && !dropped.includes(entry.key);
-        if (state?.unavailable && !mine) continue;
+        if (state?.unavailable) continue;
         if (!state && !rules.check(property).canAdd) continue;
         fresh.push(entry);
       }
       return fresh;
     },
-    [rules, inQueue, stateByKey, carriedFrom, dropped],
+    [rules, over, inQueue, stateByKey],
   );
 
   const add = useCallback(
@@ -366,18 +362,18 @@ export function AssignScreen({
       const total = entries.length + fresh.length;
       announce(
         fresh.length === 1
-          ? `Added ${fresh[0]?.propertyName}. ${first}'s queue has ${plural(total, 'listing', 'listings')}.`
-          : `Added ${plural(fresh.length, 'listing', 'listings')}. ${first}'s queue has ${total}.`,
+          ? `Added ${fresh[0]?.propertyName}. ${plural(total, 'listing', 'listings')} queued.`
+          : `Added ${fresh.length}. ${total} queued.`,
       );
       return fresh.length;
     },
-    [addable, setEntries, entries.length, first, announce],
+    [addable, setEntries, entries.length, announce],
   );
 
   // ---- quick fill -----------------------------------------------------------
 
   const quickFill = (count: number, scope: CategoryTab) => {
-    if (!rules || intern === null || count <= 0) return;
+    if (!rules || intern === null || count <= 0 || over) return;
     const inScope = scope === 'all' ? states : states.filter((s) => s.kind === scope);
     const names = [...new Set(inScope.map((s) => s.property.category))];
     // One folder name: the planner narrows to it. Several (the unsorted ones): ask wide, then narrow here.
@@ -387,12 +383,13 @@ export function AssignScreen({
       properties,
       posts,
       assignments,
-      date,
+      week,
+      today,
       rules: { cooldownDays, repostDueDays },
       intern,
       count: wide ? properties.length : count,
       ...(category ? { category } : {}),
-      exclude: [...entries, ...carried].map((e) => ({ propertyName: e.propertyName, propertyId: e.propertyId })),
+      exclude: entries.map((e) => ({ propertyName: e.propertyName, propertyId: e.propertyId })),
     });
     const picked: Property[] = [];
     for (const item of items) {
@@ -407,19 +404,16 @@ export function AssignScreen({
     const where = scope === 'all' ? '' : ` from ${tabLabel(scope, states)}`;
     if (fresh.length === 0) {
       setFill(null);
-      setFillNote(`Nothing${where} is free to add.`);
-      announce(`Nothing${where} is free to add.`);
+      setFillNote(`Nothing${where} is free.`);
+      announce(`Nothing${where} is free.`);
       return;
     }
     setEntries((now) => [...now, ...fresh.filter((e) => !now.some((n) => n.key === e.key))]);
     setProblems([]);
     setFill({ for: queueFor, keys: fresh.map((e) => e.key) });
-    const note =
-      fresh.length < count
-        ? `Added ${fresh.length}${where}. That's all that's free.`
-        : `Added ${fresh.length}${where}.`;
+    const note = fresh.length < count ? `Added ${fresh.length}${where}. That's all that's free.` : `Added ${fresh.length}${where}.`;
     setFillNote(note);
-    announce(`${note} ${first}'s queue has ${entries.length + fresh.length}.`);
+    announce(`${note} ${entries.length + fresh.length} queued.`);
   };
 
   const fillKeys = fill && fill.for === queueFor ? new Set(fill.keys.filter((k) => inQueue.has(k))) : null;
@@ -430,8 +424,40 @@ export function AssignScreen({
     setEntries((now) => now.filter((e) => !fillKeys.has(e.key)));
     setFill(null);
     setFillNote(null);
-    announce(`Removed the ${plural(n, 'listing', 'listings')} quick fill added.`);
+    announce(`Removed the ${plural(n, 'listing', 'listings')} just added.`);
   };
+
+  // ---- missed, copied to the next open week -----------------------------------
+
+  const nextOpen = (() => {
+    const next = addWeeks(week, 1);
+    const current = weekOf(today);
+    return next < current ? current : next;
+  })();
+
+  const copyMissed = (missed: readonly QueueEntry[]) => {
+    if (intern === null) return;
+    const props = missed.flatMap((e) => (e.property ? [e.property] : []));
+    setSeed({ for: `${intern}|${nextOpen}`, from: week, properties: props });
+    onWeekChange(nextOpen);
+  };
+
+  // Once the next week's queue is showing, the copied listings go in, tinted, with Undo.
+  useEffect(() => {
+    if (!seed || seed.for !== queueFor || !rules || loading) return;
+    setSeed(null);
+    const fresh = addable(seed.properties);
+    if (fresh.length > 0) {
+      setEntries((now) => [...now, ...fresh.filter((e) => !now.some((n) => n.key === e.key))]);
+      setFill({ for: queueFor, keys: fresh.map((e) => e.key) });
+    }
+    const note =
+      fresh.length === seed.properties.length
+        ? `Copied ${fresh.length} from ${weekLabel(seed.from)}.`
+        : `Copied ${fresh.length} of ${seed.properties.length} from ${weekLabel(seed.from)}. The rest aren't free.`;
+    setFillNote(note);
+    announce(note);
+  }, [seed, queueFor, rules, loading, addable, setEntries, announce]);
 
   // ---- moving and removing ------------------------------------------------
 
@@ -439,45 +465,53 @@ export function AssignScreen({
   const focusAfter = useRef<FocusTarget | null>(null);
   const emptyRef = useRef<HTMLParagraphElement>(null);
 
+  /** The queue with its Not shared rows in a new order. */
+  const reorder = useCallback(
+    (key: string, to: (at: number) => number) => {
+      setEntries((now) => {
+        const rows = now.filter((e) => groupOf(e.key) === 'open');
+        const at = rows.findIndex((e) => e.key === key);
+        if (at < 0) return now;
+        const moved = moveEntry(rows, at, to(at));
+        return [...now.filter((e) => groupOf(e.key) === 'pending'), ...moved, ...now.filter((e) => groupOf(e.key) === 'posted')];
+      });
+    },
+    [setEntries, groupOf],
+  );
+
   const move = useCallback(
     (key: string, by: number, role: string) => {
-      const from = entries.findIndex((e) => e.key === key);
+      const from = open.findIndex((e) => e.key === key);
       const to = from + by;
-      const entry = entries[from];
+      const entry = open[from];
       if (!entry) return;
-      if (to < 0 || to >= entries.length) {
+      if (to < 0 || to >= open.length) {
         announce(`${entry.propertyName} is already ${to < 0 ? 'first' : 'last'}.`);
         return;
       }
-      setEntries((now) => {
-        const at = now.findIndex((e) => e.key === key);
-        return at < 0 ? now : moveEntry(now, at, at + by);
-      });
+      reorder(key, (at) => at + by);
       focusAfter.current = { key, role };
-      announce(`${entry.propertyName} moved to ${to + 1} of ${entries.length}.`);
+      announce(`${entry.propertyName} moved to ${to + 1} of ${open.length}.`);
     },
-    [entries, setEntries, announce],
+    [open, reorder, announce],
   );
 
   const moveTo = useCallback(
     (key: string, to: number) => {
-      const from = entries.findIndex((e) => e.key === key);
-      const entry = entries[from];
-      if (!entry || from === to || to < 0 || to >= entries.length) return;
-      setEntries((now) => {
-        const at = now.findIndex((e) => e.key === key);
-        return at < 0 ? now : moveEntry(now, at, to);
-      });
-      announce(`${entry.propertyName} moved to ${to + 1} of ${entries.length}.`);
+      const from = open.findIndex((e) => e.key === key);
+      const entry = open[from];
+      if (!entry || from === to || to < 0 || to >= open.length) return;
+      reorder(key, () => to);
+      announce(`${entry.propertyName} moved to ${to + 1} of ${open.length}.`);
     },
-    [entries, setEntries, announce],
+    [open, reorder, announce],
   );
 
   const remove = useCallback(
     (key: string) => {
       if (!rules || rules.isStarted(key)) return;
-      const index = entries.findIndex((e) => e.key === key);
-      const entry = entries[index];
+      const index = open.findIndex((e) => e.key === key);
+      const entry = open[index];
       if (!entry) return;
       setEntries((now) => now.filter((e) => e.key !== key));
       setRefused((now) => {
@@ -486,26 +520,12 @@ export function AssignScreen({
         next.delete(key);
         return next;
       });
-      const next = entries[index + 1] ?? entries[index - 1];
+      const next = open[index + 1] ?? open[index - 1];
       focusAfter.current = next ? { key: next.key, role: 'remove' } : { key: '', role: 'empty' };
-      announce(
-        carriedFrom.has(key)
-          ? `Removed ${entry.propertyName}. It's back in its queue for ${dayMonth(carriedFrom.get(key) ?? '')}.`
-          : `Removed ${entry.propertyName}.`,
-      );
+      announce(`Removed ${entry.propertyName}.`);
     },
-    [rules, entries, setEntries, announce, carriedFrom],
+    [rules, open, setEntries, announce],
   );
-
-  const moveCarried = (item: CarriedItem) => {
-    setEntries((now) => (now.some((e) => e.key === item.key) ? now : [...now, item]));
-    announce(`Moved ${item.propertyName} to ${day}.`);
-  };
-
-  const releaseCarried = (item: CarriedItem) => {
-    setDraftState((d) => (d.dropped.includes(item.key) ? d : { ...d, dropped: [...d.dropped, item.key] }));
-    announce(`${item.propertyName} will be removed from ${dayMonth(item.date)} when you save.`);
-  };
 
   // Keep focus on the control that moved, or on the row that took a removed one's place.
   useLayoutEffect(() => {
@@ -531,7 +551,7 @@ export function AssignScreen({
     const sameQueueShown = positionsFor.current === queueFor;
     positionsFor.current = queueFor;
     const next = new Map<string, number>();
-    for (const entry of entries) {
+    for (const entry of open) {
       const row = rowRefs.current.get(entry.key);
       if (!row) continue;
       const top = row.offsetTop;
@@ -547,7 +567,7 @@ export function AssignScreen({
       }
     }
     positions.current = next;
-  }, [entries, queueFor]);
+  }, [open, queueFor]);
 
   // ---- dragging -----------------------------------------------------------
 
@@ -559,13 +579,13 @@ export function AssignScreen({
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
       const box = event.currentTarget.getBoundingClientRect();
-      const over = index + (event.clientY > box.top + box.height / 2 ? 1 : 0);
-      if (drag.over !== over) setDrag({ key: drag.key, over });
+      const at = index + (event.clientY > box.top + box.height / 2 ? 1 : 0);
+      if (drag.over !== at) setDrag({ key: drag.key, over: at });
     },
     onDrop: (event: DragEvent<HTMLLIElement>) => {
       event.preventDefault();
       if (!drag || drag.over === null) return;
-      const from = entries.findIndex((e) => e.key === drag.key);
+      const from = open.findIndex((e) => e.key === drag.key);
       const to = drag.over > from ? drag.over - 1 : drag.over;
       setDrag(null);
       if (from >= 0) moveTo(drag.key, to);
@@ -585,14 +605,14 @@ export function AssignScreen({
 
   const dropMark = (index: number): 'before' | 'after' | null => {
     if (!drag || drag.over === null) return null;
-    const from = entries.findIndex((e) => e.key === drag.key);
+    const from = open.findIndex((e) => e.key === drag.key);
     if (drag.over === from || drag.over === from + 1) return null; // it wouldn't move
     if (drag.over === index) return 'before';
-    if (drag.over === entries.length && index === entries.length - 1) return 'after';
+    if (drag.over === open.length && index === open.length - 1) return 'after';
     return null;
   };
 
-  // ---- switching intern or day --------------------------------------------
+  // ---- switching intern or week ---------------------------------------------
 
   const returnFocus = useRef<HTMLElement | null>(null);
   const keepRef = useRef<HTMLButtonElement>(null);
@@ -610,10 +630,10 @@ export function AssignScreen({
     else goIntern(name);
   };
 
-  const requestDate = (next: string) => {
-    if (next === date) return;
-    if (dirty) ask({ kind: 'date', value: next });
-    else onDateChange(next);
+  const requestWeek = (next: string) => {
+    if (next === week) return;
+    if (dirty) ask({ kind: 'week', value: next });
+    else onWeekChange(next);
   };
 
   useEffect(() => {
@@ -628,7 +648,7 @@ export function AssignScreen({
   };
 
   const resetDraft = () => {
-    setDraftState((d) => ({ ...d, entries: baseline, dropped: NONE }));
+    setDraftState((d) => ({ ...d, entries: baseline }));
     setProblems([]);
     setRefused(new Map());
     setAddedNote(null);
@@ -641,35 +661,13 @@ export function AssignScreen({
     setPending(null);
     resetDraft();
     if (next?.kind === 'intern') goIntern(next.value);
-    else if (next) onDateChange(next.value);
+    else if (next) onWeekChange(next.value);
   };
 
   // ---- saving ---------------------------------------------------------------
 
-  /** Each earlier day touched, saved again without what was moved or removed. */
-  const releasesOf = (): QueueSave[] => {
-    if (intern === null || released.length === 0) return [];
-    const gone = new Set(released.map((c) => c.key));
-    const days = [...new Set(released.map((c) => c.date))].sort();
-    return days.map((d) => {
-      const items: QueueItemInput[] = [];
-      for (const row of assignments) {
-        if (row.date !== d || !samePerson(row.assignedTo, intern)) continue;
-        const property = (row.propertyId ? byId.get(row.propertyId) : undefined) ?? rules?.entryNamed(row.propertyName).property;
-        const key = property ? keyOf(property) : row.propertyId ? `id:${row.propertyId}` : `name:${normalize(row.propertyName)}`;
-        if (gone.has(key) && queueStatus(row.status) === 'Not Shared') continue;
-        items.push({
-          propertyName: row.propertyName,
-          ...(row.propertyId.trim() ? { propertyId: row.propertyId } : {}),
-          status: queueStatus(row.status),
-        });
-      }
-      return { date: d, assignedTo: intern, items };
-    });
-  };
-
   const save = async () => {
-    if (!rules || intern === null || saving || loading) return;
+    if (!rules || intern === null || saving || loading || over) return;
     const result = rules.validate(entries);
     if (!result.ok) {
       setProblems(result.problems);
@@ -678,23 +676,18 @@ export function AssignScreen({
     const snapshot = entries;
     const forQueue = queueFor;
     const rowsWhenSaved = assignments;
-    const releases = releasesOf();
     setSaving(true);
     setProblems([]);
     setRefused(new Map());
     try {
-      await onSave({ date, assignedTo: intern, items: result.items, ...(releases.length > 0 ? { releases } : {}) });
+      await onSave({ week, assignedTo: intern, items: result.items });
       if (!mounted.current) return;
       setSaved({ for: forQueue, entries: snapshot, assignments: rowsWhenSaved });
-      setDraftState((d) => ({ ...d, dropped: NONE }));
       setAddedNote(null);
       setFill(null);
       setFillNote(null);
-      setSavedNote(
-        snapshot.length === 0
-          ? `Saved. ${first} has nothing queued for ${day}.`
-          : `Saved. ${first} has ${plural(snapshot.length, 'listing', 'listings')} for ${day}.`,
-      );
+      setSavedNote(true);
+      announce(`Saved. ${plural(snapshot.length, 'listing', 'listings')} for ${weekLabel(week)}.`);
     } catch (e) {
       if (!mounted.current) return;
       const refusals = heldOf(e);
@@ -704,7 +697,7 @@ export function AssignScreen({
           const entry = entries.find(
             (en) => (h.propertyId !== '' && en.propertyId === h.propertyId) || normalize(en.propertyName) === normalize(h.propertyName),
           );
-          if (entry) marks.set(entry.key, heldWords(h, intern, date));
+          if (entry) marks.set(entry.key, heldWords(h, intern));
         }
         setRefused(marks);
         const n = marks.size || refusals.length;
@@ -757,11 +750,22 @@ export function AssignScreen({
     setMatched((m) => (m ? { ...m, accepted: new Set([...m.accepted, index]) } : m));
   };
 
+  // ---- links to what was posted ---------------------------------------------
+
+  const linkOf = useMemo(() => {
+    if (intern === null) return () => undefined;
+    const theirs = posts
+      .filter((p) => p.postLink && samePerson(p.postedBy, intern) && /^\d{4}-\d{2}-\d{2}$/.test(p.date) && weekOf(p.date) === week)
+      .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
+    return (entry: QueueEntry): string | undefined => {
+      const name = normalize(entry.propertyName);
+      return theirs.find((p) => (entry.propertyId !== '' && p.propertyId === entry.propertyId) || normalize(p.title) === name)?.postLink;
+    };
+  }, [posts, intern, week]);
+
   // ---- the page -----------------------------------------------------------
 
   const waiting = loading && properties.length === 0;
-  const member = intern === null ? undefined : team?.find((m) => samePerson(m.name, intern));
-  const accounts = (member?.fbAccounts ?? []).filter((a) => a.trim());
 
   const announcer = (
     <p className="visually-hidden" aria-live="polite">
@@ -783,11 +787,14 @@ export function AssignScreen({
           <h1 className="page-header__title" tabIndex={-1}>
             Assign
           </h1>
-          {onSaveQueues ? (
-            <Button icon={<Icon name="assign" size={18} />} onClick={() => setFilling(true)} disabled={waiting}>
-              Fill queues
-            </Button>
-          ) : null}
+          <div className="assign__header-end">
+            <WeekPicker week={week} today={today} onChange={onWeekChange} />
+            {onSaveQueues ? (
+              <Button icon={<Icon name="assign" size={18} />} onClick={() => setFilling(true)} disabled={waiting}>
+                Fill queues
+              </Button>
+            ) : null}
+          </div>
         </header>
         {filling && onSaveQueues ? (
           <FillQueues
@@ -795,8 +802,9 @@ export function AssignScreen({
             properties={properties}
             posts={posts}
             assignments={assignments}
-            rules={{ cooldownDays, repostDueDays, perIntern: settings.perIntern }}
+            rules={{ cooldownDays, repostDueDays, perWeek }}
             today={today}
+            week={over ? weekOf(today) : week}
             onSave={onSaveQueues}
             onSaved={(note) => {
               setFilling(false);
@@ -809,36 +817,91 @@ export function AssignScreen({
         {interns.length === 0 ? (
           <NoInterns />
         ) : (
-          <AssignPicker interns={interns} team={team} assignments={assignments} today={today} onPick={(name) => onInternChange(name)} />
+          <AssignPicker
+            interns={interns}
+            week={week}
+            assignments={assignments}
+            posts={posts}
+            today={today}
+            onPick={(name) => onInternChange(name)}
+          />
         )}
         {announcer}
       </div>
     );
   }
 
-  // Step two: their queue for a day.
+  const pendingRows = entries.filter((e) => groupOf(e.key) === 'pending');
+  const postedRows = entries.filter((e) => groupOf(e.key) === 'posted');
+  const friday = shortDate(weekFriday(week));
+
+  const header = (
+    <header className="page-header assign__header assign__header--queue">
+      <div className="assign__who">
+        <Button
+          variant="quiet"
+          size="small"
+          className="assign__back"
+          icon={<ManagerIcon name="chevronLeft" size={18} />}
+          onClick={() => requestIntern('')}
+        >
+          All interns
+        </Button>
+        <h1 className="page-header__title" tabIndex={-1}>
+          {intern}
+        </h1>
+        <p className="assign__due">{over ? `Ended ${friday}` : `Due ${friday}`}</p>
+      </div>
+      <WeekPicker week={week} today={today} onChange={requestWeek} />
+    </header>
+  );
+
+  // Step two, a week that is over: what happened, read only.
+  if (over) {
+    const missed = open;
+    return (
+      <div className="page assign">
+        {header}
+        {errorNotice}
+        <Card className="assign__review" padding="tight">
+          {loading && entries.length === 0 ? (
+            <div className="assign__waiting">
+              <Spinner label="Loading the queue" />
+              <span>Loading…</span>
+            </div>
+          ) : entries.length === 0 ? (
+            <p className="assign__quiet assign__empty">No queue that week.</p>
+          ) : (
+            <>
+              <div className="assign-review__head">
+                <p className="assign-review__sum tabular" role="status">
+                  {postedRows.length} posted
+                  {pendingRows.length > 0 ? ` · ${pendingRows.length} pending` : ''}
+                  {' · '}
+                  <span className={missed.length > 0 ? 'assign-review__missed' : undefined}>{missed.length} missed</span>
+                </p>
+                {missed.some((e) => e.property) ? (
+                  <Button size="small" onClick={() => copyMissed(missed)}>
+                    {nextOpen === addWeeks(week, 1) ? 'Copy missed to next week' : 'Copy missed to this week'}
+                  </Button>
+                ) : null}
+              </div>
+              <QueueGroup title="Missed" tone="danger" rows={missed} linkOf={() => undefined} onOpenLink={onOpenLink} />
+              <QueueGroup title="Pending" tone="warn" rows={pendingRows} linkOf={linkOf} onOpenLink={onOpenLink} />
+              <QueueGroup title="Posted" tone="ok" rows={postedRows} linkOf={linkOf} onOpenLink={onOpenLink} />
+            </>
+          )}
+        </Card>
+        {announcer}
+      </div>
+    );
+  }
+
+  // Step two: their queue for a week.
+  const scope = tabLabel(tab, states);
   return (
     <div className="page assign">
-      <header className="page-header assign__header assign__header--queue">
-        <div className="assign__who">
-          <Button
-            variant="quiet"
-            size="small"
-            className="assign__back"
-            icon={<ManagerIcon name="chevronLeft" size={18} />}
-            onClick={() => requestIntern('')}
-          >
-            All interns
-          </Button>
-          <h1 className="page-header__title" tabIndex={-1}>
-            {intern}
-          </h1>
-          <p className="assign__fb">
-            {accounts.length === 0 ? 'Any FB account' : accounts.join(', ')}
-          </p>
-        </div>
-        <DayPicker date={date} today={today} onChange={requestDate} label="Day" quick={['today', 'tomorrow']} />
-      </header>
+      {header}
 
       {errorNotice}
 
@@ -847,7 +910,7 @@ export function AssignScreen({
           tone="warn"
           live
           className="assign__notice"
-          title={`Unsaved changes to ${first}'s queue for ${day}`}
+          title="Unsaved changes"
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
               event.preventDefault();
@@ -860,11 +923,7 @@ export function AssignScreen({
                 Keep editing
               </Button>
               <Button size="small" onClick={discard}>
-                {pending.kind === 'intern'
-                  ? pending.value === ''
-                    ? 'Discard and choose an intern'
-                    : `Discard and open ${firstName(pending.value)}'s queue`
-                  : `Discard and open ${shortDate(pending.value)}`}
+                Discard
               </Button>
             </div>
           }
@@ -876,20 +935,32 @@ export function AssignScreen({
       <div className="assign__panes">
         <Card
           className="assign__add"
+          padding="tight"
           title={mode === 'library' ? 'Listings' : 'Paste a list'}
           actions={
             mode === 'library' ? (
               <div className="assign__add-actions">
-                <Button variant="quiet" size="small" onClick={() => setMode('paste')}>
-                  Paste a list
-                </Button>
                 <QuickFill
                   count={fillCount}
                   onCount={setFillCount}
-                  scope={tabLabel(tab, states)}
+                  scope={scope}
                   onFill={(n) => quickFill(n, tab)}
                   disabled={rules === null || loading}
                 />
+                <MenuButton label="More actions" icon={<MoreIcon />} className="assign__more">
+                  {(close) => (
+                    <button
+                      type="button"
+                      className="menu__item"
+                      onClick={() => {
+                        close();
+                        setMode('paste');
+                      }}
+                    >
+                      Paste a list
+                    </button>
+                  )}
+                </MenuButton>
               </div>
             ) : (
               <Button
@@ -906,7 +977,7 @@ export function AssignScreen({
           {waiting ? (
             <div className="assign__waiting">
               <Spinner label="Loading the library" />
-              <span>Loading the library…</span>
+              <span>Loading…</span>
             </div>
           ) : mode === 'library' ? (
             <LibraryPanel
@@ -932,11 +1003,7 @@ export function AssignScreen({
               onAccept={accept}
               onAddAll={(picked) => {
                 const n = add(picked);
-                if (n > 0) {
-                  setAddedNote(
-                    `Added ${plural(n, 'listing', 'listings')} to ${first}'s queue. Save to keep ${n === 1 ? 'it' : 'them'}.`,
-                  );
-                }
+                if (n > 0) setAddedNote(`Added ${n}.`);
               }}
               addedNote={addedNote}
             />
@@ -946,22 +1013,10 @@ export function AssignScreen({
         <Card
           className="assign__queue"
           padding="tight"
-          title={`Queue for ${day}`}
-          description={plural(entries.length, 'listing', 'listings')}
+          title="Queue"
+          actions={<Badge count={entries.length} label={plural(entries.length, 'listing', 'listings')} />}
         >
-          <Carried
-            items={carriedLeft}
-            onMove={moveCarried}
-            onRelease={releaseCarried}
-            open={carriedOpen}
-            onToggle={setCarriedOpen}
-          />
-          {released.some((c) => dropped.includes(c.key)) ? (
-            <p className="assign__released">
-              {plural(dropped.length, 'earlier listing', 'earlier listings')} will be freed on save.
-            </p>
-          ) : null}
-
+          <div className="assign-queue__body">
           {fillNote ? (
             <div className="assign-fill" role="status">
               <span>{fillNote}</span>
@@ -976,96 +1031,137 @@ export function AssignScreen({
           {loading && entries.length === 0 ? (
             <div className="assign__waiting">
               <Spinner label="Loading the queue" />
-              <span>Loading the queue…</span>
+              <span>Loading…</span>
             </div>
           ) : entries.length === 0 ? (
-            <p className="assign__quiet assign__empty" ref={emptyRef} tabIndex={-1}>
-              Nothing queued for {day} yet.
-            </p>
-          ) : (
-            <ol className="assign-queue" aria-label={`${first}'s queue, in posting order`}>
-              {entries.map((entry, index) => {
-                const dnd = dragProps(entry, index);
-                const from = carriedFrom.get(entry.key);
-                return (
-                  <QueueRow
-                    key={entry.key}
-                    ref={(el) => {
-                      if (el) rowRefs.current.set(entry.key, el);
-                      else rowRefs.current.delete(entry.key);
-                    }}
-                    entry={entry}
-                    index={index}
-                    count={entries.length}
-                    rules={rules}
-                    isNew={!baseline.some((b) => b.key === entry.key)}
-                    preview={fillKeys?.has(entry.key) ?? false}
-                    refusal={refused.get(entry.key)}
-                    movedFrom={from ? dayMonth(from) : undefined}
-                    dragging={drag?.key === entry.key}
-                    dropMark={dropMark(index)}
-                    onMove={(by, role) => move(entry.key, by, role)}
-                    onRemove={() => remove(entry.key)}
-                    onDragOver={dnd.onDragOver}
-                    onDrop={dnd.onDrop}
-                    handle={dnd.handle}
-                  />
-                );
-              })}
-            </ol>
-          )}
-          {entries.length > 1 ? <p className="assign__hint">Top to bottom. Drag or Alt+Up/Down to reorder.</p> : null}
-        </Card>
-      </div>
-
-      {problems.length > 0 ? (
-        <Notice
-          tone="danger"
-          live
-          className="assign__notice"
-          title="The queue wasn't saved"
-          action={
-            refused.size > 0 ? (
-              <Button size="small" onClick={removeRefused}>
-                {refused.size === 1 ? 'Remove it' : `Remove ${refused.size}`}
+            <div className="assign__empty">
+              <p className="assign__quiet" ref={emptyRef} tabIndex={-1}>
+                Nothing queued.
+              </p>
+              <Button size="small" disabled={rules === null || loading} onClick={() => quickFill(fillCount, tab)}>
+                {scope === 'All' ? `Add ${fillCount}` : `Add ${fillCount} from ${scope}`}
               </Button>
-            ) : undefined
-          }
-        >
-          {problems.map((p) => (
-            <p key={p}>{p}</p>
-          ))}
-        </Notice>
-      ) : null}
-
-      <div className="assign-savebar">
-        <p className="assign-savebar__state" role="status">
-          {saving ? (
-            'Saving…'
-          ) : savedNote && !dirty ? (
-            <>
-              <Icon name="pass" size={18} className="assign-savebar__icon assign-savebar__icon--ok" />
-              {savedNote}
-            </>
-          ) : dirty ? (
-            <>
-              <Icon name="warn" size={18} className="assign-savebar__icon assign-savebar__icon--warn" />
-              Unsaved changes to {first}&rsquo;s queue for {day}.
-            </>
+            </div>
           ) : (
-            `${first}'s queue for ${day} is saved.`
+            <>
+              {open.length > 0 ? (
+                <section className="qgroup" aria-label="Not shared">
+                  <h3 className="qgroup__title">
+                    <span className="qgroup__dot qgroup__dot--neutral" aria-hidden="true" />
+                    Not shared <span className="qgroup__count tabular">{open.length}</span>
+                  </h3>
+                  <ol className="assign-queue" aria-label="Not shared, in posting order">
+                    {open.map((entry, index) => {
+                      const dnd = dragProps(entry, index);
+                      return (
+                        <QueueRow
+                          key={entry.key}
+                          ref={(el) => {
+                            if (el) rowRefs.current.set(entry.key, el);
+                            else rowRefs.current.delete(entry.key);
+                          }}
+                          entry={entry}
+                          index={index}
+                          count={open.length}
+                          rules={rules}
+                          preview={fillKeys?.has(entry.key) ?? false}
+                          refusal={refused.get(entry.key)}
+                          dragging={drag?.key === entry.key}
+                          dropMark={dropMark(index)}
+                          onMove={(by, role) => move(entry.key, by, role)}
+                          onRemove={() => remove(entry.key)}
+                          onDragOver={dnd.onDragOver}
+                          onDrop={dnd.onDrop}
+                          handle={dnd.handle}
+                        />
+                      );
+                    })}
+                  </ol>
+                </section>
+              ) : (
+                <p className="assign__quiet assign__all-out" ref={emptyRef} tabIndex={-1}>
+                  All shared.
+                </p>
+              )}
+              <QueueGroup title="Pending" tone="warn" rows={pendingRows} linkOf={linkOf} onOpenLink={onOpenLink} />
+              <QueueGroup title="Posted" tone="ok" rows={postedRows} linkOf={linkOf} onOpenLink={onOpenLink} />
+            </>
           )}
-        </p>
-        <div className="assign-savebar__actions">
-          <Button variant="quiet" disabled={!dirty || saving} onClick={undo}>
-            Undo changes
-          </Button>
-          <Button variant="primary" busy={saving} disabled={!dirty || rules === null || loading} onClick={() => void save()}>
-            {saving ? 'Saving…' : `Save queue (${entries.length})`}
-          </Button>
-        </div>
+          </div>
+
+          {problems.length > 0 ? (
+            <Notice
+              tone="danger"
+              live
+              className="assign__notice"
+              title="The queue wasn't saved"
+              action={
+                refused.size > 0 ? (
+                  <Button size="small" onClick={removeRefused}>
+                    {refused.size === 1 ? 'Remove it' : `Remove ${refused.size}`}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {problems.map((p) => (
+                <p key={p}>{p}</p>
+              ))}
+            </Notice>
+          ) : null}
+          <div className="assign-savebar">
+            <p className="assign-savebar__state" role="status">
+              {saving ? (
+                'Saving…'
+              ) : dirty ? (
+                <>
+                  <Icon name="warn" size={18} className="assign-savebar__icon assign-savebar__icon--warn" />
+                  Unsaved changes
+                </>
+              ) : savedNote ? (
+                <>
+                  <Icon name="pass" size={18} className="assign-savebar__icon assign-savebar__icon--ok" />
+                  Saved
+                </>
+              ) : null}
+            </p>
+            <div className="assign-savebar__actions">
+              <Button variant="quiet" disabled={!dirty || saving} onClick={undo}>
+                Undo changes
+              </Button>
+              <Button variant="primary" busy={saving} disabled={!dirty || rules === null || loading} onClick={() => void save()}>
+                {saving ? 'Saving…' : `Save queue (${entries.length})`}
+              </Button>
+            </div>
+          </div>
+        </Card>
       </div>
       {announcer}
     </div>
+  );
+}
+
+interface QueueGroupProps {
+  readonly title: 'Pending' | 'Posted' | 'Missed';
+  readonly tone: 'warn' | 'ok' | 'danger';
+  readonly rows: readonly QueueEntry[];
+  readonly linkOf: (entry: QueueEntry) => string | undefined;
+  readonly onOpenLink?: ((url: string) => void) | undefined;
+}
+
+/** Pending, Posted or Missed: a heading with its count, then the listings. Nothing in it: not shown. */
+function QueueGroup({ title, tone, rows, linkOf, onOpenLink }: QueueGroupProps) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="qgroup" aria-label={title}>
+      <h3 className="qgroup__title">
+        <span className={`qgroup__dot qgroup__dot--${tone}`} aria-hidden="true" />
+        {title} <span className="qgroup__count tabular">{rows.length}</span>
+      </h3>
+      <ul className="done-list">
+        {rows.map((entry) => (
+          <DoneRow key={entry.key} entry={entry} link={title === 'Missed' ? undefined : linkOf(entry)} onOpenLink={onOpenLink} />
+        ))}
+      </ul>
+    </section>
   );
 }

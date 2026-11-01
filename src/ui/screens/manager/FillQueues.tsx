@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
 import { Button, Notice, TextInput } from '../../components';
-import { DEFAULT_PER_INTERN, planQueues, type Plan, type SkipReason } from '@/core/planner';
-import { addDays, firstName, plural, shortDate, type DirectoryRow, type Rules } from '@/core/summary';
+import { DEFAULT_PER_WEEK, planQueues, type Plan, type SkipReason } from '@/core/planner';
+import { firstName, plural, type DirectoryRow, type Rules } from '@/core/summary';
 import type { QueueItemInput } from '@/core/tracker';
 import { UserFacingError, type Assignment, type PostLogEntry } from '@/core/types';
-import { DayPicker } from './DayPicker';
+import { weekLabel } from '@/core/week';
+import { WeekPicker } from './WeekPicker';
 import { Dialog } from './Dialog';
 import './FillQueues.css';
 
@@ -15,10 +16,12 @@ export interface FillQueuesProps {
   readonly posts: readonly PostLogEntry[];
   readonly assignments: readonly Assignment[];
   readonly rules: Rules;
-  /** Today, yyyy-MM-dd. The date starts on tomorrow. */
+  /** Today, yyyy-MM-dd. */
   readonly today: string;
+  /** The week to start on, as its Monday: the one Assign shows. */
+  readonly week: string;
   /** Saves every planned queue at once (tracker.saveQueues). Resolves with how many rows were saved. */
-  readonly onSave: (date: string, queues: ReadonlyMap<string, readonly QueueItemInput[]>) => Promise<number>;
+  readonly onSave: (week: string, queues: ReadonlyMap<string, readonly QueueItemInput[]>) => Promise<number>;
   /** Saved: closes, with what to say. */
   readonly onSaved: (note: string) => void;
   readonly onClose: () => void;
@@ -33,14 +36,14 @@ export const SKIP_WORDS: Record<SkipReason, string> = {
 };
 
 /**
- * Fill several interns' queues for one day at once: choose who, how many and
- * which day, preview the plan, and save it in one go. Nothing is written
+ * Fill several interns' queues for one week at once: choose who, how many and
+ * which week, preview the plan, and save it in one go. Nothing is written
  * until Save all.
  */
-export function FillQueues({ interns, properties, posts, assignments, rules, today, onSave, onSaved, onClose }: FillQueuesProps) {
-  const [perText, setPerText] = useState(String(rules.perIntern ?? DEFAULT_PER_INTERN));
+export function FillQueues({ interns, properties, posts, assignments, rules, today, week: startWeek, onSave, onSaved, onClose }: FillQueuesProps) {
+  const [perText, setPerText] = useState(String(rules.perWeek ?? rules.perIntern ?? DEFAULT_PER_WEEK));
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set(interns));
-  const [date, setDate] = useState(addDays(today, 1));
+  const [week, setWeek] = useState(startWeek);
   const [keep, setKeep] = useState(true);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [saving, setSaving] = useState(false);
@@ -63,7 +66,7 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
       perRef.current?.focus();
       return;
     }
-    setPlan(planQueues({ properties, posts, assignments, interns: who, perIntern: per, date, rules, keepExisting: keep }));
+    setPlan(planQueues({ properties, posts, assignments, interns: who, perWeek: per, week, today, rules, keepExisting: keep }));
   };
 
   const save = async () => {
@@ -71,8 +74,8 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
     setSaving(true);
     setError(null);
     try {
-      const saved = await onSave(date, plan.queues);
-      onSaved(`Saved ${plural(plan.queues.size, 'queue', 'queues')} for ${shortDate(date)}, ${plural(saved, 'listing', 'listings')}.`);
+      const saved = await onSave(plan.week, plan.queues);
+      onSaved(`Saved ${plural(plan.queues.size, 'queue', 'queues')} for ${weekLabel(plan.week)}, ${plural(saved, 'listing', 'listings')}.`);
     } catch (err) {
       setError(err instanceof UserFacingError ? err.message : "Couldn't save the queues. Check your connection, then try again.");
       setSaving(false);
@@ -111,7 +114,7 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
         <TextInput
           ref={perRef}
           className="fill__per"
-          label="Per intern"
+          label="Per week"
           type="number"
           inputMode="numeric"
           min={1}
@@ -123,13 +126,13 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
         />
         <div className="fill__field">
           <span className="fill__label" aria-hidden="true">
-            Date
+            Week
           </span>
-          <DayPicker date={date} today={today} onChange={changed(setDate)} label="Date" quick={['today', 'tomorrow']} />
+          <WeekPicker week={week} today={today} onChange={changed(setWeek)} />
         </div>
         <label className="fill__check fill__keep">
           <input type="checkbox" checked={keep} disabled={saving} onChange={(e) => changed(setKeep)(e.target.checked)} />
-          Keep existing queue
+          Keep existing queues
         </label>
       </div>
 
@@ -173,7 +176,7 @@ function PlanPreview({ plan, per, total }: { readonly plan: Plan; readonly per: 
 
       {plan.shortBy > 0 ? (
         <Notice tone="warn" live>
-          {plural(plan.shortBy, 'listing', 'listings')} short of {per} each. Not enough listings are free.
+          {plural(plan.shortBy, 'listing', 'listings')} short of {per} each. Not enough are free.
         </Notice>
       ) : null}
 

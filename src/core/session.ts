@@ -73,13 +73,16 @@ export function readServerInfo(reply: Reply): ServerInfo {
 export function readRules(value: unknown): ServerRules | null {
   const raw = asRecord(value);
   if (!raw) return null;
-  const rule = (name: keyof ServerRules): number => {
-    const v = raw[name];
+  const valid = (name: keyof ServerRules, from: string = name): number | undefined => {
+    const v = raw[from];
     const n = typeof v === 'number' ? v : typeof v === 'string' && /^\s*\d+\s*$/.test(v) ? Number(v) : NaN;
     const { min, max } = RULE_LIMITS[name];
-    return Number.isInteger(n) && n >= min && n <= max ? n : DEFAULT_RULES[name];
+    return Number.isInteger(n) && n >= min && n <= max ? n : undefined;
   };
-  return { cooldownDays: rule('cooldownDays'), repostDueDays: rule('repostDueDays'), perIntern: rule('perIntern') };
+  const rule = (name: keyof ServerRules): number => valid(name) ?? DEFAULT_RULES[name];
+  // v6: perWeek; a server before it sends only perIntern, its old name.
+  const perWeek = valid('perWeek') ?? valid('perWeek', 'perIntern') ?? DEFAULT_RULES.perWeek;
+  return { cooldownDays: rule('cooldownDays'), repostDueDays: rule('repostDueDays'), perWeek, perIntern: perWeek };
 }
 
 // yyyy-MM-dd.n, as SERVER_VERSION is written.

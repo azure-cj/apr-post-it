@@ -1,11 +1,32 @@
 // @vitest-environment jsdom
-import { screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { admin, fakeServer, intern, manager, renderApp, TODAY } from '../../state/testing';
+import { MemoryRouter } from 'react-router-dom';
+import type { User } from '@/core/types';
+import type { FakePlatform } from '@/platform/fake';
+import { AppShell, routerFuture } from '../../App';
+import { AppStateProvider } from '../../state/AppState';
+import { admin, EXEC, fakeServer, intern, manager, renderApp } from '../../state/testing';
 
 // No web app link built in: these tests sign in with the two-field form and
 // must not depend on the real link in src/config.ts.
 vi.mock('@/config', () => ({ BUILT_IN_SCRIPT_URL: '' }));
+
+/** Thu 5 Nov 2026, 10:00 in Manila: the fourth day of the week of Mon 2 Nov. */
+const THURSDAY = Date.parse('2026-11-05T02:00:00Z');
+const WEEK = '2026-11-02';
+const LAST_WEEK = '2026-10-26';
+
+/** The whole window at `path`, signed in as `user`, on a given day. */
+function renderAt(now: number, { platform, user = admin, path = '/interns' }: { platform: FakePlatform; user?: User; path?: string }) {
+  return render(
+    <AppStateProvider platform={platform} initialUser={user} initialSettings={{ scriptUrl: EXEC }} now={() => now}>
+      <MemoryRouter initialEntries={[path]} future={routerFuture}>
+        <AppShell />
+      </MemoryRouter>
+    </AppStateProvider>,
+  );
+}
 
 /** The team as the web app sends it: out of order, an admin, and a revoked intern. */
 const TEAM = {
@@ -22,161 +43,282 @@ const TEAM = {
       fbProfileLink: 'https://www.facebook.com/jan.delacruz',
       active: true,
     },
+    { name: 'Bea Lim', role: 'Intern', email: '', fbAccounts: '', active: true },
+    { name: 'Carlo Mendoza', role: 'Intern', email: '', fbAccounts: '', active: true },
   ],
 };
 
-const row = (who: string, property: string, status: string, date = TODAY) => ({ date, assignedTo: who, property, status, propertyId: '' });
+const row = (who: string, property: string, status: string, date = WEEK, propertyId = '') => ({ date, assignedTo: who, property, status, propertyId });
+const queue = (who: string, n: number, date = WEEK) => Array.from({ length: n }, (_, i) => row(who, `${who} listing ${i + 1}`, 'Not Shared', date));
 
-/** Jan: 2 of 5 posted today. Mika: a queue tomorrow only. */
+/**
+ * This week (2–6 Nov):
+ * - Jan: 10, of which 2 posted and 1 pending: behind (8 expected by Thursday).
+ * - Mika: 5, 4 posted: on track.
+ * - Bea: 5, nothing posted: not started.
+ * - Carlo: 2, both posted: done.
+ * Last week (26–30 Oct): Jan 4 of 4; Mika 1 of 3, so 2 missed.
+ */
 const ASSIGNMENTS = {
   ok: true,
   assignments: [
-    row(intern.name, 'Kapitolyo Ground Floor Retail, Pasig', 'Posted'),
-    row(intern.name, 'BGC Uptown Office 18F, 240 sqm', 'Posted'),
-    row(intern.name, 'Seaside Residences 2BR, Pasay', 'Pending'),
-    row(intern.name, 'Valenzuela Warehouse 1,200 sqm', 'To post'),
-    row(intern.name, 'Verdant Hills Lot 12, Tagaytay', 'To post'),
-    row('Mika Reyes', 'Kapitolyo Ground Floor Retail, Pasig', 'To post', '2026-11-01'),
+    row(intern.name, 'Kapitolyo Ground Floor Retail, Pasig', 'Posted', WEEK, '1Kapitolyo'),
+    row(intern.name, 'BGC Uptown Office 18F, 240 sqm', 'Posted', WEEK, '1BgcUptown'),
+    row(intern.name, 'Seaside Residences 2BR, Pasay', 'Pending', WEEK, '1Seaside'),
+    ...queue(intern.name, 7),
+    ...Array.from({ length: 5 }, (_, i) => row('Mika Reyes', `Mika listing ${i + 1}`, i < 4 ? 'Posted' : 'Not Shared')),
+    ...queue('Bea Lim', 5),
+    row('Carlo Mendoza', 'Carlo listing 1', 'Posted'),
+    row('Carlo Mendoza', 'Carlo listing 2', 'Posted'),
+    ...Array.from({ length: 4 }, (_, i) => row(intern.name, `Old listing ${i + 1}`, 'Posted', LAST_WEEK)),
+    row('Mika Reyes', 'Kapitolyo Ground Floor Retail, Pasig', 'Posted', LAST_WEEK, '1Kapitolyo'),
+    ...queue('Mika Reyes', 2, LAST_WEEK),
   ],
 };
 
-const post = (who: string, title: string, status: string, date: string, time: string) => ({
+const post = (who: string, title: string, status: string, date: string, time: string, link = '', propertyId = '') => ({
   date,
   time,
   type: '',
   title,
   status,
-  fbAccount: 'APG Main',
-  postLink: status === 'Posted' ? 'https://www.facebook.com/groups/apgmain/posts/1/' : '',
+  fbAccount: who === intern.name ? 'APG Main' : 'Mika Reyes APG',
+  postLink: link,
   postedBy: who,
-  propertyId: '',
+  propertyId,
 });
 
-/** Jan posted twice today, one still waiting for approval. Mika last posted on Thursday. */
+const JAN_KAPITOLYO = 'https://www.facebook.com/groups/apgmain/posts/111/';
+const MIKA_KAPITOLYO = 'https://www.facebook.com/groups/apgmain/posts/99/';
+
 const POSTS = {
   ok: true,
   posts: [
-    post(intern.name, 'Kapitolyo Ground Floor Retail, Pasig', 'Posted', TODAY, '09:41'),
-    post(intern.name, 'Seaside Residences 2BR, Pasay', 'Pending', TODAY, '11:02'),
-    post('Mika Reyes', 'BGC Uptown Office 18F, 240 sqm', 'Posted', '2026-10-29', '15:20'),
+    post(intern.name, 'Kapitolyo Ground Floor Retail, Pasig', 'Posted', '2026-11-02', '09:41', JAN_KAPITOLYO, '1Kapitolyo'),
+    post(intern.name, 'BGC Uptown Office 18F, 240 sqm', 'Posted', '2026-11-02', '10:15', 'https://www.facebook.com/groups/apgmain/posts/112/', '1BgcUptown'),
+    post(intern.name, 'Seaside Residences 2BR, Pasay', 'Pending', '2026-11-03', '11:02', 'https://www.facebook.com/groups/apgmain/posts/113/', '1Seaside'),
+    ...[2, 3, 4, 5].map((d, i) => post('Mika Reyes', `Mika listing ${i + 1}`, 'Posted', `2026-11-0${d}`, '09:00', `https://www.facebook.com/groups/x/posts/${d}/`)),
+    post('Carlo Mendoza', 'Carlo listing 1', 'Posted', '2026-11-04', '13:00', 'https://www.facebook.com/groups/x/posts/c1/'),
+    post('Carlo Mendoza', 'Carlo listing 2', 'Posted', '2026-11-04', '14:00', 'https://www.facebook.com/groups/x/posts/c2/'),
+    ...Array.from({ length: 4 }, (_, i) => post(intern.name, `Old listing ${i + 1}`, 'Posted', '2026-10-27', '10:00', `https://www.facebook.com/groups/x/posts/o${i}/`)),
+    post('Mika Reyes', 'Kapitolyo Ground Floor Retail, Pasig', 'Posted', '2026-10-28', '15:20', MIKA_KAPITOLYO, '1Kapitolyo'),
   ],
 };
 
 const server = (replies = {}) => fakeServer({ team: TEAM, assignments: ASSIGNMENTS, posts: POSTS, ...replies });
-const table = () => screen.findByRole('table');
-const rowOf = async (name: string) => (await screen.findByRole('rowheader', { name: new RegExp(name) })).closest('tr')!;
 const heading = () => screen.getByRole('heading', { level: 1 }).textContent;
+const rowOf = async (name: string) => (await screen.findByRole('button', { name: new RegExp(name), expanded: false })).closest('tr')!;
+const names = () => Array.from(document.querySelectorAll('.week-table__name')).map((n) => n.textContent);
+const stat = (label: string) => within(document.querySelector('.tracker-stats') as HTMLElement).getByText(label).nextElementSibling!.textContent;
 
-describe('the Interns screen', () => {
-  it("lists the team's active interns by name, with the day's progress, pending posts, last post and FB accounts", async () => {
-    renderApp({ platform: server(), user: admin, path: '/interns' });
+describe('the Interns screen: the week', () => {
+  it('lists the active interns worst first, with the week so far, posts per day, pace and last post', async () => {
+    renderAt(THURSDAY, { platform: server() });
     expect(heading()).toBe('Interns');
-    const rows = within(await table()).getAllByRole('row').slice(1);
-    await waitFor(() => expect(rows.map((r) => within(r).getByRole('rowheader').textContent)).toEqual(['JD' + intern.name, 'MRMika Reyes']));
+    expect(screen.getByRole('group', { name: 'Week' }).textContent).toContain('2–6 Nov');
+    await waitFor(() => expect(names()).toEqual(['Bea Lim', intern.name, 'Mika Reyes', 'Carlo Mendoza']));
 
     const jan = await rowOf(intern.name);
-    await waitFor(() => expect(jan.textContent).toContain('2 of 5 posted'));
-    expect(jan.textContent).toContain('1 pending');
-    expect(jan.textContent).toContain('Today, 11:02');
-    expect(jan.textContent).toContain('APG Main, APG Rentals South');
-    expect((jan.querySelector('.interns-progress__posted') as HTMLElement).style.width).toBe('40%');
+    expect(jan.querySelector('.week-bar__count')!.textContent).toBe('3 / 10');
+    expect(within(jan).getByText('Behind')).toBeTruthy();
+    expect(jan.textContent).toContain('Tue 3 Nov, 11:02');
+    expect((jan.querySelector('.week-bar__posted') as HTMLElement).style.width).toBe('20%');
+    expect((jan.querySelector('.week-bar__pending') as HTMLElement).style.width).toBe('10%');
 
-    const mika = await rowOf('Mika Reyes');
-    expect(mika.textContent).toContain('No queue');
-    expect(mika.textContent).toContain('None');
-    expect(mika.textContent).toContain('Thu 29 Oct, 15:20');
-    expect(within(mika).getByText('Any')).toBeTruthy();
+    // Mon–Fri: 2, 1, 0, then today (Thursday, ringed) 0, and Friday still to come.
+    const days = Array.from(jan.querySelectorAll('.week-days__day'));
+    expect(days.map((d) => d.getAttribute('data-count'))).toEqual(['2', '1', '0', '0', '0']);
+    expect(days[3]!.classList.contains('week-days__day--today')).toBe(true);
+    expect(days[4]!.classList.contains('week-days__day--later')).toBe(true);
+    expect(jan.textContent).toContain('Posts: Mon 2, Tue 1, Wed 0, Thu 0');
+
+    expect(within(await rowOf('Bea Lim')).getByText('Not started')).toBeTruthy();
+    expect(within(await rowOf('Mika Reyes')).getByText('On track')).toBeTruthy();
+    expect(within(await rowOf('Carlo Mendoza')).getByText('Done')).toBeTruthy();
 
     // Admins and revoked interns are not in the table.
-    expect(screen.getByRole('table').textContent).not.toContain(manager.name);
-    expect(screen.getByRole('table').textContent).not.toContain('Paolo Reyes');
+    const table = screen.getByRole('table');
+    expect(table.textContent).not.toContain(manager.name);
+    expect(table.textContent).not.toContain('Paolo Reyes');
 
-    // The numbers: 2 active, 0 of 1 done, 1 with pending posts, 1 with no queue.
-    const stats = document.querySelector('.tracker-stats') as HTMLElement;
-    expect(within(stats).getByText('Active interns').nextElementSibling!.textContent).toBe('2');
-    expect(within(stats).getByText('Done today').nextElementSibling!.textContent).toBe('0 of 1');
-    expect(within(stats).getByText('With pending posts').nextElementSibling!.textContent).toBe('1');
-    expect(within(stats).getByText('No queue today').nextElementSibling!.textContent).toBe('1');
+    // The week in four numbers.
+    expect(stat('Posted')).toBe('8 of 22');
+    expect(stat('Pending')).toBe('1');
+    expect(stat('Left')).toBe('13');
+    expect(stat('Behind')).toBe('2 of 4');
   });
 
-  it("shows each intern's FB broker name, with their profile a click away", async () => {
+  it('shows a week that is over as Missed, and opens on it at the weekend', async () => {
+    // Saturday 31 Oct: the week of 26–30 Oct has just ended.
+    renderApp({ platform: server(), user: admin, path: '/interns' });
+    expect((await screen.findByRole('group', { name: 'Week' })).textContent).toContain('26–30 Oct');
+    const mika = await rowOf('Mika Reyes');
+    expect(within(mika).getByText('Missed 2')).toBeTruthy();
+    expect(mika.querySelector('.week-bar__count')!.textContent).toBe('1 / 3');
+    expect(names()[0]).toBe('Mika Reyes');
+    expect(within(await rowOf(intern.name)).getByText('Done')).toBeTruthy();
+    expect(within(await rowOf('Bea Lim')).getByText('No queue')).toBeTruthy();
+    // No day is still to come.
+    expect(mika.querySelectorAll('.week-days__day--later')).toHaveLength(0);
+    expect(stat('Missed')).toBe('2');
+    expect(stat('Behind')).toBe('1 of 4');
+  });
+
+  it('follows the week picker', async () => {
+    renderAt(THURSDAY, { platform: server() });
+    await rowOf('Bea Lim');
+    await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
+    expect(screen.getByRole('group', { name: 'Week' }).textContent).toContain('26–30 Oct');
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('Missed 2')).toBeTruthy());
+    await userEvent.click(screen.getByRole('button', { name: 'This week' }));
+    await waitFor(() => expect(names()[0]).toBe('Bea Lim'));
+  });
+});
+
+describe('the Interns screen: who posted?', () => {
+  const search = () => screen.getByRole('searchbox', { name: /Who posted\?/ });
+
+  it('finds every post of a listing by name, newest first, with who, when, the FB account and status', async () => {
+    renderAt(THURSDAY, { platform: server() });
+    await rowOf('Bea Lim');
+    await userEvent.type(search(), 'kapitolyo');
+    const results = screen.getByRole('region', { name: 'Who posted?' });
+    expect(within(results).getByRole('status').textContent).toBe('2 posts');
+    const answers = Array.from(results.querySelectorAll('.who-answer'));
+    expect(answers.map((a) => a.querySelector('.who-answer__name')!.textContent)).toEqual([intern.name, 'Mika Reyes']);
+    expect(answers[0]!.textContent).toContain('Mon 2 Nov, 09:41');
+    expect(answers[0]!.textContent).toContain('APG Main');
+    expect(answers[0]!.textContent).toContain('Posted');
+    expect(answers[1]!.textContent).toContain('Mika Reyes APG');
+  });
+
+  it('finds the post by its pasted link, and opens it', async () => {
     const platform = server();
-    renderApp({ platform, user: admin, path: '/interns' });
-    await table();
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toContain('FB broker name');
-
-    const jan = await rowOf(intern.name);
-    await userEvent.click(within(jan).getByRole('button', { name: `Open ${intern.name}'s Facebook profile` }));
-    await waitFor(() => expect(platform.opened).toEqual(['https://www.facebook.com/jan.delacruz']));
-    // No link on the Team tab: no Profile.
-    expect(within(await rowOf('Mika Reyes')).queryByRole('button', { name: /Facebook profile/ })).toBeNull();
+    renderAt(THURSDAY, { platform });
+    await rowOf('Bea Lim');
+    await userEvent.click(search());
+    await userEvent.paste('facebook.com/groups/apgmain/posts/99');
+    const results = screen.getByRole('region', { name: 'Who posted?' });
+    expect(within(results).getByRole('status').textContent).toBe('1 post');
+    expect(results.querySelector('.who-answer__name')!.textContent).toBe('Mika Reyes');
+    await userEvent.click(within(results).getByRole('button', { name: /Open the post of Kapitolyo Ground Floor Retail, Pasig by Mika Reyes/ }));
+    await waitFor(() => expect(platform.opened).toEqual([MIKA_KAPITOLYO]));
   });
 
-  it('follows the day picker', async () => {
-    renderApp({ platform: server(), user: admin, path: '/interns' });
-    await rowOf('Mika Reyes');
-    await userEvent.click(screen.getByRole('button', { name: 'Tomorrow' }));
-    const mika = await rowOf('Mika Reyes');
-    await waitFor(() => expect(mika.textContent).toContain('0 of 1 posted'));
-    expect((await rowOf(intern.name)).textContent).toContain('No queue');
-  });
-
-  it('filters by name as you type', async () => {
-    renderApp({ platform: server(), user: admin, path: '/interns' });
-    await rowOf('Mika Reyes');
-    const search = screen.getByRole('searchbox', { name: 'Search interns by name' });
-
-    await userEvent.type(search, 'mika');
-    expect(within(screen.getByRole('table')).getAllByRole('rowheader').map((h) => h.textContent)).toEqual(['MRMika Reyes']);
-
-    await userEvent.clear(search);
-    await userEvent.type(search, 'zz');
-    expect(screen.queryByRole('table')).toBeNull();
-    expect(screen.getByText(/No active intern.s name matches/)).toBeTruthy();
-
+  it('says when nothing matches, and Escape clears it and closes the answers', async () => {
+    renderAt(THURSDAY, { platform: server() });
+    await rowOf('Bea Lim');
+    await userEvent.type(search(), 'zzz');
+    expect(screen.getByRole('status').textContent).toBe('No post matches “zzz”');
     await userEvent.keyboard('{Escape}');
-    expect(within(await table()).getAllByRole('rowheader')).toHaveLength(2);
+    expect((search() as HTMLInputElement).value).toBe('');
+    expect(document.querySelector('.who-posted__results')).toBeNull();
+
+    // From an answer too: back in the box, empty.
+    await userEvent.type(search(), 'kapitolyo');
+    within(screen.getByRole('region', { name: 'Who posted?' })).getAllByRole('button', { name: /Open the post/ })[0]!.focus();
+    await userEvent.keyboard('{Escape}');
+    expect(document.activeElement).toBe(search());
+    expect(document.querySelector('.who-posted__results')).toBeNull();
+  });
+});
+
+describe("the Interns screen: an intern's week", () => {
+  it('opens beside the list with the queue grouped, links to the posts, and the last four weeks', async () => {
+    const platform = server();
+    renderAt(THURSDAY, { platform });
+    await userEvent.click(within(await rowOf(intern.name)).getByRole('button', { name: new RegExp(intern.name) }));
+
+    const panel = screen.getByRole('complementary', { name: intern.name });
+    expect(document.activeElement).toBe(within(panel).getByRole('heading', { level: 2, name: intern.name }));
+    expect(within(screen.getByRole('table')).getByRole('button', { name: new RegExp(intern.name) }).getAttribute('aria-expanded')).toBe('true');
+    expect(panel.querySelector('.week-bar__count')!.textContent).toBe('3 / 10');
+
+    const group = (name: string) => within(panel).getByRole('region', { name: new RegExp(`^${name}`) });
+    expect(within(panel).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'Last 4 weeks',
+      'Not shared 7',
+      'Pending 1',
+      'Posted 2',
+    ]);
+    expect(group('Pending').textContent).toContain('Seaside Residences 2BR, Pasay');
+    // A long group shows its first five, and the rest on request. Not shared has no link to open.
+    expect(group('Not shared').querySelectorAll('.panel-item')).toHaveLength(5);
+    await userEvent.click(within(group('Not shared')).getByRole('button', { name: 'Show all 7' }));
+    expect(group('Not shared').querySelectorAll('.panel-item')).toHaveLength(7);
+    expect(within(group('Not shared')).queryByRole('button', { name: /Open/ })).toBeNull();
+    await userEvent.click(within(group('Posted')).getByRole('button', { name: 'Open the post of Kapitolyo Ground Floor Retail, Pasig' }));
+    await waitFor(() => expect(platform.opened).toEqual([JAN_KAPITOLYO]));
+
+    // Last 4 weeks: 5, 12, 19 Oct with no queue, then 26 Oct, all 4 posted.
+    const weeks = within(panel).getByRole('region', { name: 'Last 4 weeks' }).querySelectorAll('.history__week');
+    expect(Array.from(weeks).map((w) => w.querySelector('.history__value')!.textContent)).toEqual(['–', '–', '–', '100%']);
+    expect(weeks[3]!.textContent).toContain('26 Oct');
+    expect(weeks[3]!.textContent).toContain('4 of 4');
+
+    // A real way to reach them: their Facebook profile. No made-up Message button.
+    expect(within(panel).queryByRole('button', { name: /Message/ })).toBeNull();
+    await userEvent.click(within(panel).getByRole('button', { name: 'FB profile' }));
+    await waitFor(() => expect(platform.opened).toContain('https://www.facebook.com/jan.delacruz'));
   });
 
-  it("opens an intern's queue for the day shown, and plans tomorrow's", async () => {
-    renderApp({ platform: server(), user: admin, path: '/interns' });
-    const mika = await rowOf('Mika Reyes');
-    await userEvent.click(within(mika).getByRole('button', { name: 'Open queue of Mika Reyes' }));
-    // Straight to step two: Mika's queue for the day shown.
+  it('shows Missed for a week that is over', async () => {
+    renderAt(THURSDAY, { platform: server(), path: `/interns?week=${LAST_WEEK}` });
+    await userEvent.click(within(await rowOf('Mika Reyes')).getByRole('button', { name: /Mika Reyes/ }));
+    const panel = screen.getByRole('complementary', { name: 'Mika Reyes' });
+    expect(within(panel).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Last 4 weeks', 'Posted 1', 'Missed 2']);
+  });
+
+  it('closes with Escape or Close, and focus goes back to the row', async () => {
+    renderAt(THURSDAY, { platform: server() });
+    const open = within(await rowOf('Bea Lim')).getByRole('button', { name: /Bea Lim/ });
+    await userEvent.click(open);
+    expect(screen.getByRole('complementary', { name: 'Bea Lim' }).textContent).toContain('Not shared 5');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('complementary', { name: 'Bea Lim' })).toBeNull();
+    expect(document.activeElement).toBe(open);
+
+    await userEvent.click(open);
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('complementary', { name: 'Bea Lim' })).toBeNull();
+    // No FB profile on the Team tab: no button for it.
+    await userEvent.click(open);
+    expect(within(screen.getByRole('complementary', { name: 'Bea Lim' })).queryByRole('button', { name: 'FB profile' })).toBeNull();
+  });
+
+  it("opens the intern's queue in Assign", async () => {
+    renderAt(THURSDAY, { platform: server() });
+    await userEvent.click(within(await rowOf('Mika Reyes')).getByRole('button', { name: /Mika Reyes/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open in Assign' }));
     expect(heading()).toBe('Mika Reyes');
-    expect(screen.getByRole('group', { name: 'Day' }).textContent).toContain('Sat 31 Oct 2026');
-
-    await userEvent.click(screen.getByRole('link', { name: 'Interns' }));
-    await userEvent.click(within(await rowOf(intern.name)).getByRole('button', { name: `Plan tomorrow for ${intern.name}` }));
-    expect(heading()).toBe(intern.name);
-    expect(screen.getByRole('group', { name: 'Day' }).textContent).toContain('Sun 1 Nov 2026');
   });
+});
 
+describe('the Interns screen', () => {
   it('keeps revoked people folded away at the bottom', async () => {
-    renderApp({ platform: server(), user: admin, path: '/interns' });
+    renderAt(THURSDAY, { platform: server() });
     const revoked = await screen.findByRole('region', { name: 'Revoked' });
     expect(revoked.textContent).not.toContain('Paolo Reyes');
 
-    const show = within(revoked).getByRole('button', { name: 'Show revoked (1)' });
+    const show = within(revoked).getByRole('button', { name: 'Show (1)' });
     expect(show.getAttribute('aria-expanded')).toBe('false');
     await userEvent.click(show);
-    expect(within(revoked).getByRole('button', { name: 'Hide revoked' }).getAttribute('aria-expanded')).toBe('true');
+    expect(within(revoked).getByRole('button', { name: 'Hide' }).getAttribute('aria-expanded')).toBe('true');
     expect(revoked.textContent).toContain('Paolo Reyes');
     expect(revoked.textContent).toContain('APG Rentals South');
-    // After the active interns, not among them.
     const table = screen.getByRole('table');
     expect(table.compareDocumentPosition(revoked) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('has no Revoked section when nobody is revoked', async () => {
-    renderApp({ platform: server({ team: { ok: true, team: TEAM.team.filter((m) => m.active) } }), user: admin, path: '/interns' });
+    renderAt(THURSDAY, { platform: server({ team: { ok: true, team: TEAM.team.filter((m) => m.active) } }) });
     await rowOf('Mika Reyes');
     expect(screen.queryByRole('region', { name: 'Revoked' })).toBeNull();
   });
 
   it("says when the team couldn't be read, and tries again", async () => {
     const platform = server({ team: { ok: false, error: 'unavailable', message: "The web app didn't answer. Try again in a minute." } });
-    renderApp({ platform, user: admin, path: '/interns' });
+    renderAt(THURSDAY, { platform });
     expect((await screen.findByRole('alert')).textContent).toContain("The web app didn't answer.");
     expect(screen.queryByRole('table')).toBeNull();
 
@@ -187,7 +329,7 @@ describe('the Interns screen', () => {
   });
 
   it('says how to add the first intern when the team has none', async () => {
-    renderApp({ platform: server({ team: { ok: true, team: [TEAM.team[1]] } }), user: admin, path: '/interns' });
+    renderAt(THURSDAY, { platform: server({ team: { ok: true, team: [TEAM.team[1]] } }) });
     expect(await screen.findByRole('heading', { name: 'No interns yet' })).toBeTruthy();
     expect(screen.getByText('Add them in Settings → Team.')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
@@ -196,8 +338,8 @@ describe('the Interns screen', () => {
   it('says it is reading the team until it arrives', async () => {
     let answer: (reply: unknown) => void = () => undefined;
     const platform = server({ team: () => new Promise((resolve) => (answer = resolve)) });
-    renderApp({ platform, user: admin, path: '/interns' });
-    expect(screen.getByRole('status').textContent).toContain('Reading the team');
+    renderAt(THURSDAY, { platform });
+    expect(screen.getAllByRole('status').some((s) => s.textContent?.includes('Reading the team'))).toBe(true);
     await waitFor(() => expect(platform.posts.map((p) => p.action)).toContain('team'));
     answer(TEAM);
     expect(await rowOf('Mika Reyes')).toBeTruthy();
@@ -205,14 +347,24 @@ describe('the Interns screen', () => {
 
   it("is an admin's screen: an intern who asks for it is sent to their queue", async () => {
     const platform = server();
-    renderApp({ platform, user: intern, path: '/interns' });
+    renderAt(THURSDAY, { platform, user: intern });
     expect(heading()).toBe('My queue');
     expect(platform.posts.map((p) => p.action)).not.toContain('team');
+    expect(screen.queryByRole('searchbox', { name: /Who posted\?/ })).toBeNull();
   });
 
-  it('is linked from the Tracker', async () => {
-    renderApp({ platform: server(), user: admin, path: '/tracker' });
-    await userEvent.click(await screen.findByRole('link', { name: 'See all interns' }));
+  it("is linked from the Tracker, whose Interns card shows each intern's week", async () => {
+    renderAt(THURSDAY, { platform: server(), path: '/tracker' });
+    const card = await screen.findByRole('region', { name: 'Interns' });
+    await waitFor(() => expect(card.querySelectorAll('.intern-row')).toHaveLength(4));
+    const jan = Array.from(card.querySelectorAll('.intern-row')).find((r) => r.textContent?.includes(intern.name))!;
+    expect(jan.querySelector('.week-bar__count')!.textContent).toBe('3 / 10');
+    expect(jan.textContent).toContain('Behind');
+    expect(card.textContent).toContain('2–6 Nov');
+    // Still the day's tracker: today's posts, and the week's laggards counted.
+    expect(stat('Interns behind')).toBe('2 of 4');
+
+    await userEvent.click(within(card).getByRole('link', { name: 'See all interns' }));
     expect(heading()).toBe('Interns');
   });
 });

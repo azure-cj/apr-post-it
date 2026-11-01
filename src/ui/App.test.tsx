@@ -222,7 +222,7 @@ describe('the shell', () => {
 
   it('moves between screens from the nav, names the window, and starts at the heading', async () => {
     renderApp({ platform: fakeServer(), path: '/queue' });
-    await screen.findByText('Nothing in your queue today');
+    await screen.findByText('Next week isn’t assigned yet');
     await userEvent.click(screen.getByRole('link', { name: 'Find' }));
     expect(heading()).toBe('Find a property');
     expect(document.title).toBe('Find a property · APG Post-It');
@@ -269,17 +269,17 @@ describe("the manager's screens", () => {
     expect(heading()).toBe('My queue');
   });
 
-  it("save a queue through the tracker, as the intern's on the day shown", async () => {
+  it("save a queue through the tracker, as the intern's for the week shown", async () => {
     const platform = fakeServer({ assignments: QUEUED, saveQueue: { ok: true, saved: 2 } });
     renderApp({ platform, user: manager, path: `/assign?intern=${encodeURIComponent(intern.name)}` });
-    // Opens on tomorrow, on the intern in the link.
+    // Opens on this week, on the intern in the link: on a Saturday, the coming week.
     await userEvent.type(await screen.findByRole('searchbox', { name: 'Search listings' }), 'Kapitolyo');
     await userEvent.click(await screen.findByRole('button', { name: /^Add Kapitolyo/ }));
     await userEvent.click(screen.getByRole('button', { name: /^Save queue/ }));
 
     await waitFor(() => expect(platform.posts.map((p) => p.action)).toContain('saveQueue'));
     const save = platform.posts.find((p) => p.action === 'saveQueue')!.body as Record<string, unknown>;
-    expect(save['date']).toBe('2026-11-01');
+    expect(save['week']).toBe('2026-11-02');
     expect(save['assignedTo']).toBe(intern.name);
     expect(JSON.stringify(save['items'])).toContain('Kapitolyo Ground Floor Retail, Pasig');
   });
@@ -365,7 +365,7 @@ describe("the window's own controls", () => {
   it('asks the same question for Alt+F4 and the taskbar, and Escape stays', async () => {
     const platform = windowed();
     renderApp({ platform, user: intern, path: '/queue' });
-    await screen.findByText('Nothing in your queue today');
+    await screen.findByText('Next week isn’t assigned yet');
 
     act(() => platform.closeFromOutside());
     expect(screen.getByRole('dialog', { name: 'Close APG Post-It?' })).toBeTruthy();

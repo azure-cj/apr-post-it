@@ -35,6 +35,7 @@ import {
   queueStatus,
 } from './types';
 import { propertyType } from './records';
+import { assignmentWeek, isWeekKey, weekOf } from './week';
 
 /** What adding a person gives back. `warning` says something was not saved. */
 export interface AddPersonResult {
@@ -132,8 +133,14 @@ export interface Tracker {
    */
   updatePost(original: PostLogEntry, edited: PostLogEntry): Promise<PostLogEntry>;
 
-  /** Replaces one person's queue for one date with `items`, in that order. Resolves with how many were saved. */
-  saveQueue(date: string, assignedTo: string, items: readonly QueueItemInput[]): Promise<number>;
+  /**
+   * Replaces one person's queue for one week with `items`, in that order (v6).
+   * `week` is its Monday; any other day is read as the week it is in
+   * (weekOf), so a call written for daily queues still works. Their rows of
+   * that week, older daily rows included, are replaced. Resolves with how
+   * many were saved.
+   */
+  saveQueue(week: string, assignedTo: string, items: readonly QueueItemInput[]): Promise<number>;
 
   /**
    * Moves one queue item to `status`. With Posted, the server also marks the
@@ -143,12 +150,13 @@ export interface Tracker {
   setStatus(item: Assignment, status: AssignmentStatus): Promise<Assignment>;
 
   /**
-   * Replaces several interns' queues for one date at once, under one lock. A
+   * Replaces several interns' queues for one week at once, under one lock. A
    * planner's Map fits as it is. An intern given no items has their queue for
-   * that date emptied. Resolves with how many rows were saved.
+   * that week emptied. `week` is read as saveQueue reads it. Resolves with how
+   * many rows were saved.
    */
   saveQueues(
-    date: string,
+    week: string,
     queues: ReadonlyMap<string, readonly QueueItemInput[]> | readonly QueueInput[],
   ): Promise<number>;
 
@@ -315,16 +323,15 @@ export function createTracker(deps: TrackerDeps): Tracker {
       return addLink(original, edited.postLink);
     },
 
-    async saveQueue(date: string, assignedTo: string, items: readonly QueueItemInput[]): Promise<number> {
-      // The server deletes this person's rows whose date reads exactly so; any
-      // other spelling would leave the old queue in place beside the new one.
-      if (!date || readSheetDate(date) !== date) throw new UserFacingError('Pick a date for the queue.');
+    async saveQueue(day: string, assignedTo: string, items: readonly QueueItemInput[]): Promise<number> {
+      const week = queueWeek(day);
+      if (!week) throw new UserFacingError('Pick a week for the queue.');
       if (!assignedTo.trim()) throw new UserFacingError('Choose who the queue is for.');
       if (items.some((item) => !item.propertyName.trim())) {
         throw new UserFacingError('Every queue item needs a property. Remove the empty one and save again.');
       }
       const reply = await backend.call('saveQueue', {
-        date,
+        week,
         assignedTo,
         items: items.map((item) => ({
           property: item.propertyName,
@@ -354,8 +361,9 @@ export function createTracker(deps: TrackerDeps): Tracker {
       return { ...item, status };
     },
 
-    async saveQueues(date, queues): Promise<number> {
-      if (!date || readSheetDate(date) !== date) throw new UserFacingError('Pick a date for the queues.');
+    async saveQueues(day, queues): Promise<number> {
+      const week = queueWeek(day);
+      if (!week) throw new UserFacingError('Pick a week for the queues.');
       const list: readonly QueueInput[] = isQueueMap(queues)
         ? [...queues].map(([assignedTo, items]) => ({ assignedTo, items }))
         : queues;
@@ -372,7 +380,7 @@ export function createTracker(deps: TrackerDeps): Tracker {
         }
       }
       const reply = await backend.call('saveQueues', {
-        date,
+        week,
         queues: list.map((queue) => ({
           assignedTo: queue.assignedTo,
           items: queue.items.map((item) => ({
@@ -462,8 +470,12 @@ export function createTracker(deps: TrackerDeps): Tracker {
 
     async setRules(changes: Partial<ServerRules>): Promise<ServerRules> {
       const payload: Record<string, number> = {};
+      // perIntern is perWeek's old name: sent as perWeek, unless perWeek is given too.
+      const asked: Partial<Record<keyof ServerRules, number>> = { ...changes };
+      if (asked.perWeek === undefined && asked.perIntern !== undefined) asked.perWeek = asked.perIntern;
+      delete asked.perIntern;
       for (const name of Object.keys(RULE_LIMITS) as (keyof ServerRules)[]) {
-        const value = changes[name];
+        const value = asked[name];
         if (value === undefined) continue;
         const { min, max, label } = RULE_LIMITS[name];
         if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
@@ -499,6 +511,12 @@ function checkedProfileLink(url: string): string {
   const problem = facebookProfileProblem(url);
   if (problem) throw new UserFacingError(problem);
   return normalizeProfileLink(url);
+}
+
+/** The week a queue is saved under, as its Monday: weekOf any real day. '' when it is not one. */
+function queueWeek(day: string): string {
+  const text = typeof day === 'string' ? day.trim() : '';
+  return text && readSheetDate(text) === text ? weekOf(text) : '';
 }
 
 function isQueueMap(
@@ -560,8 +578,12 @@ function readTeamMember(row: Readonly<Record<string, unknown>>): TeamMember | nu
 }
 
 function readAssignment(row: Readonly<Record<string, unknown>>): Assignment {
+  const date = readSheetDate(row['date']);
+  const sent = asText(row['week']).trim();
   return {
-    date: readSheetDate(row['date']),
+    date,
+    // The server's week; a server before v6 sends none, and the date's week is read.
+    week: isWeekKey(sent) ? sent : assignmentWeek({ date }),
     assignedTo: asText(row['assignedTo']),
     propertyName: asText(row['property']),
     propertyId: asText(row['propertyId']),

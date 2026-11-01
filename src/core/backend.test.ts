@@ -233,10 +233,28 @@ describe('a refusal from the server', () => {
     const error = await failure(backendOver(post).call('saveQueues', { date: '2026-03-09' }), 'held');
 
     expect(error.message).toBe('Casa Amara is already with Ana Reyes. Remove it from their queue first.');
+    // A server before v6 sends no week: the date's (Sunday 8 Mar belongs to the week of 9 Mar).
     expect(error.held).toEqual([
-      { propertyName: 'Casa Amara', propertyId: 'F1', heldBy: 'Ana Reyes', date: '2026-03-08' },
-      { propertyName: '1201', propertyId: '', heldBy: 'Jan Dela Cruz', date: '2026-03-10' },
+      { propertyName: 'Casa Amara', propertyId: 'F1', heldBy: 'Ana Reyes', date: '2026-03-08', week: '2026-03-09' },
+      { propertyName: '1201', propertyId: '', heldBy: 'Jan Dela Cruz', date: '2026-03-10', week: '2026-03-09' },
     ]);
+  });
+
+  it('for a held listing, takes the server\'s week (v6)', async () => {
+    const { post } = scripted({
+      ok: false,
+      error: 'held',
+      held: [{ propertyName: 'Casa Amara', propertyId: 'F1', heldBy: 'Ana Reyes', date: '2026-03-16', week: '2026-03-16' }],
+    });
+    const error = await failure(backendOver(post).call('saveQueues', { week: '2026-03-09' }), 'held');
+    expect(error.held).toEqual([
+      { propertyName: 'Casa Amara', propertyId: 'F1', heldBy: 'Ana Reyes', date: '2026-03-16', week: '2026-03-16' },
+    ]);
+  });
+
+  it('for a bad week, says to pick a Monday', async () => {
+    const error = await failure(backendOver(scripted({ ok: false, error: 'bad-week', message: 'x' }).post).call('saveQueue'), 'bad-week');
+    expect(error.message).toBe('Pick a week: its Monday, written yyyy-MM-dd.');
   });
 
   it('for a held listing with no list, keeps a sentence; other refusals carry no held items', async () => {

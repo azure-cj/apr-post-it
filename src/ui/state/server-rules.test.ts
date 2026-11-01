@@ -10,7 +10,7 @@ import { createServices } from './services';
 import { defaultAppSettings, parseSettings, serializeSettings, withServerRules } from './settings';
 import { EXEC, fakeServer, NOW } from './testing';
 
-const RULES = { cooldownDays: 3, repostDueDays: 21, perIntern: 12 };
+const RULES = { cooldownDays: 3, repostDueDays: 21, perWeek: 12, perIntern: 12 };
 const PING = { ok: true, name: 'Maria Santos', role: 'Admin', fbAccounts: [], version: EXPECTED_SERVER_VERSION, rules: RULES };
 
 function services(replies: Readonly<Record<string, unknown>> = {}) {
@@ -51,6 +51,19 @@ describe('the server\'s version and rules', () => {
     expect(s.server.get().rules).toEqual(RULES);
   });
 
+  it('stay the same object when a ping says nothing new, so nothing re-renders for it', async () => {
+    const { services: s } = services();
+    await s.refreshServer();
+    const first = s.server.get();
+    const heard = vi.fn();
+    s.server.subscribe(heard);
+
+    await s.refreshServer();
+
+    expect(s.server.get()).toBe(first);
+    expect(heard).not.toHaveBeenCalled();
+  });
+
   it('are forgotten on sign-out', async () => {
     const { services: s } = services();
     await s.refreshServer();
@@ -61,12 +74,13 @@ describe('the server\'s version and rules', () => {
   });
 
   it('follow a save from the app', async () => {
-    const { services: s } = services({ setRules: { ok: true, rules: { ...RULES, perIntern: 30 } } });
+    const { services: s, platform } = services({ setRules: { ok: true, rules: { ...RULES, perWeek: 30, perIntern: 30 } } });
     await s.refreshServer();
 
-    await s.tracker.setRules({ perIntern: 30 });
+    await s.tracker.setRules({ perWeek: 30 });
 
-    expect(s.server.get().rules).toEqual({ ...RULES, perIntern: 30 });
+    expect(s.server.get().rules).toEqual({ ...RULES, perWeek: 30, perIntern: 30 });
+    expect(platform.posts.find((p) => p.action === 'setRules')?.body).toMatchObject({ perWeek: 30 });
   });
 
   it('never fail a ping because the server is unreachable: refreshServer resolves', async () => {
@@ -87,8 +101,22 @@ describe('withServerRules', () => {
     expect(withServerRules(defaultAppSettings, DEFAULT_RULES)).toBe(defaultAppSettings);
   });
 
-  it('keeps perIntern with the settings', () => {
-    expect(parseSettings(serializeSettings({ ...defaultAppSettings, perIntern: 9 })).perIntern).toBe(9);
-    expect(parseSettings('{"perIntern": 0}').perIntern).toBe(20);
+  it('puts perWeek and its old name, perIntern, over the settings\' own, always equal', () => {
+    expect(withServerRules(defaultAppSettings, { ...DEFAULT_RULES, perWeek: 55, perIntern: 55 })).toMatchObject({ perWeek: 55, perIntern: 55 });
+  });
+
+  it('keeps perWeek with the settings, and perIntern as its alias', () => {
+    const kept = parseSettings(serializeSettings({ ...defaultAppSettings, perWeek: 120, perIntern: 120 }));
+    expect(kept).toMatchObject({ perWeek: 120, perIntern: 120 });
+    expect(JSON.parse(serializeSettings(defaultAppSettings))).not.toHaveProperty('perIntern');
+    expect(parseSettings('{"perWeek": 0}')).toMatchObject({ perWeek: 40, perIntern: 40 });
+    expect(parseSettings('{"perWeek": 201}').perWeek).toBe(40);
+  });
+
+  it('reads a file kept before v6, which has only perIntern, as perWeek', () => {
+    expect(parseSettings('{"perIntern": 20}')).toMatchObject({ perWeek: 20, perIntern: 20 });
+    expect(parseSettings('{"perIntern": 0}')).toMatchObject({ perWeek: 40, perIntern: 40 });
+    expect(parseSettings('{"perWeek": 45, "perIntern": 20}')).toMatchObject({ perWeek: 45, perIntern: 45 });
+    expect(parseSettings('{"perWeek": "x", "perIntern": 20}').perWeek).toBe(20);
   });
 });

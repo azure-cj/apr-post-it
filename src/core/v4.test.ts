@@ -10,7 +10,7 @@ import { BackendError, createBackend, type BackendDeps } from './backend';
 import { perInternOf, planQueues } from './planner';
 import { ping, readRules, readServerInfo, serverVersionStatus, signIn } from './session';
 import { createTracker } from './tracker';
-import { DEFAULT_RULES, UserFacingError } from './types';
+import { DEFAULT_RULES, RULE_LIMITS, UserFacingError } from './types';
 
 const EXEC = 'https://script.google.com/macros/s/AKfy/exec';
 
@@ -78,7 +78,8 @@ describe('ping', () => {
 
     await expect(ping(backend)).resolves.toEqual({
       user: { name: 'Maria Santos', role: 'Admin', fbAccounts: [] },
-      server: { version: '2026-10-31.1', rules: { cooldownDays: 5, repostDueDays: 30, perIntern: 12 } },
+      // A server before v6 sends perIntern only: read as perWeek.
+      server: { version: '2026-10-31.1', rules: { cooldownDays: 5, repostDueDays: 30, perWeek: 12, perIntern: 12 } },
     });
     await expect(signIn(backend)).resolves.toEqual({ name: 'Maria Santos', role: 'Admin', fbAccounts: [] });
   });
@@ -102,16 +103,35 @@ describe('readRules', () => {
   });
 
   it('takes each whole number in range, as a number or its digits', () => {
-    expect(readRules({ cooldownDays: 60, repostDueDays: '120', perIntern: 1 })).toEqual({
+    expect(readRules({ cooldownDays: 60, repostDueDays: '120', perWeek: '200' })).toEqual({
       cooldownDays: 60,
       repostDueDays: 120,
-      perIntern: 1,
+      perWeek: 200,
+      perIntern: 200,
+    });
+  });
+
+  describe('perWeek (v6)', () => {
+    it('reads perIntern, its old name, when perWeek is missing or bad', () => {
+      expect(readRules({ perIntern: 1 })).toEqual({ ...DEFAULT_RULES, perWeek: 1, perIntern: 1 });
+      expect(readRules({ perWeek: 'lots', perIntern: '25' })).toEqual({ ...DEFAULT_RULES, perWeek: 25, perIntern: 25 });
+    });
+
+    it('takes perWeek over perIntern, and keeps the two equal', () => {
+      expect(readRules({ perWeek: 50, perIntern: 20 })).toEqual({ ...DEFAULT_RULES, perWeek: 50, perIntern: 50 });
+    });
+
+    it('defaults to 40 and allows 1 to 200', () => {
+      expect(DEFAULT_RULES).toMatchObject({ perWeek: 40, perIntern: 40 });
+      expect(RULE_LIMITS.perWeek).toMatchObject({ min: 1, max: 200 });
+      expect(readRules({ perWeek: 201 })?.perWeek).toBe(40);
+      expect(readRules({ perWeek: 0, perIntern: 0 })?.perWeek).toBe(40);
     });
   });
 
   it('puts the default in place of a field missing, out of range or not a whole number', () => {
     expect(readRules({})).toEqual(DEFAULT_RULES);
-    expect(readRules({ cooldownDays: 0, repostDueDays: 121, perIntern: 2.5 })).toEqual(DEFAULT_RULES);
+    expect(readRules({ cooldownDays: 0, repostDueDays: 121, perWeek: 2.5 })).toEqual(DEFAULT_RULES);
     expect(readRules({ cooldownDays: 'soon', repostDueDays: true, perIntern: '-3' })).toEqual(DEFAULT_RULES);
     expect(readRules({ cooldownDays: 3 })).toEqual({ ...DEFAULT_RULES, cooldownDays: 3 });
   });
@@ -119,7 +139,7 @@ describe('readRules', () => {
   it('is what readServerInfo reads, with the version trimmed', () => {
     expect(readServerInfo({ version: ' 2026-10-31.1\n', rules: { perIntern: 9 } })).toEqual({
       version: '2026-10-31.1',
-      rules: { ...DEFAULT_RULES, perIntern: 9 },
+      rules: { ...DEFAULT_RULES, perWeek: 9, perIntern: 9 },
     });
     expect(readServerInfo({ version: 4 })).toEqual({ version: '4', rules: null });
   });
@@ -129,18 +149,31 @@ describe('readRules', () => {
 
 describe('tracker.setRules', () => {
   it('sends only the rules given, and gives back all three as the server has them', async () => {
-    const { tracker, sent } = answering({ ok: true, rules: { cooldownDays: 3, repostDueDays: 14, perIntern: 20 } });
+    const { tracker, sent } = answering({ ok: true, rules: { cooldownDays: 3, repostDueDays: 14, perWeek: 20, perIntern: 20 } });
 
-    await expect(tracker.setRules({ cooldownDays: 3 })).resolves.toEqual({ cooldownDays: 3, repostDueDays: 14, perIntern: 20 });
+    await expect(tracker.setRules({ cooldownDays: 3 })).resolves.toEqual({ cooldownDays: 3, repostDueDays: 14, perWeek: 20, perIntern: 20 });
     expect(sent).toEqual([{ cooldownDays: 3, action: 'setRules', key: 'k' }]);
+  });
+
+  it('sends perIntern, perWeek\'s old name, as perWeek, and perWeek when both are given', async () => {
+    const { tracker, sent } = answering({ ok: true, rules: DEFAULT_RULES });
+
+    await tracker.setRules({ perIntern: 30 });
+    await tracker.setRules({ perIntern: 30, perWeek: 60 });
+    expect(sent).toEqual([
+      { perWeek: 30, action: 'setRules', key: 'k' },
+      { perWeek: 60, action: 'setRules', key: 'k' },
+    ]);
   });
 
   it.each([
     [{ cooldownDays: 0 }, 'The cooldown must be a whole number from 1 to 60.'],
     [{ cooldownDays: 61 }, 'The cooldown must be a whole number from 1 to 60.'],
     [{ repostDueDays: 7.5 }, 'The repost age must be a whole number from 1 to 120.'],
-    [{ perIntern: 101 }, 'Items per intern must be a whole number from 1 to 100.'],
-    [{ perIntern: Number.NaN }, 'Items per intern must be a whole number from 1 to 100.'],
+    [{ perWeek: 201 }, 'Listings per week must be a whole number from 1 to 200.'],
+    [{ perWeek: 0 }, 'Listings per week must be a whole number from 1 to 200.'],
+    [{ perIntern: 201 }, 'Listings per week must be a whole number from 1 to 200.'],
+    [{ perIntern: Number.NaN }, 'Listings per week must be a whole number from 1 to 200.'],
   ])('refuses %j before asking', async (changes, message) => {
     const { tracker, sent } = answering({ ok: true, rules: DEFAULT_RULES });
 

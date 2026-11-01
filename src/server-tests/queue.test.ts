@@ -240,12 +240,15 @@ describe('addLink (bug 5)', () => {
 });
 
 describe('saveQueue', () => {
-  it('replaces one person\'s queue for one date, however its dates were written, and leaves the rest', () => {
+  it('replaces one person\'s queue for one week, however its dates were written, and leaves the rest', () => {
     const w = createWorld();
     w.assignments.type(
       ['2026-03-09', 'Jan Dela Cruz', 'Old item, typed', 'To post', ''],
       ['2026-03-09', 'Ana Reyes', 'Ana\'s item', 'To post', ''],
-      ['2026-03-10', 'Jan Dela Cruz', 'Tomorrow\'s item', 'To post', ''],
+      // A daily row from before v6, in the same week: part of the queue replaced.
+      ['2026-03-11', 'Jan Dela Cruz', 'Wednesday\'s item', 'To post', ''],
+      // Saturday belongs to the next week: left alone.
+      ['2026-03-14', 'Jan Dela Cruz', 'Next week\'s item', 'To post', ''],
     );
     w.assignments.writeText(['2026-03-09', 'Jan Dela Cruz', 'Old item, as text', 'To post', '']);
 
@@ -258,7 +261,7 @@ describe('saveQueue', () => {
     expect(reply).toEqual({ ok: true, saved: 2 });
     expect(w.assignments.show().slice(1)).toEqual([
       ['#date 2026-03-09', 'Ana Reyes', 'Ana\'s item', 'To post', ''],
-      ['#date 2026-03-10', 'Jan Dela Cruz', 'Tomorrow\'s item', 'To post', ''],
+      ['#date 2026-03-14', 'Jan Dela Cruz', 'Next week\'s item', 'To post', ''],
       ['2026-03-09', 'Jan Dela Cruz', 'Casa Amara', 'Not Shared', CASA.id],
       // The id found in the directory by name; the name kept as text.
       ['2026-03-09', 'Jan Dela Cruz', '1201', 'Not Shared', TOWER.id],

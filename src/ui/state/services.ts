@@ -45,7 +45,7 @@ export interface ServerState {
   /** How that compares with EXPECTED_SERVER_VERSION (src/config.ts). */
   readonly versionStatus: ServerVersionStatus;
   /**
-   * The live rules (cooldown, repost age, items per intern). Null until a ping
+   * The live rules (cooldown, repost age, listings per week). Null until a ping
    * is answered, or from a server that sends none: then the settings' own
    * apply. Use withServerRules (./settings) to put them over the settings.
    */
@@ -108,14 +108,20 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
     },
   };
 
-  /** The server's version and rules from a ping. Never throws: the sign-in it came with matters more. */
+  /**
+   * The server's version and rules from a ping. Never throws: the sign-in it
+   * came with matters more. A ping that says nothing new keeps the state it
+   * had, so its readers (and the settings derived from it) don't re-render.
+   */
   function noteServer(reply: Reply): void {
+    let next: ServerState;
     try {
       const info = readServerInfo(reply);
-      server.set({ known: true, version: info.version, versionStatus: serverVersionStatus(info.version), rules: info.rules });
+      next = { known: true, version: info.version, versionStatus: serverVersionStatus(info.version), rules: info.rules };
     } catch {
-      server.set({ ...UNKNOWN_SERVER, known: true });
+      next = { ...UNKNOWN_SERVER, known: true };
     }
+    server.set((current) => (sameServer(current, next) ? current : next));
   }
 
   async function refreshServer(): Promise<void> {
@@ -169,9 +175,9 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
     logPost: (input) => writing(() => raw.logPost(input)),
     addLink: (post, link) => writing(() => raw.addLink(post, link)),
     updatePost: (original, edited) => writing(() => raw.updatePost(original, edited)),
-    saveQueue: (date, assignedTo, items) => writing(() => raw.saveQueue(date, assignedTo, items)),
+    saveQueue: (week, assignedTo, items) => writing(() => raw.saveQueue(week, assignedTo, items)),
     setStatus: (item, status) => writing(() => raw.setStatus(item, status)),
-    saveQueues: (date, queues) => writing(() => raw.saveQueues(date, queues)),
+    saveQueues: (week, queues) => writing(() => raw.saveQueues(week, queues)),
     addPerson: (input) => teamWrite(() => raw.addPerson(input)),
     setActive: (name, active) => teamWrite(() => raw.setActive(name, active)),
     updatePerson: (name, changes) => teamWrite(() => raw.updatePerson(name, changes)),
@@ -179,7 +185,7 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
     indexCheck: () => raw.indexCheck(),
     async setRules(changes) {
       const rules = await raw.setRules(changes);
-      server.set((s) => ({ ...s, rules }));
+      server.set((s) => (sameRules(s.rules, rules) ? s : { ...s, rules }));
       return rules;
     },
     rebuildDirectory: () => raw.rebuildDirectory(),
@@ -238,6 +244,21 @@ export function createServices(p: Platform, getSettings: () => AppSettings, now:
       savedFolders.set(new Map());
     },
   };
+}
+
+function sameRules(a: ServerRules | null, b: ServerRules | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.cooldownDays === b.cooldownDays &&
+    a.repostDueDays === b.repostDueDays &&
+    a.perWeek === b.perWeek &&
+    a.perIntern === b.perIntern
+  );
+}
+
+function sameServer(a: ServerState, b: ServerState): boolean {
+  return a.known === b.known && a.version === b.version && a.versionStatus === b.versionStatus && sameRules(a.rules, b.rules);
 }
 
 /**

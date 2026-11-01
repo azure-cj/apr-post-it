@@ -75,13 +75,16 @@ describe('the sidebar', () => {
 
   it("feeds the team to Assign's intern picker", async () => {
     renderApp({ platform: server(), user: admin, path: '/assign' });
-    // The team's active interns, by name, though Mika is first in the reply. No one is chosen yet.
+    // The team's active interns, and only them. Their order is by pace (Behind
+    // first; AssignPicker's own tests cover it), so only the set is checked here.
     const picker = await screen.findByRole('list', { name: 'Interns' });
     await waitFor(() =>
-      expect(within(picker).getAllByRole('button').map((b) => b.querySelector('.assign-pick__name')?.textContent)).toEqual([
-        intern.name,
-        'Mika Reyes',
-      ]),
+      expect(
+        within(picker)
+          .getAllByRole('button')
+          .map((b) => b.querySelector('.assign-pick__name')?.textContent)
+          .sort(),
+      ).toEqual([intern.name, 'Mika Reyes'].sort()),
     );
     expect(within(picker).queryByText(manager.name)).toBeNull();
   });

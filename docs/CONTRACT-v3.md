@@ -172,3 +172,43 @@ Core:
 - `summary.heldListings(assignments) → Map<propertyKey, { heldBy, date }>` covers open rows only, keyed by id, else by normalised name.
 - `planQueues` skips held listings, with skip reason `held` replacing `queued`. A listing held by the intern being planned isn't re-added.
 - `planForIntern(input & { intern, count, category? }) → QueueItemInput[]` is the "Assign 20" quick fill for one intern. It follows the same order: never posted first, then the longest since posted, with a mix of categories unless one category is chosen.
+
+## v6: Weekly queues (replaces daily queues)
+
+The owner: "assign per week only, e.g. 40 listings per week; Friday is the final day before the reset."
+
+**The week**
+- A **work week** runs **Monday to Friday**, and **Friday is the deadline**.
+- The **week key** is that week's Monday, as yyyy-MM-dd in Manila time.
+- `weekOf(date)`: Monday–Friday map to that week's Monday. **Saturday and Sunday map to the NEXT Monday**: the reset happens after Friday, and weekend time belongs to the coming week.
+- `weekDays(week)` gives Monday–Friday. `isWeekOver(week, today)` is true when today > that Friday.
+
+**Queues**
+- An intern gets one queue per week. Assignments rows keep the `Date` column but store the **week key**.
+- Old daily rows still read: their date maps to `weekOf(date)`, so the past still shows correctly.
+- `saveQueue`/`saveQueues` take `week` (a Monday). `date` is still accepted and converted with `weekOf`.
+- **Held rule:** an open (Not Shared) row holds its listing only while its week is NOT over. When the week ends, unposted rows are **Missed**. They're shown in reports, never written as a status, and they no longer hold the listing.
+- Posted and Pending release a listing as before, and then the cooldown applies.
+
+**Rules**
+- `perWeek` (default 40, 1–200) replaces `perIntern` as the planner and quick-fill default. A Settings tab key "Per week" is read; the old "Per intern" key is read as a fallback.
+- Bump SERVER_VERSION and EXPECTED_SERVER_VERSION to `2026-11-01.3`.
+
+**Pace** (core `weekProgress(intern, week, assignments, posts, today)`)
+- Returns `{ target, posted, pending, notShared, missed, daysLeft, expectedByToday, pace: 'done'|'on-track'|'behind'|'not-started'|'missed' }`.
+- **expectedByToday** = ceil(target × weekdaysElapsed ÷ 5), where weekdaysElapsed counts today if it's a weekday.
+- **pace:**
+  - **done:** posted+pending ≥ target
+  - **not-started:** 0 posted and it's past Monday
+  - **behind:** posted+pending < expectedByToday
+  - **missed:** the week is over with items left
+  - **on-track:** everything else
+- `weekPostsByDay(intern, week, posts)` returns [Mon..Fri] counts.
+
+**Who posted it**
+- `core/records.whoPosted(posts, query)` returns the matches by listing name, id or link, newest first, with intern, date, time, FB account and link. It's the quick lookup for inquiries.
+
+**Screens**
+- **Assign:** a week picker (This week / Next week / ‹ ›, labelled "2–6 Nov"). From Saturday it defaults to next week, otherwise this week. "Add 40 for posting" fills the week.
+- **Interns:** the weekly monitor (pace, Mon–Fri dots, Missed), plus the "Who posted?" lookup.
+- **Intern's My queue:** "This week · 12 of 40 · Due Fri".

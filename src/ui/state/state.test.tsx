@@ -113,8 +113,9 @@ describe('settings', () => {
       scriptUrl: 'https://x/exec',
       cooldownDays: 7,
       repostDueDays: 14,
-      perIntern: 20,
+      perWeek: 40,
+      perIntern: 40,
     });
-    expect(parseSettings('not json')).toEqual({ scriptUrl: '', cooldownDays: 7, repostDueDays: 14, perIntern: 20 });
+    expect(parseSettings('not json')).toEqual({ scriptUrl: '', cooldownDays: 7, repostDueDays: 14, perWeek: 40, perIntern: 40 });
   });
 });

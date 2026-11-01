@@ -1,0 +1,121 @@
+/* The week's small parts, shared by Interns and the Tracker's Interns card:
+   initials, "12 / 40" over a bar, Mon–Fri bars, and the pace pill. */
+
+.avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  line-height: 1;
+  font-weight: var(--weight-heading);
+}
+
+.avatar--small {
+  width: 28px;
+  height: 28px;
+}
+
+/* ---- "12 / 40" over a bar --------------------------------------------------- */
+
+.week-bar {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 6.5rem;
+}
+
+.week-bar__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.week-bar__count {
+  color: var(--text);
+  font-family: var(--heading-font);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  font-weight: var(--weight-heading);
+  white-space: nowrap;
+}
+
+.week-bar__of {
+  color: var(--text-muted);
+  font-weight: var(--weight-label);
+}
+
+/* Posted, then pending, on a neutral track. The count above carries it. */
+.week-bar__track {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-soft);
+}
+
+.week-bar__posted {
+  background: var(--ok-strong);
+}
+
+.week-bar__pending {
+  background: var(--warn-text);
+}
+
+.week-bar__none {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ---- Mon–Fri: five small bars ------------------------------------------------ */
+
+.week-days {
+  display: inline-flex;
+}
+
+.week-days__bars {
+  display: grid;
+  grid-template-columns: repeat(5, 14px);
+  gap: var(--space-2);
+  align-items: end;
+}
+
+/* A day: a short track that fills from the bottom with that day's posts. */
+.week-days__day {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  height: 24px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--neutral-soft);
+}
+
+.week-days__fill {
+  width: 100%;
+  background: var(--ok-strong);
+}
+
+/* Today: a ring, neutral. Gold is kept for what is selected. */
+.week-days__day--today {
+  outline: var(--border-width) solid var(--text-muted);
+  outline-offset: 2px;
+}
+
+/* Still to come: only the outline of the day. */
+.week-days__day--later {
+  background: transparent;
+  box-sizing: border-box;
+  border: var(--border-width) dashed var(--border);
+}
+
+.pace-pill {
+  white-space: nowrap;
+}
