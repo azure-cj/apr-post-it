@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-10-31.1';
+const SERVER_VERSION = '2026-11-01.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -55,6 +55,13 @@ const CONFIG = {
   // CSV, never writes anywhere near it. Its City, Size, Deal type and Status
   // are joined onto the directory by Folder ID. '' turns the join off.
   CHECKER_INDEX_CSV_URL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT_xOq-DEX-QXpSMfkkH8eEiwVkd1ylTKh6jhOxY4TfjrvnpLg-OqemlwcL6GLWlNXvjiWyTlZEymJU/pub?gid=90841346&single=true&output=csv',
+
+  // The owner's geocoding sheet (FolderId, Property, Query, Lat, Lng, GeoStatus,
+  // Checked): where each listing is, for the map on the app's startup screen.
+  // Only ever READ. GEO_SHEET_ID '' means the directory spreadsheet; GEO_TAB ''
+  // means the first tab whose header row has FolderId, Lat and Lng.
+  GEO_SHEET_ID: '',
+  GEO_TAB: '',
 };
 
 // Where the postable text ends is decided in Separators.gs, which this project
@@ -565,6 +572,7 @@ function idOf_(propertyName) {
  */
 function listProperties_() {
   var checker = checkerIndex_(false);
+  var geo = geoIndex_();
   return directoryRows_().map(function (r) {
     var out = {
       id: r.id,
@@ -578,8 +586,86 @@ function listProperties_() {
       issues: textOf_(r.issues),
     };
     joinChecker_(out, checker, r.id);
+    joinGeo_(out, geo, r.id);
     return out;
   });
+}
+
+/** Adds `lat` and `lng` for folder `id` when the geocoding sheet has them; nothing otherwise. */
+function joinGeo_(out, geo, id) {
+  var g = geo[textOf_(id).trim()];
+  if (g) {
+    out.lat = g.lat;
+    out.lng = g.lng;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- the geocoding sheet
+//
+// The owner keeps a sheet of where each listing is: FolderId, Property, Query,
+// Lat, Lng, GeoStatus, Checked. It is read by header name, joined on FolderId,
+// and never written. A row counts only when Lat and Lng are numbers inside the
+// Philippines; anything else is left out, so a listing without a good position
+// simply has no lat/lng.
+
+const GEO_CACHE = 'geo';
+const GEO_CACHE_SECONDS = 600;
+// The Philippines, generously: the app's map is drawn over the same box.
+const PH_BOUNDS = { south: 4.5, north: 19.5, west: 116.5, east: 127 };
+
+/**
+ * Folder ID -> { lat, lng }. Empty when the sheet or tab cannot be found or
+ * read: the map is a bonus, never a reason for `properties` to fail. Cached
+ * for ten minutes, like the checker's index.
+ */
+function geoIndex_() {
+  var hit = getChunked_(GEO_CACHE);
+  if (hit) return hit;
+  var index = {};
+  try {
+    index = readGeoIndex_();
+  } catch (e) {
+    index = {};
+  }
+  putChunked_(GEO_CACHE, index, GEO_CACHE_SECONDS);
+  return index;
+}
+
+function readGeoIndex_() {
+  var id = textOf_(CONFIG.GEO_SHEET_ID).trim();
+  var book = id ? SpreadsheetApp.openById(id) : directoryBook_();
+  var wanted = textOf_(CONFIG.GEO_TAB).trim();
+  var sheets = wanted ? [book.getSheetByName(wanted)] : book.getSheets();
+  var index = {};
+  for (var i = 0; i < sheets.length; i++) {
+    var sh = sheets[i];
+    if (!sh) continue;
+    var values = sh.getDataRange().getValues();
+    if (values.length < 1) continue;
+    var header = values[0].map(function (h) { return textOf_(h).trim().toLowerCase(); });
+    var col = { id: header.indexOf('folderid'), lat: header.indexOf('lat'), lng: header.indexOf('lng') };
+    if (col.id === -1 || col.lat === -1 || col.lng === -1) continue;
+    values.slice(1).forEach(function (r) {
+      var folder = textOf_(r[col.id]).trim();
+      var lat = coordinate_(r[col.lat]);
+      var lng = coordinate_(r[col.lng]);
+      if (!folder || lat === null || lng === null) return;
+      if (lat < PH_BOUNDS.south || lat > PH_BOUNDS.north || lng < PH_BOUNDS.west || lng > PH_BOUNDS.east) return;
+      index[folder] = { lat: lat, lng: lng };
+    });
+    return index; // the first tab that has the columns is the one
+  }
+  return index;
+}
+
+/** A cell as a coordinate: a number, or text that is one. null for anything else. */
+function coordinate_(value) {
+  if (typeof value === 'number') return isFinite(value) ? value : null;
+  var text = textOf_(value).trim();
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(text)) return null;
+  var n = Number(text);
+  return isFinite(n) ? n : null;
 }
 
 /**

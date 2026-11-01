@@ -32,6 +32,7 @@ import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
 import { AssignScreen, InternsScreen, RecordsScreen, SettingsScreen, settingsTab, TrackerScreen, type QueueSave } from './screens/manager';
 import { useTheme } from './state/theme';
+import { Launch } from './startup/Launch';
 import type { Platform } from '@/platform';
 import {
   manilaTime,
@@ -126,14 +127,17 @@ export interface AppProps {
 export const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true } as const;
 
 /**
- * The window: the sidebar, the title strip, the screen, and toasts. A hash router, because a
+ * The window: the startup screen once at launch (startup/Launch.tsx), then the sidebar, the
+ * title strip, the screen, and toasts. A hash router, because a
  * desktop app has no server to answer a deep link: `#/queue` survives a reload.
  * Needs an <AppStateProvider> above it.
  */
 export function App(props: AppProps) {
   return (
     <HashRouter future={routerFuture}>
-      <AppShell {...props} />
+      <Launch>
+        <AppShell {...props} />
+      </Launch>
     </HashRouter>
   );
 }

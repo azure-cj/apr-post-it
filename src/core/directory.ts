@@ -67,6 +67,13 @@ export interface Directory {
    */
   refresh(): Promise<readonly Property[]>;
 
+  /**
+   * The list in memory, else the copy on disk, put in memory; null when there
+   * is neither. Never makes a request, so it needs no key: the startup screen
+   * shows the last list with nobody signed in.
+   */
+  restore(): Promise<readonly Property[] | null>;
+
   /** The list in memory, or null before the first load. Never makes a request. */
   peek(): readonly Property[] | null;
 
@@ -253,7 +260,15 @@ function readProperty(raw: unknown): Property | null {
     ...optionalText('dealType', row['dealType']),
     ...optionalAvailability(row['availability']),
     ...(typeof row['inChecker'] === 'boolean' ? { inChecker: row['inChecker'] } : {}),
+    ...optionalPosition(row['lat'], row['lng']),
   };
+}
+
+/** Where the listing is, from the geocoding sheet: both numbers inside the Philippines, or nothing. */
+function optionalPosition(lat: unknown, lng: unknown): { lat?: number; lng?: number } {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) return {};
+  if (lat < 4.5 || lat > 19.5 || lng < 116.5 || lng > 127) return {};
+  return { lat, lng };
 }
 
 function optionalText<K extends 'city' | 'size' | 'dealType'>(name: K, value: unknown): { [P in K]?: string } {
@@ -503,6 +518,18 @@ export function createDirectory(deps: DirectoryDeps): Directory {
     },
 
     refresh: fetchList,
+
+    async restore(): Promise<readonly Property[] | null> {
+      if (index) return index.list;
+      const started = generation;
+      const saved = await readDisk();
+      // Something else may have filled the list while the disk was read.
+      const meanwhile = index as Index | null;
+      if (meanwhile) return meanwhile.list;
+      if (!saved || started !== generation) return null;
+      apply(saved);
+      return saved.list;
+    },
 
     peek: () => index?.list ?? null,
 

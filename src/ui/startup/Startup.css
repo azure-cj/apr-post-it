@@ -1,0 +1,242 @@
+/*
+ * The startup screen. Always dark: the element carries data-theme="dark",
+ * which tokens.css answers with the dark tokens even inside the light theme.
+ *
+ * Laid out on a 1366×768 reference and scaled with the window: --u is one
+ * reference pixel, the smaller of the two ratios, so nothing overflows either
+ * way. Text never drops under 14px (DESIGN.md §1).
+ */
+
+.startup-host {
+  display: contents;
+}
+
+.startup {
+  --u: min(calc(100vw / 1366), calc(100vh / 768));
+  --startup-fade: 300ms;
+  --startup-left: calc(120 * var(--u));
+  --startup-right: calc(80 * var(--u));
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--heading-font);
+  letter-spacing: var(--letter-spacing);
+  cursor: default;
+  opacity: 1;
+  transition: opacity var(--startup-fade) var(--ease-out);
+}
+
+.startup:focus {
+  outline: none;
+}
+
+.startup[data-leaving] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .startup {
+    --startup-fade: 0ms;
+  }
+}
+
+/* ---- the map: the right half, full height ---- */
+
+.startup__map {
+  position: absolute;
+  top: 1.5%;
+  left: 47%;
+  display: block;
+  width: 50%;
+  height: 97%;
+}
+
+/* ---- the left column ---- */
+
+.startup__intro {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--startup-left);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: min(calc(440 * var(--u)), 40%);
+}
+
+.startup__brand {
+  margin: 0;
+  font-family: var(--heading-font);
+  font-size: calc(72 * var(--u));
+  font-weight: var(--weight-display);
+  line-height: 1.22;
+}
+
+.startup__apg,
+.startup__name {
+  display: block;
+}
+
+.startup__apg {
+  color: var(--text);
+}
+
+.startup__name {
+  /* The gold gradient, as on the primary button. */
+  background: var(--gold-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (forced-colors: active) {
+  .startup__name {
+    background: none;
+    color: CanvasText;
+  }
+}
+
+.startup__by {
+  margin: calc(22 * var(--u)) 0 0;
+  font-size: max(15px, calc(15 * var(--u)));
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.startup__by b {
+  color: var(--text);
+  font-weight: var(--weight-heading);
+}
+
+.startup__status {
+  margin-top: calc(56 * var(--u));
+}
+
+.startup__lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: max(14px, calc(14 * var(--u)));
+  line-height: 2;
+  color: var(--text-muted);
+}
+
+.startup__line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+}
+
+.startup__mark {
+  flex: 0 0 auto;
+  width: 1em;
+  text-align: center;
+  font-weight: var(--weight-display);
+}
+
+.startup__line[data-tone="ok"] .startup__mark {
+  color: var(--ok-strong);
+}
+.startup__line[data-tone="busy"] .startup__mark {
+  color: var(--gold);
+  font-size: 0.8em;
+}
+.startup__line[data-tone="neutral"] .startup__mark {
+  color: var(--neutral-strong);
+  font-size: 0.8em;
+}
+.startup__line[data-tone="fail"] .startup__mark {
+  color: var(--danger-strong);
+}
+.startup__line[data-tone="fail"] {
+  color: var(--danger-text);
+}
+
+.startup__bar {
+  width: calc(320 * var(--u));
+  max-width: 100%;
+  height: 2px;
+  margin-top: calc(18 * var(--u));
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--tip-bg);
+}
+
+.startup__fill {
+  height: 100%;
+  background: var(--gold-gradient);
+  transform-origin: left center;
+  transition: transform var(--dur-move) var(--ease-out);
+}
+
+.startup__foot {
+  position: absolute;
+  bottom: calc(28 * var(--u));
+  left: var(--startup-left);
+  margin: 0;
+  font-size: max(14px, calc(12 * var(--u)));
+  color: var(--text-muted);
+}
+
+/* ---- the right column: the greeting over the map, the numbers under it ---- */
+
+.startup__greeting {
+  position: absolute;
+  top: calc(60 * var(--u));
+  right: var(--startup-right);
+  text-align: right;
+}
+
+.startup__hello {
+  margin: 0;
+  font-size: max(16px, calc(20 * var(--u)));
+  font-weight: var(--weight-heading);
+  line-height: 1.3;
+}
+
+.startup__date {
+  margin: calc(4 * var(--u)) 0 0;
+  font-size: max(14px, calc(13 * var(--u)));
+  color: var(--text-muted);
+}
+
+.startup__stats {
+  position: absolute;
+  right: var(--startup-right);
+  bottom: calc(70 * var(--u));
+  display: flex;
+  gap: calc(12 * var(--u));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.startup__stat {
+  display: flex;
+  flex-direction: column;
+  padding: calc(22 * var(--u)) calc(24 * var(--u));
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-verdict);
+  background: var(--card-bg) padding-box, var(--card-edge) border-box;
+}
+
+.startup__value {
+  font-size: calc(34 * var(--u));
+  font-weight: var(--weight-display);
+  line-height: 1.2;
+  /* Proportional figures: one number per card, nothing to line up, and
+     Montserrat's tabular figures read loose at this size. */
+  font-variant-numeric: proportional-nums;
+}
+
+.startup__label {
+  margin-top: calc(4 * var(--u));
+  font-size: max(14px, calc(14 * var(--u)));
+  color: var(--text-muted);
+  white-space: nowrap;
+}

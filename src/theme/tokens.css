@@ -16,9 +16,12 @@
  */
 
 /* ---- dark: the default, and the photo viewer in either theme ------------ */
+/* Also anything marked data-theme="dark" inside the light theme: the startup
+   screen is a brand moment, always dark. */
 
 :root,
-:root[data-theme="light"] .viewer {
+:root[data-theme="light"] .viewer,
+:root[data-theme="light"] [data-theme="dark"] {
   color-scheme: dark;
 
   /* ---- surfaces: neutral greys on an OLED charcoal. No warm tint. ----

@@ -60,6 +60,12 @@ export interface Property {
   readonly availability?: Availability;
   /** True when the checker's index has this folder at all. */
   readonly inChecker?: boolean;
+  // From the owner's geocoding sheet, joined on the folder id (server/README.md).
+  // Both or neither: absent when the listing has no good position.
+  /** Latitude, degrees north. */
+  readonly lat?: number;
+  /** Longitude, degrees east. */
+  readonly lng?: number;
 }
 
 /** A listing's Status in the checker's index. Blank: unknown. */

@@ -805,6 +805,50 @@ describe("the checker's fields (contract v3)", () => {
   });
 });
 
+describe('where each listing is (the geocoding sheet)', () => {
+  it('keeps lat and lng when both are numbers in the Philippines, and drops them otherwise', async () => {
+    const { post } = scripted({
+      ok: true,
+      properties: [
+        { id: 'A', name: 'Alpha', lat: 14.5547, lng: 121.0244 },
+        { id: 'B', name: 'Bravo', lat: '14.5', lng: 121 },
+        { id: 'C', name: 'Charlie', lat: 35.68, lng: 139.69 },
+        { id: 'D', name: 'Delta', lat: 14.5 },
+        { id: 'E', name: 'Echo' },
+      ],
+    });
+    const [a, b, c, d, e] = await directoryOver(post).list();
+
+    expect(a).toMatchObject({ lat: 14.5547, lng: 121.0244 });
+    for (const p of [b, c, d, e]) {
+      expect(p).not.toHaveProperty('lat');
+      expect(p).not.toHaveProperty('lng');
+    }
+  });
+
+  it('survives the copy on disk, so the next launch draws the map at once', async () => {
+    const store = memoryStore();
+    const reply = { ok: true, properties: [{ id: 'A', name: 'Alpha', lat: 10.3157, lng: 123.8854 }] };
+    await directoryOver(scripted(reply).post, { store }).list();
+
+    const second = scripted(reply);
+    const relaunched = directoryOver(second.post, { store });
+    expect(await relaunched.restore()).toEqual([expect.objectContaining({ id: 'A', lat: 10.3157, lng: 123.8854 })]);
+    expect(second.sent).toHaveLength(0);
+  });
+});
+
+describe('restore()', () => {
+  it('is null with no copy on disk, and never asks the server', async () => {
+    const { post, sent } = scripted({ ok: true, properties: [{ id: 'A', name: 'Alpha' }] });
+    const directory = directoryOver(post, { store: memoryStore() });
+
+    expect(await directory.restore()).toBeNull();
+    expect(directory.peek()).toBeNull();
+    expect(sent).toHaveLength(0);
+  });
+});
+
 describe('the Issues text on the list', () => {
   it('is kept when sent, absent when not, and survives the copy on disk', async () => {
     const store = memoryStore();

@@ -126,7 +126,7 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | Action | Who | What it does |
 |---|---|---|
 | `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`; also `version` (`SERVER_VERSION` at the top of `Code.gs`) and `rules`: `{ cooldownDays, repostDueDays, perIntern }`, the live values (below). |
-| `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. |
+| `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. With the geocoding sheet joined on by FolderId (below): `lat` and `lng`, numbers, only for a listing that has a good position. |
 | `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. The checker's fields too, joined as for `properties`. |
 | `posts` | everyone | The Posts tab as rows, every value text. An intern gets only their own. |
 | `assignments` | everyone | The Assignments tab as rows, every value text. An intern gets only their own. |
@@ -177,6 +177,25 @@ several cache entries because one holds at most 100 KB. If the fetch fails, or t
 `indexCheck` reads the CSV fresh and lists what one side has that the other does not, and
 which of our listings the checker marks Sold. The manifest's `script.external_request`
 scope is for this fetch.
+
+## The geocoding sheet
+
+The startup screen draws every listing as a dot on a map of the Philippines. Where each
+listing is comes from the owner's geocoding sheet, columns `FolderId, Property, Query, Lat,
+Lng, GeoStatus, Checked`. `properties` reads it **by header name** (any order, any case),
+keeps the rows whose `Lat` and `Lng` are numbers inside the Philippines (lat 4.5–19.5,
+lng 116.5–127), and adds `lat` and `lng` to the listing with that `FolderId`. A listing
+with no good row gets neither field.
+
+* `CONFIG.GEO_SHEET_ID`: the spreadsheet. `''` (the default) means the directory
+  spreadsheet, `DIRECTORY_SHEET_ID`.
+* `CONFIG.GEO_TAB`: the tab. `''` (the default) means the first tab whose header row has
+  `FolderId`, `Lat` and `Lng`.
+
+It is cached for 10 minutes, like the checker's index. If the spreadsheet, the tab or the
+columns are not there, `properties` answers exactly as before, without `lat`/`lng`; the app
+then places dots by the city in each listing's name. **The script never writes to this
+sheet.**
 
 ## Your existing tracker is not reformatted
 

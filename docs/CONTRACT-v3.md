@@ -145,3 +145,11 @@ Theme:
 - `useTheme(): { choice, resolved: 'dark'|'light', setChoice }` is persisted with `platform.writeLocal('theme')` and applied as `<html data-theme="dark|light">`.
 - `applySavedTheme()` is called in main.tsx before the first render, so nothing flashes.
 - Light mode: black and gold on white. Gold text needs a darker gold to pass AA on white.
+
+## v5 addition: the startup screen's map
+
+- `properties` rows gain optional `lat` and `lng` (numbers), joined by FolderId from the
+  owner's geocoding sheet (`CONFIG.GEO_SHEET_ID` / `CONFIG.GEO_TAB`; server/README.md).
+  Absent when the listing has no good position or the sheet cannot be found. Read only.
+- `Property` gains `lat?` and `lng?`; the directory keeps them, on disk too.
+- `SERVER_VERSION` / `EXPECTED_SERVER_VERSION` `2026-11-01.1`.
