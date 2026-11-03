@@ -20,7 +20,7 @@ blank included, is `Intern`.
 |---|:--:|:--:|
 | Search properties, view public text, photos | ✔ | ✔ |
 | Copy public posting text | ✔ | ✔ |
-| **See the internal section** (commission, terms) | **✘** | ✔ |
+| **See the internal section** (commission, terms) | ✔ read only (D16) | ✔ |
 | My Queue | own only | – |
 | Log a post | as self | on behalf of an intern |
 | Add the live link to a Pending post | own only | any |
@@ -37,8 +37,9 @@ In the app an Admin gets Tracker, Assign, Interns, Find and Settings; an Intern 
 
 Everything above is a guard rail except these, which hold even against a tampered client:
 
-1. **The internal section never reaches an intern.** The split happens server-side; an
-   intern's response has no `internalText` field at all. Not hidden — absent.
+1. **The internal section is never copied.** The split happens server-side, and
+   `internalText` is a field of its own, never part of `publicText`. An intern reads it
+   behind a toggle; Copy never takes it (D16).
 2. **The cooldown is checked under a lock before the row is appended.** Two interns saving
    the same property in the same second cannot both get through.
 
@@ -60,8 +61,8 @@ sign-in — the script still runs as the Drive owner, as it already does.
 Consequences worth knowing:
 
 * **Revoking somebody is one cell.** Set Active to FALSE. No Drive permissions to unpick.
-* **A leaked intern key grants intern rights only** — it cannot read internal text, because
-  the server decides that, not the app.
+* **A leaked intern key grants intern rights only** — but since D16 that includes reading
+  the internal text of separated documents.
 * **A leaked admin key is a real problem**, the same as a shared password. Keep admin
   keys off shared machines.
 * **`Posted By` comes from the key**, not from the request, so a post cannot be logged

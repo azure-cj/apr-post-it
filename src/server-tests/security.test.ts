@@ -1,7 +1,7 @@
 /**
  * The boundaries that must hold even against a tampered client (docs/ROLES.md):
- * an intern never receives the internal section (D1) or text nobody has
- * separated (D13); a role is the key's, never the request's (D2); a revoked
+ * an intern gets the internal section only apart from the public text (D1),
+ * and text nobody has separated only flagged (D13, D15); a role is the key's, never the request's (D2); a revoked
  * key stops working.
  */
 
@@ -10,38 +10,34 @@ import { CASA, createWorld, LISTINGS, LOT_9, PEOPLE, PRIVATE, TOWER } from './wo
 
 const LINK = 'https://www.facebook.com/groups/apg/posts/1/';
 
-describe('an intern\'s property reply carries nothing private (D1)', () => {
+describe('an intern\'s property reply: the internal section to read, never in the public text (D1)', () => {
   it.each(LISTINGS.map((l) => [l.name, l] as const))('%s, read live from the document', (_name, listing) => {
     const w = createWorld();
-    const text = w.project.postText({ action: 'property', id: listing.id, key: PEOPLE.jan.key });
-    const reply = JSON.parse(text) as { ok: boolean; property: Record<string, unknown> };
+    const property = w.call('jan', 'property', { id: listing.id })['property'] as Record<string, unknown>;
+    const admin = w.call('maria', 'property', { id: listing.id })['property'] as Record<string, unknown>;
 
-    expect(reply.ok).toBe(true);
-    expect(reply.property['live']).toBe(true);
-    expect(reply.property).not.toHaveProperty('internalText');
-    for (const secret of PRIVATE[listing.id]!) expect(text).not.toContain(secret);
+    expect(property['live']).toBe(true);
+    // An unseparated document has no internal section; it comes flagged instead (D15).
+    if (property['hasInternal'] === true) expect(property['internalText']).toBe(admin['internalText']);
+    else expect(property).not.toHaveProperty('internalText');
+    for (const secret of PRIVATE[listing.id]!) expect(property['publicText']).not.toContain(secret);
   });
 
   it.each(LISTINGS.map((l) => [l.name, l] as const))('%s, from the sheet\'s copy when the document cannot be read', (_name, listing) => {
     const w = createWorld();
     w.project.drive.remove(listing.docId);
-    const text = w.project.postText({ action: 'property', id: listing.id, key: PEOPLE.jan.key });
-    const reply = JSON.parse(text) as { ok: boolean; property: Record<string, unknown> };
+    const property = w.call('jan', 'property', { id: listing.id })['property'] as Record<string, unknown>;
 
-    expect(reply.property['live']).toBe(false);
-    expect(reply.property).not.toHaveProperty('internalText');
-    for (const secret of PRIVATE[listing.id]!) expect(text).not.toContain(secret);
+    expect(property['live']).toBe(false);
+    for (const secret of PRIVATE[listing.id]!) expect(property['publicText']).not.toContain(secret);
   });
 
-  it('whatever the request asks for: internal=true is not the client\'s to decide', () => {
+  it('whatever the request asks for: an unseparated document never comes as an Admin\'s', () => {
     const w = createWorld();
-    const byGet = w.project.get({ action: 'property', id: CASA.id, key: PEOPLE.jan.key, internal: 'true' });
-    const byPost = w.call('jan', 'property', { id: CASA.id, internal: true, includeInternal: true, role: 'Admin' });
+    const reply = w.call('jan', 'property', { id: LOT_9.id, internal: true, includeInternal: true, role: 'Admin' });
 
-    for (const reply of [byGet, byPost]) {
-      expect(reply['property']).not.toHaveProperty('internalText');
-      expect(JSON.stringify(reply)).not.toContain('0917 123 4567');
-    }
+    expect(reply['property']).not.toHaveProperty('internalText');
+    expect(reply['property']).toMatchObject({ unseparated: true, flaggedLines: [2] });
   });
 
   it('tells an intern the kind of marker only, never the heading it quotes', () => {
@@ -129,16 +125,18 @@ describe('a document nobody has separated (D15, superseding part of D6)', () => 
     expect(property).not.toHaveProperty('flaggedLines');
   });
 
-  it('a separated document still withholds the internal section from an intern', () => {
+  it('a separated document gives an intern its internal section apart from the public text', () => {
     const w = createWorld();
-    const text = w.project.postText({ action: 'property', id: CASA.id, key: PEOPLE.jan.key });
-    const property = (JSON.parse(text) as { property: Record<string, unknown> }).property;
+    const property = w.call('jan', 'property', { id: CASA.id })['property'];
 
-    expect(property).toMatchObject({ publicText: CASA.doc.slice(0, 4).join('\n'), hasInternal: true, withheld: false });
-    expect(property).not.toHaveProperty('internalText');
+    expect(property).toMatchObject({
+      publicText: CASA.doc.slice(0, 4).join('\n'),
+      internalText: 'Owner: Mr. Reyes 0917 123 4567\nCommission: 3%',
+      hasInternal: true,
+      withheld: false,
+    });
     expect(property).not.toHaveProperty('unseparated');
     expect(property).not.toHaveProperty('flaggedLines');
-    expect(text).not.toContain('Mr. Reyes');
   });
 
   it('a folder with no document is withheld from an intern, as before', () => {

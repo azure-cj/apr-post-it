@@ -287,11 +287,13 @@ function sameServer(a: ServerState, b: ServerState): boolean {
 }
 
 /**
- * A listing as `viewer` may see it. For an intern, two guards on top of the
+ * A listing as `viewer` may see it. For an intern, guards on top of the
  * server's own (D1, D13), so a reply that wrongly carried more never reaches
  * a screen:
  *
- * - the internal section is dropped, not hidden: it is not in the object;
+ * - the internal section of a separated document is kept, to read behind a
+ *   toggle (D1, since v8); Copy never takes it. Any other internal text is
+ *   dropped;
  * - a document nobody has separated keeps none of its text, since none of it
  *   is confirmed safe. `hasInternal: false` is how a screen knows to explain
  *   that rather than show an empty box. The one exception is a v7 server's
@@ -302,7 +304,7 @@ function sameServer(a: ServerState, b: ServerState): boolean {
 export function forViewer(detail: PropertyDetail, viewer: User): PropertyDetail {
   if (canManage(viewer)) return detail;
   const { internalText: _never, ...publicOnly } = detail;
-  if (detail.hasInternal) return publicOnly;
+  if (detail.hasInternal) return detail;
   if (detail.unseparated === true && detail.withheld !== true) return publicOnly;
   return { ...publicOnly, publicText: '' };
 }

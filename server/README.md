@@ -6,9 +6,9 @@ runs **as the owner** and returns JSON. That one decision buys three things:
 * **No Google credentials on intern machines.** No GCP project, no OAuth consent screen,
   no service-account key file to leak. The app holds the web app's URL and the person's own
   key.
-* **The internal section never leaves the server.** Where a listing's postable text ends is
-  decided by `splitAtSeparator_` in `Separators.gs`. An intern's reply has no `internalText`
-  at all. A document nobody has separated reaches an intern whole but marked `unseparated`,
+* **The internal section is never in the public text.** Where a listing's postable text ends is
+  decided by `splitAtSeparator_` in `Separators.gs`. Since v8 an intern gets a separated
+  document's `internalText`, to read; the app never copies it (D16). A document nobody has separated reaches an intern whole but marked `unseparated`,
   with the lines that may hold the owner's or the broker's details flagged, so the app can
   leave them out of the copy (v7, below). The **role** decides this, from the key. Nothing in the request can
   ask for more.
@@ -128,7 +128,7 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 |---|---|---|
 | `ping` | everyone | Who the key belongs to: `name`, `role`, `fbAccounts`, and the server's `time`; also `version` (`SERVER_VERSION` at the top of `Code.gs`) and `rules`: `{ cooldownDays, repostDueDays, perWeek, perIntern }`, the live values (below); `perIntern` is `perWeek` again, under its old name, for an app built before v6. |
 | `properties` | everyone | Every listing: `id`, `name`, `category`, `listingType`, `subCategory`, `photoCount`, `hasIssues`, and `issues` (the Directory's Issues text, as BuildDirectory.gs wrote it). For an Admin only, `docId` (the posting document's id, the DocId column) when there is one, for doc health's "Open doc". One sheet read. With the listing checker's index joined on by Folder ID (below): `city`, `size`, `dealType`, `building` (Building / street), `created` (the checker's Created as `yyyy-MM-dd`, `''` when unreadable), `availability` (`Available`, `Sold` or `''`) and `inChecker`. When the index cannot be read, or is switched off, those fields are absent and the call still works. With the geocoding sheet joined on by FolderId (below): `lat` and `lng`, numbers, only for a listing that has a good position. |
-| `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and for an Admin only, `internalText`. For an intern and a document nobody has separated, also `unseparated: true` and `flaggedLines` (below). The checker's fields too, joined as for `properties`. |
+| `property` | everyone | One listing by `id`: `publicText`, `photos`, `hasInternal`, `withheld`, `cutAt`, `issues`, `live`, and `internalText` (for an intern, only when the document is separated). For an intern and a document nobody has separated, also `unseparated: true` and `flaggedLines` (below). The checker's fields too, joined as for `properties`. |
 | `posts` | everyone | The Posts tab as rows, every value text. An intern gets only their own. |
 | `assignments` | everyone | The Assignments tab as rows, every value text. An intern gets only their own. Each row also has `week`: the Monday of the week its Date is in (`''` when the date can't be read), with `date` kept as written, so a daily row from before v6 reads as its week (below). |
 | `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` (`HH:mm`), `type` (the Property type written) and `postedBy`. `postLink` is required, an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com`, `fb.com` or `fb.me` (`error: 'link-required'` or `'bad-link'`), and so is `status`, `Posted` or `Pending` (`'bad-status'`); Pending means posted in a group and awaiting its admin's approval. Refuses with `'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the poster's Team row. An Admin may send `postedBy`: that person must be on the Team tab and active (`'unknown-person'`), and the account must be one of theirs. |
@@ -148,8 +148,8 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 
 Two things in a reply come from the key, never from the request:
 
-* **`internalText`** is in a `property` reply only for an Admin. For an intern
-  it is not empty, it is absent. A heading separator's label quotes its line
+* **`internalText`** is in a `property` reply for an Admin always, and for an
+  intern only when the document is separated (D16). A heading separator's label quotes its line
   (`heading: Commission: 3%`), so an intern's `cutAt` is the kind of marker only (`heading`).
 * **`postedBy`** on a logged post is the caller's own name. An Admin may log on an
   intern's behalf by sending `postedBy`; from an intern it is ignored.

@@ -9,7 +9,7 @@ Neither, uniformly. There are four kinds of data and they want three different a
 | Data | Size | Policy | Why |
 |---|---|---|---|
 | Property index (id, name, category, photo count) | ~200 KB for 1,474 listings | **Cached on disk**, refreshed on launch and every 15 min | The search box has to be instant as you type. A network round trip per keystroke is not an option. |
-| Posting text | 1–3 KB each | **Kept in memory only**, until the list is next refreshed | Fetched when a property is opened, and the server re-reads the document live, so a typo fixed in Drive a minute ago is already gone. Never written to disk: for a manager it includes the internal section (D1). |
+| Posting text | 1–3 KB each | **Kept in memory only**, until the list is next refreshed | Fetched when a property is opened, and the server re-reads the document live, so a typo fixed in Drive a minute ago is already gone. Never written to disk: it includes the internal section (D1, D16). |
 | Photos — thumbnails | ~50 KB each | **Cached on disk, keyed by Drive file id** | Shown while browsing. Re-downloading 15 thumbnails every time someone opens a property is pure waste; they almost never change. |
 | Photos — full size | 2–5 MB each | **Not cached. Downloaded on demand** to `Downloads\APG Post-It\<property>\` | This is not a cache, it is the deliverable: the intern picks those files in the Facebook upload dialog. Caching 60 MB per property to also copy it elsewhere would be silly. |
 | Tracker rows (Posts, Assignments) | small | **Never cached authoritatively.** Read on open, poll while a screen is up | These change because of *other people's* actions. A stale queue or tracker is worse than a slow one. Nothing is lost by not caching: the cooldown decision is made server-side, so a stale local copy can never cause a wrong write — only a briefly stale view. |
@@ -113,4 +113,4 @@ missing marker asks for a check rather than blocking (D15).
 
 One screen, fixed once per property. This turns a parsing problem into a data-quality chore
 somebody can actually finish. The server reports whether a marker was found (`hasInternal`);
-it never sends an intern the internal text itself, nor the heading it was cut at.
+since D16 it sends an intern the internal text to read, but never the heading it was cut at.

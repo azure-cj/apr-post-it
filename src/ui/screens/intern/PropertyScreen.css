@@ -241,10 +241,11 @@
   margin-top: calc(var(--space-4) * -1);
 }
 
-/* ---- the internal section: managers only, folded under a warning ---------- */
+/* ---- the internal section: folded under a warning, never selectable ------- */
 
 .internal {
   border: var(--border-width) solid var(--warn-edge);
+  user-select: none;
   border-radius: var(--radius-row);
   background: var(--warn-bg);
 }

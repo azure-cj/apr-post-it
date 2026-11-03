@@ -7,6 +7,8 @@ was hard to reach, cost something, or will look arbitrary to whoever reads the c
 
 ### D1. The posting text is split on the server, not hidden in the app (Oct 30, 2026)
 
+*Changed by D16:* an intern now gets a separated document's internal section, to read.
+
 An intern's reply from the web app contains no internal text **at all** — not hidden, absent.
 The alternative, sending the whole document and collapsing part of it, leaves the owner's
 details and the commission sitting in memory on a machine we do not control, one developer
@@ -208,4 +210,14 @@ before posting." The safeguards:
 The cost is the agent's own number: in an unseparated document it cannot be told from the
 owner's, so it is flagged too, and "Contact numbers present" warns. A post missing a contact
 number can be fixed; a published owner's number cannot (D5). Separated documents are
-unchanged, and the internal section still never reaches an intern.
+unchanged, and the internal section still never reaches an intern (until D16).
+
+### D16. Interns read the internal section, never copy it (Nov 3, 2026)
+
+Part of D1 is reversed: a `property` reply now carries a separated document's `internalText`
+to an intern too, and the app shows it folded under a warning, as it does for an Admin. Agents
+need the commission and terms to answer a client. It is never copied: Copy takes the public
+text only, the section can't be selected, and a copy made from it by hand is cancelled. It is
+still never written to disk. An unseparated document is unchanged (D15). The cost: a leaked
+intern key can now read internal text. This is step 1 of the plan to join the listing hub,
+where an intern is an agent.

@@ -26,9 +26,9 @@ const detail: PropertyDetail = {
 };
 
 describe('forViewer', () => {
-  it('drops the internal section for an intern: absent, not hidden', () => {
+  it('keeps a separated document\'s internal section for an intern, to read (D1)', () => {
     const seen = forViewer(detail, intern);
-    expect('internalText' in seen).toBe(false);
+    expect(seen.internalText).toBe(detail.internalText);
     expect(seen.publicText).toBe(CLEAN.publicText);
   });
 

@@ -50,7 +50,7 @@ They stay a visible queue of documents to fix.
 
 | Role | Does | Sees |
 |---|---|---|
-| **Intern** | Works a queue top to bottom. Searches when the queue is done. Logs posts as themself | Public text only. The internal section is absent from their replies, not hidden (D1) |
+| **Intern** | Works a queue top to bottom. Searches when the queue is done. Logs posts as themself | Public text, and the internal section to read, never to copy (D16) |
 | **Admin** | Assigns the postings: builds queues, watches the tracker, fixes logged rows, sweeps doc health. Owns Settings: the web app link, cooldown, team, keys | Everything |
 
 The scene: an office PC or laptop, Windows 10 or 11, often a 1366×768 screen, sometimes

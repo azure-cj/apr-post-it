@@ -2,8 +2,8 @@
  * APG Post-It — Google Drive + Sheets backend.
  *
  * A single Apps Script web app that the desktop app talks to over HTTPS.
- * The script runs as the owner, so interns never need Drive access and never
- * receive the internal section of a posting doc.
+ * The script runs as the owner, so interns never need Drive access. They may
+ * read a posting doc's internal section, but the app never copies it (D1).
  *
  * It shares one Apps Script project with Separators.gs, which it requires, and
  * BuildDirectory.gs. Apps Script gives every file in a project one global
@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-01.5';
+const SERVER_VERSION = '2026-11-03.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -859,8 +859,8 @@ function indexCheck_() {
  * rebuild. The sheet's text is the fallback when there is no document id or the
  * read fails.
  *
- * includeInternal is decided by role, not by the client. For an intern the
- * internal half is never put in the reply at all.
+ * includeInternal is decided by role, not by the client. An intern gets the
+ * internal half of a separated document to read, never an unseparated whole.
  */
 function getProperty_(id, includeInternal) {
   // First, and outside the try below: without the one splitter every live
@@ -937,9 +937,11 @@ function getProperty_(id, includeInternal) {
     live: live,
     photos: photos,
   };
-  if (includeInternal) out.internalText = internalText;
+  // Since v8 an intern is sent a separated document's internal section too, to
+  // read behind a toggle. The app never copies it and never saves it (D1).
+  if (includeInternal || separated) out.internalText = internalText;
   // An Admin's reply is as it was: the whole document, to fix it.
-  else if (unseparated) {
+  if (!includeInternal && unseparated) {
     out.unseparated = true;
     out.flaggedLines = flaggedLines_(publicText);
   }

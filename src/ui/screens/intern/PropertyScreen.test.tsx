@@ -291,20 +291,31 @@ describe('a document nobody has separated, from an older server or with no docum
 });
 
 describe('the internal section', () => {
-  it('never reaches an intern, even when the reply wrongly contained it', async () => {
+  it('is shown to an intern folded away, and never copied (D1)', async () => {
     const platform = fakeServer({
       property: propertyReply({ internalText: 'Owner: Mrs. Lourdes Navarro, 0918 555 0199\nCommission: 3%' }),
     });
     renderApp({ platform, path: PATH });
-    await settled();
 
-    expect(document.body.textContent).not.toContain('Navarro');
-    expect(document.body.textContent).not.toContain('Commission: 3%');
-    expect(screen.queryByText(/Internal section: never posted/)).toBeNull();
-    expect(screen.queryByText(/Cut at/)).toBeNull();
+    const summary = await screen.findByText('Internal section: never posted, never copied');
+    const details = summary.closest('details')!;
+    expect(details.open).toBe(false);
+
+    await userEvent.click(summary);
+    expect(details.textContent).toContain('Mrs. Lourdes Navarro');
 
     await userEvent.click(copyButton());
     await waitFor(() => expect(platform.copied).toEqual([CLEAN.publicText]));
+  });
+
+  it('cancels a copy made by hand from the internal section', async () => {
+    const platform = fakeServer({ property: propertyReply({ internalText: 'Commission: 3%' }) });
+    renderApp({ platform, path: PATH });
+
+    const details = (await screen.findByText('Internal section: never posted, never copied')).closest('details')!;
+    const copy = new Event('copy', { bubbles: true, cancelable: true });
+    details.dispatchEvent(copy);
+    expect(copy.defaultPrevented).toBe(true);
   });
 
   it('is shown to a manager folded away under a warning, with where the text was cut', async () => {

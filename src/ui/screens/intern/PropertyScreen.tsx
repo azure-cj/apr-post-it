@@ -412,7 +412,7 @@ function PropertyPage({ id }: { readonly id: string }) {
             />
           </section>
 
-          {manager && detail?.hasInternal ? <InternalSection detail={detail} /> : null}
+          {detail?.hasInternal && detail.internalText !== undefined ? <InternalSection detail={detail} /> : null}
 
           {/* ---- after posting ---- */}
           <LogStep
@@ -771,15 +771,18 @@ function PostText({
   );
 }
 
-/** For a manager: the part that is never posted, folded away under a warning, and where the cut was made. */
+/**
+ * The part that is never posted, folded away under a warning, and where the cut
+ * was made. Everyone may read it (D1); nobody can select or copy it.
+ */
 function InternalSection({ detail }: { readonly detail: PropertyDetail }) {
   return (
-    <details className="internal">
+    <details className="internal" onCopy={(e) => e.preventDefault()}>
       <summary className="internal__summary">
         <Icon name="warn" className="internal__icon" />
         <span className="internal__label">
           <span className="internal__title">Internal section: never posted, never copied</span>
-          <span className="meta">Admins only.</span>
+          <span className="meta">Agents only.</span>
         </span>
         <span className="internal__toggle" aria-hidden="true">
           <span className="internal__show">Show</span>
