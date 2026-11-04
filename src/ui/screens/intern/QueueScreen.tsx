@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { postLinkProblem } from '@/core/links';
 import { normalize } from '@/core/matcher';
-import { isDate, samePerson, waitingPosts, weekProgress } from '@/core/summary';
+import { fridayWarning, fridayWarningWords, isDate, samePerson, waitingPosts, weekProgress } from '@/core/summary';
 import { queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry, type Property } from '@/core/types';
 import { assignmentWeek, weekdaysElapsed, weekFriday, weekOf } from '@/core/week';
 import { Button, CategoryDot, EmptyState, Notice, PAGE_SIZE, Pagination, Pill, TextInput, categoryKind, categoryLabel, usePaged } from '../../components';
@@ -84,6 +84,8 @@ export function QueueScreen() {
     () => weekProgress(user.name, week, queue.data ?? [], posts.data ?? [], today),
     [user.name, week, queue.data, posts.data, today],
   );
+  // Warnings before Friday: from Wednesday, when behind, what is left and how many a day.
+  const behind = queue.data !== null ? fridayWarning(progress, week, today) : null;
 
   // Pending posts this week's queue doesn't already show: earlier weeks', and ones logged from Find.
   const waiting = useMemo(() => {
@@ -136,6 +138,12 @@ export function QueueScreen() {
           />
         ) : null}
       </header>
+
+      {behind ? (
+        <Notice tone="warn" title="Behind for Friday" className="queue__behind">
+          {fridayWarningWords(behind)}
+        </Notice>
+      ) : null}
 
       <WaitingPosts waiting={waiting} onChanged={reload} />
 

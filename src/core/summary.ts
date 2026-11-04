@@ -1019,6 +1019,41 @@ export interface WeekProgress {
  * - behind: posted + pending < expectedByToday;
  * - on-track: everything else, a week with no queue included (target 0).
  */
+/** Behind for Friday: what is left, the weekdays left (today included), and about how many a day that is. */
+export interface FridayWarning {
+  readonly left: number;
+  readonly daysLeft: number;
+  readonly perDay: number;
+}
+
+/** The weekday a warning starts on: Wednesday, the third of the week, so there is still time to catch up. */
+export const WARN_FROM_WEEKDAY = 3;
+
+/**
+ * Warnings before Friday: from Wednesday to Friday of the week `progress`
+ * is for, when someone is behind (or hasn't started), what is left to post
+ * and how many a day that takes. Null on Monday and Tuesday, once the week is
+ * over, with no queue, or when on track or done.
+ */
+export function fridayWarning(progress: WeekProgress, week: string, today: string): FridayWarning | null {
+  const monday = weekOf(week);
+  if (progress.target === 0 || isWeekOver(monday, today)) return null;
+  if (progress.pace !== 'behind' && progress.pace !== 'not-started') return null;
+  const elapsed = weekdaysElapsed(monday, today);
+  if (elapsed < WARN_FROM_WEEKDAY) return null;
+  const left = progress.target - progress.posted - progress.pending;
+  if (left <= 0) return null;
+  // Today counts: Wednesday leaves 3 days to post in, Friday 1.
+  const daysLeft = 6 - elapsed;
+  return { left, daysLeft, perDay: Math.ceil(left / daysLeft) };
+}
+
+/** The warning in words: "8 left, 2 days to go: about 4 a day." or, on Friday, "3 left: due today." */
+export function fridayWarningWords(w: FridayWarning): string {
+  if (w.daysLeft === 1) return `${w.left} left: due today.`;
+  return `${w.left} left, ${w.daysLeft} days to go: about ${w.perDay} a day.`;
+}
+
 export function weekProgress(
   intern: string,
   week: string,

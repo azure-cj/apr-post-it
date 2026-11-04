@@ -1,6 +1,18 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button, Card, EmptyState, Notice, Pill, Spinner } from '../../components';
-import { activeInterns, lastPostBy, samePerson, teamWeek, waitedFor, waitingPosts, type TeamMember, type TeamWeekRow } from '@/core/summary';
+import {
+  activeInterns,
+  fridayWarning,
+  fridayWarningWords,
+  lastPostBy,
+  samePerson,
+  teamWeek,
+  waitedFor,
+  waitingPosts,
+  type FridayWarning,
+  type TeamMember,
+  type TeamWeekRow,
+} from '@/core/summary';
 import { isWeekOver, weekDays } from '@/core/week';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
 import { cleanProfiles, profilesOf as memberProfiles } from './FbAccountsField';
@@ -65,6 +77,15 @@ export function InternsScreen({
   const rows = useMemo<readonly TeamWeekRow[]>(
     () => (team ? teamWeek(activeInterns(team), week, assignments, posts, today) : []),
     [team, week, assignments, posts, today],
+  );
+  // Warnings before Friday: from Wednesday of the week shown, who is behind and by how much, most left first.
+  const behindForFriday = useMemo(
+    () =>
+      rows
+        .map((row) => ({ name: row.name, warning: fridayWarning(row, week, today) }))
+        .filter((r): r is { name: string; warning: FridayWarning } => r.warning !== null)
+        .sort((a, b) => b.warning.left - a.warning.left),
+    [rows, week, today],
   );
 
   const revoked = useMemo<readonly TeamMember[]>(() => {
@@ -152,6 +173,22 @@ export function InternsScreen({
             <Stat label={over ? 'Missed' : 'Left'} value={sum((r) => (over ? r.missed : r.notShared))} />
             <Stat label="Behind" value={behind} of={rows.length} />
           </dl>
+
+          {behindForFriday.length > 0 ? (
+            <Notice
+              tone="warn"
+              className="interns__friday"
+              title={behindForFriday.length === 1 ? '1 intern behind for Friday' : `${behindForFriday.length} interns behind for Friday`}
+            >
+              <ul className="interns__friday-list">
+                {behindForFriday.map(({ name, warning }) => (
+                  <li key={name}>
+                    <strong>{name}</strong>: {fridayWarningWords(warning)}
+                  </li>
+                ))}
+              </ul>
+            </Notice>
+          ) : null}
 
           <div className={`interns__body${openRow ? ' interns__body--panel' : ''}`}>
             <Card className="interns__list" padding="tight">
@@ -267,7 +304,7 @@ function WeekTable({ rows, week, today, posts, open, onOpen }: WeekTableProps) {
                 </td>
                 <td className="tabular">
                   {oldest ? (
-                    <span className={oldest.days >= 2 ? 'interns__waiting interns__waiting--old' : 'interns__waiting'}>
+                    <span className={oldest.days >= 2 ? 'interns__pending-age interns__pending-age--old' : 'interns__pending-age'}>
                       {waiting.length} · oldest {waitedFor(oldest.days)}
                     </span>
                   ) : (

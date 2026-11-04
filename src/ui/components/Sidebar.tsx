@@ -47,6 +47,8 @@ export interface SidebarProps {
   readonly onCheckUpdates?: (() => void) | undefined;
   /** A check is under way. */
   readonly checkingUpdates?: boolean | undefined;
+  /** Opens What's new: the version becomes a button. */
+  readonly onWhatsNew?: (() => void) | undefined;
 }
 
 const isModifiedClick = (e: MouseEvent) => e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
@@ -80,6 +82,7 @@ export function Sidebar({
   appVersion,
   onCheckUpdates,
   checkingUpdates = false,
+  onWhatsNew,
 }: SidebarProps) {
   const asideRef = useRef<HTMLElement>(null);
   const id = useId();
@@ -213,12 +216,21 @@ export function Sidebar({
             <Icon name="refresh" className="sidebar__icon" />
           </button>
         ) : null}
-        {appVersion ? (
+        {appVersion && onWhatsNew ? (
+          <button
+            type="button"
+            className="sidebar__version sidebar__version--link tabular"
+            onClick={onWhatsNew}
+            aria-label={`Version ${appVersion}: what's new`}
+            {...tipFor("What's new")}
+          >
+            <span className="sidebar__label">Version {appVersion}</span>
+            <span className="sidebar__version-short">v{appVersion}</span>
+          </button>
+        ) : appVersion ? (
           <p className="sidebar__version tabular">
             <span className="sidebar__label">Version {appVersion}</span>
-            <span className="sidebar__version-short">
-              v{appVersion}
-            </span>
+            <span className="sidebar__version-short">v{appVersion}</span>
           </p>
         ) : null}
       </div>

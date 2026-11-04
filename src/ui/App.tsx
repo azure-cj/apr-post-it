@@ -33,6 +33,7 @@ import { AccountSignInScreen } from './screens/AccountSignIn';
 import { SignInScreen } from './screens/SignInScreen';
 import { OutboxBanner } from './OutboxBanner';
 import { PendingNotifier } from './PendingNotifier';
+import { WhatsNew } from './WhatsNew';
 import { UpdateBanner, type CheckResult } from './UpdateBanner';
 import { version as APP_VERSION } from '../../package.json';
 import { useSignInRole } from './screens/SignInScreen.role';
@@ -159,6 +160,8 @@ export function AppShell({ signInNote }: AppProps) {
   const notifyShell = useNotify();
   const checkNow = useRef<(() => Promise<CheckResult>) | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
+  // What's new: once after an update, and from the version at the sidebar's foot.
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const onCheckReady = useCallback((check: () => Promise<CheckResult>) => {
     checkNow.current = check;
   }, []);
@@ -402,6 +405,7 @@ export function AppShell({ signInNote }: AppProps) {
             appVersion={APP_VERSION}
             onCheckUpdates={() => void checkUpdates()}
             checkingUpdates={checkingUpdates}
+            onWhatsNew={() => setWhatsNewOpen(true)}
           />
         ) : null}
 
@@ -410,6 +414,9 @@ export function AppShell({ signInNote }: AppProps) {
           <UpdateBanner platform={platform} requestLeave={requestLeave} onCheckReady={onCheckReady} />
           {user ? <OutboxBanner who={user.name} /> : null}
           {user ? <PendingNotifier who={user.name} /> : null}
+          {user ? (
+            <WhatsNew platform={platform} version={APP_VERSION} openNow={whatsNewOpen} onClosed={() => setWhatsNewOpen(false)} />
+          ) : null}
 
           <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
             {session.status === 'starting' ? (

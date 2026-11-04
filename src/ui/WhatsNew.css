@@ -1,0 +1,8 @@
+/* What's new in this version: a short list, after an update. */
+.whats-new {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding-left: var(--space-8);
+  color: var(--text);
+}

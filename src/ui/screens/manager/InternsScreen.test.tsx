@@ -146,6 +146,11 @@ describe('the Interns screen: the week', () => {
     expect(stat('Pending')).toBe('1');
     expect(stat('Left')).toBe('13');
     expect(stat('Behind')).toBe('2 of 4');
+
+    // Thursday: those behind are named for Friday, with what is left and how many a day.
+    const friday = screen.getByText('2 interns behind for Friday').closest('.notice')!;
+    expect(friday.querySelectorAll('li')).toHaveLength(2);
+    expect(friday.textContent).toMatch(/left, 2 days to go: about \d+ a day\./);
   });
 
   it('shows a week that is over as Missed, and opens on it at the weekend', async () => {

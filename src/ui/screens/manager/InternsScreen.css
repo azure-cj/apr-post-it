@@ -561,10 +561,16 @@
 }
 
 /* Waiting: posts Pending approval, oldest first; two days and more stands out. */
-.interns__waiting {
+.interns__pending-age {
   white-space: nowrap;
 }
 
-.interns__waiting--old {
+.interns__pending-age--old {
   color: var(--warn-text);
+}
+
+/* Behind for Friday: from Wednesday, who is behind and by how much. */
+.interns__friday-list {
+  margin: 0;
+  padding-left: var(--space-8);
 }

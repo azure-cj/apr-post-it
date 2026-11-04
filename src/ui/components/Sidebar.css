@@ -342,3 +342,22 @@
 .sidebar--collapsed .sidebar__version .sidebar__label {
   display: none;
 }
+
+/* The version opens What's new. */
+.sidebar__version--link {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar__version--link:hover {
+  color: var(--text);
+}
+
+.sidebar__version--link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
