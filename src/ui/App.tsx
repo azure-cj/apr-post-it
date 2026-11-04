@@ -32,6 +32,7 @@ import {
 import { AccountSignInScreen } from './screens/AccountSignIn';
 import { SignInScreen } from './screens/SignInScreen';
 import { OutboxBanner } from './OutboxBanner';
+import { PendingNotifier } from './PendingNotifier';
 import { UpdateBanner } from './UpdateBanner';
 import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
@@ -388,6 +389,7 @@ export function AppShell({ signInNote }: AppProps) {
           <TitleBar brandHref={user ? undefined : '#/'} windowControls={windowControls} />
           <UpdateBanner platform={platform} requestLeave={requestLeave} />
           {user ? <OutboxBanner who={user.name} /> : null}
+          {user ? <PendingNotifier who={user.name} /> : null}
 
           <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
             {session.status === 'starting' ? (
@@ -1088,6 +1090,8 @@ function SettingsRoute() {
         serverVersion: server.version || undefined,
         theme: theme.choice,
         onThemeChange: theme.setChoice,
+        reminderDays: app.settings.pendingReminderDays,
+        onReminderDaysChange: (days) => void app.saveSettings({ pendingReminderDays: days }).catch(() => {}),
       }}
     />
   );

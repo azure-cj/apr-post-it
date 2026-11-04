@@ -65,6 +65,16 @@ export function createTauriPlatform(): Platform {
       return firebase;
     },
 
+    async notify(title, body) {
+      try {
+        const n = await import('@tauri-apps/plugin-notification');
+        const granted = (await n.isPermissionGranted()) || (await n.requestPermission()) === 'granted';
+        if (granted) n.sendNotification({ title, body });
+      } catch {
+        // No notifications on this PC: the reminder in My queue still shows.
+      }
+    },
+
     async checkUpdate(): Promise<AppUpdate | null> {
       // A development run is never replaced by an installer.
       if (import.meta.env.DEV) return null;

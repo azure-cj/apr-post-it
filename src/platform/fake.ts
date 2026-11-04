@@ -107,6 +107,8 @@ export interface FakePlatform extends Platform {
   readonly copied: readonly string[];
   /** Every photo copied to the clipboard, by its address, oldest first. */
   readonly copiedPhotos: readonly string[];
+  /** Every notification shown, oldest first. */
+  readonly notified: readonly { readonly title: string; readonly body: string }[];
   /** Every version installed through checkUpdate, oldest first. */
   readonly installed: readonly string[];
   /** Every link and folder opened, oldest first. */
@@ -168,6 +170,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   const copiedPhotos: string[] = [];
   const opened: string[] = [];
   const installed: string[] = [];
+  const notified: { title: string; body: string }[] = [];
   const posts: FakePost[] = [];
   const saves: FakeSave[] = [];
 
@@ -197,6 +200,12 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       await begin('firebase');
       return options.firebase ?? null;
     },
+
+    async notify(title, body) {
+      await begin('notify');
+      notified.push({ title, body });
+    },
+    notified,
 
     async checkUpdate() {
       await begin('checkUpdate');

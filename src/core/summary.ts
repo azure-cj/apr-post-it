@@ -947,6 +947,30 @@ export function internDays(
   });
 }
 
+/** A post still waiting for the group admin's approval, and for how long. */
+export interface WaitingPost {
+  readonly post: PostLogEntry;
+  /** Whole days since it was logged, on Manila's calendar: 0 the same day. */
+  readonly days: number;
+}
+
+/**
+ * A person's posts still Pending, whatever their date, oldest first: the ones
+ * to check on Facebook. A row whose date can't be read comes last, as 0 days.
+ */
+export function waitingPosts(posts: readonly PostLogEntry[], name: string, today: string): WaitingPost[] {
+  const theirs = posts.filter((p) => p.status === 'Pending' && samePerson(p.postedBy, name));
+  return newestFirst(theirs)
+    .reverse()
+    .map((post) => ({ post, days: isDate(post.date) ? Math.max(0, daysBetween(post.date, today)) : 0 }))
+    .sort((a, b) => b.days - a.days);
+}
+
+/** Words for how long a post has waited: "today", "1 day", "3 days". */
+export function waitedFor(days: number): string {
+  return days <= 0 ? 'today' : days === 1 ? '1 day' : `${days} days`;
+}
+
 /**
  * A person's latest Posted or Pending row, whatever its date: by date, then
  * time, then sheet order, as `newestFirst` orders them. Undefined when they

@@ -1,0 +1,57 @@
+/* Pending reminders: posts waiting for the group admin's approval, oldest first. */
+.waiting {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.waiting__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.waiting__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+  border-block-start: var(--border-width) solid var(--border);
+}
+
+.waiting__row:first-child {
+  border-block-start: 0;
+}
+
+.waiting__what {
+  display: grid;
+  min-width: 0;
+}
+
+.waiting__title {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.waiting__age,
+.waiting__error {
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-muted);
+}
+
+/* Two days and more: worth a look on Facebook today. */
+.waiting__age--old {
+  color: var(--warn-text);
+}
+
+.waiting__error {
+  color: var(--danger-text);
+}
+
+.waiting__actions {
+  display: flex;
+  gap: var(--space-4);
+}

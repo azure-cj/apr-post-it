@@ -67,6 +67,12 @@ export interface Platform {
    */
   checkUpdate(): Promise<AppUpdate | null>;
 
+  /**
+   * A Windows notification. Asks for permission the first time; resolves
+   * quietly when it isn't given or there is none to show (never rejects).
+   */
+  notify(title: string, body: string): Promise<void>;
+
   /** True on a machine where saving photos and Explorer work. */
   readonly hasFileSystem: boolean;
 

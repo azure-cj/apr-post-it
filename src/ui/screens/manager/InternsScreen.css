@@ -559,3 +559,12 @@
   font-size: var(--text-meta);
   line-height: var(--lh-meta);
 }
+
+/* Waiting: posts Pending approval, oldest first; two days and more stands out. */
+.interns__waiting {
+  white-space: nowrap;
+}
+
+.interns__waiting--old {
+  color: var(--warn-text);
+}

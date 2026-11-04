@@ -24,6 +24,8 @@ export interface AppSettings {
   readonly perWeek: number;
   /** @deprecated perWeek's old name: always the same value, kept while the screens switch. */
   readonly perIntern: number;
+  /** A Windows notification when a post has waited this many days for approval (PI-88). 0: never. This PC's own. */
+  readonly pendingReminderDays: number;
 }
 
 /** Where the settings are kept, through platform.readLocal / writeLocal. */
@@ -35,6 +37,7 @@ export const defaultAppSettings: AppSettings = Object.freeze({
   repostDueDays: defaultSettings.repostDueDays,
   perWeek: defaultSettings.perWeek,
   perIntern: defaultSettings.perWeek,
+  pendingReminderDays: 2,
 });
 
 /**
@@ -94,6 +97,7 @@ export function parseSettings(text: string | null | undefined): AppSettings {
     repostDueDays: wholeDays(saved['repostDueDays'], defaultAppSettings.repostDueDays),
     perWeek,
     perIntern: perWeek,
+    pendingReminderDays: reminderDays(saved['pendingReminderDays']),
   });
 }
 
@@ -103,6 +107,7 @@ export function serializeSettings(settings: AppSettings): string {
     cooldownDays: settings.cooldownDays,
     repostDueDays: settings.repostDueDays,
     perWeek: settings.perWeek,
+    pendingReminderDays: settings.pendingReminderDays,
   });
 }
 
@@ -114,4 +119,9 @@ function inRange(value: unknown, limits: { readonly min: number; readonly max: n
 
 function wholeDays(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 365 ? value : fallback;
+}
+
+/** Days before a Pending post's reminder: 0 (off) to 30, else the default. */
+export function reminderDays(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 30 ? value : defaultAppSettings.pendingReminderDays;
 }

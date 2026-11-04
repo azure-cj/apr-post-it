@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { postLinkProblem } from '@/core/links';
 import { normalize } from '@/core/matcher';
-import { isDate, samePerson, weekProgress } from '@/core/summary';
+import { isDate, samePerson, waitingPosts, weekProgress } from '@/core/summary';
 import { queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry, type Property } from '@/core/types';
 import { assignmentWeek, weekdaysElapsed, weekFriday, weekOf } from '@/core/week';
 import { Button, CategoryDot, EmptyState, Notice, PAGE_SIZE, Pagination, Pill, TextInput, categoryKind, categoryLabel, usePaged } from '../../components';
@@ -20,6 +20,7 @@ import {
 } from '../../state';
 import { shortDate } from './format';
 import { Waiting } from './shared';
+import { WaitingPosts } from './WaitingPosts';
 import './QueueScreen.css';
 
 const FROM_QUEUE: FromList = { section: 'queue' };
@@ -84,6 +85,12 @@ export function QueueScreen() {
     [user.name, week, queue.data, posts.data, today],
   );
 
+  // Pending posts this week's queue doesn't already show: earlier weeks', and ones logged from Find.
+  const waiting = useMemo(() => {
+    const shown = new Set(items.map((i) => i.post).filter(Boolean));
+    return waitingPosts(posts.data ?? [], user.name, today).filter((w) => !shown.has(w.post));
+  }, [items, posts.data, user.name, today]);
+
   const toPost = items.filter((i) => i.status === 'Not Shared');
   const pending = items.filter((i) => i.status === 'Pending');
   const posted = items.filter((i) => i.status === 'Posted');
@@ -129,6 +136,8 @@ export function QueueScreen() {
           />
         ) : null}
       </header>
+
+      <WaitingPosts waiting={waiting} onChanged={reload} />
 
       {queue.data === null ? (
         queue.error && !queue.loading ? (

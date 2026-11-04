@@ -98,6 +98,17 @@ export function createBrowserPlatform(options: BrowserPlatformOptions = {}): Pla
       return firebase;
     },
 
+    async notify(title, body) {
+      try {
+        const N = globalThis.Notification;
+        if (!N) return;
+        const granted = N.permission === 'granted' || (N.permission !== 'denied' && (await N.requestPermission()) === 'granted');
+        if (granted) new N(title, { body });
+      } catch {
+        // Notifications blocked: the reminder in My queue still shows.
+      }
+    },
+
     async checkUpdate() {
       // A browser has nothing to install.
       return null;

@@ -60,6 +60,8 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         // Restart after an update is installed.
         .plugin(tauri_plugin_process::init())
+        // Windows notifications: posts waiting too long for approval.
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             photos::save_photos,
             key::read_key,

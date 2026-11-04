@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button, Card, EmptyState, Notice, Pill, Spinner } from '../../components';
-import { activeInterns, lastPostBy, samePerson, teamWeek, type TeamMember, type TeamWeekRow } from '@/core/summary';
+import { activeInterns, lastPostBy, samePerson, teamWeek, waitedFor, waitingPosts, type TeamMember, type TeamWeekRow } from '@/core/summary';
 import { isWeekOver, weekDays } from '@/core/week';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
 import { cleanProfiles, profilesOf as memberProfiles } from './FbAccountsField';
@@ -228,6 +228,7 @@ function WeekTable({ rows, week, today, posts, open, onOpen }: WeekTableProps) {
               </span>
             </th>
             <th scope="col">Pace</th>
+            <th scope="col">Waiting</th>
             <th scope="col" className="week-table__last">
               Last post
             </th>
@@ -236,6 +237,9 @@ function WeekTable({ rows, week, today, posts, open, onOpen }: WeekTableProps) {
         <tbody>
           {rows.map((row) => {
             const last = lastPostBy(posts, row.name);
+            // Their posts waiting for the group admin's approval, oldest first (Pending reminders).
+            const waiting = waitingPosts(posts, row.name, today);
+            const oldest = waiting[0];
             const selected = open !== null && samePerson(open, row.name);
             return (
               <tr key={row.name} className={selected ? 'week-table__row week-table__row--open' : 'week-table__row'}>
@@ -260,6 +264,15 @@ function WeekTable({ rows, week, today, posts, open, onOpen }: WeekTableProps) {
                 </td>
                 <td>
                   <PacePill progress={row} />
+                </td>
+                <td className="tabular">
+                  {oldest ? (
+                    <span className={oldest.days >= 2 ? 'interns__waiting interns__waiting--old' : 'interns__waiting'}>
+                      {waiting.length} · oldest {waitedFor(oldest.days)}
+                    </span>
+                  ) : (
+                    <span className="interns__quiet">None</span>
+                  )}
                 </td>
                 <td className="week-table__last tabular">{last ? lastPostWords(last, today) : <span className="interns__quiet">Never</span>}</td>
               </tr>
