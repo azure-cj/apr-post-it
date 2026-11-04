@@ -50,6 +50,13 @@ export interface BackendConfig {
   readonly url?: string | null | undefined;
   /** This person's key from the Team tab. It is their identity (DECISIONS D2). */
   readonly key?: string | null | undefined;
+  /**
+   * v10: a Firebase account's sign-in token, sent instead of the key. The web
+   * app asks Google whose it is and finds them by the Team tab's Email.
+   */
+  readonly idToken?: string | null | undefined;
+  /** With idToken: the account it is for. Tokens renew every hour; the account stays who is asking. */
+  readonly who?: string | null | undefined;
 }
 
 export interface BackendDeps {
@@ -315,7 +322,7 @@ export function createBackend(deps: BackendDeps): Backend {
   let changes = 0;
 
   /** The link and key, trimmed — blank when not set — and their fingerprint. */
-  async function readConfig(action: Action): Promise<{ url: string; key: string; seen: string }> {
+  async function readConfig(action: Action): Promise<{ url: string; key: string; idToken: string; seen: string }> {
     let config: BackendConfig;
     try {
       config = await deps.getConfig();
@@ -331,18 +338,21 @@ export function createBackend(deps: BackendDeps): Backend {
     }
     const url = (config.url ?? '').trim();
     const key = (config.key ?? '').trim();
-    const seen = url && key ? fingerprint(`${url}\n${key}`) : '';
+    const idToken = (config.idToken ?? '').trim();
+    // A signed-in account is the same person however often its token renews.
+    const credential = idToken ? `account:${(config.who ?? '').trim()}` : key;
+    const seen = url && (key || idToken) ? fingerprint(`${url}\n${credential}`) : '';
     if (seen !== lastSeen) {
       lastSeen = seen;
       changes++;
     }
-    return { url, key, seen };
+    return { url, key, idToken, seen };
   }
 
   /** The link and key, or a sentence saying which is missing — before anything is sent. */
-  async function settings(action: Action): Promise<{ url: string; key: string }> {
-    const { url, key } = await readConfig(action);
-    if (!url && !key) {
+  async function settings(action: Action): Promise<{ url: string; key: string; idToken: string }> {
+    const { url, key, idToken } = await readConfig(action);
+    if (!url && !key && !idToken) {
       throw new BackendError('not-configured', action,
         'Post-It is not connected yet. Add the web app link and your key in Settings.');
     }
@@ -350,7 +360,7 @@ export function createBackend(deps: BackendDeps): Backend {
       throw new BackendError('not-configured', action,
         'Post-It does not have the web app link yet. Add it in Settings.');
     }
-    if (!key) {
+    if (!key && !idToken) {
       throw new BackendError('not-configured', action,
         'Post-It does not have your key yet. Add the key your admin gave you in Settings.');
     }
@@ -359,7 +369,7 @@ export function createBackend(deps: BackendDeps): Backend {
         'The web app link in Settings is not a complete web address. ' +
           'Copy the whole /exec link again, starting with https://.');
     }
-    return { url, key };
+    return { url, key, idToken };
   }
 
   /** One trip, bounded by the timeout. Anything that goes wrong comes back as a sentence. */
@@ -384,9 +394,9 @@ export function createBackend(deps: BackendDeps): Backend {
 
   return {
     async call<T extends object = Reply>(action: Action, payload?: Payload): Promise<T> {
-      const { url, key } = await settings(action);
+      const { url, key, idToken } = await settings(action);
 
-      // action and key go last, so nothing in the payload can stand in for them.
+      // action and the credential go last, so nothing in the payload can stand in for them.
       const body: Record<string, unknown> = {};
       if (payload) {
         for (const name of Object.keys(payload)) {
@@ -395,7 +405,13 @@ export function createBackend(deps: BackendDeps): Backend {
         }
       }
       body['action'] = action;
-      body['key'] = key;
+      delete body['idToken'];
+      if (idToken) {
+        delete body['key'];
+        body['idToken'] = idToken;
+      } else {
+        body['key'] = key;
+      }
 
       const reply = readBody(await send(url, body, action), action);
       if (reply['ok'] === true) return reply as T;
@@ -404,8 +420,8 @@ export function createBackend(deps: BackendDeps): Backend {
     },
 
     async isConfigured(): Promise<boolean> {
-      const { url, key } = await readConfig('ping');
-      return url !== '' && key !== '';
+      const { url, key, idToken } = await readConfig('ping');
+      return url !== '' && (key !== '' || idToken !== '');
     },
 
     async identity(): Promise<string> {

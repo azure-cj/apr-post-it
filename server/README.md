@@ -3,11 +3,14 @@
 The desktop app does not talk to the Google APIs. It calls one Apps Script web app, which
 runs **as the owner** and returns JSON. That one decision buys three things:
 
+* **Sign-in is by Firebase account (v10).** The app sends the account's sign-in token as
+  `idToken`; Code.gs asks Google whose it is and finds the person by the Team tab's **Email**.
+  Keys still work, for a copy of the app not yet updated.
 * **No Google credentials on intern machines.** No GCP project, no OAuth consent screen,
   no service-account key file to leak. The app holds the web app's URL and the person's own
   key.
 * **The internal section is never in the public text.** Where a listing's postable text ends is
-  decided by `splitAtSeparator_` in `Separators.gs`. Since v8 an intern gets a separated
+  decided by `splitAtSeparator_` in `Separators.gs`. Since v9 an intern gets a separated
   document's `internalText`, to read; the app never copies it (D16). A document nobody has separated reaches an intern whole but marked `unseparated`,
   with the lines that may hold the owner's or the broker's details flagged, so the app can
   leave them out of the copy (v7, below). The **role** decides this, from the key. Nothing in the request can
@@ -134,9 +137,9 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | `logPost` | everyone | Appends a Posts row and replies with its `status`, `date`, `time` (`HH:mm`), `type` (the Property type written) and `postedBy`. `postLink` is required, an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com`, `fb.com` or `fb.me` (`error: 'link-required'` or `'bad-link'`), and so is `status`, `Posted` or `Pending` (`'bad-status'`); Pending means posted in a group and awaiting its admin's approval. Refuses with `'cooldown'` (with `lastPosted`, `nextAllowed` and the sentence to show) inside the cooldown, and with `'forbidden'` for a Facebook account not on the poster's Team row. An Admin may send `postedBy`: that person must be on the Team tab and active (`'unknown-person'`), and the account must be one of theirs. |
 | `addLink` | everyone | Turns a Pending row into Posted with its link: `notfound` when there is no such row. An intern can complete only their own. Kept for old rows logged without a link. |
 | `setStatus` | everyone | Moves one queue item's status (`Not Shared`, `Pending` or `Posted`; an older app's `To post` is written `Not Shared`): `notfound` when no open item matches. An intern can move only their own. With `Posted`, also marks the assignee's newest Pending post of that listing Posted (by id, else by name), keeping its link. |
-| `team` | Admin | The Team tab without keys: `name`, `role`, `email`, `fbAccounts` (a list: the FB broker name(s)), `fbProfileLink` (`''` when none) and `active` for each person, revoked people included. The Key column is never sent. |
-| `addPerson` | Admin | Adds `{ name, role: 'Intern' \| 'Admin', fbAccounts?, fbProfileLink?, email? }` to the Team tab and replies `{ person, key }`. The key is shown this once. A name already on the tab, in any case, is `'duplicate'`; any other role is `'bad-role'`. `fbProfileLink` is optional; when given it must be an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com` or `fb.com`, any path (typed without a scheme, `https://` is put in front first), else `'bad-profile-link'`. |
-| `updatePerson` | Admin | `{ name, fbAccounts?, fbProfileLink? }`: changes only the fields sent (blank clears), with `addPerson`'s checks, replying `{ person }`. Name, role and key never change. The cached Team tab is cleared, so the log step's account check uses the new broker name at once. |
+| `team` | Admin | The Team tab without keys: `name`, `role`, `email`, `fbAccounts` (a list: the FB broker name(s)), `fbProfiles` (each account with its own profile link, `[{ account, link }]`, v9), `fbProfileLink` (the first link, `''` when none) and `active` for each person, revoked people included. The Key column is never sent. |
+| `addPerson` | Admin | Adds `{ name, role: 'Intern' \| 'Admin', fbProfiles?, fbAccounts?, fbProfileLink?, email? }` to the Team tab and replies `{ person, key }`. The key is shown this once. A name already on the tab, in any case, is `'duplicate'`; any other role is `'bad-role'`. `fbProfileLink` is optional; when given it must be an https link on `facebook.com`, `www.`/`m.`/`web.facebook.com` or `fb.com`, any path (typed without a scheme, `https://` is put in front first), else `'bad-profile-link'`. |
+| `updatePerson` | Admin | `{ name, fbProfiles?, fbAccounts?, fbProfileLink? }`: changes only the fields sent (blank clears); `fbProfiles` (`[{ account, link? }]`, one per FB account) replaces the other two, the links kept one per line in FB Profile Link, in the accounts' order, with `addPerson`'s checks, replying `{ person }`. Name, role and key never change. The cached Team tab is cleared, so the log step's account check uses the new broker name at once. |
 | `setActive` | Admin | `{ name, active }`: revokes or restores a person, replying `{ person }`. Nobody can deactivate themselves (`'self'`). |
 | `newKey` | Admin | `{ name }`: gives the person a new key, replying `{ key }`. The old one stops working at once. |
 | `saveQueue` | Admin | `{ week, assignedTo, items }`: replaces one person's queue for one week. `week` and `date` as for `saveQueues`. Refuses held listings, as `saveQueues` does (below). |

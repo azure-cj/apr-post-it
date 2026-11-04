@@ -13,6 +13,7 @@ import {
   type User,
 } from '@/core/types';
 import type { Platform } from '@/platform';
+import type { FirebaseAccess } from '@/platform/firebase';
 import { createRemote, sentenceOf, type RemoteResource } from './remote';
 import type { AppSettings } from './settings';
 import { createStore, type Store } from './store';
@@ -115,12 +116,24 @@ export interface Services {
   forget(): void;
 }
 
-export function createServices(p: Platform, getSettings: () => AppSettings, now: () => number): Services {
-  // The link and key are read before every call, so a link changed in
-  // Settings applies at once and the key never lives in React state.
+export function createServices(
+  p: Platform,
+  getSettings: () => AppSettings,
+  now: () => number,
+  /** Firebase, when sign-in goes by account: its token is sent instead of a key. Null: by key. */
+  getFirebase: () => FirebaseAccess | null = () => null,
+): Services {
+  // The link and the credential are read before every call, so a link changed
+  // in Settings applies at once and neither lives in React state.
   const inner = createBackend({
     post: p.post,
-    getConfig: async () => ({ url: getSettings().scriptUrl, key: await p.readKey() }),
+    getConfig: async () => {
+      const url = getSettings().scriptUrl;
+      const firebase = getFirebase();
+      if (!firebase) return { url, key: await p.readKey() };
+      const signedIn = await firebase.token();
+      return { url, idToken: signedIn?.token ?? null, who: signedIn?.uid ?? null };
+    },
   });
   const server = createStore<ServerState>(UNKNOWN_SERVER);
   // Every ping answered through here says what the server is and its rules.
@@ -292,7 +305,7 @@ function sameServer(a: ServerState, b: ServerState): boolean {
  * a screen:
  *
  * - the internal section of a separated document is kept, to read behind a
- *   toggle (D1, since v8); Copy never takes it. Any other internal text is
+ *   toggle (D1, since v9); Copy never takes it. Any other internal text is
  *   dropped;
  * - a document nobody has separated keeps none of its text, since none of it
  *   is confirmed safe. `hasInternal: false` is how a screen knows to explain

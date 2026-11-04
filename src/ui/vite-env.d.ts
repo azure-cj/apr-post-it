@@ -5,6 +5,8 @@
 interface ImportMetaEnv {
   /** The web app's /exec link to build in (src/config.ts). Optional. */
   readonly VITE_SCRIPT_URL?: string;
+  /** 'live': a development run signs in to live Firebase instead of the emulator. */
+  readonly VITE_FIREBASE?: string;
 }
 
 interface ImportMeta {

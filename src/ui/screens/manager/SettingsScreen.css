@@ -375,6 +375,24 @@
   gap: var(--space-6);
 }
 
+/* One row per FB account: its broker name and its profile link. */
+.fb-accounts {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.fb-accounts__row {
+  display: grid;
+  gap: var(--space-4);
+  padding-block-end: var(--space-6);
+  border-block-end: var(--border-width) solid var(--border);
+}
+
+.fb-accounts__remove,
+.fb-accounts__add {
+  justify-self: start;
+}
+
 .person-details__save {
   display: flex;
   align-items: center;

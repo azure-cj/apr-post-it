@@ -123,6 +123,7 @@ describe('updatePerson', () => {
         role: 'Intern',
         email: '',
         fbAccounts: ['CYRUS ORBANO'],
+        fbProfiles: [{ account: 'CYRUS ORBANO', link: 'https://facebook.com/cyrus' }],
         fbProfileLink: 'https://facebook.com/cyrus',
         active: true,
       },
@@ -227,5 +228,72 @@ describe('the server and the app', () => {
 
     expect(server.problem !== undefined, typed).toBe(problem !== null);
     if (!problem) expect(server.value).toBe(normalizeProfileLink(typed));
+  });
+});
+
+describe('one person, several FB accounts, each with its own profile link (v9)', () => {
+  const CYRUS = 'https://www.facebook.com/cyrus';
+  const KEVS = 'https://www.facebook.com/kevs';
+
+  it('adds them as pairs: names in FB Accounts, links one per line in the same order', () => {
+    const w = createWorld({ teamHeaders: NEW_HEADERS });
+    const reply = w.call('maria', 'addPerson', {
+      name: 'CJ',
+      role: 'Intern',
+      fbProfiles: [
+        { account: 'Cyrus', link: CYRUS },
+        { account: 'Kevs', link: 'www.facebook.com/kevs' },
+      ],
+    });
+
+    expect(reply).toMatchObject({
+      ok: true,
+      person: { fbAccounts: ['Cyrus', 'Kevs'], fbProfiles: [{ account: 'Cyrus', link: CYRUS }, { account: 'Kevs', link: KEVS }], fbProfileLink: CYRUS },
+    });
+    expect(w.team.row(w.team.lastRow).slice(4, 6)).toEqual(['Cyrus, Kevs', `${CYRUS}\n${KEVS}`]);
+  });
+
+  it('keeps an account with no link in its place', () => {
+    const w = createWorld({ teamHeaders: NEW_HEADERS });
+    const reply = w.call('maria', 'updatePerson', {
+      name: 'Jan Dela Cruz',
+      fbProfiles: [
+        { account: 'Cyrus', link: '' },
+        { account: 'Kevs', link: KEVS },
+      ],
+    });
+
+    expect(reply['person']).toMatchObject({ fbProfiles: [{ account: 'Cyrus', link: '' }, { account: 'Kevs', link: KEVS }], fbProfileLink: KEVS });
+    expect(w.team.row(2).slice(4, 6)).toEqual(['Cyrus, Kevs', `\n${KEVS}`]);
+  });
+
+  it('reads a cell from before v9 as the first account\'s link', () => {
+    const w = createWorld({ teamHeaders: NEW_HEADERS });
+    w.call('maria', 'updatePerson', { name: 'Jan Dela Cruz', fbAccounts: ['Cyrus', 'Kevs'], fbProfileLink: CYRUS });
+
+    expect(teamOf(w.call('maria', 'team')).find((t) => t.name === 'Jan Dela Cruz')).toMatchObject({
+      fbProfiles: [{ account: 'Cyrus', link: CYRUS }, { account: 'Kevs', link: '' }],
+    });
+  });
+
+  it('lets them log a post from either account', () => {
+    const w = createWorld({ teamHeaders: NEW_HEADERS });
+    w.call('maria', 'updatePerson', { name: 'Jan Dela Cruz', fbProfiles: [{ account: 'Cyrus' }, { account: 'Kevs' }] });
+
+    expect(w.call('jan', 'ping')).toMatchObject({ fbAccounts: ['Cyrus', 'Kevs'] });
+  });
+
+  it.each([
+    [[{ account: 'Cyrus' }, { account: 'cyrus' }], 'cyrus is listed twice.'],
+    [[{ account: '', link: KEVS }], `Type the name of the account for ${KEVS}.`],
+    [[{ account: 'A, B' }], 'A Facebook account name cannot contain a comma.'],
+    [[{ account: 'Kevs', link: 'https://instagram.com/kevs' }], "That isn't a Facebook profile link."],
+    ['Cyrus', 'The Facebook accounts must be a list.'],
+  ] as const)('refuses %j and writes nothing', (fbProfiles, message) => {
+    const w = createWorld({ teamHeaders: NEW_HEADERS });
+    const before = w.team.row(2);
+
+    expect(w.call('maria', 'updatePerson', { name: 'Jan Dela Cruz', fbProfiles })).toMatchObject({ ok: false, message });
+    expect(w.team.row(2)).toEqual(before);
   });
 });

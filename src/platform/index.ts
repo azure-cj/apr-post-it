@@ -7,6 +7,8 @@
  * no Rust.
  */
 
+import type { FirebaseAccess } from './firebase';
+
 export interface SavedPhoto {
   readonly name: string;
   readonly path: string;
@@ -15,6 +17,12 @@ export interface SavedPhoto {
 export interface Platform {
   /** Put text on the clipboard. The one button that matters. */
   copyText(text: string): Promise<void>;
+
+  /**
+   * Put one photo on the clipboard, as an image to paste into Facebook. Call it
+   * straight from the click: the clipboard takes the photo while it downloads.
+   */
+  copyPhoto(url: string): Promise<void>;
 
   /** POST JSON to the Apps Script web app, through Rust so cross-site limits don't apply. */
   post(url: string, body: unknown): Promise<unknown>;
@@ -32,6 +40,13 @@ export interface Platform {
   /** The key is kept by the OS, never in the WebView. */
   readKey(): Promise<string | null>;
   writeKey(key: string): Promise<void>;
+
+  /**
+   * The shared Firebase server: the live project in the installed app, the
+   * emulator on this PC in development, and null where there is none. Made on
+   * first use, once per window.
+   */
+  firebase(): Promise<FirebaseAccess | null>;
 
   /** True on a machine where saving photos and Explorer work. */
   readonly hasFileSystem: boolean;

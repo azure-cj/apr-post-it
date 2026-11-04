@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-03.1';
+const SERVER_VERSION = '2026-11-04.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -62,6 +62,10 @@ const CONFIG = {
   // means the first tab whose header row has FolderId, Lat and Lng.
   GEO_SHEET_ID: '',
   GEO_TAB: '',
+
+  // The shared Firebase project's web API key (Alpha Listing Hub's accounts),
+  // to ask Google whose a sign-in is. It only names the project: not a secret.
+  FIREBASE_API_KEY: 'AIzaSyCO7e6rg1geJWrjN1K_0-wX2ZiJek3kENQ',
 };
 
 // Where the postable text ends is decided in Separators.gs, which this project
@@ -105,8 +109,20 @@ function parseBody_(e) {
 
 function route_(req) {
   try {
-    var me = identify_(req.key);
-    if (!me) return json_({ ok: false, error: 'unauthorized', message: 'This copy of Post-It is not registered. Ask your admin for a key.' });
+    var me;
+    if (req.idToken) {
+      // Signed in with a Firebase account (v10): Google says whose it is, the Team tab's Email says who that is.
+      var email = accountEmail_(req.idToken);
+      if (!email) return json_({ ok: false, error: 'unauthorized', message: 'Your sign-in has ended. Sign in again.' });
+      me = identifyEmail_(email);
+      if (!me) {
+        return json_({ ok: false, error: 'unauthorized',
+                       message: 'Nobody active on the Team tab has the email ' + email + '. Ask your admin to add it.' });
+      }
+    } else {
+      me = identify_(req.key);
+      if (!me) return json_({ ok: false, error: 'unauthorized', message: 'This copy of Post-It is not registered. Ask your admin for a key.' });
+    }
     if (!allowed_(me.role, req.action)) {
       return json_({ ok: false, error: 'forbidden', message: 'Your account cannot do that.' });
     }
@@ -166,8 +182,50 @@ function identify_(key) {
   var row = team.filter(function (t) {
     return String(t.Key) === String(key) && String(t.Active).toUpperCase() !== 'FALSE';
   })[0];
-  if (!row) return null;
+  return row ? callerOf_(row) : null;
+}
 
+/** The active Team row with this email (any case), as identify_ describes a caller. Null when none. */
+function identifyEmail_(email) {
+  var want = textOf_(email).trim().toLowerCase();
+  if (!want) return null;
+  var row = teamRows_().filter(function (t) {
+    return textOf_(t.Email).trim().toLowerCase() === want && String(t.Active).toUpperCase() !== 'FALSE';
+  })[0];
+  return row ? callerOf_(row) : null;
+}
+
+/**
+ * The email of the Firebase account a sign-in token is for, or null when Google
+ * says the token is not good (made up, expired, or for a turned-off account).
+ * Google's accounts:lookup checks the token itself. The answer is kept for five
+ * minutes, under the token's signature, so a busy screen isn't a call each time;
+ * a token lasts an hour.
+ */
+function accountEmail_(idToken) {
+  var token = textOf_(idToken).trim();
+  if (!token || !CONFIG.FIREBASE_API_KEY) return null;
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'idtoken:' + token.slice(-200);
+  var hit = cache.get(cacheKey);
+  if (hit) return hit;
+  var res = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + CONFIG.FIREBASE_API_KEY, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ idToken: token }),
+    muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() !== 200) return null;
+  var user;
+  try { user = (JSON.parse(res.getContentText()).users || [])[0]; } catch (e) { return null; }
+  if (!user || user.disabled || !user.email) return null;
+  var email = String(user.email).toLowerCase();
+  try { cache.put(cacheKey, email, 300); } catch (e) { /* ignore */ }
+  return email;
+}
+
+/** A Team row as the caller every action is given. */
+function callerOf_(row) {
   var role = roleOf_(row.Role);
   return {
     // Text, as every tracker value is (readRows): Posted By is matched with ===.
@@ -211,12 +269,17 @@ function teamList_() {
  * built here, field by field, so the Key column cannot come along with it.
  */
 function personOf_(t) {
+  var accounts = accountsOf_(t['FB Accounts']);
+  var links = profileLinksOf_(t['FB Profile Link']);
   return {
     name: textOf_(t.Name),
     role: roleOf_(t.Role),
     email: textOf_(t.Email),
-    fbAccounts: accountsOf_(t['FB Accounts']),
-    fbProfileLink: textOf_(t['FB Profile Link']).trim(),
+    fbAccounts: accounts,
+    // Since v9, each FB account with its own profile link (one person may run
+    // several accounts). fbProfileLink stays for an older app: the first link.
+    fbProfiles: accounts.map(function (a, i) { return { account: a, link: links[i] || '' }; }),
+    fbProfileLink: links.filter(String)[0] || '',
     active: String(t.Active).toUpperCase() !== 'FALSE',
   };
 }
@@ -224,6 +287,15 @@ function personOf_(t) {
 /** "APG Main, APG Rentals" -> ['APG Main', 'APG Rentals']. */
 function accountsOf_(value) {
   return textOf_(value).split(',').map(function (x) { return x.trim(); }).filter(String);
+}
+
+/**
+ * The FB Profile Link cell: one link per line, in FB Accounts' order, a blank
+ * line where an account has none. A cell from before v9 holds one link, which
+ * is the first account's.
+ */
+function profileLinksOf_(value) {
+  return textOf_(value).split('\n').map(function (x) { return x.trim(); });
 }
 
 function allowed_(role, action) {
@@ -283,6 +355,12 @@ function addPersonNow_(req) {
   if (accounts.problem) return accounts.problem;
   var link = profileLinkIn_(req.fbProfileLink);
   if (link.problem) return link.problem;
+  if (req.fbProfiles !== undefined) {
+    var profiles = profilesIn_(req.fbProfiles);
+    if (profiles.problem) return profiles.problem;
+    accounts = { list: profiles.accounts };
+    link = { value: profiles.links };
+  }
 
   // Read fresh, not from the cache: a name added a moment ago must count.
   var want = name.toLowerCase();
@@ -321,9 +399,10 @@ function setActive_(req, me) {
 }
 
 /**
- * updatePerson { name, fbAccounts?, fbProfileLink? }: changes the person's FB
- * broker name(s) and profile link, only the fields sent, with addPerson's
- * checks. Name, role and key never change here. Replies { person }.
+ * updatePerson { name, fbProfiles?, fbAccounts?, fbProfileLink? }: changes the
+ * person's FB accounts and their profile links, only the fields sent, with
+ * addPerson's checks. fbProfiles, when sent, replaces both. Name, role and key
+ * never change here. Replies { person }.
  */
 function updatePerson_(req, me) {
   requireAll_(req, ['name']);
@@ -333,6 +412,12 @@ function updatePerson_(req, me) {
   if (accounts && accounts.problem) return accounts.problem;
   var link = hasLink ? profileLinkIn_(req.fbProfileLink) : null;
   if (link && link.problem) return link.problem;
+  if (req.fbProfiles !== undefined) {
+    var profiles = profilesIn_(req.fbProfiles);
+    if (profiles.problem) return profiles.problem;
+    accounts = { list: profiles.accounts };
+    link = { value: profiles.links };
+  }
   return editTeamRow_(req.name, function (sh, r, col, row) {
     if (accounts) {
       row['FB Accounts'] = accounts.list.join(', ');
@@ -359,6 +444,41 @@ function accountsIn_(value) {
     return { problem: { ok: false, error: 'bad-accounts', message: 'A Facebook account name cannot contain a comma.' } };
   }
   return { list: accounts };
+}
+
+/**
+ * fbProfiles as sent: [{ account, link? }], one per FB account the person
+ * posts as. Rows with neither are skipped. Replies { accounts, links } with
+ * links as the FB Profile Link cell holds them, or { problem }.
+ */
+function profilesIn_(value) {
+  if (!Array.isArray(value)) return { problem: badProfiles_('The Facebook accounts must be a list.') };
+  var accounts = [];
+  var links = [];
+  for (var i = 0; i < value.length; i++) {
+    var p = value[i];
+    if (!p || typeof p !== 'object' || typeof p.account !== 'string' || (p.link !== undefined && typeof p.link !== 'string')) {
+      return { problem: badProfiles_('The Facebook accounts must be a list.') };
+    }
+    var account = p.account.trim();
+    var link = profileLinkIn_(p.link);
+    if (link.problem) return link;
+    if (!account && !link.value) continue;
+    if (!account) return { problem: badProfiles_('Type the name of the account for ' + link.value + '.') };
+    if (account.indexOf(',') !== -1) return { problem: badProfiles_('A Facebook account name cannot contain a comma.') };
+    var lower = account.toLowerCase();
+    if (accounts.some(function (a) { return a.toLowerCase() === lower; })) {
+      return { problem: badProfiles_(account + ' is listed twice.') };
+    }
+    accounts.push(account);
+    links.push(link.value);
+  }
+  while (links.length && !links[links.length - 1]) links.pop();
+  return { accounts: accounts, links: links.join('\n') };
+}
+
+function badProfiles_(message) {
+  return { ok: false, error: 'bad-accounts', message: message };
 }
 
 // A Facebook profile's address: https, on facebook.com (www., m., web.) or
@@ -937,7 +1057,7 @@ function getProperty_(id, includeInternal) {
     live: live,
     photos: photos,
   };
-  // Since v8 an intern is sent a separated document's internal section too, to
+  // Since v9 an intern is sent a separated document's internal section too, to
   // read behind a toggle. The app never copies it and never saves it (D1).
   if (includeInternal || separated) out.internalText = internalText;
   // An Admin's reply is as it was: the whole document, to fix it.

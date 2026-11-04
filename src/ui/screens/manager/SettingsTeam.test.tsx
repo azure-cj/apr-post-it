@@ -137,17 +137,17 @@ describe('Settings → Team', () => {
     screen.getByRole('button', { name: intern.name }).focus();
     await userEvent.keyboard('{Enter}');
     const side = panel(intern.name);
-    await userEvent.click(within(side).getByRole('button', { name: `Open ${intern.name}'s Facebook profile` }));
+    await userEvent.click(within(side).getByRole('button', { name: 'Open APG Main profile' }));
     await waitFor(() => expect(platform.opened).toEqual(['https://www.facebook.com/jan.delacruz']));
     await userEvent.click(within(side).getByRole('button', { name: 'See their queue in Interns' }));
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Interns');
   });
 
-  it('edits the FB broker name and profile link in place, then reads the team again', async () => {
+  it('edits the FB accounts, each with its own profile link, then reads the team again', async () => {
     const platform = await openTeam({
       updatePerson: (body) => ({
         ok: true,
-        person: { name: body['name'], role: 'Intern', fbAccounts: body['fbAccounts'], fbProfileLink: body['fbProfileLink'], active: true },
+        person: { name: body['name'], role: 'Intern', fbAccounts: body['fbAccounts'], fbProfiles: body['fbProfiles'], active: true },
       }),
     });
     await userEvent.click(screen.getByRole('button', { name: intern.name }));
@@ -159,20 +159,33 @@ describe('Settings → Team', () => {
     const broker = within(details).getByLabelText(/^FB broker name/);
     await userEvent.clear(broker);
     await userEvent.click(save);
-    expect(within(details).getByText('Type their FB broker name.')).toBeTruthy();
+    expect(within(details).getByText('Type the account name.')).toBeTruthy();
     expect(actionsOf(platform)).not.toContain('updatePerson');
 
-    await userEvent.type(broker, 'CYRUS ORBANO, APG South');
-    const link = within(details).getByLabelText(/^FB profile link/);
-    await userEvent.clear(link);
-    await userEvent.type(link, 'm.facebook.com/cyrus.orbano');
+    await userEvent.type(broker, 'CYRUS ORBANO');
+    await userEvent.click(within(details).getByRole('button', { name: 'Add account' }));
+    await userEvent.type(within(details).getByLabelText(/^FB broker name 2/), 'cyrus orbano');
+    await userEvent.click(save);
+    expect(within(details).getByText('Already listed.')).toBeTruthy();
+
+    const second = within(details).getByLabelText(/^FB broker name 2/);
+    await userEvent.clear(second);
+    await userEvent.type(second, 'KEVS');
+    await userEvent.type(within(details).getByLabelText(/^FB profile link 2/), 'm.facebook.com/kevs');
     const teamReads = actionsOf(platform).filter((a) => a === 'team').length;
     await userEvent.click(save);
 
     expect(await within(details).findByText('Saved')).toBeTruthy();
     const sent = platform.posts.find((p) => p.action === 'updatePerson')!.body;
     expect(sent).toEqual(
-      expect.objectContaining({ name: intern.name, fbAccounts: ['CYRUS ORBANO', 'APG South'], fbProfileLink: 'https://m.facebook.com/cyrus.orbano' }),
+      expect.objectContaining({
+        name: intern.name,
+        fbProfiles: [
+          { account: 'CYRUS ORBANO', link: 'https://www.facebook.com/jan.delacruz' },
+          { account: 'KEVS', link: 'https://m.facebook.com/kevs' },
+        ],
+        fbAccounts: ['CYRUS ORBANO', 'KEVS'],
+      }),
     );
     expect(sent).not.toHaveProperty('role');
     expect(sent).not.toHaveProperty('active');
@@ -248,8 +261,10 @@ describe('Settings → Team', () => {
     const order = Array.from(dialog.querySelectorAll('label.field__label, legend')).map((l) => l.textContent);
     expect(order).toEqual(['Intern name', 'Role', 'FB broker name', 'FB profile link (optional)']);
     await userEvent.type(within(dialog).getByLabelText('Intern name'), 'Mika Reyes');
-    await userEvent.type(within(dialog).getByLabelText(/^FB broker name/), 'APG Main, , APG South ');
+    await userEvent.type(within(dialog).getByLabelText(/^FB broker name/), 'APG Main ');
     await userEvent.type(within(dialog).getByLabelText(/^FB profile link/), 'facebook.com/mika.reyes');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add account' }));
+    await userEvent.type(within(dialog).getByLabelText(/^FB broker name 2/), 'APG South');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add person' }));
 
     const shown = await screen.findByRole('dialog', { name: 'Mika Reyes added' });
@@ -258,6 +273,10 @@ describe('Settings → Team', () => {
       role: 'Intern',
       fbAccounts: ['APG Main', 'APG South'],
       fbProfileLink: 'https://facebook.com/mika.reyes',
+      fbProfiles: [
+        { account: 'APG Main', link: 'https://facebook.com/mika.reyes' },
+        { account: 'APG South', link: '' },
+      ],
     });
     expect(within(shown).getByText('k-9f3a-77')).toBeTruthy();
     // This fake answers like an older web app: no fbProfileLink in the person.

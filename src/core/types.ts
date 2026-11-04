@@ -272,6 +272,12 @@ export class UserFacingError extends Error {
   }
 }
 
+/** One Facebook account a person posts as, and its profile link ('' when none). */
+export interface FbProfile {
+  readonly account: string;
+  readonly link: string;
+}
+
 /** A row of the Team tab, as the app may see it: never the key. */
 export interface TeamMember {
   readonly name: string;
@@ -281,8 +287,10 @@ export interface TeamMember {
    * what they pick as "FB account name" when logging. Empty or missing means any.
    */
   readonly fbAccounts?: readonly string[] | undefined;
-  /** The link to that Facebook profile. Missing when the Team tab has none. */
+  /** The first account's profile link. Missing when the Team tab has none. */
   readonly fbProfileLink?: string | undefined;
+  /** Each FB account with its own profile link, in fbAccounts' order. */
+  readonly fbProfiles?: readonly FbProfile[] | undefined;
   readonly email?: string | undefined;
   /** False once revoked on the Team tab. Missing means active. */
   readonly active?: boolean | undefined;

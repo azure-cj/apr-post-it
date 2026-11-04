@@ -36,6 +36,7 @@ describe('addPerson', () => {
         role: 'Intern',
         email: 'lia@apg.example',
         fbAccounts: ['APG Main', 'APG Leasing'],
+        fbProfiles: [{ account: 'APG Main', link: '' }, { account: 'APG Leasing', link: '' }],
         fbProfileLink: '',
         active: true,
       },
@@ -110,7 +111,7 @@ describe('setActive', () => {
 
     expect(w.call('maria', 'setActive', { name: 'Jan Dela Cruz', active: false })).toEqual({
       ok: true,
-      person: { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], fbProfileLink: '', active: false },
+      person: { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], fbProfiles: [{ account: 'APG Main', link: '' }, { account: 'APG Rentals', link: '' }], fbProfileLink: '', active: false },
     });
     expect(w.call('jan', 'ping')).toMatchObject({ ok: false, error: 'unauthorized' });
     expect(w.team.row(2)[5]).toBe('FALSE');

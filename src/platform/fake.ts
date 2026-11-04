@@ -28,6 +28,7 @@
  */
 
 import { UserFacingError } from '../core/types';
+import type { FirebaseAccess } from './firebase';
 import type { Platform, SavedPhoto } from './index';
 
 /**
@@ -70,6 +71,8 @@ export interface FakePlatformOptions {
   readonly hasFileSystem?: boolean;
   /** Default false: in a browser there is no window to minimize or close. True draws the controls anyway. */
   readonly hasWindowControls?: boolean;
+  /** What `firebase()` gives. Default null: no Firebase. */
+  readonly firebase?: FirebaseAccess | null;
 }
 
 /** What has happened to the fake's window. */
@@ -100,6 +103,8 @@ export interface FakeSave {
 export interface FakePlatform extends Platform {
   /** Everything copied, oldest first. */
   readonly copied: readonly string[];
+  /** Every photo copied to the clipboard, by its address, oldest first. */
+  readonly copiedPhotos: readonly string[];
   /** Every link and folder opened, oldest first. */
   readonly opened: readonly string[];
   /** Every request to the web app, oldest first. */
@@ -156,6 +161,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   };
 
   const copied: string[] = [];
+  const copiedPhotos: string[] = [];
   const opened: string[] = [];
   const posts: FakePost[] = [];
   const saves: FakeSave[] = [];
@@ -181,7 +187,13 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
 
   return {
     hasFileSystem: options.hasFileSystem ?? false,
+
+    async firebase() {
+      await begin('firebase');
+      return options.firebase ?? null;
+    },
     copied,
+    copiedPhotos,
     opened,
     posts,
     saves,
@@ -233,6 +245,14 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     async copyText(text) {
       await begin('copyText');
       copied.push(text);
+    },
+
+    async copyPhoto(url) {
+      await begin('copyPhoto');
+      const refusal = refuse(url);
+      if (refusal) throw new UserFacingError(`Refused to copy the photo: its address ${refusal}.`);
+      if (failing.has(url)) throw new UserFacingError('Could not copy the photo. Try again, or download it instead.');
+      copiedPhotos.push(url);
     },
 
     async post(url, body) {

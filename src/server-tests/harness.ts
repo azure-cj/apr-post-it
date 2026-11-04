@@ -664,13 +664,19 @@ interface WebAnswer {
  * mutes an HTTP status, never a failed connection). Every fetch is recorded.
  */
 export class FakeWeb {
-  readonly #answers = new Map<string, WebAnswer | { readonly fail: string }>();
+  readonly #answers = new Map<string, WebAnswer | { readonly fail: string } | ((payload: string) => WebAnswer)>();
   /** Every URL fetched, oldest first. */
   readonly fetched: string[] = [];
 
   /** `url` answers `code` with `body`. */
   respond(url: string, body: string, code = 200): this {
     this.#answers.set(url, { code, body });
+    return this;
+  }
+
+  /** `url` answers by what was sent: for a POST whose answer depends on its payload. */
+  respondTo(url: string, answer: (payload: string) => WebAnswer): this {
+    this.#answers.set(url, answer);
     return this;
   }
 
@@ -685,9 +691,11 @@ export class FakeWeb {
       if (typeof url !== 'string') throw new Error("Exception: The parameters don't match the method signature for UrlFetchApp.fetch.");
       if (!/^https?:\/\//i.test(url)) throw new Error(`Exception: Invalid argument: ${url}`);
       this.fetched.push(url);
-      const answer = this.#answers.get(url) ?? { fail: `Exception: Address unavailable: ${url}` };
+      const options = params && typeof params === 'object' ? (params as Record<string, unknown>) : {};
+      const found = this.#answers.get(url) ?? { fail: `Exception: Address unavailable: ${url}` };
+      const answer = typeof found === 'function' ? found(typeof options['payload'] === 'string' ? options['payload'] : '') : found;
       if ('fail' in answer) throw new Error(answer.fail);
-      const mute = !!(params && typeof params === 'object' && (params as Record<string, unknown>)['muteHttpExceptions']);
+      const mute = !!options['muteHttpExceptions'];
       if (answer.code >= 400 && !mute) {
         throw new Error(`Exception: Request failed for ${url} returned code ${answer.code}. Truncated server response: ${answer.body.slice(0, 50)}`);
       }

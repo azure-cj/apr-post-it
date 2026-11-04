@@ -84,7 +84,11 @@ export function Launch({ children, minMs = MIN_MS, maxMs = MAX_MS }: LaunchProps
     };
   }, [minMs, maxMs, leave]);
 
-  const signInSettled = session.status === 'signed-in' || session.status === 'signed-out' || session.status === 'resume-failed';
+  const signInSettled =
+    session.status === 'signed-in' ||
+    session.status === 'signed-out' ||
+    session.status === 'account' ||
+    session.status === 'resume-failed';
   const listSettled = user ? listStatus.lastAttempt !== null && !listStatus.refreshing : restored;
   useEffect(() => {
     if (minPassed && signInSettled && listSettled) leave();
@@ -138,7 +142,7 @@ export function Launch({ children, minMs = MIN_MS, maxMs = MAX_MS }: LaunchProps
   const steps: boolean[] = [signInSettled];
   if (session.status === 'signed-in') {
     lines.push({ key: 'who', tone: 'ok', text: `Signed in as ${session.user.name}` });
-  } else if (session.status === 'signed-out') {
+  } else if (session.status === 'signed-out' || session.status === 'account') {
     lines.push({ key: 'who', tone: 'neutral', text: 'Not signed in' });
   } else if (session.status === 'resume-failed') {
     lines.push({ key: 'who', tone: 'fail', text: "Couldn't sign you in" });

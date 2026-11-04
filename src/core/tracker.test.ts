@@ -287,10 +287,10 @@ describe('the team', () => {
     });
 
     expect(await trackerOver(post).team()).toEqual([
-      { name: 'Jan Dela Cruz', role: 'Intern', email: 'jan@example.com', fbAccounts: ['APG Main', 'APG Rentals'], active: true },
-      { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], active: true },
-      { name: 'Old Manager', role: 'Admin', email: '', fbAccounts: [], active: true },
-      { name: 'Someone', role: 'Intern', email: '', fbAccounts: [], active: true },
+      { name: 'Jan Dela Cruz', role: 'Intern', email: 'jan@example.com', fbAccounts: ['APG Main', 'APG Rentals'], fbProfiles: [{ account: 'APG Main', link: '' }, { account: 'APG Rentals', link: '' }], active: true },
+      { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], fbProfiles: [], active: true },
+      { name: 'Old Manager', role: 'Admin', email: '', fbAccounts: [], fbProfiles: [], active: true },
+      { name: 'Someone', role: 'Intern', email: '', fbAccounts: [], fbProfiles: [], active: true },
     ]);
   });
 
@@ -821,7 +821,7 @@ describe('managing the team', () => {
     const added = await trackerOver(post).addPerson({ name: ' Mia Santos ', role: 'Intern', fbAccounts: [' APG Homes ', ''] });
 
     expect(added).toEqual({
-      person: { name: 'Mia Santos', role: 'Intern', fbAccounts: ['APG Homes'], email: '', active: true },
+      person: { name: 'Mia Santos', role: 'Intern', fbAccounts: ['APG Homes'], fbProfiles: [{ account: 'APG Homes', link: '' }], email: '', active: true },
       key: 'k-123',
     });
     expect(sent[0]!.body).toEqual({ name: 'Mia Santos', role: 'Intern', fbAccounts: ['APG Homes'], action: 'addPerson', key: 'testkey' });
@@ -893,6 +893,7 @@ describe('managing the team', () => {
       email: '',
       fbAccounts: ['CYRUS ORBANO'],
       fbProfileLink: 'https://www.facebook.com/cyrus',
+      fbProfiles: [{ account: 'CYRUS ORBANO', link: 'https://www.facebook.com/cyrus' }],
       active: true,
     });
     expect(sent[0]!.body).toEqual({

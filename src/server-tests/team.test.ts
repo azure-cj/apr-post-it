@@ -16,11 +16,11 @@ describe('team', () => {
     expect(w.call('maria', 'team')).toEqual({
       ok: true,
       team: [
-        { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], fbProfileLink: '', active: true },
-        { name: 'Ana Reyes', role: 'Intern', email: '', fbAccounts: [], fbProfileLink: '', active: true },
-        { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], fbProfileLink: '', active: true },
-        { name: 'Rico Bautista', role: 'Admin', email: '', fbAccounts: [], fbProfileLink: '', active: true },
-        { name: 'Former Intern', role: 'Intern', email: '', fbAccounts: [], fbProfileLink: '', active: false },
+        { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], fbProfiles: [{ account: 'APG Main', link: '' }, { account: 'APG Rentals', link: '' }], fbProfileLink: '', active: true },
+        { name: 'Ana Reyes', role: 'Intern', email: '', fbAccounts: [], fbProfiles: [], fbProfileLink: '', active: true },
+        { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], fbProfiles: [], fbProfileLink: '', active: true },
+        { name: 'Rico Bautista', role: 'Admin', email: '', fbAccounts: [], fbProfiles: [], fbProfileLink: '', active: true },
+        { name: 'Former Intern', role: 'Intern', email: '', fbAccounts: [], fbProfiles: [], fbProfileLink: '', active: false },
       ],
     });
   });
@@ -79,11 +79,11 @@ describe('team', () => {
     const w = createWorld();
 
     await expect(w.app('maria').tracker.team()).resolves.toEqual([
-      { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], active: true },
-      { name: 'Ana Reyes', role: 'Intern', email: '', fbAccounts: [], active: true },
-      { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], active: true },
-      { name: 'Rico Bautista', role: 'Admin', email: '', fbAccounts: [], active: true },
-      { name: 'Former Intern', role: 'Intern', email: '', fbAccounts: [], active: false },
+      { name: 'Jan Dela Cruz', role: 'Intern', email: '', fbAccounts: ['APG Main', 'APG Rentals'], fbProfiles: [{ account: 'APG Main', link: '' }, { account: 'APG Rentals', link: '' }], active: true },
+      { name: 'Ana Reyes', role: 'Intern', email: '', fbAccounts: [], fbProfiles: [], active: true },
+      { name: 'Maria Santos', role: 'Admin', email: '', fbAccounts: [], fbProfiles: [], active: true },
+      { name: 'Rico Bautista', role: 'Admin', email: '', fbAccounts: [], fbProfiles: [], active: true },
+      { name: 'Former Intern', role: 'Intern', email: '', fbAccounts: [], fbProfiles: [], active: false },
     ]);
     await expect(w.app('jan').tracker.team()).rejects.toThrow();
   });

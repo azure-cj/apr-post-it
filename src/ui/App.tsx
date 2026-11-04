@@ -29,6 +29,7 @@ import {
   type SidebarProps,
   type WindowControlsProps,
 } from './components';
+import { AccountSignInScreen } from './screens/AccountSignIn';
 import { SignInScreen } from './screens/SignInScreen';
 import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
@@ -284,6 +285,35 @@ export function AppShell({ signInNote }: AppProps) {
     },
     [signIn, navigate],
   );
+  // Firebase: the account, then who it is on the Team tab. One at a time, as above.
+  const { signInAccount } = app;
+  const accountStep = useCallback(
+    async (step: (signal: AbortSignal) => Promise<User | null>) => {
+      signingIn.current?.abort();
+      const attempt = new AbortController();
+      signingIn.current = attempt;
+      setSignInError(null);
+      setSignInBusy(true);
+      try {
+        const signedIn = await step(attempt.signal);
+        if (!attempt.signal.aborted && signedIn) navigate(homeFor(signedIn), { replace: true });
+      } catch (e) {
+        if (!attempt.signal.aborted) setSignInError(e instanceof UserFacingError ? e.message : "Couldn't sign you in. Try again.");
+      } finally {
+        if (signingIn.current === attempt) {
+          signingIn.current = null;
+          setSignInBusy(false);
+        }
+      }
+    },
+    [navigate],
+  );
+  const switchAccount = useCallback(async () => {
+    signingIn.current?.abort();
+    setSignInError(null);
+    await app.signOut().catch(() => {});
+  }, [app]);
+
   const cancelSignIn = useCallback(() => {
     signingIn.current?.abort();
     signingIn.current = null;
@@ -326,7 +356,7 @@ export function AppShell({ signInNote }: AppProps) {
 
   const home = user ? <Navigate to={homeFor(user)} replace /> : <Navigate to={paths.signIn} replace />;
 
-  const settled = session.status === 'signed-in' || session.status === 'signed-out';
+  const settled = session.status === 'signed-in' || session.status === 'signed-out' || session.status === 'account';
 
   return (
     <>
@@ -359,9 +389,15 @@ export function AppShell({ signInNote }: AppProps) {
             {session.status === 'starting' ? (
               <Opening>Opening Post-It…</Opening>
             ) : session.status === 'resuming' ? (
-              <Opening>Checking your key with the web app…</Opening>
+              <Opening>{app.usesAccounts ? 'Signing you in…' : 'Checking your key with the web app…'}</Opening>
             ) : session.status === 'resume-failed' ? (
-              <ResumeFailed error={session.error} onRetry={app.retrySignIn} onSignIn={app.showSignIn} />
+              <ResumeFailed error={session.error} onRetry={app.retrySignIn} onSignIn={app.usesAccounts ? switchAccount : app.showSignIn} />
+            ) : session.status === 'account' ? (
+              <AccountSignInScreen
+                onSubmit={(email, password) => void accountStep((signal) => signInAccount(email, password, signal))}
+                busy={signInBusy}
+                error={signInError ?? session.error}
+              />
             ) : (
               <Routes>
                 <Route
@@ -414,7 +450,7 @@ export function AppShell({ signInNote }: AppProps) {
       </div>
 
       {confirmingSignOut ? (
-        <SignOutDialog onCancel={() => setConfirmingSignOut(false)} onConfirm={confirmSignOut} />
+        <SignOutDialog onCancel={() => setConfirmingSignOut(false)} onConfirm={confirmSignOut} withAccount={app.usesAccounts} />
       ) : null}
 
       {confirmingClose ? (
@@ -616,15 +652,28 @@ function ResumeFailed({
  * again needs it pasted. Focus starts on staying, so Enter or Escape keeps you
  * signed in.
  */
-function SignOutDialog({ onCancel, onConfirm }: { readonly onCancel: () => void; readonly onConfirm: () => Promise<void> }) {
+function SignOutDialog({
+  onCancel,
+  onConfirm,
+  withAccount,
+}: {
+  readonly onCancel: () => void;
+  readonly onConfirm: () => Promise<void>;
+  /** Signing in is by account: the key stays on this computer. */
+  readonly withAccount: boolean;
+}) {
   return (
     <ConfirmDialog
       title="Sign out of Post-It?"
-      body="Post-It will forget your key on this computer. To sign in again you'll need the key your admin gave you."
+      body={
+        withAccount
+          ? "You'll need your email and password to sign in again."
+          : "Post-It will forget your key on this computer. To sign in again you'll need the key your admin gave you."
+      }
       cancelLabel="Stay signed in"
       confirmLabel="Sign out"
       busyLabel="Signing out…"
-      failure="Post-It couldn't remove your key. Try again."
+      failure={withAccount ? "Post-It couldn't sign you out. Try again." : "Post-It couldn't remove your key. Try again."}
       onCancel={onCancel}
       onConfirm={onConfirm}
     />

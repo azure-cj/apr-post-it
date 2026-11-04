@@ -302,6 +302,31 @@ describe("the Interns screen: an intern's week", () => {
     await waitFor(() => expect(platform.opened).toContain('https://www.facebook.com/jan.delacruz'));
   });
 
+  it('gives one button per FB account that has a profile link', async () => {
+    const team = TEAM.team.map((m) =>
+      m.name === 'Mika Reyes'
+        ? {
+            ...m,
+            fbAccounts: ['Cyrus', 'Kevs', 'No Link'],
+            fbProfiles: [
+              { account: 'Cyrus', link: 'https://www.facebook.com/cyrus' },
+              { account: 'Kevs', link: 'https://www.facebook.com/kevs' },
+              { account: 'No Link', link: '' },
+            ],
+          }
+        : m,
+    );
+    const platform = server({ team: { ok: true, team } });
+    renderAt(THURSDAY, { platform });
+    await userEvent.click(within(await rowOf('Mika Reyes')).getByRole('button', { name: /Mika Reyes/ }));
+    const panel = screen.getByRole('complementary', { name: 'Mika Reyes' });
+
+    expect(within(panel).queryByRole('button', { name: 'FB profile: No Link' })).toBeNull();
+    await userEvent.click(within(panel).getByRole('button', { name: 'FB profile: Kevs' }));
+    await waitFor(() => expect(platform.opened).toEqual(['https://www.facebook.com/kevs']));
+    expect(within(panel).getByRole('button', { name: 'FB profile: Cyrus' })).toBeTruthy();
+  });
+
   it('shows Missed for a week that is over', async () => {
     renderAt(THURSDAY, { platform: server(), path: `/interns?week=${LAST_WEEK}` });
     await userEvent.click(within(await rowOf('Mika Reyes')).getByRole('button', { name: /Mika Reyes/ }));

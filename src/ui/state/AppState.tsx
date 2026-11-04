@@ -22,10 +22,12 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { createBackend } from '@/core/backend';
+import { NO_ROLE, postItRole, signInSentence } from '@/core/account';
+import { BackendError, createBackend } from '@/core/backend';
 import { signIn as askWhoThisIs } from '@/core/session';
 import { UserFacingError, type PropertyDetail, type Role, type User } from '@/core/types';
 import type { Platform } from '@/platform';
+import type { FirebaseAccess, FirebaseAccount } from '@/platform/firebase';
 import { ToastRegion, useToasts, type ToastTone } from '../components';
 import { manilaDate } from './clock';
 import { sentenceOf } from './remote';
@@ -51,6 +53,8 @@ export type Session =
   /** That failed: why, as a sentence. The key is kept, so Try again needs nothing typed. */
   | { readonly status: 'resume-failed'; readonly error: string }
   | { readonly status: 'signed-out' }
+  /** Firebase: no account signed in. `error` says why the last try didn't work. */
+  | { readonly status: 'account'; readonly error?: string | undefined }
   | { readonly status: 'signed-in'; readonly user: User };
 
 export interface AppState extends Omit<Services, 'openProperty' | 'forget'> {
@@ -77,7 +81,19 @@ export interface AppState extends Omit<Services, 'openProperty' | 'forget'> {
   retrySignIn(): void;
   /** After a failed resume: go to the sign-in form instead. */
   showSignIn(): void;
-  /** Removes the key from this PC and forgets the property list and everything read. Confirm first. */
+  /**
+   * Firebase: signs the account in, then asks the web app who it is: the Team
+   * tab row with the account's email. Resolves with null when the web app
+   * didn't answer (session `resume-failed`). Rejects with a sentence.
+   */
+  signInAccount(email: string, password: string, signal?: AbortSignal): Promise<User | null>;
+  /** True when sign-in goes by Firebase account; false where there is no Firebase (tests, the browser). */
+  readonly usesAccounts: boolean;
+  /**
+   * Signs out and forgets the property list and everything read. Confirm
+   * first. With Firebase, the account signs out; without, the key is removed
+   * from this PC.
+   */
   signOut(): Promise<void>;
   /** A listing as the signed-in person may see it: an intern never gets internal text (see forViewer). */
   openProperty(id: string): Promise<PropertyDetail>;
@@ -116,9 +132,17 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
   nowRef.current = now;
   const clock = useCallback(() => nowRef.current(), []);
 
+  // Firebase, once the platform has said whether there is one (null: sign in by key alone).
+  const firebaseRef = useRef<FirebaseAccess | null>(null);
+  const [usesAccounts, setUsesAccounts] = useState(false);
+
   // One set of services per platform: the directory and the tracker's shared
-  // reads live as long as the window does.
-  const services = useMemo(() => createServices(platform, () => settingsRef.current, clock), [platform, clock]);
+  // reads live as long as the window does. Signed in by account, each call
+  // carries the account's sign-in token instead of a key.
+  const services = useMemo(
+    () => createServices(platform, () => settingsRef.current, clock, () => firebaseRef.current),
+    [platform, clock],
+  );
 
   const applySettings = useCallback((wanted: AppSettings) => {
     const next = withBuiltInLink(wanted);
@@ -135,8 +159,62 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
     [platform, applySettings],
   );
 
+  /**
+   * The account signed in: its role, then who it is on the Team tab, which
+   * the web app finds by the account's email. A Team role that isn't the
+   * account's signs it out: the two must agree. `fresh` asks Firebase for the
+   * role now, as after typing a password; on launch the kept one does.
+   */
+  const continueWith = useCallback(
+    async (fb: FirebaseAccess, fresh: boolean): Promise<User | null> => {
+      const role = postItRole(await fb.role(fresh));
+      if (!role) {
+        await fb.signOut().catch(() => {});
+        throw new UserFacingError(NO_ROLE);
+      }
+      setSession({ status: 'resuming' });
+      let user: User;
+      try {
+        user = await askWhoThisIs(services.backend);
+      } catch (err) {
+        if (err instanceof BackendError && err.code === 'unauthorized') {
+          // Not on the Team tab, or the sign-in ended: nothing to try again with.
+          await fb.signOut().catch(() => {});
+          throw err;
+        }
+        // The web app didn't answer: Try again asks with the same account.
+        setSession({ status: 'resume-failed', error: sentenceOf(err) });
+        return null;
+      }
+      if (user.role !== role) {
+        await fb.signOut().catch(() => {});
+        throw new UserFacingError(`The Team tab says ${user.role}, but this account is ${role === 'Admin' ? 'an admin' : 'an agent'}. Ask your admin.`);
+      }
+      setSession({ status: 'signed-in', user });
+      return user;
+    },
+    [platform, services],
+  );
+
   /** Asks the server who the kept key belongs to. */
   const resume = useCallback(async () => {
+    const fb = firebaseRef.current;
+    if (fb) {
+      setSession({ status: 'resuming' });
+      const account = await firstAccount(fb);
+      if (!account) {
+        setSession({ status: 'account' });
+        return;
+      }
+      try {
+        await continueWith(fb, false);
+      } catch (err) {
+        // Turned away (no role, not on the Team tab, roles that don't agree): signed out, with why.
+        if (err instanceof UserFacingError) setSession({ status: 'account', error: err.message });
+        else setSession({ status: 'resume-failed', error: sentenceOf(err) });
+      }
+      return;
+    }
     let key: string | null;
     try {
       key = await platform.readKey();
@@ -155,7 +233,7 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
     } catch (err) {
       setSession({ status: 'resume-failed', error: sentenceOf(err) });
     }
-  }, [platform, services]);
+  }, [platform, services, continueWith]);
 
   // On launch: the kept settings, then who the kept key belongs to. Once per
   // window, StrictMode's second run included.
@@ -173,6 +251,9 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
         }
         applySettings(parseSettings(kept));
       }
+      // No Firebase where the platform has none, or can't load it: sign in by key, as before.
+      firebaseRef.current = await platform.firebase().catch(() => null);
+      setUsesAccounts(firebaseRef.current !== null);
       if (!initialUser) await resume();
     })();
     // Launch only: the props are read once, as the window opens.
@@ -225,13 +306,62 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
     [platform, saveSettings, services],
   );
 
+  const signInAccount = useCallback(
+    async (email: string, password: string, signal?: AbortSignal): Promise<User | null> => {
+      const fb = firebaseRef.current;
+      if (!fb) throw new UserFacingError("Couldn't sign you in. Try again.");
+      signal?.throwIfAborted();
+      try {
+        await fb.signIn(email, password);
+      } catch (err) {
+        throw new UserFacingError(signInSentence(err), err);
+      }
+      const account = await firstAccount(fb);
+      if (signal?.aborted || !account) {
+        await fb.signOut().catch(() => {});
+        signal?.throwIfAborted();
+        throw new UserFacingError("Couldn't sign you in. Try again.");
+      }
+      services.forget();
+      try {
+        return await continueWith(fb, true);
+      } catch (err) {
+        // Turned away: back to email and password, where the screen says why.
+        setSession({ status: 'account' });
+        throw err;
+      }
+    },
+    [services, continueWith],
+  );
+
   const signOut = useCallback(async () => {
+    const fb = firebaseRef.current;
+    if (fb) {
+      await fb.signOut();
+      services.forget();
+      setSession({ status: 'account' });
+      return;
+    }
     // First, so that a failure leaves you signed in and able to try again,
     // rather than signed out with your key still on the PC.
     await platform.writeKey('');
     services.forget();
     setSession({ status: 'signed-out' });
   }, [platform, services]);
+
+  // Signed out elsewhere (the account turned off, its sign-ins ended): the same here.
+  useEffect(() => {
+    const fb = firebaseRef.current;
+    if (!fb || !usesAccounts) return undefined;
+    return fb.watch((account) => {
+      if (account) return;
+      setSession((s) => {
+        if (s.status !== 'signed-in') return s;
+        services.forget();
+        return { status: 'account' };
+      });
+    });
+  }, [usesAccounts, services]);
 
   const retrySignIn = useCallback(() => void resume(), [resume]);
   const showSignIn = useCallback(() => setSession({ status: 'signed-out' }), []);
@@ -258,6 +388,8 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
       session,
       user,
       signIn,
+      signInAccount,
+      usesAccounts,
       retrySignIn,
       showSignIn,
       signOut,
@@ -265,13 +397,43 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
       today: () => manilaDate(clock()),
       now: clock,
     };
-  }, [services, platform, effectiveSettings, saveSettings, session, user, signIn, retrySignIn, showSignIn, signOut, openProperty, clock]);
+  }, [
+    services,
+    platform,
+    effectiveSettings,
+    saveSettings,
+    session,
+    user,
+    signIn,
+    signInAccount,
+    usesAccounts,
+    retrySignIn,
+    showSignIn,
+    signOut,
+    openProperty,
+    clock,
+  ]);
 
   return (
     <AppStateContext.Provider value={value}>
       <Toasts>{children}</Toasts>
     </AppStateContext.Provider>
   );
+}
+
+/** The account Firebase has once it has read the sign-in it keeps: null when none. */
+function firstAccount(fb: FirebaseAccess): Promise<FirebaseAccount | null> {
+  return new Promise((resolve) => {
+    let stop: (() => void) | null = null;
+    let done = false;
+    stop = fb.watch((account) => {
+      if (done) return;
+      done = true;
+      resolve(account);
+      // Called back at once by some versions, before watch returned its stop.
+      queueMicrotask(() => stop?.());
+    });
+  });
 }
 
 /**

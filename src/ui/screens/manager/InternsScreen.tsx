@@ -3,6 +3,7 @@ import { Button, Card, EmptyState, Notice, Pill, Spinner } from '../../component
 import { activeInterns, lastPostBy, samePerson, teamWeek, type TeamMember, type TeamWeekRow } from '@/core/summary';
 import { isWeekOver, weekDays } from '@/core/week';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
+import { cleanProfiles, profilesOf as memberProfiles } from './FbAccountsField';
 import { DAY_LETTERS, isBehind, lastPostWords, PacePill, WeekBar, WeekDays } from './InternsParts';
 import { InternPanel } from './InternsPanel';
 import { WhoPosted } from './InternsWhoPosted';
@@ -78,7 +79,7 @@ export function InternsScreen({
   }, [team, rows]);
 
   const openRow = rows.find((r) => open !== null && samePerson(r.name, open));
-  const profileOf = (name: string) => team?.find((m) => samePerson(m.name, name))?.fbProfileLink?.trim() ?? '';
+  const profilesOf = (name: string) => cleanProfiles(memberProfiles(team?.find((m) => samePerson(m.name, name)) ?? null)).filter((p) => p.link);
 
   // A newly opened panel takes focus at its heading; closing it goes back to the row.
   useEffect(() => {
@@ -180,7 +181,7 @@ export function InternsScreen({
                 today={today}
                 posts={posts}
                 assignments={assignments}
-                profile={profileOf(openRow.name)}
+                profiles={profilesOf(openRow.name)}
                 onClose={close}
                 onOpenQueue={onOpenQueue ? () => onOpenQueue(openRow.name, week) : undefined}
                 onOpenLink={onOpenLink}

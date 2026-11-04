@@ -1,9 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Button, Chip, EmptyState, Icon, Notice, PAGE_SIZE, Pagination, Pill, SearchBox, Spinner, TextInput, usePaged } from '../../components';
-import { facebookProfileProblem, normalizeProfileLink } from '@/core/links';
 import { addDays, samePerson, shortDate, type TeamMember } from '@/core/summary';
 import type { AddPersonInput, UpdatePersonInput } from '@/core/tracker';
-import type { PostLogEntry } from '@/core/types';
+import type { FbProfile, PostLogEntry } from '@/core/types';
+import { cleanProfiles, FbAccountsField, profilesOf, profilesProblem, sameProfiles, type ProfilesProblem } from './FbAccountsField';
 import { lastPostWords } from './InternsScreen';
 import { PersonDialog } from './PersonDialog';
 import { ConfirmAction, KeyOnce, sentence } from './SettingsShared';
@@ -398,7 +398,7 @@ function PersonPanel({
   );
 }
 
-/** Role, FB broker name and FB profile link; the last two edited in place. */
+/** Their FB accounts, each with its profile link, edited in place. */
 function Details({
   member,
   onUpdatePerson,
@@ -408,60 +408,46 @@ function Details({
   readonly onUpdatePerson?: ((name: string, changes: UpdatePersonInput) => Promise<unknown>) | undefined;
   readonly onOpenLink?: ((url: string) => void) | undefined;
 }) {
-  const fromTeam = { broker: (member.fbAccounts ?? []).join(', '), link: member.fbProfileLink?.trim() ?? '' };
+  const fromTeam = cleanProfiles(profilesOf(member));
+  const teamKey = JSON.stringify(fromTeam);
   /** What the web app holds: the team's row, then what each Save sent. */
   const [base, setBase] = useState(fromTeam);
-  const [broker, setBroker] = useState(fromTeam.broker);
-  const [link, setLink] = useState(fromTeam.link);
+  const [rows, setRows] = useState(() => profilesOf(member));
   // The team read again with different values (changed elsewhere): show them, unless edits are under way.
   useEffect(() => {
-    setBase((b) => (b.broker === fromTeam.broker && b.link === fromTeam.link ? b : fromTeam));
-  }, [fromTeam.broker, fromTeam.link]);
-  const savedBroker = base.broker;
-  const savedLink = base.link;
-  const [brokerError, setBrokerError] = useState<string | null>(null);
-  const [linkChecked, setLinkChecked] = useState(false);
+    setBase((b) => (sameProfiles(b, fromTeam) ? b : fromTeam));
+  }, [teamKey]);
+  const [problem, setProblem] = useState<ProfilesProblem | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const brokerRef = useRef<HTMLInputElement>(null);
-  const linkRef = useRef<HTMLInputElement>(null);
+  const firstRef = useRef<HTMLInputElement>(null);
   const formId = useId();
 
   const editable = Boolean(onUpdatePerson);
-  const dirty = broker.trim() !== savedBroker || link.trim() !== savedLink;
-  const linkProblem = facebookProfileProblem(link);
-  const openable = savedLink !== '' && !facebookProfileProblem(savedLink);
+  const dirty = !sameProfiles(cleanProfiles(rows), base);
+  const required = member.role === 'Intern';
+  const reset = (to: readonly FbProfile[]) => setRows(to.length > 0 ? to.map((p) => ({ ...p })) : [{ account: '', link: '' }]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy || !onUpdatePerson || !dirty) return;
-    const fbAccounts = broker
-      .split(',')
-      .map((a) => a.trim())
-      .filter(Boolean);
-    const brokerProblem = member.role === 'Intern' && fbAccounts.length === 0 ? 'Type their FB broker name.' : null;
-    setBrokerError(brokerProblem);
-    setLinkChecked(true);
-    if (brokerProblem) {
-      brokerRef.current?.focus();
-      return;
-    }
-    if (linkProblem) {
-      linkRef.current?.focus();
+    const found = profilesProblem(rows, required);
+    setProblem(found);
+    if (found) {
+      const row = document.getElementById(formId)?.querySelectorAll('.fb-accounts__row')[found.index];
+      row?.querySelectorAll('input')[found.field === 'account' ? 0 : 1]?.focus();
       return;
     }
     setBusy(true);
     setError(null);
     setSaved(false);
     try {
-      const fbProfileLink = normalizeProfileLink(link);
-      await onUpdatePerson(member.name, { fbAccounts, fbProfileLink });
+      const fbProfiles = cleanProfiles(rows);
+      await onUpdatePerson(member.name, { fbProfiles });
       // As the team will read once it is fetched again.
-      const kept = { broker: fbAccounts.join(', '), link: fbProfileLink };
-      setBase(kept);
-      setBroker(kept.broker);
-      setLink(kept.link);
+      setBase(fbProfiles);
+      reset(fbProfiles);
       setSaved(true);
     } catch (err) {
       setError(sentence(err));
@@ -472,51 +458,18 @@ function Details({
 
   return (
     <form id={formId} className="person-details" onSubmit={(e) => void submit(e)} noValidate>
-      <TextInput
-        ref={brokerRef}
-        label={
-          <>
-            FB broker name{member.role === 'Intern' ? null : <span className="settings__optional"> (optional)</span>}
-          </>
-        }
-        autoComplete="off"
-        spellCheck={false}
-        value={broker}
-        readOnly={!editable || busy}
-        error={brokerError ?? undefined}
-        onChange={(e) => {
-          setBroker(e.target.value);
-          setBrokerError(null);
+      <FbAccountsField
+        rows={rows}
+        onChange={(next) => {
+          setRows(next);
+          setProblem(null);
           setSaved(false);
         }}
-      />
-      <TextInput
-        ref={linkRef}
-        label={
-          <>
-            FB profile link<span className="settings__optional"> (optional)</span>
-          </>
-        }
-        type="url"
-        inputMode="url"
-        autoComplete="off"
-        spellCheck={false}
-        value={link}
+        required={required}
         readOnly={!editable || busy}
-        placeholder="https://www.facebook.com/…"
-        error={linkChecked && linkProblem ? linkProblem : undefined}
-        onBlur={() => setLinkChecked(link.trim() !== '')}
-        onChange={(e) => {
-          setLink(e.target.value);
-          setSaved(false);
-        }}
-        end={
-          openable && onOpenLink && !dirty ? (
-            <Button variant="quiet" size="small" onClick={() => onOpenLink(savedLink)} aria-label={`Open ${member.name}'s Facebook profile`}>
-              Open
-            </Button>
-          ) : undefined
-        }
+        problem={problem}
+        firstRef={firstRef}
+        onOpenLink={dirty ? undefined : onOpenLink}
       />
       {error ? (
         <Notice tone="danger" live>
@@ -533,10 +486,8 @@ function Details({
               size="small"
               variant="quiet"
               onClick={() => {
-                setBroker(savedBroker);
-                setLink(savedLink);
-                setBrokerError(null);
-                setLinkChecked(false);
+                reset(base);
+                setProblem(null);
               }}
             >
               Undo

@@ -2,7 +2,7 @@ import { forwardRef, useId, useMemo, type KeyboardEvent } from 'react';
 import { Button, Icon, PAGE_SIZE, Pagination, usePaged } from '../../components';
 import { isDate, lastPostOf, samePerson, shortDate, weekProgress, type TeamWeekRow } from '@/core/summary';
 import { addWeeks, assignmentWeek, isWeekOver, weekLabel, weekOf } from '@/core/week';
-import { initials, queueStatus, type Assignment, type PostLogEntry } from '@/core/types';
+import { initials, queueStatus, type Assignment, type FbProfile, type PostLogEntry } from '@/core/types';
 import { PacePill, WeekBar } from './InternsParts';
 
 /** How many weeks before the one shown the history covers. */
@@ -14,8 +14,8 @@ export interface InternPanelProps {
   readonly today: string;
   readonly posts: readonly PostLogEntry[];
   readonly assignments: readonly Assignment[];
-  /** Their Facebook profile, '' when the Team tab has none. */
-  readonly profile: string;
+  /** Their FB accounts that have a profile link: one button each. */
+  readonly profiles: readonly FbProfile[];
   readonly onClose: () => void;
   /** Open Assign on their queue for this week. */
   readonly onOpenQueue?: (() => void) | undefined;
@@ -40,7 +40,7 @@ interface Item {
  * is, the last four weeks as bars, and the way to their queue in Assign.
  */
 export const InternPanel = forwardRef<HTMLHeadingElement, InternPanelProps>(function InternPanel(
-  { row, week, today, posts, assignments, profile, onClose, onOpenQueue, onOpenLink },
+  { row, week, today, posts, assignments, profiles, onClose, onOpenQueue, onOpenLink },
   headingRef,
 ) {
   const titleId = useId();
@@ -79,18 +79,26 @@ export const InternPanel = forwardRef<HTMLHeadingElement, InternPanelProps>(func
         <PacePill progress={row} />
       </div>
 
-      {onOpenQueue || (profile && onOpenLink) ? (
+      {onOpenQueue || (profiles.length > 0 && onOpenLink) ? (
         <div className="intern-panel__actions">
           {onOpenQueue ? (
             <Button size="small" onClick={onOpenQueue}>
               Open in Assign
             </Button>
           ) : null}
-          {profile && onOpenLink ? (
-            <Button size="small" variant="quiet" onClick={() => onOpenLink(profile)}>
-              FB profile
-            </Button>
-          ) : null}
+          {onOpenLink
+            ? profiles.map((p) => (
+                <Button
+                  key={p.account}
+                  size="small"
+                  variant="quiet"
+                  onClick={() => onOpenLink(p.link)}
+                  aria-label={profiles.length === 1 ? 'FB profile' : `FB profile: ${p.account}`}
+                >
+                  {profiles.length === 1 ? 'FB profile' : p.account}
+                </Button>
+              ))
+            : null}
         </div>
       ) : null}
 

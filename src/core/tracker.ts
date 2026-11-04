@@ -22,6 +22,7 @@ import { parseRole, readAccounts, readRules } from './session';
 import {
   RULE_LIMITS,
   type DirectoryBuildStatus,
+  type FbProfile,
   type ServerRules,
   type IndexCheck,
   type Role,
@@ -95,6 +96,8 @@ export interface AddPersonInput {
   readonly fbAccounts?: readonly string[] | undefined;
   /** The link to that Facebook profile: https on facebook.com or fb.com (links.ts). Blank means none. */
   readonly fbProfileLink?: string | undefined;
+  /** Each FB account with its own profile link. When sent, replaces fbAccounts and fbProfileLink. */
+  readonly fbProfiles?: readonly FbProfile[] | undefined;
   readonly email?: string | undefined;
 }
 
@@ -102,6 +105,8 @@ export interface AddPersonInput {
 export interface UpdatePersonInput {
   readonly fbAccounts?: readonly string[] | undefined;
   readonly fbProfileLink?: string | undefined;
+  /** Each FB account with its own profile link. When sent, replaces the two above. */
+  readonly fbProfiles?: readonly FbProfile[] | undefined;
 }
 
 export interface Tracker {
@@ -400,14 +405,16 @@ export function createTracker(deps: TrackerDeps): Tracker {
       const name = input.name.trim();
       if (!name) throw new UserFacingError("Type the person's name.");
       if (input.role !== 'Intern' && input.role !== 'Admin') throw new UserFacingError('Choose Intern or Admin.');
-      const fbAccounts = readAccounts(input.fbAccounts ?? []);
+      const profiles = input.fbProfiles !== undefined ? checkedProfiles(input.fbProfiles) : undefined;
+      const fbAccounts = profiles ? profiles.map((p) => p.account) : readAccounts(input.fbAccounts ?? []);
       const email = (input.email ?? '').trim();
-      const fbProfileLink = checkedProfileLink(input.fbProfileLink ?? '');
+      const fbProfileLink = profiles ? firstLink(profiles) : checkedProfileLink(input.fbProfileLink ?? '');
       const reply = await backend.call('addPerson', {
         name,
         role: input.role,
         fbAccounts: fbAccounts.length > 0 ? fbAccounts : undefined,
         fbProfileLink: fbProfileLink || undefined,
+        fbProfiles: profiles,
         email: email || undefined,
       });
       const row = asRecord(reply['person']);
@@ -437,6 +444,12 @@ export function createTracker(deps: TrackerDeps): Tracker {
       const payload: Record<string, unknown> = { name };
       if (changes.fbAccounts !== undefined) payload['fbAccounts'] = readAccounts(changes.fbAccounts);
       if (changes.fbProfileLink !== undefined) payload['fbProfileLink'] = checkedProfileLink(changes.fbProfileLink);
+      if (changes.fbProfiles !== undefined) {
+        const profiles = checkedProfiles(changes.fbProfiles);
+        payload['fbProfiles'] = profiles;
+        payload['fbAccounts'] = profiles.map((p) => p.account);
+        payload['fbProfileLink'] = firstLink(profiles);
+      }
       const reply = await backend.call('updatePerson', payload);
       const row = asRecord(reply['person']);
       const person = row ? readTeamMember(row) : null;
@@ -507,6 +520,38 @@ export function createTracker(deps: TrackerDeps): Tracker {
 }
 
 /** The profile link to send, normalized, or a refusal before any request when it is not Facebook's. */
+/**
+ * A reply's fbProfiles, or, from a web app older than v9, each account with
+ * the one profile link on the first.
+ */
+function readProfiles(value: unknown, accounts: readonly string[], link: string): readonly FbProfile[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((v) => {
+      const row = asRecord(v);
+      const account = row ? asText(row['account']).trim() : '';
+      return account ? [{ account, link: asText(row?.['link']).trim() }] : [];
+    });
+  }
+  return accounts.map((account, i) => ({ account, link: i === 0 ? link : '' }));
+}
+
+/** Each FB account and its link as the server checks them: names given, no commas, none twice, links on Facebook. */
+function checkedProfiles(profiles: readonly FbProfile[]): FbProfile[] {
+  const out: FbProfile[] = [];
+  for (const p of profiles) {
+    const account = p.account.trim();
+    const link = checkedProfileLink(p.link);
+    if (!account && !link) continue;
+    if (!account) throw new UserFacingError(`Type the name of the account for ${link}.`);
+    if (account.includes(',')) throw new UserFacingError('A Facebook account name cannot contain a comma.');
+    if (out.some((o) => o.account.toLowerCase() === account.toLowerCase())) throw new UserFacingError(`${account} is listed twice.`);
+    out.push({ account, link });
+  }
+  return out;
+}
+
+const firstLink = (profiles: readonly FbProfile[]) => profiles.find((p) => p.link)?.link ?? '';
+
 function checkedProfileLink(url: string): string {
   const problem = facebookProfileProblem(url);
   if (problem) throw new UserFacingError(problem);
@@ -566,12 +611,15 @@ function readTeamMember(row: Readonly<Record<string, unknown>>): TeamMember | nu
   const name = asText(row['name']);
   if (!name.trim()) return null;
   const active = row['active'];
+  const fbAccounts = readAccounts(row['fbAccounts']);
+  const fbProfileLink = asText(row['fbProfileLink']).trim();
   return {
     name,
     role: parseRole(row['role']),
     email: asText(row['email']).trim(),
-    fbAccounts: readAccounts(row['fbAccounts']),
-    ...(asText(row['fbProfileLink']).trim() ? { fbProfileLink: asText(row['fbProfileLink']).trim() } : {}),
+    fbAccounts,
+    ...(fbProfileLink ? { fbProfileLink } : {}),
+    fbProfiles: readProfiles(row['fbProfiles'], fbAccounts, fbProfileLink),
     // Only an explicit "no" revokes, as the server's identify() reads the Active cell.
     active: !(active === false || (typeof active === 'string' && active.trim().toUpperCase() === 'FALSE')),
   };

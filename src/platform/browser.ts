@@ -15,6 +15,7 @@
  */
 
 import { UserFacingError } from '../core/types';
+import type { FirebaseAccess } from './firebase';
 import type { Platform } from './index';
 
 /**
@@ -49,6 +50,8 @@ export interface BrowserPlatformOptions {
   readonly clipboard?: Pick<Clipboard, 'writeText'> | null;
   /** Default: window.open. */
   readonly openWindow?: (url: string, target: string, features: string) => unknown;
+  /** Talk to the Firebase emulator on this PC. Default false: no Firebase. */
+  readonly firebase?: boolean;
 }
 
 export function createBrowserPlatform(options: BrowserPlatformOptions = {}): Platform {
@@ -59,6 +62,8 @@ export function createBrowserPlatform(options: BrowserPlatformOptions = {}): Pla
     'clipboard' in options ? options.clipboard ?? null : globalThis.navigator?.clipboard ?? null;
   const openWindow =
     options.openWindow ?? ((url: string, target: string, features: string) => globalThis.window?.open(url, target, features));
+
+  let firebase: Promise<FirebaseAccess> | null = null;
 
   // When storage is blocked (a private window, blocked site data), values live for this page only.
   const memory = new Map<string, string>();
@@ -85,6 +90,13 @@ export function createBrowserPlatform(options: BrowserPlatformOptions = {}): Pla
 
   return {
     hasFileSystem: false,
+
+    firebase() {
+      // Development only, and only the emulator: a browser never signs in to live.
+      if (!options.firebase) return Promise.resolve(null);
+      firebase ??= import('./firebase').then((m) => m.createFirebase(m.EMULATOR));
+      return firebase;
+    },
 
     async copyText(text) {
       const board = clipboard();
@@ -121,6 +133,11 @@ export function createBrowserPlatform(options: BrowserPlatformOptions = {}): Pla
       const text = await response.text();
       if (!response.ok) throw new BrowserHttpError(response.status);
       return parseJson(text);
+    },
+
+    async copyPhoto() {
+      // Drive answers a page's fetch without the headers a canvas needs, so the photo can't be read here.
+      throw new UserFacingError('Copying a photo works in the desktop app.');
     },
 
     async savePhotos() {

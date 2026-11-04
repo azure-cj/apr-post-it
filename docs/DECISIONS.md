@@ -221,3 +221,21 @@ text only, the section can't be selected, and a copy made from it by hand is can
 still never written to disk. An unseparated document is unchanged (D15). The cost: a leaked
 intern key can now read internal text. This is step 1 of the plan to join the listing hub,
 where an intern is an agent.
+
+### D17. One person, several FB accounts, each with its own profile link (Nov 3, 2026)
+
+An intern may run more than one Facebook account (CJ posts as Cyrus and as Kevs), and each
+account has its own profile. The Team tab keeps its columns rather than gaining one per
+account: FB Accounts lists the names and FB Profile Link holds one link per line, in the same
+order, so an old one-link cell still reads as the first account's. Accounts are edited as rows
+of name and link. The weekly target stays per person, not per account.
+
+### D18. Sign in with the Firebase account; no keys in the app (Nov 4, 2026)
+
+Post-It signs in with the same email and password as Alpha Listing Hub. Listings, posts and
+queues stay in the Apps Script web app: each call carries the account's sign-in token instead
+of a key, Code.gs asks Google's accounts:lookup whose it is (kept five minutes), and finds the
+person by the Team tab's Email. The name and role are still the Team tab's, so history matches;
+the account's role must agree (agent = Intern, admin or owner = Admin), and a scanner or an
+account with no role is turned away. Keys still work on the server, for a copy of the app not
+yet updated. The cost: each person's Team tab Email must be their account's email.

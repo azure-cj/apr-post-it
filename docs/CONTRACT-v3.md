@@ -245,3 +245,30 @@ The owner: "assign per week only, e.g. 40 listings per week; Friday is the final
 - `Property` gains `building?` and `created?`. The directory's search also matches the city and
   the building. Find's "Newest" sorts by `created`, and is offered only once some listing has it.
 - No version bump: the fields are optional, and an older server simply doesn't send them.
+
+## v9: interns read the internal section; several FB accounts per person (server 2026-11-03.2)
+
+- `property`: an intern's reply carries `internalText` when the document is separated (D16).
+  The app shows it folded, never copies it and never saves it.
+- `team`, `addPerson`, `updatePerson`, `setActive`: each person gains `fbProfiles`,
+  `[{ account, link }]`, one per FB account they post as, in `fbAccounts`' order (`link` is
+  `''` when none). `fbProfileLink` stays, as the first link, for an older app.
+- `addPerson` and `updatePerson` take `fbProfiles`. When sent it replaces `fbAccounts` and
+  `fbProfileLink`. Refused with `bad-accounts`: a name given twice (any case), a link with no
+  name, a comma in a name, or not a list; `bad-profile-link` for a link not on Facebook.
+- The Team tab keeps its columns: FB Accounts holds the names, FB Profile Link one link per
+  line in the same order. A cell from before v9 (one link) is the first account's.
+- `logPost` is unchanged: the FB account must be one of the person's `fbAccounts`.
+- The weekly target stays per person, however many accounts they post from.
+- `core/types.FbProfile`; `TeamMember.fbProfiles`; `AddPersonInput.fbProfiles` and
+  `UpdatePersonInput.fbProfiles`.
+
+## v10: Firebase sign-in instead of keys (server 2026-11-04.1)
+
+- Every action accepts `idToken` (a Firebase sign-in token) in place of `key`; with both, the
+  token wins. Code.gs checks it with Google's accounts:lookup (`CONFIG.FIREBASE_API_KEY`, the live
+  project's web key) and finds the active Team row whose Email matches, in any case.
+- Refused with `unauthorized`: "Your sign-in has ended. Sign in again." (a bad, expired or
+  turned-off token), or "Nobody active on the Team tab has the email ... Ask your admin to add it."
+- `core/backend` sends `idToken` (and never `key`) when `BackendConfig.idToken` is set; `who`
+  (the account's uid) keeps `identity()` the same while the token renews.
