@@ -8,7 +8,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const REPO = 'azure-cj/apr-post-it-releases';
+const REPO = 'azure-cj/apr-post-it';
 
 const conf = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
 const version = conf.version;

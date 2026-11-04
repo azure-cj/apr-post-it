@@ -81,7 +81,7 @@
     },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERBMzIxRDFBRjkzNkNCMjEKUldRaHl6YjVHaDB5MnNha0pxVktudXF5WUd0eTJTdVp3KzFPV1ZYZ2NzdlI4bE1KV2g2dFRuSVAK",
-      "endpoints": ["https://github.com/azure-cj/apr-post-it-releases/releases/latest/download/latest.json"],
+      "endpoints": ["https://github.com/azure-cj/apr-post-it/releases/latest/download/latest.json"],
       "windows": {
         "installMode": "passive"
       }
