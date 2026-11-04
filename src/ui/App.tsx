@@ -33,7 +33,8 @@ import { AccountSignInScreen } from './screens/AccountSignIn';
 import { SignInScreen } from './screens/SignInScreen';
 import { OutboxBanner } from './OutboxBanner';
 import { PendingNotifier } from './PendingNotifier';
-import { UpdateBanner } from './UpdateBanner';
+import { UpdateBanner, type CheckResult } from './UpdateBanner';
+import { version as APP_VERSION } from '../../package.json';
 import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
 import { AssignScreen, InternsScreen, monitorWeek, RecordsScreen, SettingsScreen, settingsTab, TrackerScreen, type QueueSave } from './screens/manager';
@@ -153,6 +154,22 @@ export function AppShell({ signInNote }: AppProps) {
   const app = useApp();
   const { session, user } = app;
   const [signInBusy, setSignInBusy] = useState(false);
+
+  // Check for updates, at the sidebar's foot: the update banner's own check, run now.
+  const notifyShell = useNotify();
+  const checkNow = useRef<(() => Promise<CheckResult>) | null>(null);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const onCheckReady = useCallback((check: () => Promise<CheckResult>) => {
+    checkNow.current = check;
+  }, []);
+  const checkUpdates = useCallback(async () => {
+    if (!checkNow.current) return;
+    setCheckingUpdates(true);
+    const found = await checkNow.current();
+    setCheckingUpdates(false);
+    if (found === 'none') notifyShell(`You're on the latest version (${APP_VERSION}).`);
+    else if (found === 'failed') notifyShell("Couldn't check for updates. Check your connection, then try again.", 'warn');
+  }, [notifyShell]);
   const [signInError, setSignInError] = useState<string | null>(null);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const navigate = useNavigate();
@@ -382,12 +399,15 @@ export function AppShell({ signInNote }: AppProps) {
             animate={sidebar.animate}
             onToggleCollapsed={toggleSidebar}
             dragRegion={windowControls !== null}
+            appVersion={APP_VERSION}
+            onCheckUpdates={() => void checkUpdates()}
+            checkingUpdates={checkingUpdates}
           />
         ) : null}
 
         <div className="shell__content">
           <TitleBar brandHref={user ? undefined : '#/'} windowControls={windowControls} />
-          <UpdateBanner platform={platform} requestLeave={requestLeave} />
+          <UpdateBanner platform={platform} requestLeave={requestLeave} onCheckReady={onCheckReady} />
           {user ? <OutboxBanner who={user.name} /> : null}
           {user ? <PendingNotifier who={user.name} /> : null}
 

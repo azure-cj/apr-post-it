@@ -41,6 +41,12 @@ export interface SidebarProps {
   readonly dragRegion?: boolean | undefined;
   /** Width changes animate. Off for the first paint, so a remembered state doesn't slide in. */
   readonly animate?: boolean | undefined;
+  /** This app's version, shown at the foot. */
+  readonly appVersion?: string | undefined;
+  /** Looks for a newer version now. Without it, no button. */
+  readonly onCheckUpdates?: (() => void) | undefined;
+  /** A check is under way. */
+  readonly checkingUpdates?: boolean | undefined;
 }
 
 const isModifiedClick = (e: MouseEvent) => e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
@@ -71,6 +77,9 @@ export function Sidebar({
   navLabel = 'Main',
   dragRegion = false,
   animate = false,
+  appVersion,
+  onCheckUpdates,
+  checkingUpdates = false,
 }: SidebarProps) {
   const asideRef = useRef<HTMLElement>(null);
   const id = useId();
@@ -191,6 +200,27 @@ export function Sidebar({
           </span>
           <Icon name="sidebar" className="sidebar__icon" />
         </button>
+        {onCheckUpdates ? (
+          <button
+            type="button"
+            className="sidebar__item sidebar__action"
+            onClick={onCheckUpdates}
+            disabled={checkingUpdates}
+            aria-busy={checkingUpdates || undefined}
+            {...tipFor(appVersion ? `Check for updates · v${appVersion}` : 'Check for updates')}
+          >
+            <span className="sidebar__label">{checkingUpdates ? 'Checking…' : 'Check for updates'}</span>
+            <Icon name="refresh" className="sidebar__icon" />
+          </button>
+        ) : null}
+        {appVersion ? (
+          <p className="sidebar__version tabular">
+            <span className="sidebar__label">Version {appVersion}</span>
+            <span className="sidebar__version-short">
+              v{appVersion}
+            </span>
+          </p>
+        ) : null}
       </div>
 
       {tip ? (

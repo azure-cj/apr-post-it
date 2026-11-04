@@ -316,3 +316,29 @@
     opacity: 0;
   }
 }
+
+/* This app's version, under Check for updates: words when open, a short tag on the rail. */
+.sidebar__version {
+  margin: 0;
+  padding: var(--space-1) var(--space-3) 0;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.sidebar__version-short {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar__version {
+  text-align: center;
+  padding-inline: 0;
+}
+
+.sidebar--collapsed .sidebar__version-short {
+  display: inline;
+}
+
+.sidebar--collapsed .sidebar__version .sidebar__label {
+  display: none;
+}

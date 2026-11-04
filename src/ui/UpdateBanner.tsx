@@ -21,30 +21,47 @@ type State =
  * version than the one dismissed. Restarting goes through `requestLeave`, so
  * unsaved changes are asked about first.
  */
+/** What a check found: a newer version (now offered), none, or no answer. */
+export type CheckResult = 'found' | 'none' | 'failed';
+
 export function UpdateBanner({
   platform,
   requestLeave,
   now = Date.now,
+  onCheckReady,
 }: {
   readonly platform: Pick<Platform, 'checkUpdate'>;
   /** Runs `go` now, or after asking when there are unsaved changes. */
   readonly requestLeave: (go: () => void) => void;
   readonly now?: () => number;
+  /** Hands over a check to run on demand (Check for updates), which also offers a version put off with Later. */
+  readonly onCheckReady?: ((checkNow: () => Promise<CheckResult>) => void) | undefined;
 }) {
   const [state, setState] = useState<State>({ kind: 'none' });
   const dismissed = useRef<string | null>(null);
   const busy = useRef(false);
 
-  const check = useCallback(async () => {
-    if (busy.current) return;
-    try {
-      const update = await platform.checkUpdate();
-      if (!update || update.version === dismissed.current) return;
-      setState((s) => (s.kind === 'installing' ? s : { kind: 'ready', update }));
-    } catch {
-      // Offline, or the releases repo didn't answer: try again at the next check.
-    }
-  }, [platform]);
+  const check = useCallback(
+    async (asked = false): Promise<CheckResult> => {
+      if (busy.current) return 'found';
+      try {
+        const update = await platform.checkUpdate();
+        if (!update) return 'none';
+        if (asked) dismissed.current = null;
+        if (update.version === dismissed.current) return 'none';
+        setState((s) => (s.kind === 'installing' ? s : { kind: 'ready', update }));
+        return 'found';
+      } catch {
+        // Offline, or the releases repo didn't answer: try again at the next check.
+        return 'failed';
+      }
+    },
+    [platform],
+  );
+
+  useEffect(() => {
+    onCheckReady?.(() => check(true));
+  }, [onCheckReady, check]);
 
   // On start, then every few hours. Checked every minute against the clock, so
   // a laptop waking from sleep catches up.

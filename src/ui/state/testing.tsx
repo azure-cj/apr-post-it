@@ -83,12 +83,13 @@ export const TEAM = {
 export function fakeServer(
   replies: Readonly<Record<string, FakeReply>> = {},
   key: string | null = 'test-key',
-  { hasWindowControls = false }: { readonly hasWindowControls?: boolean } = {},
+  { hasWindowControls = false, update }: { readonly hasWindowControls?: boolean; readonly update?: { readonly version: string } } = {},
 ): FakePlatform {
   return createFakePlatform({
     key,
     hasFileSystem: true,
     hasWindowControls,
+    ...(update ? { update } : {}),
     replies: {
       properties: PROPERTIES,
       property: propertyReply(),
