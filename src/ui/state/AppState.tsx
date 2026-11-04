@@ -160,10 +160,12 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
   );
 
   /**
-   * The account signed in: its role, then who it is on the Team tab, which
-   * the web app finds by the account's email. A Team role that isn't the
-   * account's signs it out: the two must agree. `fresh` asks Firebase for the
-   * role now, as after typing a password; on launch the kept one does.
+   * The account signed in: its role, then who it is, as the web app says from
+   * the same account (v11): its name, or its Team row's when the email is on
+   * one. The two roles differ only when the role was changed since this PC's
+   * sign-in was kept: it signs out, and signing in again brings the new one.
+   * `fresh` asks Firebase for the role now, as after typing a password; on
+   * launch the kept one does.
    */
   const continueWith = useCallback(
     async (fb: FirebaseAccess, fresh: boolean): Promise<User | null> => {
@@ -178,7 +180,7 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
         user = await askWhoThisIs(services.backend);
       } catch (err) {
         if (err instanceof BackendError && err.code === 'unauthorized') {
-          // Not on the Team tab, or the sign-in ended: nothing to try again with.
+          // No role for Post-It, or the sign-in ended: nothing to try again with.
           await fb.signOut().catch(() => {});
           throw err;
         }
@@ -188,7 +190,7 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
       }
       if (user.role !== role) {
         await fb.signOut().catch(() => {});
-        throw new UserFacingError(`The Team tab says ${user.role}, but this account is ${role === 'Admin' ? 'an admin' : 'an agent'}. Ask your admin.`);
+        throw new UserFacingError('Your role was changed. Sign in again.');
       }
       setSession({ status: 'signed-in', user });
       return user;

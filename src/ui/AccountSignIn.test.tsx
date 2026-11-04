@@ -9,7 +9,7 @@ import { defaultAppSettings, serializeSettings, SETTINGS_KEY } from './state/set
 import { EXEC, PROPERTIES, TEAM, renderApp } from './state/testing';
 
 // Signing in with a Firebase account, the same as Alpha Listing Hub's (POST-IT-PLAN.md section 5). No key: every call
-// to the web app carries the account's sign-in token, and the web app finds the person by the Team tab's Email (v10).
+// to the web app carries the account's sign-in token, and the account says who you are and your role (v11).
 
 interface Person {
   readonly uid: string;
@@ -119,20 +119,20 @@ describe('signing in with an account', () => {
     expect(await screen.findByText('CJ Aureo')).toBeTruthy();
   });
 
-  it("turns away an account whose email isn't on the Team tab, and signs it out", async () => {
+  it('signs out with the web app\'s sentence when it turns the sign-in away', async () => {
     const firebase = fakeFirebase();
-    const message = 'Nobody active on the Team tab has the email cj@aureo.com. Ask your admin to add it.';
+    const message = 'Your sign-in has ended. Sign in again.';
     renderApp({ platform: platformWith(firebase, { ok: false, error: 'unauthorized', message }), user: null });
     await signInWith('cj@aureo.com', 'right-password');
     expect(await screen.findByText(message)).toBeTruthy();
     expect(firebase.current()).toBeNull();
   });
 
-  it("turns away an account whose role isn't the Team tab's", async () => {
+  it("signs out when the role was changed since the sign-in was kept", async () => {
     const firebase = fakeFirebase();
     renderApp({ platform: platformWith(firebase, { ...PING_CJ, role: 'Admin' }), user: null });
     await signInWith('cj@aureo.com', 'right-password');
-    expect(await screen.findByText('The Team tab says Admin, but this account is an agent. Ask your admin.')).toBeTruthy();
+    expect(await screen.findByText('Your role was changed. Sign in again.')).toBeTruthy();
     expect(firebase.current()).toBeNull();
   });
 

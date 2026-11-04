@@ -5,9 +5,9 @@
  * admin, and a scanner or an account with no role not at all.
  *
  * Listings, posts and queues stay in the Apps Script web app. It is sent the
- * account's sign-in token instead of a key, asks Google whose it is, and finds
- * the person by the Team tab's Email (v10). Their Team tab name stays the one
- * on posts and queues, so history keeps matching.
+ * account's sign-in token instead of a key and asks Google whose it is: the
+ * account's name and role say who you are (v11). A Team row with the same
+ * email lends its name, so history keeps matching; none is needed.
  */
 
 import type { Role } from './types';

@@ -4,7 +4,8 @@ The desktop app does not talk to the Google APIs. It calls one Apps Script web a
 runs **as the owner** and returns JSON. That one decision buys three things:
 
 * **Sign-in is by Firebase account (v10).** The app sends the account's sign-in token as
-  `idToken`; Code.gs asks Google whose it is and finds the person by the Team tab's **Email**.
+  `idToken`; Code.gs asks Google whose it is: the account's name and role say who you are (v11).
+  A Team row with the same **Email** lends its name and FB accounts; none is needed.
   Keys still work, for a copy of the app not yet updated.
 * **No Google credentials on intern machines.** No GCP project, no OAuth consent screen,
   no service-account key file to leak. The app holds the web app's URL and the person's own

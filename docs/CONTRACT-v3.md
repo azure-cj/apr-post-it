@@ -272,3 +272,13 @@ The owner: "assign per week only, e.g. 40 listings per week; Friday is the final
   turned-off token), or "Nobody active on the Team tab has the email ... Ask your admin to add it."
 - `core/backend` sends `idToken` (and never `key`) when `BackendConfig.idToken` is set; `who`
   (the account's uid) keeps `identity()` the same while the token renews.
+
+## v11: the account says who you are (server 2026-11-04.2)
+
+- With `idToken`, the caller's role is the account's `role` claim (agent: Intern; admin, owner:
+  Admin), and its name the account's display name (its email when it has none). No Team row is
+  needed. An active Team row with the same email gives its Name and FB Accounts instead; its
+  Role is not read.
+- Refused with `unauthorized`: "Your sign-in has ended. Sign in again." (bad, expired or
+  turned-off token), or "This account can't use Post-It yet. Ask an admin to give it a role on
+  the People screen." (no role, or the scanner).

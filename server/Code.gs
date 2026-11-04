@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-04.1';
+const SERVER_VERSION = '2026-11-04.2';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -111,13 +111,13 @@ function route_(req) {
   try {
     var me;
     if (req.idToken) {
-      // Signed in with a Firebase account (v10): Google says whose it is, the Team tab's Email says who that is.
-      var email = accountEmail_(req.idToken);
-      if (!email) return json_({ ok: false, error: 'unauthorized', message: 'Your sign-in has ended. Sign in again.' });
-      me = identifyEmail_(email);
+      // Signed in with a Firebase account (v11): the account says who you are and your role.
+      var account = accountOf_(req.idToken);
+      if (!account) return json_({ ok: false, error: 'unauthorized', message: 'Your sign-in has ended. Sign in again.' });
+      me = callerOfAccount_(account);
       if (!me) {
         return json_({ ok: false, error: 'unauthorized',
-                       message: 'Nobody active on the Team tab has the email ' + email + '. Ask your admin to add it.' });
+                       message: 'This account can\'t use Post-It yet. Ask an admin to give it a role on the People screen.' });
       }
     } else {
       me = identify_(req.key);
@@ -196,19 +196,43 @@ function identifyEmail_(email) {
 }
 
 /**
- * The email of the Firebase account a sign-in token is for, or null when Google
- * says the token is not good (made up, expired, or for a turned-off account).
- * Google's accounts:lookup checks the token itself. The answer is kept for five
- * minutes, under the token's signature, so a busy screen isn't a call each time;
- * a token lasts an hour.
+ * The caller for a Firebase account (v11), or null when its role can't use
+ * Post-It. The role is the account's (agent: Intern; admin or owner: Admin),
+ * never the Team tab's. When the account's email is on an active Team row,
+ * that row's name and FB accounts are used, so Posted By and the history keep
+ * matching; otherwise the account's own name, and any FB account.
  */
-function accountEmail_(idToken) {
+function callerOfAccount_(account) {
+  var role = account.role === 'agent' ? 'Intern'
+           : (account.role === 'admin' || account.role === 'owner') ? 'Admin' : null;
+  if (!role) return null;
+  var row = identifyEmail_(account.email);
+  return {
+    name: row ? row.name : (account.name || account.email),
+    email: account.email,
+    role: role,
+    fbAccounts: row ? row.fbAccounts : [],
+    canSeeInternal: role !== 'Intern',
+  };
+}
+
+/**
+ * The Firebase account a sign-in token is for, as { email, name, role }, or
+ * null when Google says the token is not good (made up, expired, or for a
+ * turned-off account). Google's accounts:lookup checks the token itself and
+ * gives the account's name and its custom claims, where the role is. The
+ * answer is kept for five minutes, under the token's signature, so a busy
+ * screen isn't a call each time; a token lasts an hour.
+ */
+function accountOf_(idToken) {
   var token = textOf_(idToken).trim();
   if (!token || !CONFIG.FIREBASE_API_KEY) return null;
   var cache = CacheService.getScriptCache();
   var cacheKey = 'idtoken:' + token.slice(-200);
   var hit = cache.get(cacheKey);
-  if (hit) return hit;
+  if (hit) {
+    try { return JSON.parse(hit); } catch (e) { /* ask Google again */ }
+  }
   var res = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + CONFIG.FIREBASE_API_KEY, {
     method: 'post',
     contentType: 'application/json',
@@ -219,9 +243,15 @@ function accountEmail_(idToken) {
   var user;
   try { user = (JSON.parse(res.getContentText()).users || [])[0]; } catch (e) { return null; }
   if (!user || user.disabled || !user.email) return null;
-  var email = String(user.email).toLowerCase();
-  try { cache.put(cacheKey, email, 300); } catch (e) { /* ignore */ }
-  return email;
+  var claims = {};
+  try { claims = JSON.parse(user.customAttributes || '{}') || {}; } catch (e) { claims = {}; }
+  var account = {
+    email: String(user.email).toLowerCase(),
+    name: textOf_(user.displayName).trim(),
+    role: textOf_(claims.role).trim(),
+  };
+  try { cache.put(cacheKey, JSON.stringify(account), 300); } catch (e) { /* ignore */ }
+  return account;
 }
 
 /** A Team row as the caller every action is given. */

@@ -239,3 +239,13 @@ person by the Team tab's Email. The name and role are still the Team tab's, so h
 the account's role must agree (agent = Intern, admin or owner = Admin), and a scanner or an
 account with no role is turned away. Keys still work on the server, for a copy of the app not
 yet updated. The cost: each person's Team tab Email must be their account's email.
+
+### D19. The Firebase account says who you are; the sheets hold the data (Nov 4, 2026)
+
+Amends D18. Signing in needed a Team tab row with the account's email, so an account the
+People screen had made could not use Post-It until an admin also typed it into the sheet. Now
+the account alone decides: Code.gs reads its name and role from Google's accounts:lookup (the
+`role` claim: agent is Intern, admin or owner is Admin; anything else is refused). A Team row with
+the same email still lends its name and FB accounts, so Posted By and the history keep matching,
+but its Role no longer counts. Listings, posts and queues stay in the sheets. Not changed: a
+queue is still given only to an active Intern on the Team tab.
