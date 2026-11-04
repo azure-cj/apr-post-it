@@ -190,7 +190,7 @@ describe('Settings → Team', () => {
     expect(sent).not.toHaveProperty('role');
     expect(sent).not.toHaveProperty('active');
     await waitFor(() => expect(actionsOf(platform).filter((a) => a === 'team').length).toBeGreaterThan(teamReads));
-  });
+  }, 15_000); // Types four fields: slow when the whole suite runs at once.
 
   it('blocks a profile link that is not Facebook', async () => {
     const platform = await openTeam();

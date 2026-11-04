@@ -4,7 +4,7 @@
  * never sees or copies the owner's details or the commission. These tests
  * hold the screen to it even when the server's reply is wrong.
  */
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CLEAN, fakeServer, intern, manager, PROPERTIES, propertyReply, renderApp, TODAY } from '../../state/testing';
 
@@ -435,7 +435,10 @@ describe('photos', () => {
     renderApp({ platform, path: PATH });
     await settled();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Download all' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download photos' }));
+    const picker = screen.getByRole('dialog', { name: 'Download photos' });
+    expect(within(picker).getByText(/of 2 photos ticked/)).toBeTruthy();
+    await userEvent.click(within(picker).getByRole('button', { name: 'Download 2 photos' }));
     expect(await screen.findByText(/2 photos saved to Downloads\\APG Post-It\\Verdant Hills Lot 12, Tagaytay/)).toBeTruthy();
     expect(platform.saves.at(-1)?.photos.map((p) => p.name)).toEqual(['photo 1', 'photo 2']);
 
@@ -443,6 +446,36 @@ describe('photos', () => {
     await waitFor(() =>
       expect(platform.opened).toEqual(['C:\\Users\\Intern\\Downloads\\APG Post-It\\Verdant Hills Lot 12, Tagaytay']),
     );
+  });
+
+  it('downloads only the ticked photos, and none until one is ticked', async () => {
+    const platform = fakeServer();
+    renderApp({ platform, path: PATH });
+    await settled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download photos' }));
+    const picker = screen.getByRole('dialog', { name: 'Download photos' });
+    await userEvent.click(within(picker).getByRole('button', { name: 'Untick all' }));
+    expect((within(picker).getByRole('button', { name: 'Download' }) as HTMLButtonElement).disabled).toBe(true);
+
+    await userEvent.click(within(picker).getByRole('checkbox', { name: 'Photo 2 of 2' }));
+    expect(within(picker).getByRole('button', { name: 'Tick all' })).toBeTruthy();
+    await userEvent.click(within(picker).getByRole('button', { name: 'Download 1 photo' }));
+
+    expect(await screen.findByText(/1 photo saved to/)).toBeTruthy();
+    expect(platform.saves.at(-1)?.photos.map((p) => p.name)).toEqual(['photo 2']);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('cancels without saving anything', async () => {
+    const platform = fakeServer();
+    renderApp({ platform, path: PATH });
+    await settled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download photos' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Download photos' })).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(platform.saves).toEqual([]);
   });
 });
 

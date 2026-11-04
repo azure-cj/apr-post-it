@@ -41,6 +41,7 @@ import {
   shortDate,
 } from './format';
 import { LogStep } from './LogStep';
+import { PhotoPicker, Thumb } from './PhotoPicker';
 import { PhotoViewer } from './PhotoViewer';
 import { BackLink, Key, Waiting } from './shared';
 import './PropertyScreen.css';
@@ -201,20 +202,22 @@ function PropertyPage({ id }: { readonly id: string }) {
   const photosRef = useRef<HTMLButtonElement>(null);
   const photos = detail?.photos ?? [];
   const [viewing, setViewing] = useState<number | null>(null);
+  const [picking, setPicking] = useState(false);
 
-  const downloadAll = async () => {
-    if (!detail || saving || photos.length === 0) return;
+  const download = async (chosen: readonly Photo[]) => {
+    setPicking(false);
+    if (!detail || saving || chosen.length === 0) return;
     setSaving(true);
     setPhotoError(null);
     try {
-      const saved = await app.platform.savePhotos(detail.name, photos);
+      const saved = await app.platform.savePhotos(detail.name, chosen);
       const first = saved[0];
       const folder = first ? folderOf(first.path) : null;
       if (folder) rememberFolder(folder);
       const where = folder ? ` to ${friendlyFolder(folder)}` : '';
-      const missing = photos.length - saved.length;
+      const missing = chosen.length - saved.length;
       if (missing > 0) {
-        notify(`${saved.length} of ${count(photos.length, 'photo', 'photos')} saved${where}. ${count(missing, 'photo', 'photos')} could not be downloaded.`, 'warn');
+        notify(`${saved.length} of ${count(chosen.length, 'photo', 'photos')} saved${where}. ${count(missing, 'photo', 'photos')} could not be downloaded.`, 'warn');
       } else {
         notify(`${count(saved.length, 'photo', 'photos')} saved${where}.`);
       }
@@ -246,7 +249,7 @@ function PropertyPage({ id }: { readonly id: string }) {
 
   const linkRef = useRef<HTMLInputElement>(null);
 
-  // Alt+C copies, Alt+P downloads the photos, Alt+L goes to the post link:
+  // Alt+C copies, Alt+P opens the photo picker (Enter there downloads them all), Alt+L goes to the post link:
   // the day's path without the mouse. Through the controls, so a blocked one stays blocked.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -445,9 +448,9 @@ function PropertyPage({ id }: { readonly id: string }) {
                     busy={saving}
                     disabled={detail === null || photos.length === 0}
                     aria-keyshortcuts="Alt+P"
-                    onClick={() => void downloadAll()}
+                    onClick={() => setPicking(true)}
                   >
-                    {saving ? 'Downloading…' : savedFolder ? 'Download again' : 'Download all'}
+                    {saving ? 'Downloading…' : savedFolder ? 'Download again' : 'Download photos'}
                   </Button>
                 ) : null}
                 {savedFolder ? (
@@ -526,6 +529,14 @@ function PropertyPage({ id }: { readonly id: string }) {
 
       {viewing !== null ? (
         <PhotoViewer photos={photos} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)} />
+      ) : null}
+      {picking && detail ? (
+        <PhotoPicker
+          property={detail.name}
+          photos={photos}
+          onDownload={(chosen) => void download(chosen)}
+          onClose={() => setPicking(false)}
+        />
       ) : null}
     </div>
   );
@@ -912,19 +923,6 @@ function CooldownLines({
       {!manager ? <p className="meta">Your posts only. The server checks everyone's.</p> : null}
     </div>
   );
-}
-
-/** A photo's thumbnail, or a plain numbered tile when there is none or it won't load. */
-function Thumb({ photo, label }: { readonly photo: Photo; readonly label: string }) {
-  const [failed, setFailed] = useState(false);
-  if (!photo.thumb || failed) {
-    return (
-      <span className="photos__tile" aria-hidden="true">
-        {label}
-      </span>
-    );
-  }
-  return <img className="photos__img" src={photo.thumb} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />;
 }
 
 /** This listing's posts, newest first: by folder id where both have one, else by name, as the cooldown matches them. */

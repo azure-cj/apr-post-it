@@ -1,0 +1,117 @@
+/* Download photos: pick which ones. A ticked photo carries the gold of what is selected. */
+
+.picker__property {
+  margin: calc(var(--space-6) * -1) 0 0;
+  color: var(--text-muted);
+}
+
+.picker__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.picker__bar .meta {
+  margin: 0;
+}
+
+.picker__bar strong {
+  color: var(--text);
+}
+
+.picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.picker__item {
+  aspect-ratio: 4 / 3;
+  min-width: 0;
+}
+
+.picker__tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-chip);
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+
+/* An unticked photo is dimmed, so the set to download reads at a glance. */
+.picker__tile .photos__img,
+.picker__tile .photos__tile {
+  opacity: 0.45;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.picker__tile--on {
+  border-color: var(--gold-edge);
+}
+
+.picker__tile--on .photos__img,
+.picker__tile--on .photos__tile {
+  opacity: 1;
+}
+
+/* The real checkbox, invisible, over the whole tile: it takes the click and the focus. */
+.picker__check {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.picker__tile:has(.picker__check:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* The tick, top left: a gold disc when ticked, an empty ring when not. */
+.picker__mark {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--text);
+  border-radius: 50%;
+  background: var(--scrim);
+}
+
+.picker__tile--on .picker__mark {
+  border-color: var(--gold);
+  background: var(--gold);
+}
+
+.picker__tile--on .picker__mark::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--on-gold);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picker__tile .photos__img,
+  .picker__tile .photos__tile {
+    transition: none;
+  }
+}
