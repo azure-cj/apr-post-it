@@ -249,3 +249,15 @@ the account alone decides: Code.gs reads its name and role from Google's account
 the same email still lends its name and FB accounts, so Posted By and the history keep matching,
 but its Role no longer counts. Listings, posts and queues stay in the sheets. Not changed: a
 queue is still given only to an active Intern on the Team tab.
+
+### D20. Never lose a log: kept on this PC, sent again, never twice (Nov 4, 2026)
+
+By the time an intern logs a post it is on Facebook, so a save that fails on the way (no
+connection, a timeout, Apps Script busy) used to lose the record. Now it is kept on this PC (the
+platform's local store), shown as "n posts waiting to save" with Retry now, and sent again at
+sign-in, every five minutes and when the connection comes back, only while the same person is
+signed in. A post's Facebook link is its own, so the server takes a second save of a link the
+same person already logged as the first one and writes nothing (no new column, which PI-68
+would have needed). A retry carries when it was logged, and the server dates the row by it if
+that is within the last four days. A refusal (the cooldown, an FB account that isn't yours) is
+still shown at once and never kept; one that only comes on a retry is shown until dismissed.

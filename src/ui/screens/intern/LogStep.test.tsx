@@ -166,11 +166,19 @@ describe('the log step', () => {
   });
 
   it('shows any other refusal as it was written', async () => {
+    const platform = fakeServer({ logPost: { ok: false, error: 'forbidden', message: 'You are not assigned to APG Main.' } });
+    renderApp({ platform, path: PATH });
+    await userEvent.type(await linkField(), LINK);
+    await userEvent.click(posted());
+    expect((await screen.findByRole('alert')).textContent).toContain('You are not assigned to APG Main.');
+  });
+
+  it('keeps a post on this PC when the web app is busy, rather than losing it (never lose a log)', async () => {
     const platform = fakeServer({ logPost: { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' } });
     renderApp({ platform, path: PATH });
     await userEvent.type(await linkField(), LINK);
     await userEvent.click(posted());
-    expect((await screen.findByRole('alert')).textContent).toContain('Someone else is saving right now. Try again in a moment.');
+    expect(await screen.findByText(`Kept on this PC: ${CLEAN.name}. It's saved when the connection is back.`)).toBeTruthy();
   });
 
   it('Alt+L puts you in the post link field', async () => {

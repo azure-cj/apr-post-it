@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-04.2';
+const SERVER_VERSION = '2026-11-04.3';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -1190,9 +1190,18 @@ function logPost_(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
   try {
+    // A post's link is its own: the same link again is the same Facebook post.
+    // A retry from the app's outbox (v12) whose first try was saved, but whose
+    // answer was lost, gets that row back instead of a second one.
+    var earlier = postWithLink_(link);
+    if (earlier && earlier.postedBy === postedBy) {
+      return { ok: true, repeat: true, status: postStatus_(earlier.status), date: sheetDay_(earlier.date),
+               time: sheetTime_(earlier.time), type: earlier.type, postedBy: earlier.postedBy };
+    }
+
     // One reading of the clock for the check and the row, so the two cannot
-    // fall either side of midnight.
-    var when = new Date();
+    // fall either side of midnight. A retry says when it was logged (v12).
+    var when = loggedAt_(req.loggedAt, new Date());
     var guard = cooldownFor_(req.propertyId, req.property, when);
     if (guard) return guard;
 
@@ -1222,6 +1231,32 @@ function logPost_(req, me) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** The Posts row whose link is exactly `link`, or null. */
+function postWithLink_(link) {
+  var want = textOf_(link).trim();
+  if (!want) return null;
+  return readRows_(CONFIG.POSTS_TAB, POST_FIELDS).filter(function (p) {
+    return textOf_(p.postLink).trim() === want;
+  })[0] || null;
+}
+
+// How far back a retried post may be dated: an outbox kept over a weekend.
+const LOGGED_AT_MAX_AGE_MS = 4 * 24 * 60 * 60 * 1000;
+
+/**
+ * When a post was logged: `sent` (ISO, from the app's outbox) when it is a
+ * real moment within the last few days and not in the future, else `now`.
+ */
+function loggedAt_(sent, now) {
+  var text = textOf_(sent).trim();
+  // ISO with its zone only, as the app sends it: anything else would be read in the script's zone.
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(text)) return now;
+  var at = new Date(text);
+  var ms = at.getTime();
+  if (isNaN(ms) || ms > now.getTime() || now.getTime() - ms > LOGGED_AT_MAX_AGE_MS) return now;
+  return at;
 }
 
 /**

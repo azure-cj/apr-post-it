@@ -10,6 +10,8 @@ import { normalize } from '../core/matcher';
 import { CASA, createWorld, TOWER } from './world';
 
 const LINK = 'https://www.facebook.com/groups/apg/posts/1/';
+// A new post's own link: the same link again would be a retry of an earlier post (v12).
+const NEW_LINK = 'https://www.facebook.com/groups/apg/posts/2/';
 
 describe('logPost replies with the row it wrote', () => {
   it('including the time, on Manila\'s clock (bug 1)', () => {
@@ -128,7 +130,7 @@ describe('columns are found by header in each tab', () => {
 
     // Someone swaps Title and Type in the header between two requests.
     w.posts.typeAt(1, 2, 'Type').typeAt(1, 3, 'Title');
-    w.call('jan', 'logPost', { property: TOWER.name, propertyId: TOWER.id, fbAccount: 'APG Main', postLink: LINK, status: 'Pending' });
+    w.call('jan', 'logPost', { property: TOWER.name, propertyId: TOWER.id, fbAccount: 'APG Main', postLink: NEW_LINK, status: 'Pending' });
 
     expect(w.posts.row(3).slice(0, 3)).toEqual(['2026-03-09', 'Office Space', '1201']);
   });

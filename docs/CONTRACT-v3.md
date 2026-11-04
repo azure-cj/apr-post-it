@@ -282,3 +282,13 @@ The owner: "assign per week only, e.g. 40 listings per week; Friday is the final
 - Refused with `unauthorized`: "Your sign-in has ended. Sign in again." (bad, expired or
   turned-off token), or "This account can't use Post-It yet. Ask an admin to give it a role on
   the People screen." (no role, or the scanner).
+
+## v12: never lose a log (server 2026-11-04.3)
+
+- `logPost` with a `postLink` the same person already logged returns that row,
+  `{ ok: true, repeat: true, status, date, time, type, postedBy }`, and writes nothing: a retry
+  whose first try was saved. Someone else's row with the same link is not taken as one.
+- `logPost` takes `loggedAt` (ISO with its zone): the row is dated by it when it is not in the
+  future and at most four days old; otherwise now. The cooldown is judged at that moment too.
+- `core/outbox`: `keepsForRetry(err)` is true for a failure on the way (unreachable, timeout,
+  http, busy, an unreadable reply, a Google page, unauthorized, server); a refusal is not kept.

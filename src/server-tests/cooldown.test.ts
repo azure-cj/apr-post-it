@@ -13,7 +13,8 @@ import { readSheetDate } from '../core/tracker';
 import type { Project, ProjectOptions, Reply } from './harness';
 import { CASA, createWorld, type Listing, TOWER } from './world';
 
-const LINK = 'https://www.facebook.com/groups/apg/posts/1/';
+// The seeded rows' own link, apart from the new posts': the same link again would be a retry (v12).
+const LINK = 'https://www.facebook.com/groups/apg/posts/seeded/';
 
 /** A Posts row for the world's column order. */
 function postRow(date: string, title: string, status: string, propertyId: string): string[] {
@@ -310,7 +311,7 @@ describe('the cooldown is decided under the lock', () => {
     if (file !== 'Code.gs') return src;
     const start = src.indexOf('function logPost_(');
     const lock = src.indexOf('  var lock = LockService.getScriptLock();', start);
-    const checkStart = src.indexOf('    var when = new Date();', lock);
+    const checkStart = src.indexOf('    var when = loggedAt_(', lock);
     const checkEnd = src.indexOf('    if (guard) return guard;\n', checkStart);
     if (start < 0 || lock < 0 || checkStart < 0 || checkEnd < 0) {
       throw new Error('logPost no longer reads as this mutation expects: update checkBeforeLock.');

@@ -110,6 +110,9 @@ const NotifyContext = createContext<Notify | null>(null);
 /** How often the property list is fetched again while signed in (docs/DATA-FLOW.md). */
 export const DIRECTORY_REFRESH_MS = 15 * 60 * 1000;
 
+/** How often posts kept on this PC are sent again while their person is signed in. */
+export const OUTBOX_RETRY_MS = 5 * 60 * 1000;
+
 export interface AppStateProviderProps {
   readonly platform: Platform;
   /** Start signed in as this person without asking the server. For tests. */
@@ -276,6 +279,23 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
     }, 60_000);
     return () => clearInterval(timer);
   }, [user, services, clock]);
+
+  // Posts kept on this PC (never lose a log): read once, then sent while their
+  // person is signed in, at sign-in, every few minutes, and when the
+  // connection comes back.
+  const outboxLoaded = useRef<Promise<void> | null>(null);
+  useEffect(() => {
+    if (!user) return undefined;
+    outboxLoaded.current ??= services.outbox.load();
+    const send = () => void outboxLoaded.current!.then(() => services.outbox.flush(user.name));
+    send();
+    const timer = setInterval(send, OUTBOX_RETRY_MS);
+    window.addEventListener('online', send);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', send);
+    };
+  }, [user, services]);
 
   const signIn = useCallback(
     async (typed: string, key: string, signal?: AbortSignal, role?: Role): Promise<User> => {

@@ -247,6 +247,7 @@ export function createWorld(options: WorldOptions = {}): World {
   const call = (person: Person, action: string, fields: Readonly<Record<string, unknown>> = {}): Reply =>
     project.post({ ...fields, action, key: PEOPLE[person].key });
 
+  let posted = 0;
   return {
     project,
     tracker,
@@ -262,7 +263,8 @@ export function createWorld(options: WorldOptions = {}): World {
         property: listing.name,
         propertyId: listing.id,
         fbAccount: 'APG Main',
-        postLink: 'https://www.facebook.com/groups/apg/posts/1/',
+        // Each post its own link, as on Facebook: the same link again is a retry (v12).
+        postLink: `https://www.facebook.com/groups/apg/posts/${++posted}/`,
         status: 'Posted',
         ...fields,
       }),

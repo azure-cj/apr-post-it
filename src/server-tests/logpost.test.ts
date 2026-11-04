@@ -190,3 +190,47 @@ describe('posting on behalf of someone', () => {
     expect(w.logPost('maria', CASA, { postedBy: 'Ana Reyes' })).toMatchObject({ ok: false, error: 'unknown-person' });
   });
 });
+
+describe('a retried post (v12): never logged twice, dated when it was logged', () => {
+  const LINK = 'https://www.facebook.com/groups/apg/posts/77/';
+
+  it('gives back the row already saved for the same link, and writes no second one', () => {
+    const w = createWorld();
+    const first = w.logPost('jan', CASA, { postLink: LINK });
+    w.project.clock.advance(60 * 60 * 1000);
+    const again = w.logPost('jan', CASA, { postLink: ` ${LINK} ` });
+
+    expect(again).toMatchObject({ ok: true, repeat: true, date: first['date'], time: first['time'], postedBy: 'Jan Dela Cruz' });
+    expect(w.posts.lastRow).toBe(2);
+  });
+
+  it("does not take someone else's row with the same link as a retry", () => {
+    const w = createWorld();
+    w.logPost('jan', CASA, { postLink: LINK });
+
+    expect(w.logPost('ana', TOWER, { postLink: LINK })).toMatchObject({ ok: true, postedBy: 'Ana Reyes' });
+    expect(w.posts.lastRow).toBe(3);
+  });
+
+  it('is dated when the app logged it, within the last few days', () => {
+    const w = createWorld();
+    w.project.clock.set('2026-03-10 09:00');
+
+    expect(w.logPost('jan', CASA, { postLink: LINK, loggedAt: '2026-03-08T02:15:00Z' })).toMatchObject({
+      ok: true,
+      date: '2026-03-08',
+      time: '10:15',
+    });
+  });
+
+  it.each([
+    ['in the future', '2026-03-11T00:00:00Z'],
+    ['more than four days ago', '2026-03-05T00:00:00Z'],
+    ['not a time', 'yesterday'],
+  ])('is dated now when the time sent is %s', (_why, loggedAt) => {
+    const w = createWorld();
+    w.project.clock.set('2026-03-10 09:00');
+
+    expect(w.logPost('jan', CASA, { postLink: LINK, loggedAt })).toMatchObject({ ok: true, date: '2026-03-10', time: '09:00' });
+  });
+});

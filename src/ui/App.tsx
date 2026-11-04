@@ -31,6 +31,7 @@ import {
 } from './components';
 import { AccountSignInScreen } from './screens/AccountSignIn';
 import { SignInScreen } from './screens/SignInScreen';
+import { OutboxBanner } from './OutboxBanner';
 import { UpdateBanner } from './UpdateBanner';
 import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
@@ -386,6 +387,7 @@ export function AppShell({ signInNote }: AppProps) {
         <div className="shell__content">
           <TitleBar brandHref={user ? undefined : '#/'} windowControls={windowControls} />
           <UpdateBanner platform={platform} requestLeave={requestLeave} />
+          {user ? <OutboxBanner who={user.name} /> : null}
 
           <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
             {session.status === 'starting' ? (

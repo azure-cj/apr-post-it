@@ -2,6 +2,7 @@ import { forwardRef, useId, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BackendError } from '@/core/backend';
 import { postLinkProblem } from '@/core/links';
+import { keepsForRetry } from '@/core/outbox';
 import { normalize } from '@/core/matcher';
 import { canManage, type Assignment, type PostStatus, type Property } from '@/core/types';
 import { Button, Notice, TextInput } from '../../components';
@@ -93,20 +94,31 @@ export const LogStep = forwardRef<HTMLInputElement, {
     const next = nextUp();
     setSaving(status);
     setOutcome(null);
-    try {
-      await app.tracker.logPost({
-        propertyId: property.id,
-        propertyName: property.name,
-        fbAccount: chosen,
-        postLink: link,
-        status,
-        // A fallback: the server takes the Property type from the Directory.
-        type: property.category,
-      });
-      notify(status === 'Posted' ? `Saved as posted: ${property.name}.` : `Saved as pending: ${property.name}.`);
+    const input = {
+      propertyId: property.id,
+      propertyName: property.name,
+      fbAccount: chosen,
+      postLink: link,
+      status,
+      // A fallback: the server takes the Property type from the Directory.
+      type: property.category,
+    };
+    const moveOn = () => {
       if (next) navigate(paths.property(next.id), { state: FROM_QUEUE });
       else navigate(section === 'queue' || !canManage(user) ? paths.queue : paths.find);
+    };
+    try {
+      await app.tracker.logPost(input);
+      notify(status === 'Posted' ? `Saved as posted: ${property.name}.` : `Saved as pending: ${property.name}.`);
+      moveOn();
     } catch (err) {
+      if (keepsForRetry(err)) {
+        // It's on Facebook already: never lost. Kept on this PC and sent when the web app answers.
+        await app.outbox.keep(input, user.name, err);
+        notify(`Kept on this PC: ${property.name}. It's saved when the connection is back.`, 'warn');
+        moveOn();
+        return;
+      }
       if (err instanceof BackendError && err.code === 'cooldown') {
         // The server's own sentence: it holds the lock and the dates.
         setOutcome({ kind: 'cooldown', message: err.message, nextAllowed: err.nextAllowed });

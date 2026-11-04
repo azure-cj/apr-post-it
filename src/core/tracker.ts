@@ -71,6 +71,8 @@ export interface LogPostInput {
   readonly type?: string | undefined;
   /** A manager logging for an intern, by their name exactly as the tracker has it. The server ignores it from an intern. */
   readonly postedBy?: string | undefined;
+  /** v12: when it was logged (ISO), for a post kept on this PC and sent later. The server dates the row by it. */
+  readonly loggedAt?: string | undefined;
 }
 
 /** One line of a queue, in posting order. An Assignment fits. */
@@ -289,6 +291,7 @@ export function createTracker(deps: TrackerDeps): Tracker {
         status: input.status,
         type: type || undefined,
         postedBy: postedBy.trim() ? postedBy : undefined,
+        loggedAt: input.loggedAt || undefined,
       });
 
       const said = asText(reply['status']).trim();

@@ -14,6 +14,7 @@ import {
 } from '@/core/types';
 import type { Platform } from '@/platform';
 import type { FirebaseAccess } from '@/platform/firebase';
+import { createOutbox, type OutboxService } from './outbox';
 import { createRemote, sentenceOf, type RemoteResource } from './remote';
 import type { AppSettings } from './settings';
 import { createStore, type Store } from './store';
@@ -102,6 +103,8 @@ export interface Services {
   readonly find: Store<FindState>;
   /** Where each listing's photos were saved this session, by property id: for Open folder. */
   readonly savedFolders: Store<ReadonlyMap<string, string>>;
+  /** Posts kept on this PC until the web app saves them. Kept through sign-out: each is its person's. */
+  readonly outbox: OutboxService;
   /** Fetches the property list now and records how it went. Never rejects. */
   refreshDirectory(): Promise<void>;
   /**
@@ -230,6 +233,7 @@ export function createServices(
     directoryStatus: () => raw.directoryStatus(),
   };
 
+  const outbox = createOutbox(p, tracker, now);
   const directoryStatus = createStore<DirectoryStatus>(IDLE);
   const find = createStore<FindState>(EMPTY_FIND);
   const savedFolders = createStore<ReadonlyMap<string, string>>(new Map());
@@ -256,6 +260,7 @@ export function createServices(
     team,
     find,
     savedFolders,
+    outbox,
     refreshDirectory,
 
     async startDirectory() {
