@@ -9,7 +9,8 @@
 //! - The plugins, each scoped in `capabilities/default.json`: the clipboard (write
 //!   only), HTTP (Google only), the file system (the app's own folders only),
 //!   dialogs, opening links and the photo folders, one window per PC, the
-//!   window's place and size, and a small settings store.
+//!   window's place and size, a small settings store, and signed updates with
+//!   a restart.
 
 mod hosts;
 mod key;
@@ -44,7 +45,10 @@ pub fn run() {
                         StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED,
                     )
                     .build(),
-            );
+            )
+            // New versions from the releases repo, signed with the app's key
+            // (tauri.conf.json `plugins.updater`); the app offers them, never forces.
+            .plugin(tauri_plugin_updater::Builder::new().build());
     }
 
     builder
@@ -54,6 +58,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        // Restart after an update is installed.
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             photos::save_photos,
             key::read_key,

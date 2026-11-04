@@ -1,0 +1,10 @@
+/* A newer version, under the title bar: offered, never forced. */
+.update-banner {
+  margin: var(--space-4) var(--space-8) 0;
+}
+
+.update-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}

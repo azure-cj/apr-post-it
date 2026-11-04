@@ -26,7 +26,9 @@ if errorlevel 1 (
 )
 
 echo [3/3] Building the installer. This takes several minutes...
-call npm run tauri build
+rem An unsigned build to try on this PC: no update files, so no signing key is needed.
+rem To publish an update that installed copies get, use release.ps1 instead.
+call npm run tauri build -- --config src-tauri/tauri.unsigned.json
 if errorlevel 1 goto :fail
 
 echo.

@@ -9,6 +9,18 @@
 
 import type { FirebaseAccess } from './firebase';
 
+/** A newer version, signed with the app's key, ready to download. */
+export interface AppUpdate {
+  readonly version: string;
+  /** What changed, as the release says it. Blank when it says nothing. */
+  readonly notes: string;
+  /**
+   * Downloads and installs it, then restarts the app. `progress` gets 0 to 1,
+   * or null while the size isn't known. Resolves only if the app didn't close.
+   */
+  install(progress: (share: number | null) => void): Promise<void>;
+}
+
 export interface SavedPhoto {
   readonly name: string;
   readonly path: string;
@@ -47,6 +59,13 @@ export interface Platform {
    * first use, once per window.
    */
   firebase(): Promise<FirebaseAccess | null>;
+
+  /**
+   * A newer version of the app from the releases repo, or null when this is
+   * the newest or there is nowhere to update from (the browser, development).
+   * Rejects only when the check itself failed.
+   */
+  checkUpdate(): Promise<AppUpdate | null>;
 
   /** True on a machine where saving photos and Explorer work. */
   readonly hasFileSystem: boolean;

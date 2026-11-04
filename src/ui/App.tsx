@@ -31,6 +31,7 @@ import {
 } from './components';
 import { AccountSignInScreen } from './screens/AccountSignIn';
 import { SignInScreen } from './screens/SignInScreen';
+import { UpdateBanner } from './UpdateBanner';
 import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
 import { AssignScreen, InternsScreen, monitorWeek, RecordsScreen, SettingsScreen, settingsTab, TrackerScreen, type QueueSave } from './screens/manager';
@@ -285,7 +286,7 @@ export function AppShell({ signInNote }: AppProps) {
     },
     [signIn, navigate],
   );
-  // Firebase: the account, then who it is on the Team tab. One at a time, as above.
+  // Firebase: the account, then who the web app says it is. One at a time, as above.
   const { signInAccount } = app;
   const accountStep = useCallback(
     async (step: (signal: AbortSignal) => Promise<User | null>) => {
@@ -384,6 +385,7 @@ export function AppShell({ signInNote }: AppProps) {
 
         <div className="shell__content">
           <TitleBar brandHref={user ? undefined : '#/'} windowControls={windowControls} />
+          <UpdateBanner platform={platform} requestLeave={requestLeave} />
 
           <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
             {session.status === 'starting' ? (

@@ -18,7 +18,7 @@ import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import { load, type Store } from '@tauri-apps/plugin-store';
 
 import { UserFacingError } from '../core/types';
-import type { Platform, SavedPhoto } from './index';
+import type { AppUpdate, Platform, SavedPhoto } from './index';
 import type { FirebaseAccess } from './firebase';
 
 /**
@@ -63,6 +63,35 @@ export function createTauriPlatform(): Platform {
       // Loaded on first use: Firebase's SDK stays out of the start-up.
       firebase ??= import('./firebase').then((m) => m.createFirebase(m.firebaseTarget()));
       return firebase;
+    },
+
+    async checkUpdate(): Promise<AppUpdate | null> {
+      // A development run is never replaced by an installer.
+      if (import.meta.env.DEV) return null;
+      const [{ check }, { relaunch }] = await Promise.all([import('@tauri-apps/plugin-updater'), import('@tauri-apps/plugin-process')]);
+      const update = await check();
+      if (!update) return null;
+      return {
+        version: update.version,
+        notes: (update.body ?? '').trim(),
+        async install(progress) {
+          let total: number | null = null;
+          let done = 0;
+          await update.downloadAndInstall((event) => {
+            if (event.event === 'Started') {
+              total = event.data.contentLength ?? null;
+              progress(total ? 0 : null);
+            } else if (event.event === 'Progress') {
+              done += event.data.chunkLength;
+              progress(total ? Math.min(done / total, 1) : null);
+            } else {
+              progress(1);
+            }
+          });
+          // On Windows the installer has closed the app already; elsewhere, start the new one.
+          await relaunch();
+        },
+      };
     },
 
     async copyText(text) {

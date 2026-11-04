@@ -98,6 +98,11 @@ export function createBrowserPlatform(options: BrowserPlatformOptions = {}): Pla
       return firebase;
     },
 
+    async checkUpdate() {
+      // A browser has nothing to install.
+      return null;
+    },
+
     async copyText(text) {
       const board = clipboard();
       try {

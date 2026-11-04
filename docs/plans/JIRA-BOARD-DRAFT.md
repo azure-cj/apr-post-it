@@ -6,6 +6,11 @@ draft refs; each story's description names its ref. Built from the git history (
 `docs/DECISIONS.md` (D1–D18), `docs/CONTRACT-v3.md` (v3–v10), `docs/plans/TAURI-PLAN.md` and the
 uncommitted work in the tree as of Nov 4, 2026.
 
+**Later on Nov 4, in Jira (pushed `2eaea96`):** D19, the Firebase account alone says who you
+are, so PI-99 (AID-243, Team emails) is no longer needed. New PI-101 (AID-257): deploy server
+`2026-11-04.2`. PI-56 (AID-147, auto-update) unblocked and In Progress. Done: AID-134, 136, 138,
+142, 144, 200, 242.
+
 **Updated Nov 4, 2026, in this file and in Jira:** sign-in no longer uses keys. The per-PC key
 link (PI-52, AID-140) is replaced by the web app trusting the Firebase sign-in (D18, contract
 v10). New stories PI-98 to PI-100 are AID-242, AID-243 and AID-244. AID-140 is closed as Done

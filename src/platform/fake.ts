@@ -73,6 +73,8 @@ export interface FakePlatformOptions {
   readonly hasWindowControls?: boolean;
   /** What `firebase()` gives. Default null: no Firebase. */
   readonly firebase?: FirebaseAccess | null;
+  /** A newer version `checkUpdate()` offers. Default none. */
+  readonly update?: { readonly version: string; readonly notes?: string };
 }
 
 /** What has happened to the fake's window. */
@@ -105,6 +107,8 @@ export interface FakePlatform extends Platform {
   readonly copied: readonly string[];
   /** Every photo copied to the clipboard, by its address, oldest first. */
   readonly copiedPhotos: readonly string[];
+  /** Every version installed through checkUpdate, oldest first. */
+  readonly installed: readonly string[];
   /** Every link and folder opened, oldest first. */
   readonly opened: readonly string[];
   /** Every request to the web app, oldest first. */
@@ -163,6 +167,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   const copied: string[] = [];
   const copiedPhotos: string[] = [];
   const opened: string[] = [];
+  const installed: string[] = [];
   const posts: FakePost[] = [];
   const saves: FakeSave[] = [];
 
@@ -192,6 +197,22 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       await begin('firebase');
       return options.firebase ?? null;
     },
+
+    async checkUpdate() {
+      await begin('checkUpdate');
+      const offered = options.update;
+      if (!offered) return null;
+      return {
+        version: offered.version,
+        notes: offered.notes ?? '',
+        async install(progress) {
+          progress(0);
+          progress(1);
+          installed.push(offered.version);
+        },
+      };
+    },
+    installed,
     copied,
     copiedPhotos,
     opened,
