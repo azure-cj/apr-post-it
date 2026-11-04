@@ -1,0 +1,1031 @@
+From a7a8083433806a6638efaadcce7014d8e682ecb5 Mon Sep 17 00:00:00 2001
+From: azure-cj <azure-cj@users.noreply.github.com>
+Date: Tue, 3 Nov 2026 16:44:18 +0800
+Subject: [PATCH] Post-It's functions: posts, weekly queues, rules and FB
+ accounts, with emulator tests
+
+---
+ docs/plans/POST-IT-FUNCTIONS.md             |  49 +++
+ firebase/firestore.indexes.json             |  19 +-
+ firebase/functions/src/index.ts             |   1 +
+ firebase/functions/src/people.ts            |   6 +-
+ firebase/functions/src/posting/functions.ts | 449 ++++++++++++++++++++
+ firebase/functions/src/posting/profiles.ts  |  15 +
+ firebase/functions/src/posting/rules.ts     | 140 ++++++
+ firebase/tests/posting.test.ts              | 249 +++++++++++
+ 8 files changed, 926 insertions(+), 2 deletions(-)
+ create mode 100644 docs/plans/POST-IT-FUNCTIONS.md
+ create mode 100644 firebase/functions/src/posting/functions.ts
+ create mode 100644 firebase/functions/src/posting/profiles.ts
+ create mode 100644 firebase/functions/src/posting/rules.ts
+ create mode 100644 firebase/tests/posting.test.ts
+
+diff --git a/docs/plans/POST-IT-FUNCTIONS.md b/docs/plans/POST-IT-FUNCTIONS.md
+new file mode 100644
+index 0000000..f7ff946
+--- /dev/null
++++ b/docs/plans/POST-IT-FUNCTIONS.md
+@@ -0,0 +1,49 @@
++# Post-It's functions
++
++Step 4 of the Post-It plan, phase A: the functions Post-It calls in place of its Apps Script, in
++`firebase/functions/src/posting/`. Tests: `firebase/tests/posting.test.ts`, on the emulator.
++
++Not built yet: phase B (Post-It signs in here and calls these) and phase C (listings through Post-It's Apps
++Script with a secret, the copy of each post in the posting tracker sheet, and the import of the sheet's history).
++
++## Data
++
++| Collection | One document per | Fields |
++|---|---|---|
++| `posts` | post logged | folderId, title, type, fbAccount, link, status (Posted, Pending), by (uid), byName, loggedBy (an admin's uid, when they logged it for someone), date (Manila, yyyy-MM-dd), time (HH:mm), at, sheetCopied |
++| `assignments` | listing in a queue | week (its Monday), assignedTo (uid), assignedToName, folderId, name, order, status (Not Shared, Pending, Posted), by, at |
++| `cooldowns` | listing, by folder ID | last (the day it was last posted), post |
++| `config/posting` | the one document | cooldownDays (7), repostDueDays (14), perWeek (40) |
++| `users` | person | adds `fbProfiles: [{ account, link }]`: the FB accounts they post as, each with its profile link |
++
++Missed is worked out, never saved: an open item of a week that's over.
++
++## Functions
++
++Who: **people** is owner, admin and agent; **managers** is owner and admin. The scanner and an account with no role
++get nothing. A refusal's `details.error` names it, as Post-It's Apps Script replies did.
++
++| Function | Who | Does |
++|---|---|---|
++| `postingStart` | people | `{ rules, today, week, me: { uid, name, role, fbProfiles } }` |
++| `listPosts` `{ from? }` | people | Posts, oldest first. An agent gets their own |
++| `listAssignments` `{ week? }` | people | Queue items by week, agent and order. An agent gets their own |
++| `logPost` `{ folderId, title, type?, fbAccount, link, status, postedBy? }` | people | Refuses `link-required`, `bad-link`, `bad-status`, `forbidden` (not one of the poster's FB accounts), `cooldown` (with `lastPosted`, `nextAllowed`). A manager may log for an active person with `postedBy` (uid). Moves the poster's open queue item for the listing to the post's status |
++| `addLink` `{ postId, link }` | people | A Pending post made Posted, with its live link. An agent's own only |
++| `setStatus` `{ assignmentId, status }` | people | A queue item moved. Posted also makes the assignee's newest Pending post of it Posted. An agent's own only |
++| `saveQueues` `{ week, queues: [{ assignedTo, items: [{ folderId, name, status? }] }] }` | managers | Replaces those agents' items of that week, all or nothing. Refuses `bad-week`, `bad-queues`, `bad-agent`, and `held` (with `held: [{ folderId, name, heldBy, heldByName, week }]`) |
++| `setRules` `{ cooldownDays?, repostDueDays?, perWeek? }` | managers | Only what's sent changes. `bad-rules` (with `field`) |
++| `setFbProfiles` `{ uid, fbProfiles }` | managers | An owner anyone's, an admin an agent's, and anyone their own. `bad-accounts`, `bad-profile-link` |
++
++`listPeople` also returns each person's `fbProfiles`.
++
++## How the rules hold
++
++- **The cooldown** reads one document, `cooldowns/{folderId}`, and writes it with the post, in one transaction: two
++  people logging the same listing at once can't both get through (a test sends two at the same moment).
++- **The held rule** reads the open items of weeks that aren't over (`status == Not Shared`, `week >= this week`) in the
++  same transaction as the save.
++- **Logging and changes check the account now** (`requireCurrentRole`): a turned-off agent is refused at once.
++- **Days are Manila's** (UTC+8, no daylight saving), as in Post-It.
++
++Two composite indexes, in `firestore.indexes.json`: assignments by status and week, and posts by poster and date.
+diff --git a/firebase/firestore.indexes.json b/firebase/firestore.indexes.json
+index 415027e..302d622 100644
+--- a/firebase/firestore.indexes.json
++++ b/firebase/firestore.indexes.json
+@@ -1,4 +1,21 @@
+ {
+-  "indexes": [],
++  "indexes": [
++    {
++      "collectionGroup": "assignments",
++      "queryScope": "COLLECTION",
++      "fields": [
++        { "fieldPath": "status", "order": "ASCENDING" },
++        { "fieldPath": "week", "order": "ASCENDING" }
++      ]
++    },
++    {
++      "collectionGroup": "posts",
++      "queryScope": "COLLECTION",
++      "fields": [
++        { "fieldPath": "by", "order": "ASCENDING" },
++        { "fieldPath": "date", "order": "ASCENDING" }
++      ]
++    }
++  ],
+   "fieldOverrides": []
+ }
+diff --git a/firebase/functions/src/index.ts b/firebase/functions/src/index.ts
+index 93e64aa..522082e 100644
+--- a/firebase/functions/src/index.ts
++++ b/firebase/functions/src/index.ts
+@@ -12,3 +12,4 @@ export const whoami = onCall((request) => {
+ });
+ 
+ export { addPerson, claimFirstOwner, listPeople, setActive, setPassword, setRole } from "./people.js";
++export { addLink, listAssignments, listPosts, logPost, postingStart, saveQueues, setFbProfiles, setRules, setStatus } from "./posting/functions.js";
+diff --git a/firebase/functions/src/people.ts b/firebase/functions/src/people.ts
+index 5954f53..1c7fea7 100644
+--- a/firebase/functions/src/people.ts
++++ b/firebase/functions/src/people.ts
+@@ -2,6 +2,7 @@ import "./setup.js";
+ import { getAuth, type UserRecord } from "firebase-admin/auth";
+ import { FieldValue, getFirestore, type Timestamp } from "firebase-admin/firestore";
+ import { HttpsError, onCall, type CallableRequest } from "firebase-functions/https";
++import { profilesOf, type FbProfile } from "./posting/profiles.js";
+ import { isRole, MANAGERS, mayGive, mayManage, PEOPLE, requireRole, type Role } from "./roles.js";
+ 
+ // Accounts and roles (FIREBASE-PLAN.md section 10, step 2). The admin makes each account with a first password and
+@@ -28,6 +29,8 @@ export interface Person {
+   madeBy: string | null;
+   /** When, as an ISO time. */
+   madeAt: string | null;
++  /** The FB accounts they post as in Post-It, each with its profile link. */
++  fbProfiles: FbProfile[];
+ }
+ 
+ function users() {
+@@ -43,7 +46,7 @@ function callerId(request: CallableRequest): string {
+  * requireRole, then Firebase asked about the caller now, not the sign-in's copy (FIREBASE-PLAN.md section 8): a
+  * turned-off account, an ended sign-in or a role taken away stops at once, not within the hour a sign-in lasts.
+  */
+-async function requireCurrentRole(request: CallableRequest, allowed: readonly Role[]): Promise<Role> {
++export async function requireCurrentRole(request: CallableRequest, allowed: readonly Role[]): Promise<Role> {
+   requireRole(request, allowed);
+   const auth = request.auth!;
+   const user = await getAuth().getUser(auth.uid).catch(() => null);
+@@ -156,6 +159,7 @@ export const listPeople = onCall(async (request) => {
+       active: doc.get("active") !== false,
+       madeBy: typeof madeBy === "string" && madeBy !== doc.id ? (names.get(madeBy) ?? null) : null,
+       madeAt: madeAt?.toDate().toISOString() ?? null,
++      fbProfiles: profilesOf(doc.get("fbProfiles")),
+     };
+   });
+   people.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+diff --git a/firebase/functions/src/posting/functions.ts b/firebase/functions/src/posting/functions.ts
+new file mode 100644
+index 0000000..d667aa5
+--- /dev/null
++++ b/firebase/functions/src/posting/functions.ts
+@@ -0,0 +1,449 @@
++import "../setup.js";
++import { FieldValue, getFirestore, type DocumentReference, type Query, type Transaction } from "firebase-admin/firestore";
++import { HttpsError, onCall, type CallableRequest } from "firebase-functions/https";
++import { requireCurrentRole } from "../people.js";
++import { profilesOf, type FbProfile } from "./profiles.js";
++import { isRole, MANAGERS, mayManage, PEOPLE, requireRole, type Role } from "../roles.js";
++import {
++  cooldownWords,
++  isMonday,
++  isPostLink,
++  isWeekOver,
++  manilaDay,
++  manilaTime,
++  NOT_SHARED,
++  POST_STATUSES,
++  profileLink,
++  QUEUE_STATUSES,
++  readRules,
++  RULE_LIMITS,
++  weekLabel,
++  weekOf,
++  type QueueStatus,
++  type RuleName,
++  type Rules,
++} from "./rules.js";
++
++// Post-It's functions (POST-IT-PLAN.md sections 7 and 8): the posts agents log, the weekly queues admins build, and the
++// posting rules. Each starts with requireRole; the ones that write check the caller's account now (requireCurrentRole),
++// so a turned-off agent can't log a post within the hour a sign-in lasts. An agent sees and changes only their own.
++//
++// The cooldown and the held rule are checked in a transaction with the write, so two people saving the same listing at
++// the same moment can't both get through. That replaces Post-It's Apps Script lock.
++
++const db = () => getFirestore();
++const posts = () => db().collection("posts");
++const assignments = () => db().collection("assignments");
++/** One document per listing, by folder ID: the day it was last posted. The cooldown reads one document, not a query. */
++const cooldowns = () => db().collection("cooldowns");
++const rulesDoc = () => db().doc("config/posting");
++
++function fields(request: CallableRequest): Record<string, unknown> {
++  const data: unknown = request.data;
++  return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
++}
++
++function textIn(data: Record<string, unknown>, key: string, words: string): string {
++  const value = typeof data[key] === "string" ? data[key].trim() : "";
++  if (!value) throw new HttpsError("invalid-argument", words);
++  return value;
++}
++
++/** A refusal the app tells apart by `error`, as Post-It's Apps Script replies did. */
++function refuse(code: "invalid-argument" | "failed-precondition" | "permission-denied" | "not-found", error: string, message: string, more: Record<string, unknown> = {}): HttpsError {
++  return new HttpsError(code, message, { error, ...more });
++}
++
++interface Person {
++  uid: string;
++  name: string;
++  role: Role | null;
++  active: boolean;
++  fbProfiles: FbProfile[];
++}
++
++async function personOf(uid: string, tx?: Transaction): Promise<Person | null> {
++  const ref = db().collection("users").doc(uid);
++  const doc = tx ? await tx.get(ref) : await ref.get();
++  if (!doc.exists) return null;
++  const role: unknown = doc.get("role");
++  return {
++    uid,
++    name: String(doc.get("name") ?? ""),
++    role: isRole(role) ? role : null,
++    active: doc.get("active") !== false,
++    fbProfiles: profilesOf(doc.get("fbProfiles")),
++  };
++}
++
++async function rulesNow(tx?: Transaction): Promise<Rules> {
++  const doc = tx ? await tx.get(rulesDoc()) : await rulesDoc().get();
++  return readRules(doc.data());
++}
++
++function audit(tx: Transaction, request: CallableRequest, what: string, change: Record<string, unknown>, before: Record<string, unknown> | null = null): void {
++  tx.set(db().collection("audit").doc(), { who: request.auth!.uid, what, before, after: change, at: FieldValue.serverTimestamp() });
++}
++
++// ---- Reading ---------------------------------------------------------------------------------------
++
++/** What Post-It needs at start: the rules, Manila's today and its week, and the caller with their FB accounts. */
++export const postingStart = onCall(async (request) => {
++  const role = requireRole(request, PEOPLE);
++  const me = await personOf(request.auth!.uid);
++  const today = manilaDay(new Date());
++  return {
++    rules: await rulesNow(),
++    today,
++    week: weekOf(today),
++    me: { uid: request.auth!.uid, name: me?.name ?? "", role, fbProfiles: me?.fbProfiles ?? [] },
++  };
++});
++
++/** A post as the app gets it. */
++function postOut(doc: FirebaseFirestore.DocumentSnapshot) {
++  return {
++    id: doc.id,
++    folderId: String(doc.get("folderId") ?? ""),
++    title: String(doc.get("title") ?? ""),
++    type: String(doc.get("type") ?? ""),
++    fbAccount: String(doc.get("fbAccount") ?? ""),
++    link: String(doc.get("link") ?? ""),
++    status: String(doc.get("status") ?? ""),
++    by: String(doc.get("by") ?? ""),
++    byName: String(doc.get("byName") ?? ""),
++    loggedBy: (doc.get("loggedBy") as string | undefined) ?? null,
++    date: String(doc.get("date") ?? ""),
++    time: String(doc.get("time") ?? ""),
++  };
++}
++
++/** The posts logged, oldest first: `from` a day on, when sent. An agent gets only their own. */
++export const listPosts = onCall(async (request) => {
++  const role = requireRole(request, PEOPLE);
++  const data = fields(request);
++  let query: Query = posts();
++  if (role === "agent") query = query.where("by", "==", request.auth!.uid);
++  if (data["from"] !== undefined) {
++    if (typeof data["from"] !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data["from"])) throw new HttpsError("invalid-argument", "From must be a day written yyyy-MM-dd.");
++    query = query.where("date", ">=", data["from"]);
++  }
++  const docs = (await query.get()).docs.map(postOut);
++  docs.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
++  return { posts: docs };
++});
++
++function assignmentOut(doc: FirebaseFirestore.DocumentSnapshot) {
++  return {
++    id: doc.id,
++    week: String(doc.get("week") ?? ""),
++    assignedTo: String(doc.get("assignedTo") ?? ""),
++    assignedToName: String(doc.get("assignedToName") ?? ""),
++    folderId: String(doc.get("folderId") ?? ""),
++    name: String(doc.get("name") ?? ""),
++    order: Number(doc.get("order") ?? 0),
++    status: String(doc.get("status") ?? ""),
++  };
++}
++
++/** The queue items, by week then order: one `week` when sent. An agent gets only their own. */
++export const listAssignments = onCall(async (request) => {
++  const role = requireRole(request, PEOPLE);
++  const data = fields(request);
++  let query: Query = assignments();
++  if (role === "agent") query = query.where("assignedTo", "==", request.auth!.uid);
++  if (data["week"] !== undefined) {
++    if (!isMonday(data["week"])) throw refuse("invalid-argument", "bad-week", "The week must be a Monday written yyyy-MM-dd.");
++    query = query.where("week", "==", data["week"]);
++  }
++  const docs = (await query.get()).docs.map(assignmentOut);
++  docs.sort((a, b) => a.week.localeCompare(b.week) || a.assignedToName.localeCompare(b.assignedToName) || a.order - b.order);
++  return { assignments: docs };
++});
++
++// ---- Logging a post --------------------------------------------------------------------------------
++
++/** The person's queue item for the listing that isn't Posted yet, newest week first: the one a post moves on. */
++async function openItem(tx: Transaction, assignedTo: string, folderId: string): Promise<DocumentReference | null> {
++  const found = await tx.get(assignments().where("assignedTo", "==", assignedTo).where("folderId", "==", folderId));
++  const open = found.docs.filter((d) => d.get("status") !== "Posted").sort((a, b) => String(b.get("week")).localeCompare(String(a.get("week"))));
++  return open[0]?.ref ?? null;
++}
++
++/**
++ * A post logged: its link, Posted or Pending (waiting for the group's admin). Refused inside the cooldown, and from an FB
++ * account that isn't the poster's. An admin or owner may log for someone else with `postedBy`, a uid.
++ */
++export const logPost = onCall(async (request) => {
++  const role = await requireCurrentRole(request, PEOPLE);
++  const data = fields(request);
++  const folderId = textIn(data, "folderId", "Pick a listing.");
++  const title = textIn(data, "title", "Pick a listing.");
++  const fbAccount = textIn(data, "fbAccount", "Type the FB account you posted from.");
++  const link = typeof data["link"] === "string" ? data["link"].trim() : "";
++  if (!link) throw refuse("invalid-argument", "link-required", "Paste the post's link.");
++  if (!isPostLink(link)) throw refuse("invalid-argument", "bad-link", "That isn't a Facebook link.");
++  const status = data["status"];
++  if (!(POST_STATUSES as readonly unknown[]).includes(status)) throw refuse("invalid-argument", "bad-status", "Say whether the post is Posted or Pending.");
++  const type = typeof data["type"] === "string" ? data["type"].trim() : "";
++
++  const caller = request.auth!.uid;
++  const onBehalf = typeof data["postedBy"] === "string" && data["postedBy"] && data["postedBy"] !== caller ? data["postedBy"] : null;
++  if (onBehalf && !MANAGERS.includes(role)) throw new HttpsError("permission-denied", "You can log only your own posts.");
++
++  return db().runTransaction(async (tx) => {
++    const poster = await personOf(onBehalf ?? caller, tx);
++    if (!poster || !poster.active || !poster.role || !PEOPLE.includes(poster.role)) {
++      throw refuse("failed-precondition", "unknown-person", "That person isn't active on the team.");
++    }
++    const accounts = poster.fbProfiles.map((p) => p.account);
++    if (accounts.length > 0 && !accounts.includes(fbAccount)) {
++      throw refuse("permission-denied", "forbidden", `${onBehalf ? `${poster.name} is` : "You are"} not assigned to ${fbAccount}.`);
++    }
++
++    // One reading of the clock for the check and the post, so the two can't fall either side of midnight.
++    const now = new Date();
++    const today = manilaDay(now);
++    const rules = await rulesNow(tx);
++    const cooldown = await tx.get(cooldowns().doc(folderId));
++    const last = cooldown.get("last") as string | undefined;
++    const refused = last ? cooldownWords(last, today, rules.cooldownDays) : null;
++    if (refused) throw refuse("failed-precondition", "cooldown", refused.message, { lastPosted: last, nextAllowed: refused.nextAllowed });
++
++    const item = await openItem(tx, poster.uid, folderId);
++    const post = posts().doc();
++    const time = manilaTime(now);
++    tx.set(post, {
++      folderId,
++      title,
++      type,
++      fbAccount,
++      link,
++      status,
++      by: poster.uid,
++      byName: poster.name,
++      ...(onBehalf ? { loggedBy: caller } : {}),
++      date: today,
++      time,
++      at: FieldValue.serverTimestamp(),
++      sheetCopied: false,
++    });
++    tx.set(cooldowns().doc(folderId), { last: today, post: post.id });
++    if (item) tx.update(item, { status });
++    return { id: post.id, status, date: today, time, type, by: poster.uid, byName: poster.name };
++  });
++});
++
++/** A Pending post made Posted, with its live link. An agent completes only their own. */
++export const addLink = onCall(async (request) => {
++  const role = await requireCurrentRole(request, PEOPLE);
++  const data = fields(request);
++  const id = textIn(data, "postId", "Pick a post.");
++  const link = typeof data["link"] === "string" ? data["link"].trim() : "";
++  if (!link) throw refuse("invalid-argument", "link-required", "Paste the post's link.");
++  if (!isPostLink(link)) throw refuse("invalid-argument", "bad-link", "That isn't a Facebook link.");
++
++  return db().runTransaction(async (tx) => {
++    const post = await tx.get(posts().doc(id));
++    if (!post.exists || post.get("status") !== "Pending") throw refuse("not-found", "notfound", "No pending post for that listing.");
++    const by = String(post.get("by"));
++    if (role === "agent" && by !== request.auth!.uid) throw refuse("not-found", "notfound", "No pending post for that listing.");
++    const item = await openItem(tx, by, String(post.get("folderId")));
++    tx.update(post.ref, { status: "Posted", link, sheetCopied: false });
++    if (item) tx.update(item, { status: "Posted" });
++    return { id };
++  });
++});
++
++/**
++ * One queue item moved to Not Shared, Pending or Posted. An agent moves only their own. Posted also makes the
++ * assignee's newest Pending post of the listing Posted: approved in the group, so the post is live too.
++ */
++export const setStatus = onCall(async (request) => {
++  const role = await requireCurrentRole(request, PEOPLE);
++  const data = fields(request);
++  const id = textIn(data, "assignmentId", "Pick a queue item.");
++  const status = data["status"];
++  if (!(QUEUE_STATUSES as readonly unknown[]).includes(status)) throw refuse("invalid-argument", "bad-status", "Pick Not Shared, Pending or Posted.");
++
++  return db().runTransaction(async (tx) => {
++    const item = await tx.get(assignments().doc(id));
++    const assignedTo = String(item.get("assignedTo") ?? "");
++    const notFound = refuse("not-found", "notfound", "That queue item isn't there any more. Reload the queue.");
++    if (!item.exists || (role === "agent" && assignedTo !== request.auth!.uid)) throw notFound;
++    if (item.get("status") === "Posted") throw refuse("failed-precondition", "posted", "That item is posted already.");
++    let pending: FirebaseFirestore.QueryDocumentSnapshot | undefined;
++    if (status === "Posted") {
++      const mine = await tx.get(posts().where("by", "==", assignedTo).where("folderId", "==", String(item.get("folderId"))));
++      pending = mine.docs.filter((p) => p.get("status") === "Pending").sort((a, b) => String(b.get("date")).localeCompare(String(a.get("date"))))[0];
++    }
++    tx.update(item.ref, { status });
++    if (pending) tx.update(pending.ref, { status: "Posted", sheetCopied: false });
++    return { id };
++  });
++});
++
++// ---- Weekly queues ---------------------------------------------------------------------------------
++
++interface QueueIn {
++  person: Person;
++  items: { folderId: string; name: string; status: QueueStatus }[];
++}
++
++/** A listing someone else holds, as the refusal lists it. */
++interface Held {
++  folderId: string;
++  name: string;
++  heldBy: string;
++  heldByName: string;
++  week: string;
++}
++
++/**
++ * Several agents' queues for one week, all or none: each named agent's items of that week are replaced, and nobody
++ * else's are touched. Refused when a listing is held: an open (Not Shared) item of a week that isn't over holds its
++ * listing for its agent until it's posted, or the week ends. Re-saving the same agent's week releases their own items.
++ */
++export const saveQueues = onCall(async (request) => {
++  await requireCurrentRole(request, MANAGERS);
++  const data = fields(request);
++  const week = data["week"];
++  if (!isMonday(week)) throw refuse("invalid-argument", "bad-week", "The week must be a Monday written yyyy-MM-dd.");
++  if (!Array.isArray(data["queues"])) throw refuse("invalid-argument", "bad-queues", "Send the queues as a list.");
++
++  return db().runTransaction(async (tx) => {
++    const queues: QueueIn[] = [];
++    for (const raw of data["queues"] as unknown[]) {
++      const q = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
++      const uid = typeof q["assignedTo"] === "string" ? q["assignedTo"] : "";
++      const person = uid ? await personOf(uid, tx) : null;
++      if (!person || !person.active || person.role !== "agent") throw refuse("invalid-argument", "bad-agent", `${person?.name || "That person"} isn't an active agent.`);
++      if (queues.some((other) => other.person.uid === uid)) {
++        throw refuse("invalid-argument", "bad-queues", `${person.name} has two queues for the week of ${weekLabel(week)}. Send one.`);
++      }
++      if (!Array.isArray(q["items"])) throw refuse("invalid-argument", "bad-queues", `${person.name}'s items must be a list.`);
++      const items = (q["items"] as unknown[]).map((rawItem, i) => {
++        const it = typeof rawItem === "object" && rawItem !== null ? (rawItem as Record<string, unknown>) : {};
++        const folderId = typeof it["folderId"] === "string" ? it["folderId"].trim() : "";
++        const name = typeof it["name"] === "string" ? it["name"].trim() : "";
++        if (!folderId || !name) throw refuse("invalid-argument", "bad-queues", `Item ${i + 1} of ${person.name}'s queue has no listing.`);
++        const status = (QUEUE_STATUSES as readonly unknown[]).includes(it["status"]) ? (it["status"] as QueueStatus) : NOT_SHARED;
++        return { folderId, name, status };
++      });
++      queues.push({ person, items });
++    }
++
++    // Every read before any write, as a transaction requires.
++    const today = manilaDay(new Date());
++    const named = new Set(queues.map((q) => q.person.uid));
++    const openNow = await tx.get(assignments().where("status", "==", NOT_SHARED).where("week", ">=", weekOf(today)));
++    const replaced = await tx.get(assignments().where("week", "==", week));
++
++    const holders: Held[] = openNow.docs
++      .filter((d) => !isWeekOver(String(d.get("week")), today))
++      .filter((d) => !(d.get("week") === week && named.has(String(d.get("assignedTo")))))
++      .map((d) => ({
++        folderId: String(d.get("folderId")),
++        name: String(d.get("name")),
++        heldBy: String(d.get("assignedTo")),
++        heldByName: String(d.get("assignedToName")),
++        week: String(d.get("week")),
++      }));
++    const held: Held[] = [];
++    for (const q of queues) {
++      for (const it of q.items) {
++        const holder = holders.find((h) => h.folderId === it.folderId && h.heldBy !== q.person.uid) ?? holders.find((h) => h.folderId === it.folderId && h.week !== week);
++        if (holder) held.push({ ...holder, name: it.name });
++        else holders.push({ folderId: it.folderId, name: it.name, heldBy: q.person.uid, heldByName: q.person.name, week });
++      }
++    }
++    if (held.length > 0) {
++      const first = held[0]!;
++      const more = held.length > 1 ? ` ${held.length - 1} more ${held.length === 2 ? "is" : "are"} held too.` : "";
++      throw refuse(
++        "failed-precondition",
++        "held",
++        `${first.name} is already with ${first.heldByName} (queue for the week of ${weekLabel(first.week)}). Remove it from their queue first.${more}`,
++        { held },
++      );
++    }
++
++    for (const doc of replaced.docs) if (named.has(String(doc.get("assignedTo")))) tx.delete(doc.ref);
++    let saved = 0;
++    for (const q of queues) {
++      q.items.forEach((it, order) => {
++        tx.set(assignments().doc(), { week, assignedTo: q.person.uid, assignedToName: q.person.name, folderId: it.folderId, name: it.name, order, status: it.status, by: request.auth!.uid, at: FieldValue.serverTimestamp() });
++        saved++;
++      });
++    }
++    audit(tx, request, "save queues", { week, queues: queues.map((q) => ({ assignedTo: q.person.uid, items: q.items.length })) });
++    return { saved };
++  });
++});
++
++// ---- Rules and FB accounts -------------------------------------------------------------------------
++
++/** The posting rules: only the ones sent change, each a whole number within its limits, or nothing is saved. */
++export const setRules = onCall(async (request) => {
++  await requireCurrentRole(request, MANAGERS);
++  const data = fields(request);
++  const changes: Partial<Rules> = {};
++  for (const name of Object.keys(RULE_LIMITS) as RuleName[]) {
++    const value = data[name];
++    if (value === undefined || value === null || value === "") continue;
++    const spec = RULE_LIMITS[name];
++    if (typeof value !== "number" || !Number.isInteger(value) || value < spec.min || value > spec.max) {
++      throw refuse("invalid-argument", "bad-rules", `${spec.label} must be a whole number from ${spec.min} to ${spec.max}.`, { field: name });
++    }
++    changes[name] = value;
++  }
++  return db().runTransaction(async (tx) => {
++    const before = await rulesNow(tx);
++    tx.set(rulesDoc(), changes, { merge: true });
++    audit(tx, request, "set rules", changes, before);
++    return { rules: { ...before, ...changes } };
++  });
++});
++
++/** The FB accounts as sent: each name once, no commas, each link Facebook's. Rows with neither are dropped. */
++function profilesIn(value: unknown): FbProfile[] {
++  if (!Array.isArray(value)) throw refuse("invalid-argument", "bad-accounts", "The Facebook accounts must be a list.");
++  const out: FbProfile[] = [];
++  for (const raw of value as unknown[]) {
++    const p = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null;
++    if (!p || typeof p["account"] !== "string" || (p["link"] !== undefined && typeof p["link"] !== "string")) {
++      throw refuse("invalid-argument", "bad-accounts", "The Facebook accounts must be a list.");
++    }
++    const account = p["account"].trim();
++    const link = profileLink(typeof p["link"] === "string" ? p["link"] : "");
++    if (link === null) throw refuse("invalid-argument", "bad-profile-link", "That isn't a Facebook profile link.");
++    if (!account && !link) continue;
++    if (!account) throw refuse("invalid-argument", "bad-accounts", `Type the name of the account for ${link}.`);
++    if (account.includes(",")) throw refuse("invalid-argument", "bad-accounts", "A Facebook account name cannot contain a comma.");
++    if (out.some((o) => o.account.toLowerCase() === account.toLowerCase())) throw refuse("invalid-argument", "bad-accounts", `${account} is listed twice.`);
++    out.push({ account, link });
++  }
++  return out;
++}
++
++/**
++ * A person's FB accounts, each with its own profile link (one person may run several). Who may change whose follows
++ * the People screen's rule: an owner anyone's, an admin an agent's. Anyone may change their own.
++ */
++export const setFbProfiles = onCall(async (request) => {
++  const caller = await requireCurrentRole(request, MANAGERS);
++  const data = fields(request);
++  const uid = textIn(data, "uid", "Pick a person.");
++  const fbProfiles = profilesIn(data["fbProfiles"]);
++  return db().runTransaction(async (tx) => {
++    const person = await personOf(uid, tx);
++    if (!person) throw refuse("not-found", "notfound", "That person isn't on the team.");
++    if (uid !== request.auth!.uid && !mayManage(caller, person.role)) {
++      throw new HttpsError("permission-denied", caller === "admin" ? "Admins can change agents only." : "Your account can't do this.");
++    }
++    tx.set(db().collection("users").doc(uid), { fbProfiles }, { merge: true });
++    audit(tx, request, "set FB accounts", { user: uid, fbProfiles }, { fbProfiles: person.fbProfiles });
++    return { fbProfiles };
++  });
++});
++
+diff --git a/firebase/functions/src/posting/profiles.ts b/firebase/functions/src/posting/profiles.ts
+new file mode 100644
+index 0000000..3fa8bb8
+--- /dev/null
++++ b/firebase/functions/src/posting/profiles.ts
+@@ -0,0 +1,15 @@
++/** One FB account a person posts as in Post-It, and its profile link ('' when none). One person may run several. */
++export interface FbProfile {
++  account: string;
++  link: string;
++}
++
++/** The FB accounts in a `users` document, as saved. */
++export function profilesOf(value: unknown): FbProfile[] {
++  if (!Array.isArray(value)) return [];
++  return value.flatMap((v: unknown) => {
++    const p = typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
++    const account = typeof p["account"] === "string" ? p["account"].trim() : "";
++    return account ? [{ account, link: typeof p["link"] === "string" ? p["link"] : "" }] : [];
++  });
++}
+diff --git a/firebase/functions/src/posting/rules.ts b/firebase/functions/src/posting/rules.ts
+new file mode 100644
+index 0000000..6188989
+--- /dev/null
++++ b/firebase/functions/src/posting/rules.ts
+@@ -0,0 +1,140 @@
++// Post-It's rules, without Firebase: Manila's days, the work week, Facebook's links and the posting rules' limits. The
++// same rules as Post-It's Apps Script (its server/Code.gs) and its app (src/core/week.ts, links.ts, cooldown.ts), so a
++// listing is refused here exactly when the app says it will be.
++
++const DAY_MS = 86_400_000;
++/** Manila is UTC+8 all year: no daylight saving. */
++const MANILA_MS = 8 * 60 * 60 * 1000;
++
++/** Manila's date at `when`, yyyy-MM-dd. */
++export function manilaDay(when: Date): string {
++  return new Date(when.getTime() + MANILA_MS).toISOString().slice(0, 10);
++}
++
++/** Manila's clock at `when`, HH:mm. */
++export function manilaTime(when: Date): string {
++  return new Date(when.getTime() + MANILA_MS).toISOString().slice(11, 16);
++}
++
++/** True for a real calendar day written yyyy-MM-dd. */
++export function isDay(text: unknown): text is string {
++  if (typeof text !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
++  return new Date(`${text}T00:00:00Z`).toISOString().slice(0, 10) === text;
++}
++
++function dayNumber(day: string): number {
++  return Date.parse(`${day}T00:00:00Z`) / DAY_MS;
++}
++
++function isoDay(n: number): string {
++  return new Date(n * DAY_MS).toISOString().slice(0, 10);
++}
++
++/** Whole days from `from` to `to`, both yyyy-MM-dd. */
++export function daysBetween(from: string, to: string): number {
++  return dayNumber(to) - dayNumber(from);
++}
++
++export function addDays(day: string, n: number): string {
++  return isoDay(dayNumber(day) + n);
++}
++
++/**
++ * The week a day belongs to, named by its Monday: Monday to Friday give that Monday, Saturday and Sunday the next one,
++ * since Friday is the deadline. '' for anything that isn't a day.
++ */
++export function weekOf(day: string): string {
++  if (!isDay(day)) return "";
++  const n = dayNumber(day);
++  const weekday = new Date(n * DAY_MS).getUTCDay(); // 0 Sun … 6 Sat
++  if (weekday === 0) return isoDay(n + 1);
++  if (weekday === 6) return isoDay(n + 2);
++  return isoDay(n - (weekday - 1));
++}
++
++export function isMonday(day: unknown): day is string {
++  return isDay(day) && weekOf(day) === day;
++}
++
++/** True once `today` is past the week's Friday: its open items are Missed, and hold nothing. */
++export function isWeekOver(week: string, today: string): boolean {
++  return dayNumber(today) > dayNumber(week) + 4;
++}
++
++const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
++const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
++
++/** "2–6 Nov", or "30 Oct – 3 Nov" across months. */
++export function weekLabel(week: string): string {
++  const mon = new Date(dayNumber(week) * DAY_MS);
++  const fri = new Date((dayNumber(week) + 4) * DAY_MS);
++  if (mon.getUTCMonth() === fri.getUTCMonth()) return `${mon.getUTCDate()}–${fri.getUTCDate()} ${MONTHS[fri.getUTCMonth()]}`;
++  return `${mon.getUTCDate()} ${MONTHS[mon.getUTCMonth()]} – ${fri.getUTCDate()} ${MONTHS[fri.getUTCMonth()]}`;
++}
++
++const plural = (n: number) => (n === 1 ? "1 day" : `${n} days`);
++
++/**
++ * The refusal's words when a listing last posted on `last` is inside the cooldown on `today`, or null when it may be
++ * posted. A post dated after today, from a skewed clock, counts as today's.
++ */
++export function cooldownWords(last: string, today: string, cooldownDays: number): { nextAllowed: string; message: string } | null {
++  const ago = Math.max(0, daysBetween(last, today));
++  if (ago >= cooldownDays) return null;
++  const next = addDays(last, cooldownDays);
++  const lastDate = new Date(`${last}T00:00:00Z`);
++  const nextDate = new Date(`${next}T00:00:00Z`);
++  const when = ago === 0 ? "today" : `${plural(ago)} ago`;
++  return {
++    nextAllowed: next,
++    message:
++      `Posted ${when} (${lastDate.getUTCDate()} ${MONTHS[lastDate.getUTCMonth()]}). The cooldown is ${plural(cooldownDays)} — ` +
++      `it can be posted again on ${WEEKDAYS[nextDate.getUTCDay()]} ${nextDate.getUTCDate()} ${MONTHS[nextDate.getUTCMonth()]} ${nextDate.getUTCFullYear()}.`,
++  };
++}
++
++const POST_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.com", "fb.me"];
++const PROFILE_HOSTS = ["facebook.com", "www.facebook.com", "m.facebook.com", "web.facebook.com", "fb.com"];
++const LINK = /^https:\/\/([^/?#\s]+)(?:[/?#][^\s]*)?$/i;
++
++/** A Facebook post's link: https on one of Facebook's own hosts. */
++export function isPostLink(text: string): boolean {
++  const m = LINK.exec(text);
++  return m !== null && POST_HOSTS.includes(m[1]!.toLowerCase());
++}
++
++/** A profile link as saved: https:// put in front when it had no scheme. Null when it isn't Facebook's; '' stays ''. */
++export function profileLink(text: string): string | null {
++  let link = text.trim();
++  if (!link) return "";
++  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(link)) link = `https://${link}`;
++  const m = LINK.exec(link);
++  return m !== null && PROFILE_HOSTS.includes(m[1]!.toLowerCase()) ? link : null;
++}
++
++/** The posting rules an admin sets, with Post-It's defaults and limits. */
++export const RULE_LIMITS = {
++  cooldownDays: { fallback: 7, min: 1, max: 60, label: "The cooldown" },
++  repostDueDays: { fallback: 14, min: 1, max: 120, label: "The repost age" },
++  perWeek: { fallback: 40, min: 1, max: 200, label: "Listings per week" },
++} as const;
++
++export type RuleName = keyof typeof RULE_LIMITS;
++export type Rules = Record<RuleName, number>;
++
++/** The saved rules, each its default when missing or out of range. */
++export function readRules(saved: Record<string, unknown> | undefined): Rules {
++  const out = {} as Rules;
++  for (const name of Object.keys(RULE_LIMITS) as RuleName[]) {
++    const spec = RULE_LIMITS[name];
++    const n = saved?.[name];
++    out[name] = typeof n === "number" && Number.isInteger(n) && n >= spec.min && n <= spec.max ? n : spec.fallback;
++  }
++  return out;
++}
++
++export const NOT_SHARED = "Not Shared";
++export const QUEUE_STATUSES = [NOT_SHARED, "Pending", "Posted"] as const;
++export type QueueStatus = (typeof QUEUE_STATUSES)[number];
++export const POST_STATUSES = ["Posted", "Pending"] as const;
++export type PostStatus = (typeof POST_STATUSES)[number];
+diff --git a/firebase/tests/posting.test.ts b/firebase/tests/posting.test.ts
+new file mode 100644
+index 0000000..74c5437
+--- /dev/null
++++ b/firebase/tests/posting.test.ts
+@@ -0,0 +1,249 @@
++import { getFirestore } from "firebase-admin/firestore";
++import { beforeAll, beforeEach, describe, expect, it } from "vitest";
++import { manilaDay, weekOf, addDays } from "../functions/src/posting/rules.ts";
++import { admin, client, makeAccount, refusal, resetEmulator } from "./emulator.ts";
++
++// Post-It's functions (POST-IT-PLAN.md sections 7 and 8). Each refuses a signed-out caller, an account with no role, the
++// scanner, and the roles that mustn't use it (FIREBASE-PLAN.md 7.7); then Post-It's own rules: the cooldown, the FB
++// account, the held listing, and an agent seeing only their own.
++
++const LINK = "https://www.facebook.com/groups/apg/posts/1/";
++const TODAY = manilaDay(new Date());
++const WEEK = weekOf(TODAY);
++
++const FUNCTIONS = {
++  postingStart: { people: true, data: {} },
++  listPosts: { people: true, data: {} },
++  listAssignments: { people: true, data: {} },
++  logPost: { people: true, data: { folderId: "F1", title: "Casa", fbAccount: "Cyrus", link: LINK, status: "Posted" } },
++  addLink: { people: true, data: { postId: "x", link: LINK } },
++  setStatus: { people: true, data: { assignmentId: "x", status: "Posted" } },
++  saveQueues: { people: false, data: { week: WEEK, queues: [] } },
++  setRules: { people: false, data: { cooldownDays: 7 } },
++  setFbProfiles: { people: false, data: { uid: "x", fbProfiles: [] } },
++};
++
++const uids: Record<string, string> = {};
++
++async function freshTeam(): Promise<void> {
++  await resetEmulator();
++  for (const role of ["owner", "admin", "agent", "scanner"] as const) uids[role] = await makeAccount(role, role);
++  uids["nobody"] = await makeAccount("nobody", null);
++  uids["cj"] = await makeAccount("cj", "agent");
++  uids["ana"] = await makeAccount("ana", "agent");
++  await getFirestore(admin()).collection("users").doc(uids["cj"]).update({ fbProfiles: [{ account: "Cyrus", link: "" }, { account: "Kevs", link: "" }] });
++}
++
++async function as(who: string) {
++  const app = client();
++  await app.signIn(who);
++  return app;
++}
++
++/** A refused call's code, words and details. */
++async function failure(call: Promise<unknown>): Promise<{ code: string; message: string; details: Record<string, unknown> }> {
++  return call.then(
++    () => {
++      throw new Error("The call wasn't refused.");
++    },
++    (e: unknown) => e as { code: string; message: string; details: Record<string, unknown> },
++  );
++}
++
++const post = (folderId: string, more: Record<string, unknown> = {}) => ({ folderId, title: `Listing ${folderId}`, fbAccount: "Cyrus", link: LINK, status: "Posted", ...more });
++
++describe("who may call Post-It's functions", () => {
++  beforeAll(freshTeam);
++
++  describe.each(Object.entries(FUNCTIONS))("%s", (name, { people, data }) => {
++    it("refuses a signed-out caller", async () => {
++      expect(await refusal(client().call(name, data))).toMatchObject({ code: "functions/unauthenticated" });
++    });
++
++    it.each(people ? ["nobody", "scanner"] : ["nobody", "scanner", "agent"])("refuses %s", async (who) => {
++      expect(await refusal((await as(who)).call(name, data))).toMatchObject({ code: "functions/permission-denied" });
++    });
++  });
++});
++
++describe("logging a post", () => {
++  beforeEach(freshTeam);
++
++  it("logs it as the caller, on Manila's day, and tells the app what it wrote", async () => {
++    const reply = await (await as("cj")).call<Record<string, unknown>>("logPost", post("F1", { fbAccount: "Kevs" }));
++    expect(reply).toMatchObject({ status: "Posted", date: TODAY, by: uids["cj"], byName: "cj" });
++    expect(reply["time"]).toMatch(/^\d{2}:\d{2}$/);
++    const saved = await getFirestore(admin()).collection("posts").doc(String(reply["id"])).get();
++    expect(saved.data()).toMatchObject({ folderId: "F1", fbAccount: "Kevs", link: LINK, by: uids["cj"], sheetCopied: false });
++  });
++
++  it("refuses a second post of the same listing inside the cooldown, by anyone", async () => {
++    await (await as("cj")).call("logPost", post("F1"));
++    const e = await failure((await as("ana")).call("logPost", post("F1")));
++    expect(e).toMatchObject({ code: "functions/failed-precondition", details: { error: "cooldown", lastPosted: TODAY, nextAllowed: addDays(TODAY, 7) } });
++    expect(e.message).toMatch(/^Posted today \(.+\)\. The cooldown is 7 days — it can be posted again on /);
++  });
++
++  it("lets only one of two posts of the same listing at the same moment through", async () => {
++    const [cj, ana] = [await as("cj"), await as("ana")];
++    const results = await Promise.allSettled([cj.call("logPost", post("F1")), ana.call("logPost", post("F1"))]);
++    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
++    expect((await getFirestore(admin()).collection("posts").where("folderId", "==", "F1").get()).size).toBe(1);
++  });
++
++  it("allows it again once the cooldown has passed", async () => {
++    await getFirestore(admin()).collection("cooldowns").doc("F1").set({ last: addDays(TODAY, -7) });
++    await expect((await as("ana")).call("logPost", post("F1"))).resolves.toMatchObject({ status: "Posted" });
++  });
++
++  it("refuses an FB account that isn't the poster's", async () => {
++    expect(await refusal((await as("cj")).call("logPost", post("F1", { fbAccount: "Someone Else" })))).toEqual({
++      code: "functions/permission-denied",
++      message: "You are not assigned to Someone Else. [403]",
++    });
++  });
++
++  it.each([
++    [{ link: "" }, "link-required"],
++    [{ link: "https://instagram.com/p/1" }, "bad-link"],
++    [{ status: "Done" }, "bad-status"],
++  ])("refuses %j", async (change, error) => {
++    const e = await (await as("cj")).call("logPost", post("F1", change)).catch((e: unknown) => e);
++    expect(e).toMatchObject({ code: "functions/invalid-argument", details: { error } });
++  });
++
++  it("lets an admin log for an agent, from that agent's account, but not an agent for someone else", async () => {
++    await expect((await as("admin")).call("logPost", post("F1", { postedBy: uids["cj"] }))).resolves.toMatchObject({ by: uids["cj"], byName: "cj" });
++    expect(await refusal((await as("ana")).call("logPost", post("F2", { postedBy: uids["cj"] })))).toMatchObject({ code: "functions/permission-denied" });
++  });
++
++  it("refuses a turned-off agent at once", async () => {
++    const app = await as("cj");
++    await (await as("owner")).call("setActive", { uid: uids["cj"], active: false });
++    expect(await refusal(app.call("logPost", post("F1")))).toMatchObject({ code: "functions/unauthenticated" });
++  });
++
++  it("gives an agent only their own posts, and an admin everyone's", async () => {
++    await (await as("cj")).call("logPost", post("F1"));
++    await (await as("ana")).call("logPost", post("F2", { fbAccount: "Ana FB" }));
++    expect((await (await as("ana")).call<{ posts: { folderId: string }[] }>("listPosts")).posts.map((p) => p.folderId)).toEqual(["F2"]);
++    expect((await (await as("admin")).call<{ posts: unknown[] }>("listPosts")).posts).toHaveLength(2);
++  });
++
++  it("makes a Pending post Posted with its link, the poster's own only", async () => {
++    const { id } = await (await as("cj")).call<{ id: string }>("logPost", post("F1", { status: "Pending" }));
++    const live = "https://www.facebook.com/groups/apg/posts/2/";
++    expect(await refusal((await as("ana")).call("addLink", { postId: id, link: live }))).toMatchObject({ code: "functions/not-found" });
++    await (await as("cj")).call("addLink", { postId: id, link: live });
++    expect((await getFirestore(admin()).collection("posts").doc(id).get()).data()).toMatchObject({ status: "Posted", link: live });
++  });
++});
++
++describe("weekly queues", () => {
++  beforeEach(freshTeam);
++
++  const queue = (who: string, ...folders: string[]) => ({ assignedTo: uids[who], items: folders.map((f) => ({ folderId: f, name: `Listing ${f}` })) });
++
++  it("saves several agents' queues for a week, and an agent sees only their own", async () => {
++    const reply = await (await as("admin")).call("saveQueues", { week: WEEK, queues: [queue("cj", "F1", "F2"), queue("ana", "F3")] });
++    expect(reply).toEqual({ saved: 3 });
++    const mine = (await (await as("cj")).call<{ assignments: { folderId: string; status: string; order: number }[] }>("listAssignments", { week: WEEK })).assignments;
++    expect(mine.map((a) => [a.folderId, a.status, a.order])).toEqual([
++      ["F1", "Not Shared", 0],
++      ["F2", "Not Shared", 1],
++    ]);
++  });
++
++  it("refuses a listing held by another agent, and saves nothing", async () => {
++    const app = await as("admin");
++    await app.call("saveQueues", { week: WEEK, queues: [queue("cj", "F1")] });
++    const e = await failure(app.call("saveQueues", { week: WEEK, queues: [queue("ana", "F9", "F1")] }));
++    expect(e).toMatchObject({ code: "functions/failed-precondition", details: { error: "held", held: [{ folderId: "F1", heldBy: uids["cj"], heldByName: "cj", week: WEEK }] } });
++    expect(e.message).toMatch(/^Listing F1 is already with cj \(queue for the week of .+\)\. Remove it from their queue first\./);
++    expect((await getFirestore(admin()).collection("assignments").where("folderId", "==", "F9").get()).size).toBe(0);
++  });
++
++  it("re-saving the same agent's week replaces it, releasing what was taken out", async () => {
++    const app = await as("admin");
++    await app.call("saveQueues", { week: WEEK, queues: [queue("cj", "F1", "F2")] });
++    await app.call("saveQueues", { week: WEEK, queues: [queue("cj", "F2")] });
++    await expect(app.call("saveQueues", { week: WEEK, queues: [queue("ana", "F1")] })).resolves.toEqual({ saved: 1 });
++  });
++
++  it("refuses one listing to two agents in the same save", async () => {
++    expect(await (await as("admin")).call("saveQueues", { week: WEEK, queues: [queue("cj", "F1"), queue("ana", "F1")] }).catch((e: unknown) => e)).toMatchObject({
++      details: { error: "held" },
++    });
++  });
++
++  it.each([
++    [{ week: addDays(WEEK, 1), queues: [] }, "bad-week"],
++    [{ week: WEEK, queues: "x" }, "bad-queues"],
++  ])("refuses %j", async (data, error) => {
++    expect(await (await as("admin")).call("saveQueues", data).catch((e: unknown) => e)).toMatchObject({ details: { error } });
++  });
++
++  it("gives queues to agents only", async () => {
++    expect(await (await as("admin")).call("saveQueues", { week: WEEK, queues: [queue("admin", "F1")] }).catch((e: unknown) => e)).toMatchObject({
++      details: { error: "bad-agent" },
++    });
++  });
++
++  it("moves the queue item when its listing is logged, which releases it", async () => {
++    await (await as("admin")).call("saveQueues", { week: WEEK, queues: [queue("cj", "F1")] });
++    await (await as("cj")).call("logPost", post("F1", { status: "Pending" }));
++    const [item] = (await (await as("cj")).call<{ assignments: { status: string }[] }>("listAssignments")).assignments;
++    expect(item?.status).toBe("Pending");
++  });
++
++  it("an item set Posted makes the agent's Pending post Posted; an agent moves only their own", async () => {
++    await (await as("admin")).call("saveQueues", { week: WEEK, queues: [queue("cj", "F1")] });
++    const { id } = await (await as("cj")).call<{ id: string }>("logPost", post("F1", { status: "Pending" }));
++    const [item] = (await (await as("cj")).call<{ assignments: { id: string }[] }>("listAssignments")).assignments;
++    expect(await refusal((await as("ana")).call("setStatus", { assignmentId: item!.id, status: "Posted" }))).toMatchObject({ code: "functions/not-found" });
++    await (await as("cj")).call("setStatus", { assignmentId: item!.id, status: "Posted" });
++    expect((await getFirestore(admin()).collection("posts").doc(id).get()).get("status")).toBe("Posted");
++  });
++});
++
++describe("rules and FB accounts", () => {
++  beforeEach(freshTeam);
++
++  it("starts with Post-It's defaults, and an admin changes only what they send", async () => {
++    expect(await (await as("agent")).call("postingStart")).toMatchObject({ rules: { cooldownDays: 7, repostDueDays: 14, perWeek: 40 }, today: TODAY, week: WEEK });
++    expect(await (await as("admin")).call("setRules", { cooldownDays: 3 })).toEqual({ rules: { cooldownDays: 3, repostDueDays: 14, perWeek: 40 } });
++    expect(await (await as("admin")).call("setRules", { perWeek: 500 }).catch((e: unknown) => e)).toMatchObject({ details: { error: "bad-rules", field: "perWeek" } });
++  });
++
++  it("uses the cooldown as set", async () => {
++    await (await as("admin")).call("setRules", { cooldownDays: 1 });
++    await getFirestore(admin()).collection("cooldowns").doc("F1").set({ last: addDays(TODAY, -1) });
++    await expect((await as("cj")).call("logPost", post("F1"))).resolves.toMatchObject({ status: "Posted" });
++  });
++
++  it("sets a person's FB accounts, each with its own link, and People shows them", async () => {
++    const fbProfiles = [{ account: "Cyrus", link: "www.facebook.com/cyrus" }, { account: "Kevs" }];
++    expect(await (await as("admin")).call("setFbProfiles", { uid: uids["cj"], fbProfiles })).toEqual({
++      fbProfiles: [{ account: "Cyrus", link: "https://www.facebook.com/cyrus" }, { account: "Kevs", link: "" }],
++    });
++    const people = (await (await as("owner")).call<{ people: { name: string; fbProfiles: unknown[] }[] }>("listPeople")).people;
++    expect(people.find((p) => p.name === "cj")?.fbProfiles).toHaveLength(2);
++    expect((await (await as("cj")).call<{ me: { fbProfiles: unknown[] } }>("postingStart")).me.fbProfiles).toHaveLength(2);
++  });
++
++  it("lets an admin change an agent's accounts and their own, not another admin's", async () => {
++    const app = await as("admin");
++    await expect(app.call("setFbProfiles", { uid: uids["admin"], fbProfiles: [{ account: "Admin FB" }] })).resolves.toBeTruthy();
++    const other = await makeAccount("admin2", "admin");
++    expect(await refusal(app.call("setFbProfiles", { uid: other, fbProfiles: [] }))).toMatchObject({ code: "functions/permission-denied" });
++  });
++
++  it.each([
++    [[{ account: "Cyrus" }, { account: "cyrus" }], "bad-accounts"],
++    [[{ account: "", link: "https://www.facebook.com/x" }], "bad-accounts"],
++    [[{ account: "A, B" }], "bad-accounts"],
++    [[{ account: "Kevs", link: "https://instagram.com/kevs" }], "bad-profile-link"],
++  ])("refuses %j", async (fbProfiles, error) => {
++    expect(await (await as("admin")).call("setFbProfiles", { uid: uids["cj"], fbProfiles }).catch((e: unknown) => e)).toMatchObject({ details: { error } });
++  });
++});
+-- 
+2.52.0.windows.1
+
