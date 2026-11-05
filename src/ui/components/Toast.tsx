@@ -155,7 +155,9 @@ export function useToasts(): Toasts {
 
   const show = useCallback((message: ReactNode, tone: ToastTone = 'ok') => {
     const id = nextId.current++;
-    setToasts((all) => [...all.filter((t) => !t.leaving).slice(-(MAX_TOASTS - 1)), { id, tone, message, leaving: false }]);
+    // The same words again (Check for updates clicked twice) replace the toast already up, not stack under it.
+    const same = (t: ToastItem) => typeof message === 'string' && t.message === message;
+    setToasts((all) => [...all.filter((t) => !t.leaving && !same(t)).slice(-(MAX_TOASTS - 1)), { id, tone, message, leaving: false }]);
     return id;
   }, []);
 

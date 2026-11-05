@@ -95,4 +95,12 @@ describe('toasts', () => {
     });
     expect(messages()).toEqual(['Two', 'Three', 'Four']);
   });
+
+  it('show the same words once: a repeat replaces the one already up', () => {
+    render(<Harness />);
+    act(() => {
+      ['Couldn’t check.', 'Saved.', 'Couldn’t check.', 'Couldn’t check.'].forEach((m) => api.show(m));
+    });
+    expect(messages()).toEqual(['Saved.', 'Couldn’t check.']);
+  });
 });
