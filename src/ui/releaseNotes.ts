@@ -10,6 +10,14 @@ export interface ReleaseNotes {
 
 export const RELEASE_NOTES: readonly ReleaseNotes[] = [
   {
+    version: '1.1.3',
+    items: [
+      "The team comes from Alpha Listing Hub's People screen: add people, give roles and turn them off there.",
+      "Interns are now called Agents, as on Alpha Listing Hub.",
+      'Settings → Team sets each person’s FB accounts and profile links.',
+    ],
+  },
+  {
     version: '1.1.2',
     items: [
       'Warnings from Wednesday when your week is behind: what is left, and how many a day.',
