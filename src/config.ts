@@ -32,4 +32,4 @@ export const BUILT_IN_SCRIPT_URL: string = fromEnv || PASTED_SCRIPT_URL.trim();
  * server/Code.gs, which ping sends. Change both together (a test holds them
  * equal). A server older than this is told to be redeployed (serverVersionStatus).
  */
-export const EXPECTED_SERVER_VERSION = '2026-11-04.3';
+export const EXPECTED_SERVER_VERSION = '2026-11-04.4';

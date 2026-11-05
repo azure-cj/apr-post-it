@@ -98,7 +98,7 @@ describe('RecordsScreen', () => {
     expect(tile('Pending').textContent).toBe('Pending1↑Up 1 vs 26–28 Oct');
     // No week of the period has ended yet: nothing can be missed.
     expect(tile('Missed').textContent).toBe('Missed–After Fri 6 Nov');
-    expect(tile('Active interns').textContent).toBe('Active interns3↑Up 1 vs 26–28 Oct');
+    expect(tile('Active agents').textContent).toBe('Active agents3↑Up 1 vs 26–28 Oct');
     expect(tile('Busiest day').textContent).toBe('Busiest day3 Tue 3 Nov↑Up 1 vs 26–28 Oct');
     expect(tile('Posts').querySelector('.records-tile__change--good')).toBeTruthy();
     // More pending is neither better nor worse.
@@ -148,7 +148,7 @@ describe('RecordsScreen', () => {
     expect(screen.queryByRole('complementary')).toBeNull();
     expect(screen.queryByRole('button', { name: KAPITOLYO })).toBeNull();
     const breakdown = screen.getByRole('region', { name: 'Breakdown' });
-    expect(within(breakdown).getAllByRole('tab').map((t) => t.textContent)).toEqual(['By intern', 'By category']);
+    expect(within(breakdown).getAllByRole('tab').map((t) => t.textContent)).toEqual(['By agent', 'By category']);
   });
 
   it('shows a bar’s numbers on hover or focus, and a bar does nothing else', async () => {
@@ -183,7 +183,7 @@ describe('RecordsScreen', () => {
     const onOpenIntern = vi.fn();
     render(<Harness internsHref={(week) => `#/interns?week=${week}`} onOpenIntern={onOpenIntern} />);
     const breakdown = screen.getByRole('region', { name: 'Breakdown' });
-    expect(within(breakdown).getByRole('tab', { name: 'By intern' }).getAttribute('aria-selected')).toBe('true');
+    expect(within(breakdown).getByRole('tab', { name: 'By agent' }).getAttribute('aria-selected')).toBe('true');
     const internRows = within(breakdown)
       .getAllByRole('row')
       .slice(1)
@@ -216,7 +216,7 @@ describe('RecordsScreen', () => {
     // The arrow keys move between the two tabs.
     within(breakdown).getByRole('tab', { name: 'By category' }).focus();
     await userEvent.keyboard('{ArrowRight}');
-    expect(within(breakdown).getByRole('tab', { name: 'By intern' }).getAttribute('aria-selected')).toBe('true');
+    expect(within(breakdown).getByRole('tab', { name: 'By agent' }).getAttribute('aria-selected')).toBe('true');
 
     // Last week's period opens Interns on last week.
     await userEvent.click(screen.getByRole('button', { name: 'Last week' }));
@@ -339,7 +339,7 @@ describe('the Records route', () => {
     const mika = screen.getByRole('link', { name: 'Mika Reyes' });
     expect(mika.getAttribute('href')).toBe('#/interns?week=2026-09-28');
     await userEvent.click(mika);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Interns' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Agents' })).toBeTruthy();
     expect(where()).toBe('?week=2026-09-28');
   });
 

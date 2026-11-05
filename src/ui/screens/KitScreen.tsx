@@ -76,7 +76,7 @@ const internNav: SidebarNavItem[] = [
 const adminNav: SidebarNavItem[] = [
   { key: 'tracker', label: 'Tracker', href: '#/kit', icon: 'tracker' },
   { key: 'assign', label: 'Assign', href: '#/kit', icon: 'assign' },
-  { key: 'interns', label: 'Interns', href: '#/kit', icon: 'interns' },
+  { key: 'interns', label: 'Agents', href: '#/kit', icon: 'interns' },
   { key: 'find', label: 'Find', href: '#/kit', icon: 'search' },
   { key: 'settings', label: 'Settings', href: '#/kit', icon: 'settings' },
 ];
@@ -276,7 +276,7 @@ export default function KitScreen() {
                 <Pill tone="info">Due for repost</Pill>
               </div>
               <div className="kit__row kit__row--tight">
-                <Pill>Intern</Pill>
+                <Pill>Agent</Pill>
                 <Pill>Admin</Pill>
                 <Badge count={6} label="6 to post" />
                 <Badge count={12} tone="warn" label="12 pending" />

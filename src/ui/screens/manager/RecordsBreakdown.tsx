@@ -8,7 +8,7 @@ import './RecordsBreakdown.css';
 export type BreakdownTab = 'intern' | 'category';
 
 const TABS: readonly { readonly key: BreakdownTab; readonly label: string }[] = [
-  { key: 'intern', label: 'By intern' },
+  { key: 'intern', label: 'By agent' },
   { key: 'category', label: 'By category' },
 ];
 
@@ -101,7 +101,7 @@ function InternTable({
       <table className="breakdown-table">
         <thead>
           <tr>
-            <th scope="col">Intern</th>
+            <th scope="col">Agent</th>
             <th scope="col" className="breakdown-table__num">
               Posts
             </th>

@@ -62,18 +62,18 @@ describe('Settings → Team', () => {
     expect(within(screen.getByRole('button', { name: 'Carlo Mendoza' }).closest('tr')!).getByText('Turned off')).toBeTruthy();
 
     const filters = screen.getByRole('group', { name: 'Show only' });
-    expect(within(filters).getAllByRole('button').map((b) => b.textContent)).toEqual(['Interns2', 'Admins2', 'Turned off1']);
+    expect(within(filters).getAllByRole('button').map((b) => b.textContent)).toEqual(['Agents2', 'Admins2', 'Turned off1']);
     // Add person is the one gold button.
     expect(screen.getByRole('button', { name: 'Add person' }).className).toContain('button--primary');
   });
 
   it('filters by role and by turned off, and searches names and FB broker names', async () => {
     await openTeam();
-    await userEvent.click(screen.getByRole('button', { name: /^Interns/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Agents/ }));
     expect(names()).toEqual([intern.name, 'Carlo Mendoza']);
     await userEvent.click(screen.getByRole('button', { name: /^Turned off/ }));
     expect(names()).toEqual(['Carlo Mendoza']);
-    await userEvent.click(screen.getByRole('button', { name: /^Interns/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Agents/ }));
     await userEvent.click(screen.getByRole('button', { name: /^Turned off/ }));
     await userEvent.click(screen.getByRole('button', { name: /^Admins/ }));
     expect(names()).toEqual([admin.name, 'Bea Lim']);
@@ -110,7 +110,7 @@ describe('Settings → Team', () => {
   it('says so when no one is on the team yet', async () => {
     renderApp({ platform: fakeServer({ team: { ok: true, team: [] } }), user: admin, path: '/settings' });
     expect(await screen.findByText('No one yet')).toBeTruthy();
-    expect(screen.getByText('Add your first intern.')).toBeTruthy();
+    expect(screen.getByText('Add your first agent.')).toBeTruthy();
   });
 
   it('opens a row in the side panel, with this week counted from the posts', async () => {
@@ -139,8 +139,8 @@ describe('Settings → Team', () => {
     const side = panel(intern.name);
     await userEvent.click(within(side).getByRole('button', { name: 'Open APG Main profile' }));
     await waitFor(() => expect(platform.opened).toEqual(['https://www.facebook.com/jan.delacruz']));
-    await userEvent.click(within(side).getByRole('button', { name: 'See their queue in Interns' }));
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Interns');
+    await userEvent.click(within(side).getByRole('button', { name: 'See their queue in Agents' }));
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Agents');
   });
 
   it('edits the FB accounts, each with its own profile link, then reads the team again', async () => {
@@ -151,7 +151,7 @@ describe('Settings → Team', () => {
       }),
     });
     await userEvent.click(screen.getByRole('button', { name: intern.name }));
-    expect(within(panel(intern.name)).getByText('Intern')).toBeTruthy();
+    expect(within(panel(intern.name)).getByText('Agent')).toBeTruthy();
     const details = within(panel(intern.name)).getByRole('region', { name: 'Details' });
     const save = within(details).getByRole('button', { name: 'Save' });
     expect(save).toHaveProperty('disabled', true);
@@ -259,8 +259,8 @@ describe('Settings → Team', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
     const dialog = screen.getByRole('dialog', { name: 'Add person' });
     const order = Array.from(dialog.querySelectorAll('label.field__label, legend')).map((l) => l.textContent);
-    expect(order).toEqual(['Intern name', 'Role', 'FB broker name', 'FB profile link (optional)']);
-    await userEvent.type(within(dialog).getByLabelText('Intern name'), 'Mika Reyes');
+    expect(order).toEqual(['Agent name', 'Role', 'FB broker name', 'FB profile link (optional)']);
+    await userEvent.type(within(dialog).getByLabelText('Agent name'), 'Mika Reyes');
     await userEvent.type(within(dialog).getByLabelText(/^FB broker name/), 'APG Main ');
     await userEvent.type(within(dialog).getByLabelText(/^FB profile link/), 'facebook.com/mika.reyes');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add account' }));
@@ -291,7 +291,7 @@ describe('Settings → Team', () => {
     const platform = await openTeam();
     await userEvent.click(screen.getByRole('button', { name: 'Add person' }));
     const dialog = screen.getByRole('dialog', { name: 'Add person' });
-    await userEvent.type(within(dialog).getByLabelText('Intern name'), 'jan dela cruz');
+    await userEvent.type(within(dialog).getByLabelText('Agent name'), 'jan dela cruz');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add person' }));
     expect(within(dialog).getByText('Jan Dela Cruz is already on the team.')).toBeTruthy();
     expect(within(dialog).getByText('Type their FB broker name.')).toBeTruthy();

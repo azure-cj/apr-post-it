@@ -389,7 +389,7 @@ describe('a refusal from the server', () => {
 
   it.each([
     ['unknown-person', 'logPost', 'There is nobody active called Bea on the team.', "That person isn't active on the team."],
-    ['bad-intern', 'saveQueues', 'Bea is not an active intern on the Team tab.', "That person isn't an active intern."],
+    ['bad-intern', 'saveQueues', 'Bea is not an active intern on the Team tab.', "That person isn't an active agent."],
     ['bad-queues', 'saveQueues', "Item 2 of Jan's queue has no property.", "The queues couldn't be read. Check them and save again."],
     ['bad-accounts', 'addPerson', 'FB accounts must be a list of names.', "The FB accounts couldn't be read. Check them and try again."],
     ['notfound', 'newKey', 'There is nobody called Bea on the team.', 'Google could not find what it needed to make a new key. Reload and try again.'],

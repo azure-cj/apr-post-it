@@ -13,7 +13,7 @@ export const RELEASE_NOTES: readonly ReleaseNotes[] = [
     version: '1.1.2',
     items: [
       'Warnings from Wednesday when your week is behind: what is left, and how many a day.',
-      'Admins see who is behind for Friday on Interns.',
+      'Admins see who is behind for Friday on Agents.',
       "This What's new, after each update. Click the version in the sidebar to see it again.",
     ],
   },

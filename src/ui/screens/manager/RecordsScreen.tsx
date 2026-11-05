@@ -167,7 +167,7 @@ export function RecordsScreen({
             ) : (
               <Tile label="Missed" value={null} note={nextFriday && nextFriday <= period.to ? `After ${shortDate(nextFriday)}` : 'No week ended'} />
             )}
-            <Tile label="Active interns" value={now.interns} change={prev ? compareToPrevious(now.interns, prev.interns) : null} versus={versus} />
+            <Tile label="Active agents" value={now.interns} change={prev ? compareToPrevious(now.interns, prev.interns) : null} versus={versus} />
             <Tile
               label="Busiest day"
               value={now.busiest?.count ?? null}

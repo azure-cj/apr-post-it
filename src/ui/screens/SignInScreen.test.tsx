@@ -156,7 +156,7 @@ describe('SignInScreen', () => {
     it('starts on Intern, sends the role picked, and says where each key comes from', async () => {
       const onSubmit = vi.fn();
       render(<SignInScreen onSubmit={onSubmit} busy={false} initialUrl="https://x" />);
-      expect((screen.getByRole('radio', { name: 'Intern' }) as HTMLInputElement).checked).toBe(true);
+      expect((screen.getByRole('radio', { name: 'Agent' }) as HTMLInputElement).checked).toBe(true);
       expect(screen.getByText('Ask your admin.')).toBeTruthy();
 
       await userEvent.click(screen.getByRole('radio', { name: 'Admin' }));
@@ -183,13 +183,13 @@ describe('signing in as the wrong role', () => {
     const key = screen.getByLabelText('Your key') as HTMLInputElement;
     await userEvent.type(key, 'intern-key{Enter}');
 
-    expect((await screen.findByRole('alert')).textContent).toContain('This key is for an Intern.');
+    expect((await screen.findByRole('alert')).textContent).toContain('This key is for an Agent.');
     expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeTruthy();
     expect(key.value).toBe('intern-key');
     expect(await platform.readKey()).toBeNull();
 
     // Picking Intern then signs in, and is remembered.
-    await userEvent.click(screen.getByRole('radio', { name: 'Intern' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Agent' }));
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'My queue' })).toBeTruthy();
     expect(await platform.readLocal(SIGN_IN_ROLE_KEY)).toBe('Intern');

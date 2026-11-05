@@ -56,16 +56,16 @@ export function AssignPicker({ interns, week, assignments, posts, today, onPick 
   const shown = q === '' ? rows : rows.filter((r) => r.name.toLowerCase().includes(q));
 
   return (
-    <section className="assign-pick" aria-label="Interns this week">
+    <section className="assign-pick" aria-label="Agents this week">
       {interns.length >= SEARCH_FROM ? (
-        <SearchBox label="Search interns" placeholder="Search" value={query} onValueChange={setQuery} className="assign-pick__search" />
+        <SearchBox label="Search agents" placeholder="Search" value={query} onValueChange={setQuery} className="assign-pick__search" />
       ) : null}
       {shown.length === 0 ? (
         <p className="assign__quiet assign-pick__none" role="status">
-          No intern matches “{query.trim()}”.
+          No agent matches “{query.trim()}”.
         </p>
       ) : (
-        <ul className="assign-pick__grid" aria-label="Interns">
+        <ul className="assign-pick__grid" aria-label="Agents">
           {shown.map((row) => (
             <li key={row.name}>
               <InternCard row={row} onPick={() => onPick(row.name)} />
@@ -74,7 +74,7 @@ export function AssignPicker({ interns, week, assignments, posts, today, onPick 
         </ul>
       )}
       <p className="visually-hidden" role="status">
-        {q === '' ? '' : plural(shown.length, 'intern', 'interns')}
+        {q === '' ? '' : plural(shown.length, 'agent', 'agents')}
       </p>
     </section>
   );
@@ -122,7 +122,7 @@ function InternCard({ row, onPick }: { readonly row: TeamWeekRow; readonly onPic
 export function NoInterns() {
   return (
     <Card>
-      <EmptyState title="No interns yet">Add them in Settings → Team.</EmptyState>
+      <EmptyState title="No agents yet">Add them in Settings → Team.</EmptyState>
     </Card>
   );
 }

@@ -4,6 +4,7 @@ import { Icon, type IconName } from './Icon';
 import { Badge } from './Pill';
 import './TitleBar.css';
 import './Sidebar.css';
+import { roleWord } from '@/core/types';
 
 export interface SidebarNavItem {
   readonly key: string;
@@ -170,10 +171,10 @@ export function Sidebar({
       <div className="sidebar__spacer" {...drag} />
 
       <div className="sidebar__footer">
-        <div className="sidebar__user" {...tipFor(`${user.name} · ${user.role}`)}>
+        <div className="sidebar__user" {...tipFor(`${user.name} · ${roleWord(user.role)}`)}>
           <span className="sidebar__who">
             <span className="sidebar__user-name">{user.name}</span>
-            <span className="sidebar__user-role">{user.role}</span>
+            <span className="sidebar__user-role">{roleWord(user.role)}</span>
           </span>
           <span className="sidebar__avatar sidebar__avatar--me" aria-hidden="true">
             {initials(user.name)}

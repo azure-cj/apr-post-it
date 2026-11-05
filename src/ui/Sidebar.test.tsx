@@ -44,8 +44,8 @@ describe('the sidebar', () => {
 
   it('gives an admin Tracker, Assign, Interns, Records, Find and Settings, and no list of people', async () => {
     renderApp({ platform: server(), user: admin, path: '/tracker' });
-    expect(navNames()).toEqual(['Tracker', 'Assign', 'Interns', 'Records', 'Find', 'Settings']);
-    const interns = screen.getByRole('link', { name: 'Interns' });
+    expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'Find', 'Settings']);
+    const interns = screen.getByRole('link', { name: 'Agents' });
     expect(interns.getAttribute('href')).toBe('#/interns');
     expect(interns.querySelector('svg')).not.toBeNull();
     // Nobody is listed in the sidebar itself, however long the team.
@@ -57,10 +57,10 @@ describe('the sidebar', () => {
 
   it('opens the Interns screen from the nav, and marks it', async () => {
     renderApp({ platform: server(), user: admin, path: '/tracker' });
-    await userEvent.click(screen.getByRole('link', { name: 'Interns' }));
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Interns');
-    expect(screen.getByRole('link', { name: 'Interns' }).getAttribute('aria-current')).toBe('page');
-    expect(document.title).toBe('Interns · APG Post-It');
+    await userEvent.click(screen.getByRole('link', { name: 'Agents' }));
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Agents');
+    expect(screen.getByRole('link', { name: 'Agents' }).getAttribute('aria-current')).toBe('page');
+    expect(document.title).toBe('Agents · APG Post-It');
   });
 
   it('gives an intern no Interns item, and never asks for the team', async () => {
@@ -68,7 +68,7 @@ describe('the sidebar', () => {
     renderApp({ platform, user: intern, path: '/queue' });
     await screen.findByRole('heading', { level: 1, name: 'My queue' });
     expect(navNames()).toEqual(['My queue', 'Find']);
-    expect(screen.queryByRole('link', { name: 'Interns' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Agents' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeTruthy();
     expect(platform.posts.map((p) => p.action)).not.toContain('team');
   });
@@ -77,7 +77,7 @@ describe('the sidebar', () => {
     renderApp({ platform: server(), user: admin, path: '/assign' });
     // The team's active interns, and only them. Their order is by pace (Behind
     // first; AssignPicker's own tests cover it), so only the set is checked here.
-    const picker = await screen.findByRole('list', { name: 'Interns' });
+    const picker = await screen.findByRole('list', { name: 'Agents' });
     await waitFor(() =>
       expect(
         within(picker)
@@ -99,7 +99,7 @@ describe('the sidebar', () => {
     expect(sidebar().classList.contains('sidebar--collapsed')).toBe(true);
     // The rail keeps every name.
     expect(screen.getByRole('link', { name: 'Tracker' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Interns' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Agents' })).toBeTruthy();
     await waitFor(async () => expect(await platform.readLocal('sidebar')).toBe('collapsed'));
 
     await userEvent.keyboard('{Control>}b{/Control}');

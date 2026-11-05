@@ -27,7 +27,7 @@ const { cooldownDays, repostDueDays, perWeek } = RULE_LIMITS;
 export const RULES: readonly RuleDef[] = [
   { key: 'cooldownDays', label: 'Cooldown', what: 'Days before a listing can be posted again.', unit: ['day', 'days'], min: cooldownDays.min, max: cooldownDays.max },
   { key: 'repostDueDays', label: 'Due for repost', what: 'Days without a post before a listing is due again.', unit: ['day', 'days'], min: repostDueDays.min, max: repostDueDays.max },
-  { key: 'perWeek', label: 'Listings per week', what: 'Each intern’s weekly target. Due Friday.', unit: ['listing', 'listings'], min: perWeek.min, max: perWeek.max },
+  { key: 'perWeek', label: 'Listings per week', what: 'Each agent’s weekly target. Due Friday.', unit: ['listing', 'listings'], min: perWeek.min, max: perWeek.max },
 ];
 
 /** The problem with a typed value, or null. */

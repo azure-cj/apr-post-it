@@ -3,6 +3,7 @@ import type { Role } from '@/core/types';
 import { Button, Card, Notice, TextInput } from '../components';
 import { Segmented } from './manager/Segmented';
 import './SignInScreen.css';
+import { roleWord } from '@/core/types';
 
 export interface SignInScreenProps {
   /** Called with the trimmed link and key once both are filled in, and the role chosen. */
@@ -110,7 +111,7 @@ export function SignInScreen({
         </h1>
 
         <form className="sign-in__form" onSubmit={submit} noValidate aria-busy={busy || undefined}>
-          <Segmented label="Sign in as" options={ROLES} value={role} onChange={pickRole} disabled={busy} />
+          <Segmented label="Sign in as" options={ROLES} labelOf={roleWord} value={role} onChange={pickRole} disabled={busy} />
 
           {builtIn ? null : (
             <TextInput

@@ -261,3 +261,15 @@ same person already logged as the first one and writes nothing (no new column, w
 would have needed). A retry carries when it was logged, and the server dates the row by it if
 that is within the last four days. A refusal (the cooldown, an FB account that isn't yours) is
 still shown at once and never kept; one that only comes on a retry is shown until dismissed.
+
+### D21. The team is Firebase's people; the Team tab keeps only FB accounts (Nov 4, 2026)
+
+Amends D19. Signed in by account, Post-It's team is Alpha Listing Hub's people, read with the
+admin's sign-in from the hub's `listPeople`: agent is Intern, admin or owner is Admin, and a
+scanner or an account with no role is left out. People are added, given roles and turned off on
+the hub's People screen only, so Post-It's Add person, Turn off and New key are gone there (the
+server refuses them, `hub-people`). The name everywhere is the People screen's: the server keeps
+the names `listPeople` last gave, by email, so an intern's own posts are credited under the same
+name the admin's screens show. Each person's FB accounts and profile links stay in the sheets,
+on the Team tab row with their email (made when there is none). A copy still on a key keeps the
+Team tab as before. Queues and logging on someone's behalf take only active people on Firebase.

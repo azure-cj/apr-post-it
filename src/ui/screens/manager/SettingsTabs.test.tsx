@@ -246,7 +246,7 @@ describe('Settings → Rules', () => {
     renderApp({ platform, user: admin, path: '/settings?tab=rules' });
     const per = (await screen.findByLabelText('Listings per week')) as HTMLInputElement;
     await waitFor(() => expect(per.value).toBe('40'));
-    expect(screen.getByText('Each intern’s weekly target. Due Friday.')).toBeTruthy();
+    expect(screen.getByText('Each agent’s weekly target. Due Friday.')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Fewer: Listings per week' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Saved')).toBeTruthy();

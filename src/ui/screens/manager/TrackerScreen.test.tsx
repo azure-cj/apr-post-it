@@ -104,11 +104,11 @@ describe('TrackerScreen', () => {
   it('sums up the day in four tiles, zero included', async () => {
     renderTracker();
     const tiles = Array.from(document.querySelectorAll('.tracker-stats dt')).map((dt) => dt.textContent);
-    expect(tiles).toEqual(['Posted today', 'Pending', 'Interns behind', 'Docs to fix']);
+    expect(tiles).toEqual(['Posted today', 'Pending', 'Agents behind', 'Docs to fix']);
     expect(stat('Posted today')).toBe('9');
     // Waiting for approval, whatever day.
     expect(stat('Pending')).toBe('2');
-    expect(stat('Interns behind')).toBe('1 of 2');
+    expect(stat('Agents behind')).toBe('1 of 2');
     // Four listings, Bulacan counted once.
     expect(stat('Docs to fix')).toBe('4');
 
@@ -156,7 +156,7 @@ describe('TrackerScreen', () => {
     const card = screen.getByRole('region', { name: 'This week' });
     const rows = Array.from(card.querySelectorAll('.intern-row')).map((r) => r.textContent);
     expect(rows).toEqual(['JDJan Dela Cruz1 / 10Behind', 'MRMika Reyes6 / 10On track']);
-    const link = within(card).getByRole('link', { name: 'See all interns' });
+    const link = within(card).getByRole('link', { name: 'See all agents' });
     expect(link.textContent).toBe('See all');
     expect(link.getAttribute('href')).toBe('#/interns');
     await userEvent.click(link);
@@ -177,7 +177,7 @@ describe('TrackerScreen', () => {
 
     // Only the kinds someone has, in order, each folded with its count.
     const toggles = within(card).getAllByRole('button', { expanded: false });
-    expect(toggles.map((b) => b.textContent)).toEqual(['No separator· 2Shown to interns with a warning', 'No document· 1', 'No photos· 2']);
+    expect(toggles.map((b) => b.textContent)).toEqual(['No separator· 2Shown to agents with a warning', 'No document· 1', 'No photos· 2']);
     expect(within(card).queryByRole('list', { name: 'No separator' })).toBeNull();
 
     await userEvent.click(toggles[0]!);
@@ -216,7 +216,7 @@ describe('TrackerScreen', () => {
     const card = screen.getByRole('region', { name: 'Documents' });
     const toggles = within(card).getAllByRole('button', { expanded: false });
     expect(toggles.map((b) => b.textContent)).toEqual([
-      'No separator· 14Shown to interns with a warning',
+      'No separator· 14Shown to agents with a warning',
       'Empty above separator· 1',
       "Couldn't read· 1",
     ]);

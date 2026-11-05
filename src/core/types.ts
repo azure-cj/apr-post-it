@@ -9,6 +9,11 @@
 /** Admin assigns the postings and sees everything; an Intern posts. */
 export type Role = 'Intern' | 'Admin';
 
+/** A role as the app says it: the Intern role is called Agent on screen, as Alpha Listing Hub does. */
+export function roleWord(role: Role | string): string {
+  return role === 'Intern' ? 'Agent' : role;
+}
+
 export interface User {
   readonly name: string;
   readonly role: Role;

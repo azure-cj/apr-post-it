@@ -176,7 +176,7 @@ export function TrackerScreen({
           <dl className="tracker-stats tracker__stats">
             <Stat label={isToday ? 'Posted today' : 'Posted'} value={day.posted} />
             <Stat label="Pending" value={day.pending} />
-            <Stat label="Interns behind" value={behind} of={pace.length} />
+            <Stat label="Agents behind" value={behind} of={pace.length} />
             <Card padding="tight" className="tracker-stat tracker-stat--link">
               <dt className="tracker-stat__label">
                 <button type="button" className="tracker-stat__jump" onClick={showDocs}>
@@ -207,14 +207,14 @@ export function TrackerScreen({
               padding="tight"
               actions={
                 internsHref ? (
-                  <RouteLink href={internsHref} onNavigate={onOpenInterns} aria-label="See all interns">
+                  <RouteLink href={internsHref} onNavigate={onOpenInterns} aria-label="See all agents">
                     See all
                   </RouteLink>
                 ) : undefined
               }
             >
               {pace.length === 0 ? (
-                <p className="tracker__quiet">No active interns.</p>
+                <p className="tracker__quiet">No active agents.</p>
               ) : (
                 <ul className="intern-list">
                   {pace.map((row) => (
@@ -296,7 +296,7 @@ function DayPosts({
         <tr>
           <th scope="col">Time</th>
           <th scope="col">Listing</th>
-          <th scope="col">Intern</th>
+          <th scope="col">Agent</th>
           <th scope="col">Status</th>
           <th scope="col">Post</th>
         </tr>
@@ -342,7 +342,7 @@ const DOC_LABEL: Record<DocIssue, string> = {
 
 /** Only these are posted anyway; the rest stop a listing being posted, or are a folder to fill. */
 const DOC_HINT: Partial<Record<DocIssue, string>> = {
-  noSeparator: 'Shown to interns with a warning',
+  noSeparator: 'Shown to agents with a warning',
 };
 
 /** Can't be posted until fixed: nothing to copy. */

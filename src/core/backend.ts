@@ -500,7 +500,7 @@ function refusal(reply: Reply, action: Action): BackendError {
     case 'unknown-person':
       return new BackendError('unknown-person', action, theirs("That person isn't active on the team."));
     case 'bad-intern':
-      return new BackendError('bad-intern', action, theirs("That person isn't an active intern."));
+      return new BackendError('bad-intern', action, theirs("That person isn't an active agent."));
     case 'bad-queues':
       return new BackendError('bad-queues', action, theirs("The queues couldn't be read. Check them and save again."));
     case 'bad-accounts':

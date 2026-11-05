@@ -9,13 +9,15 @@ export interface SegmentedProps<T extends string> {
   readonly onChange: (value: T) => void;
   readonly disabled?: boolean | undefined;
   readonly className?: string | undefined;
+  /** How each option reads, when not as its value. */
+  readonly labelOf?: ((option: T) => string) | undefined;
 }
 
 /**
  * Two or three choices side by side, one picked: radios underneath, so the
  * arrow keys move between them. The picked one is gold (selected).
  */
-export function Segmented<T extends string>({ label, options, value, onChange, disabled = false, className }: SegmentedProps<T>) {
+export function Segmented<T extends string>({ label, options, value, onChange, disabled = false, className, labelOf }: SegmentedProps<T>) {
   const name = useId();
   return (
     <fieldset className={['segmented', className].filter(Boolean).join(' ')} disabled={disabled}>
@@ -31,7 +33,7 @@ export function Segmented<T extends string>({ label, options, value, onChange, d
               onChange={() => onChange(option)}
               className="segmented__input"
             />
-            <span>{option}</span>
+            <span>{labelOf ? labelOf(option) : option}</span>
           </label>
         ))}
       </div>

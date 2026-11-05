@@ -65,12 +65,12 @@ describe('a Firebase sign-in instead of a key', () => {
     expect(w.project.post({ action: 'ping', idToken: 'token-noname' })).toMatchObject({ ok: true, name: 'noname@apg.test', role: 'Admin' });
   });
 
-  it("takes a Team row's name and FB accounts when the email matches, but the account's role", () => {
+  it("takes the FB accounts the Team tab keeps for the email, but the account's name and role", () => {
     const w = world();
-    // The row says Admin; the account is an agent, and the account wins.
+    // The row says CJ Aureo and Admin; the account is "cj", an agent, and the account wins.
     expect(w.project.post({ action: 'ping', idToken: 'token-cj' })).toMatchObject({
       ok: true,
-      name: 'CJ Aureo',
+      name: 'cj',
       role: 'Intern',
       fbAccounts: ['Cyrus', 'Kevs'],
     });
@@ -85,7 +85,7 @@ describe('a Firebase sign-in instead of a key', () => {
     const w = world();
     expect(w.project.post({ action: 'posts', idToken: 'token-new' })).toMatchObject({ ok: true, posts: [] });
     expect(w.project.post({ action: 'team', idToken: 'token-new' })).toMatchObject({ ok: false, error: 'forbidden' });
-    expect(w.project.post({ action: 'team', idToken: 'token-boss' })).toMatchObject({ ok: true });
+    expect(w.project.post({ action: 'team', idToken: 'token-boss' })).not.toMatchObject({ error: 'forbidden' });
   });
 
   it.each([

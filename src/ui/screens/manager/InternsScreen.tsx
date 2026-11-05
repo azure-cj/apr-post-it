@@ -124,7 +124,7 @@ export function InternsScreen({
     <div className="page interns">
       <header className="page-header interns__header">
         <h1 className="page-header__title" tabIndex={-1}>
-          Interns
+          Agents
         </h1>
         <div className="interns__controls">
           <WeekPicker week={week} today={today} onChange={onWeekChange} />
@@ -163,7 +163,7 @@ export function InternsScreen({
         </div>
       ) : team === null ? null : nobody ? (
         <Card>
-          <EmptyState title="No interns yet">Add them in Settings → Team.</EmptyState>
+          <EmptyState title="No agents yet">Add them in Settings → Team.</EmptyState>
         </Card>
       ) : (
         <>
@@ -178,7 +178,7 @@ export function InternsScreen({
             <Notice
               tone="warn"
               className="interns__friday"
-              title={behindForFriday.length === 1 ? '1 intern behind for Friday' : `${behindForFriday.length} interns behind for Friday`}
+              title={behindForFriday.length === 1 ? '1 agent behind for Friday' : `${behindForFriday.length} agents behind for Friday`}
             >
               <ul className="interns__friday-list">
                 {behindForFriday.map(({ name, warning }) => (
@@ -193,7 +193,7 @@ export function InternsScreen({
           <div className={`interns__body${openRow ? ' interns__body--panel' : ''}`}>
             <Card className="interns__list" padding="tight">
               {rows.length === 0 ? (
-                <p className="interns__quiet">No active interns.</p>
+                <p className="interns__quiet">No active agents.</p>
               ) : (
                 <WeekTable
                   rows={rows}
@@ -252,7 +252,7 @@ function WeekTable({ rows, week, today, posts, open, onOpen }: WeekTableProps) {
       <table className="week-table">
         <thead>
           <tr>
-            <th scope="col">Intern</th>
+            <th scope="col">Agent</th>
             <th scope="col">Progress</th>
             <th scope="col">
               <span className="visually-hidden">Mon to Fri</span>

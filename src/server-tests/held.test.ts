@@ -18,7 +18,7 @@ const JAN = 'Jan Dela Cruz';
 const ANA = 'Ana Reyes';
 
 describe('held listings', () => {
-  it('refuses a listing held by another intern in a week that is not over, and writes nothing', () => {
+  it('refuses a listing held by another agent in a week that is not over, and writes nothing', () => {
     const w = createWorld();
     w.assignments.writeText([THIS_WEEK, ANA, CASA.name, 'Not Shared', CASA.id]);
     const before = w.assignments.show();

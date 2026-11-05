@@ -708,8 +708,8 @@ export function AssignScreen({
         const n = marks.size || refusals.length;
         setProblems([
           n === 1
-            ? 'One listing is held by another intern. Remove it, then save again.'
-            : `${n} listings are held by other interns. Remove them, then save again.`,
+            ? 'One listing is held by another agent. Remove it, then save again.'
+            : `${n} listings are held by other agents. Remove them, then save again.`,
         ]);
       } else {
         setProblems([e instanceof UserFacingError ? e.message : COULD_NOT_SAVE]);
@@ -850,7 +850,7 @@ export function AssignScreen({
           icon={<ManagerIcon name="chevronLeft" size={18} />}
           onClick={() => requestIntern('')}
         >
-          All interns
+          All agents
         </Button>
         <h1 className="page-header__title" tabIndex={-1}>
           {intern}

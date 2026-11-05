@@ -141,7 +141,7 @@ describe('Assign, step one: the interns this week', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Assign');
     expect(weekShown()).toBe('26–30 Oct');
 
-    const cards = within(screen.getByRole('list', { name: 'Interns' })).getAllByRole('button');
+    const cards = within(screen.getByRole('list', { name: 'Agents' })).getAllByRole('button');
     expect(cards.map((c) => c.querySelector('.assign-pick__name')?.textContent)).toEqual([JAN, MIKA, BEA, DANA]);
     expect(cards.map((c) => c.querySelector('.pill')?.textContent)).toEqual(['Behind', 'Not started', 'No queue', 'Done']);
     // Posted and pending against the week's queue: Ortigas posted, Lot 7 pending, two to go.
@@ -176,7 +176,7 @@ describe('Assign, step one: the interns this week', () => {
     render(<Harness intern={null} />);
     await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
     expect(weekShown()).toBe('19–23 Oct');
-    const cards = within(screen.getByRole('list', { name: 'Interns' })).getAllByRole('button');
+    const cards = within(screen.getByRole('list', { name: 'Agents' })).getAllByRole('button');
     expect(cards[0]?.querySelector('.assign-pick__name')?.textContent).toBe(JAN);
     expect(cards[0]?.querySelector('.pill')?.textContent).toBe('Missed');
   });
@@ -206,7 +206,7 @@ describe('Assign, the week picker and the link', () => {
   it('opens on this week on a weekday, and keeps the week and the intern in the link', async () => {
     // Wednesday 28 Oct, 10:00 in Manila.
     const path = renderShell(Date.parse('2026-10-28T02:00:00Z'));
-    const list = await screen.findByRole('list', { name: 'Interns' });
+    const list = await screen.findByRole('list', { name: 'Agents' });
     expect(weekShown()).toBe('26–30 Oct');
     expect(screen.getByRole('button', { name: 'This week' }).getAttribute('aria-pressed')).toBe('true');
 
@@ -222,7 +222,7 @@ describe('Assign, the week picker and the link', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
     expect(week(path())).toBe(WEEK);
 
-    await userEvent.click(screen.getByRole('button', { name: 'All interns' }));
+    await userEvent.click(screen.getByRole('button', { name: 'All agents' }));
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Assign');
     expect(path()).not.toContain('intern=');
     expect(week(path())).toBe(WEEK);
@@ -231,7 +231,7 @@ describe('Assign, the week picker and the link', () => {
   it('opens on next week from Saturday: the reset has happened', async () => {
     // Saturday 31 Oct, 10:00 in Manila.
     renderShell(Date.parse('2026-10-31T02:00:00Z'));
-    await screen.findByRole('list', { name: 'Interns' });
+    await screen.findByRole('list', { name: 'Agents' });
     expect(weekShown()).toBe('2–6 Nov');
     expect(screen.getByRole('button', { name: 'This week' }).getAttribute('aria-pressed')).toBe('true');
   });
@@ -485,7 +485,7 @@ describe('Assign, saving', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add Meycauayan Warehouse B' }));
     await userEvent.click(screen.getByRole('button', { name: /^Save queue/ }));
 
-    await screen.findByText('One listing is held by another intern. Remove it, then save again.');
+    await screen.findByText('One listing is held by another agent. Remove it, then save again.');
     const refused = document.querySelector('.queue-row--refused')!;
     expect(refused.textContent).toContain('Casa Amara House & Lot');
     expect(refused.textContent).toContain('With Bea, 26–30 Oct');
@@ -567,7 +567,7 @@ describe('Assign, kept from before', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Remove Sta. Rosa Lot 22' }));
     expect(queueNames()).toEqual(['Verdant Hills Lot 12']);
 
-    const back = screen.getByRole('button', { name: 'All interns' });
+    const back = screen.getByRole('button', { name: 'All agents' });
     await userEvent.click(back);
     expect(onInternChange).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toContain('Unsaved changes');
@@ -582,7 +582,7 @@ describe('Assign, kept from before', () => {
     await userEvent.click(back);
     await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(onInternChange).toHaveBeenCalledWith(null);
-    expect(screen.getByRole('list', { name: 'Interns' })).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Agents' })).toBeTruthy();
   });
 
   it('asks before switching week too, and moves on once discarded', async () => {

@@ -42,6 +42,7 @@ import { AssignScreen, InternsScreen, monitorWeek, RecordsScreen, SettingsScreen
 import { useTheme } from './state/theme';
 import { Launch } from './startup/Launch';
 import type { Platform } from '@/platform';
+import type { AddPersonInput } from '@/core/tracker';
 import {
   manilaTime,
   paths,
@@ -83,7 +84,7 @@ export function navFor(user: User): readonly NavDef[] {
     return [
       { key: 'tracker', label: 'Tracker', path: paths.tracker, icon: 'tracker' },
       { key: 'assign', label: 'Assign', path: paths.assign, icon: 'assign' },
-      { key: 'interns', label: 'Interns', path: paths.interns, icon: 'interns' },
+      { key: 'interns', label: 'Agents', path: paths.interns, icon: 'interns' },
       { key: 'records', label: 'Records', path: paths.records, icon: 'records' },
       { key: 'find', label: 'Find', path: paths.find, icon: 'search' },
       { key: 'settings', label: 'Settings', path: paths.settings, icon: 'settings' },
@@ -115,7 +116,7 @@ function titleFor(pathname: string): string | null {
     '/queue': 'My queue',
     '/assign': 'Assign',
     '/tracker': 'Tracker',
-    '/interns': 'Interns',
+    '/interns': 'Agents',
     '/records': 'Records',
     '/settings': 'Settings',
     '/kit': 'UI kit',
@@ -1094,10 +1095,15 @@ function SettingsRoute() {
         today: app.today(),
         loading: team.loading,
         error: team.data ? null : team.error,
-        onAddPerson: (input) => tracker.addPerson(input),
-        onSetActive: (name, active) => tracker.setActive(name, active),
+        // Signed in by account, people are added, given roles and turned off on Alpha Listing Hub (v13).
+        ...(app.usesAccounts
+          ? { managedInHub: true }
+          : {
+              onAddPerson: (input: AddPersonInput) => tracker.addPerson(input),
+              onSetActive: (name: string, active: boolean) => tracker.setActive(name, active),
+              onNewKey: (name: string) => tracker.newKey(name),
+            }),
         onUpdatePerson: (name, changes) => tracker.updatePerson(name, changes),
-        onNewKey: (name) => tracker.newKey(name),
         onOpenLink: open,
         onCopy: copy,
         onOpenInterns: () => navigate(paths.interns),

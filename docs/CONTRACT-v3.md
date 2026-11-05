@@ -292,3 +292,14 @@ The owner: "assign per week only, e.g. 40 listings per week; Friday is the final
   future and at most four days old; otherwise now. The cooldown is judged at that moment too.
 - `core/outbox`: `keepsForRetry(err)` is true for a failure on the way (unreachable, timeout,
   http, busy, an unreadable reply, a Google page, unauthorized, server); a refusal is not kept.
+
+## v13: the team from Firebase (server 2026-11-04.4)
+
+With an `idToken`, `team` lists Alpha Listing Hub's people (`listPeople`, asked with that token):
+`{ name, role, email, fbAccounts, fbProfiles, fbProfileLink, active }`, role `Intern` for agent and
+`Admin` for admin or owner; others are left out. FB accounts are the Team tab's for that email.
+`updatePerson` saves FB accounts on the Team tab row with the person's email, making it when there
+is none. `addPerson`, `setActive` and `newKey` reply `{ ok: false, error: 'hub-people' }`.
+`saveQueues` and `logPost`'s `postedBy` take active people on Firebase. When `listPeople` can't be
+read, the reply's error is "Couldn't read the people from Alpha Listing Hub. Try again." Calls with
+a `key` are unchanged.

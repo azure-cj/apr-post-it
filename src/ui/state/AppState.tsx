@@ -309,7 +309,7 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
       signal?.throwIfAborted();
       // The role picked only states intent; the server's answer decides, and
       // a key for the other role is not kept.
-      if (role && signedIn.role !== role) throw new UserFacingError(`This key is for an ${signedIn.role}.`);
+      if (role && signedIn.role !== role) throw new UserFacingError(`This key is for ${signedIn.role === 'Admin' ? 'an Admin' : 'an Agent'}.`);
       await platform.writeKey(key);
       if (signal?.aborted) {
         // Cancelled while the key was being kept: take it back off this PC.

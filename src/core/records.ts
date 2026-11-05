@@ -655,7 +655,7 @@ export function missedInPeriod(weeks: readonly QueueWeek[]): MissedInPeriod {
   return { total, weeksOver: overWeeks.size, byIntern };
 }
 
-/** One row of "By intern". */
+/** One row of "By agent". */
 export interface InternRow {
   readonly name: string;
   /** Their posts dated in the span, either status. */

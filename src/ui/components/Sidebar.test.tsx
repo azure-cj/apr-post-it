@@ -20,7 +20,7 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: 'APG Post-It' })).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
     expect(screen.getByText('Jan Dela Cruz')).toBeTruthy();
-    expect(screen.getByText('Intern')).toBeTruthy();
+    expect(screen.getByText('Agent')).toBeTruthy();
   });
 
   it('marks the current screen, and only it', () => {

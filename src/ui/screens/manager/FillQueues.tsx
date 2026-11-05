@@ -31,7 +31,7 @@ export const SKIP_WORDS: Record<SkipReason, string> = {
   sold: 'Sold or not available',
   noSeparator: 'No separator',
   noDocument: 'No document',
-  held: 'Held by another intern',
+  held: 'Held by another agent',
   cooldown: 'In cooldown',
 };
 
@@ -141,7 +141,7 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
           Interns <span className="fill__count tabular">{who.length} of {interns.length}</span>
         </legend>
         {interns.length === 0 ? (
-          <p className="fill__muted">No active interns.</p>
+          <p className="fill__muted">No active agents.</p>
         ) : (
           <div className="fill__interns">
             {interns.map((name) => (

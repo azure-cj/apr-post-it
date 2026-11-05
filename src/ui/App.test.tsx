@@ -205,7 +205,7 @@ describe('the shell', () => {
     for (const user of [manager, admin]) {
       const { unmount } = renderApp({ platform: fakeServer(), user });
       expect(heading()).toBe('Tracker');
-      expect(navNames()).toEqual(['Tracker', 'Assign', 'Interns', 'Records', 'Find', 'Settings']);
+      expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'Find', 'Settings']);
       unmount();
     }
   });
@@ -256,8 +256,8 @@ describe("the manager's screens", () => {
     expect(heading()).toBe('Tracker');
     await userEvent.click(screen.getByRole('link', { name: 'Assign' }));
     expect(heading()).toBe('Assign');
-    await userEvent.click(screen.getByRole('link', { name: 'Interns' }));
-    expect(heading()).toBe('Interns');
+    await userEvent.click(screen.getByRole('link', { name: 'Agents' }));
+    expect(heading()).toBe('Agents');
     await userEvent.click(screen.getByRole('link', { name: 'Settings' }));
     expect(heading()).toBe('Settings');
     // The team the web app sent, in Settings' table.

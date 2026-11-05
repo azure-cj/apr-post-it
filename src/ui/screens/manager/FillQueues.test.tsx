@@ -36,7 +36,7 @@ describe('Assign → Fill queues', () => {
     const platform = fakeServer({ team: TEAM, posts: POSTS, saveQueues: (body) => ({ ok: true, saved: 4, echo: body }) });
     renderApp({ platform, user: admin, path: '/assign' });
     // Step one, choosing an intern, is still there.
-    expect(await screen.findByRole('list', { name: 'Interns' })).toBeTruthy();
+    expect(await screen.findByRole('list', { name: 'Agents' })).toBeTruthy();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Fill queues' }));
     const dialog = screen.getByRole('dialog', { name: 'Fill queues' });

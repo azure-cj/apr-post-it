@@ -7,6 +7,7 @@ import { cleanProfiles, FbAccountsField, profilesOf, profilesProblem, sameProfil
 import { lastPostWords } from './InternsScreen';
 import { PersonDialog } from './PersonDialog';
 import { ConfirmAction, KeyOnce, sentence } from './SettingsShared';
+import { roleWord } from '@/core/types';
 
 export interface SettingsTeamProps {
   /** The Team tab without its keys, in its own order. Null: not read yet, or the web app doesn't send it. */
@@ -28,6 +29,8 @@ export interface SettingsTeamProps {
   readonly onCopy?: ((text: string) => void) | undefined;
   /** Opens the Interns screen, where an intern's queue and posts are. */
   readonly onOpenInterns?: (() => void) | undefined;
+  /** The team is Alpha Listing Hub's people (v13): said above the list. */
+  readonly managedInHub?: boolean | undefined;
 }
 
 /** Add person lives in the page header (the screen's one gold button); this tab runs its dialogs. */
@@ -73,6 +76,7 @@ export function SettingsTeam({
   onOpenInterns,
   adding = false,
   onAddingChange,
+  managedInHub = false,
 }: SettingsTeamProps & AddingProps) {
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<ReadonlySet<Filter>>(new Set());
@@ -134,7 +138,7 @@ export function SettingsTeam({
     </EmptyState>
   ) : team.length === 0 ? (
     <EmptyState headingLevel={3} title="No one yet">
-      Add your first intern.
+      Add your first agent.
     </EmptyState>
   ) : shown.length === 0 ? (
     <EmptyState
@@ -212,6 +216,12 @@ export function SettingsTeam({
   return (
     <div className={['team', member ? 'team--panel' : null].filter(Boolean).join(' ')}>
       <div className="team__main">
+        {managedInHub ? (
+          <Notice tone="info" className="team__hub">
+            People, their roles and who is turned off come from Alpha Listing Hub&apos;s People screen. Here you set each
+            person&apos;s FB accounts.
+          </Notice>
+        ) : null}
         <div className="team__bar">
           <SearchBox
             className="team__search"
@@ -222,7 +232,7 @@ export function SettingsTeam({
           />
           <div className="team__chips" role="group" aria-label="Show only">
             <Chip selected={filters.has('interns')} onSelectedChange={(on) => toggle('interns', on)} count={counts.interns}>
-              Interns
+              Agents
             </Chip>
             <Chip selected={filters.has('admins')} onSelectedChange={(on) => toggle('admins', on)} count={counts.admins}>
               Admins
@@ -348,7 +358,7 @@ function PersonPanel({
             {self ? <span className="settings__you">You</span> : null}
           </h2>
           <p className="person-panel__role">
-            {member.role}
+            {roleWord(member.role)}
             {active ? '' : ' · Turned off'}
           </p>
         </div>
@@ -367,7 +377,7 @@ function PersonPanel({
         <Week name={member.name} posts={posts} today={today} />
         {onOpenInterns && member.role === 'Intern' ? (
           <Button variant="link" onClick={onOpenInterns}>
-            See their queue in Interns
+            See their queue in Agents
           </Button>
         ) : null}
       </section>

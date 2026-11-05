@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-04.3';
+const SERVER_VERSION = '2026-11-04.4';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -66,7 +66,15 @@ const CONFIG = {
   // The shared Firebase project's web API key (Alpha Listing Hub's accounts),
   // to ask Google whose a sign-in is. It only names the project: not a secret.
   FIREBASE_API_KEY: 'AIzaSyCO7e6rg1geJWrjN1K_0-wX2ZiJek3kENQ',
+
+  // Alpha Listing Hub's listPeople (its People screen), asked with an admin's
+  // sign-in for who is on the team (v13). Admin and owner only, on its side.
+  LIST_PEOPLE_URL: 'https://asia-southeast1-apr-listing-live.cloudfunctions.net/listPeople',
 };
+
+// The sign-in token of the call being answered, when it came with one: then
+// the team is Firebase's people, not the Team tab (v13).
+var REQUEST_TOKEN_ = '';
 
 // Where the postable text ends is decided in Separators.gs, which this project
 // must also contain. Do not add a marker list here (D13).
@@ -110,6 +118,7 @@ function parseBody_(e) {
 function route_(req) {
   try {
     var me;
+    REQUEST_TOKEN_ = req.idToken ? textOf_(req.idToken).trim() : '';
     if (req.idToken) {
       // Signed in with a Firebase account (v11): the account says who you are and your role.
       var account = accountOf_(req.idToken);
@@ -125,6 +134,10 @@ function route_(req) {
     }
     if (!allowed_(me.role, req.action)) {
       return json_({ ok: false, error: 'forbidden', message: 'Your account cannot do that.' });
+    }
+    if (REQUEST_TOKEN_ && HUB_PEOPLE_ACTIONS.indexOf(req.action) !== -1) {
+      return json_({ ok: false, error: 'hub-people',
+                     message: 'People are added and turned off on Alpha Listing Hub\'s People screen.' });
     }
     switch (req.action) {
       case 'ping':        return json_({ ok: true, name: me.name, role: me.role, fbAccounts: me.fbAccounts, time: now_(),
@@ -185,35 +198,122 @@ function identify_(key) {
   return row ? callerOf_(row) : null;
 }
 
-/** The active Team row with this email (any case), as identify_ describes a caller. Null when none. */
-function identifyEmail_(email) {
-  var want = textOf_(email).trim().toLowerCase();
-  if (!want) return null;
-  var row = teamRows_().filter(function (t) {
-    return textOf_(t.Email).trim().toLowerCase() === want && String(t.Active).toUpperCase() !== 'FALSE';
-  })[0];
-  return row ? callerOf_(row) : null;
-}
-
 /**
  * The caller for a Firebase account (v11), or null when its role can't use
  * Post-It. The role is the account's (agent: Intern; admin or owner: Admin),
- * never the Team tab's. When the account's email is on an active Team row,
- * that row's name and FB accounts are used, so Posted By and the history keep
- * matching; otherwise the account's own name, and any FB account.
+ * never the Team tab's. The name is the People screen's (v13: as listPeople
+ * last gave it, else the account's own); the FB accounts are the ones the Team
+ * tab keeps for the email, or any FB account when it keeps none.
  */
 function callerOfAccount_(account) {
   var role = account.role === 'agent' ? 'Intern'
            : (account.role === 'admin' || account.role === 'owner') ? 'Admin' : null;
   if (!role) return null;
-  var row = identifyEmail_(account.email);
+  var row = teamRowByEmail_(account.email);
   return {
-    name: row ? row.name : (account.name || account.email),
+    name: knownNameOf_(account.email) || account.name || account.email,
     email: account.email,
     role: role,
-    fbAccounts: row ? row.fbAccounts : [],
+    fbAccounts: row ? accountsOf_(row['FB Accounts']) : [],
     canSeeInternal: role !== 'Intern',
   };
+}
+
+/** The Team tab's row with this email (any case), active or not, or null. It holds only FB accounts now (v13). */
+function teamRowByEmail_(email, rows) {
+  var want = textOf_(email).trim().toLowerCase();
+  if (!want) return null;
+  return (rows || teamRows_()).filter(function (t) { return textOf_(t.Email).trim().toLowerCase() === want; })[0] || null;
+}
+
+// ---------------------------------------------------------------- the team, from Firebase (v13)
+//
+// Signed in by account, the team is Alpha Listing Hub's people: its People
+// screen adds them, gives the role (agent is Intern, admin or owner is Admin)
+// and turns them off. A scanner or an account with no role is not on Post-It's
+// team. The Team tab only keeps each person's FB accounts and profile links,
+// by email. listPeople answers admins only, so the names it gives are kept in
+// Script Properties (by email): an intern's own calls are then credited under
+// the same name the admin's screens show.
+
+const HUB_PEOPLE_ACTIONS = ['addPerson', 'setActive', 'newKey'];
+const KNOWN_NAMES_PROPERTY = 'firebaseNames';
+
+/** Firebase's people as Post-It's team, [{ name, email, role, active }], or null without a sign-in token. Cached a minute. */
+function firebasePeople_() {
+  if (!REQUEST_TOKEN_) return null;
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'people:' + REQUEST_TOKEN_.slice(-200);
+  var hit = cache.get(cacheKey);
+  if (hit) {
+    try { return JSON.parse(hit); } catch (e) { /* ask again */ }
+  }
+  var res = UrlFetchApp.fetch(CONFIG.LIST_PEOPLE_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + REQUEST_TOKEN_ },
+    payload: JSON.stringify({ data: {} }),
+    muteHttpExceptions: true,
+  });
+  var list = null;
+  if (res.getResponseCode() === 200) {
+    try { list = (JSON.parse(res.getContentText()).result || {}).people; } catch (e) { list = null; }
+  }
+  if (!Array.isArray(list)) throw new Error('Couldn\'t read the people from Alpha Listing Hub. Try again.');
+  var people = [];
+  list.forEach(function (p) {
+    if (!p || typeof p !== 'object') return;
+    var role = p.role === 'agent' ? 'Intern' : (p.role === 'admin' || p.role === 'owner') ? 'Admin' : null;
+    var email = textOf_(p.email).trim().toLowerCase();
+    if (!role || !email) return;
+    people.push({ name: textOf_(p.name).trim() || email, email: email, role: role, active: p.active !== false });
+  });
+  try { cache.put(cacheKey, JSON.stringify(people), 60); } catch (e) { /* ignore */ }
+  rememberNames_(people);
+  return people;
+}
+
+/** Keeps each person's Firebase name by email, for knownNameOf_. Written only when something changed. */
+function rememberNames_(people) {
+  var props = PropertiesService.getScriptProperties();
+  var names = {};
+  people.forEach(function (p) { names[p.email] = p.name; });
+  var text = JSON.stringify(names);
+  if (props.getProperty(KNOWN_NAMES_PROPERTY) !== text) props.setProperty(KNOWN_NAMES_PROPERTY, text);
+}
+
+/** The person's name as the People screen last gave it, or ''. */
+function knownNameOf_(email) {
+  var text = PropertiesService.getScriptProperties().getProperty(KNOWN_NAMES_PROPERTY);
+  if (!text) return '';
+  try { return textOf_((JSON.parse(text) || {})[textOf_(email).trim().toLowerCase()]).trim(); } catch (e) { return ''; }
+}
+
+/** One of Firebase's people as the app's TeamMember, with the FB accounts the Team tab keeps for their email. */
+function memberOfPerson_(p, rows) {
+  var row = teamRowByEmail_(p.email, rows);
+  var kept = row ? personOf_(row) : { fbAccounts: [], fbProfiles: [], fbProfileLink: '' };
+  return {
+    name: p.name,
+    role: p.role,
+    email: p.email,
+    fbAccounts: kept.fbAccounts,
+    fbProfiles: kept.fbProfiles,
+    fbProfileLink: kept.fbProfileLink,
+    active: p.active,
+  };
+}
+
+/** The team as the app's TeamMembers: Firebase's people when signed in by account, else the Team tab. */
+function teamMembers_() {
+  var people = firebasePeople_();
+  if (!people) {
+    return teamRows_()
+      .filter(function (t) { return textOf_(t.Name).trim(); })
+      .map(personOf_);
+  }
+  var rows = teamRows_();
+  return people.map(function (p) { return memberOfPerson_(p, rows); });
 }
 
 /**
@@ -289,9 +389,7 @@ function teamRows_() {
  * included, with active: false.
  */
 function teamList_() {
-  return teamRows_()
-    .filter(function (t) { return textOf_(t.Name).trim(); })
-    .map(personOf_);
+  return teamMembers_();
 }
 
 /**
@@ -448,6 +546,7 @@ function updatePerson_(req, me) {
     accounts = { list: profiles.accounts };
     link = { value: profiles.links };
   }
+  if (REQUEST_TOKEN_) return updateMemberProfiles_(req.name, accounts, link);
   return editTeamRow_(req.name, function (sh, r, col, row) {
     if (accounts) {
       row['FB Accounts'] = accounts.list.join(', ');
@@ -532,6 +631,44 @@ function badProfileLink_() {
   return { ok: false, error: 'bad-profile-link', message: 'That isn\'t a Facebook profile link.' };
 }
 
+/**
+ * updatePerson for one of Firebase's people (v13): their FB accounts and links
+ * go on the Team tab row with their email, made when there is none (no key: an
+ * account signs in by its own sign-in). Name and Role there follow Firebase.
+ */
+function updateMemberProfiles_(name, accounts, link) {
+  var want = textOf_(name).trim().toLowerCase();
+  var person = teamMembers_().filter(function (m) { return m.name.trim().toLowerCase() === want; })[0];
+  if (!person) return { ok: false, error: 'notfound', message: 'There is nobody called ' + textOf_(name).trim() + ' on the team.' };
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
+  try {
+    var sh = plainTab_('Team', TEAM_HEADERS);
+    var col = teamColumns_(sh);
+    var values = sh.getDataRange().getValues();
+    var r = -1;
+    for (var i = 1; i < values.length; i++) {
+      if (textOf_(values[i][col.Email]).trim().toLowerCase() === person.email) { r = i; break; }
+    }
+    var row = {};
+    TEAM_HEADERS.forEach(function (h) { row[h] = r === -1 ? '' : values[r][col[h]]; });
+    row.Name = person.name;
+    row.Email = person.email;
+    row.Role = person.role;
+    row.Active = 'TRUE';
+    if (accounts) row['FB Accounts'] = accounts.list.join(', ');
+    if (link) row['FB Profile Link'] = link.value;
+    var at = r === -1 ? sh.getLastRow() + 1 : r + 1;
+    ['Name', 'Email', 'Role', 'Active', 'FB Accounts', 'FB Profile Link'].forEach(function (h) {
+      setText_(sh.getRange(at, col[h] + 1), textOf_(row[h]));
+    });
+    CacheService.getScriptCache().remove('team');
+    return { ok: true, person: memberOfPerson_(person, [row]) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function newKey_(req, me) {
   requireAll_(req, ['name']);
   return editTeamRow_(req.name, function (sh, r, col, row) {
@@ -602,10 +739,9 @@ function teamColumns_(sh) {
 function activePerson_(name) {
   var want = textOf_(name).trim().toLowerCase();
   if (!want) return null;
-  var row = teamRows_().filter(function (t) {
-    return textOf_(t.Name).trim().toLowerCase() === want && String(t.Active).toUpperCase() !== 'FALSE';
-  })[0];
-  return row ? personOf_(row) : null;
+  return teamMembers_().filter(function (m) {
+    return m.active && textOf_(m.name).trim().toLowerCase() === want;
+  })[0] || null;
 }
 
 // ---------------------------------------------------------------- the directory

@@ -6,6 +6,7 @@ import { UserFacingError, type Role } from '@/core/types';
 import { Dialog } from './Dialog';
 import { cleanProfiles, FbAccountsField, profilesOf, profilesProblem, type ProfilesProblem } from './FbAccountsField';
 import { Segmented } from './Segmented';
+import { roleWord } from '@/core/types';
 
 const ROLES: readonly Role[] = ['Intern', 'Admin'];
 const FAILED = "That didn't work. Check your connection, then try again.";
@@ -103,7 +104,7 @@ export function PersonDialog(props: PersonDialogProps) {
       <form id={formId} className="settings__form" onSubmit={(e) => void submit(e)} noValidate>
         <TextInput
           ref={nameRef}
-          label={role === 'Admin' ? 'Name' : 'Intern name'}
+          label={role === 'Admin' ? 'Name' : 'Agent name'}
           autoComplete="off"
           value={name}
           readOnly={busy || editing}
@@ -114,9 +115,9 @@ export function PersonDialog(props: PersonDialogProps) {
           }}
         />
         {editing ? (
-          <TextInput label="Role" value={role} readOnly />
+          <TextInput label="Role" value={roleWord(role)} readOnly />
         ) : (
-          <Segmented label="Role" options={ROLES} value={role} onChange={setRole} disabled={busy} />
+          <Segmented label="Role" options={ROLES} labelOf={roleWord} value={role} onChange={setRole} disabled={busy} />
         )}
         <FbAccountsField
           rows={rows}

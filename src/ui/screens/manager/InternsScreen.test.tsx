@@ -114,7 +114,7 @@ const stat = (label: string) => within(document.querySelector('.tracker-stats') 
 describe('the Interns screen: the week', () => {
   it('lists the active interns worst first, with the week so far, posts per day, pace and last post', async () => {
     renderAt(THURSDAY, { platform: server() });
-    expect(heading()).toBe('Interns');
+    expect(heading()).toBe('Agents');
     expect(screen.getByRole('group', { name: 'Week' }).textContent).toContain('2–6 Nov');
     await waitFor(() => expect(names()).toEqual(['Bea Lim', intern.name, 'Mika Reyes', 'Carlo Mendoza']));
 
@@ -148,7 +148,7 @@ describe('the Interns screen: the week', () => {
     expect(stat('Behind')).toBe('2 of 4');
 
     // Thursday: those behind are named for Friday, with what is left and how many a day.
-    const friday = screen.getByText('2 interns behind for Friday').closest('.notice')!;
+    const friday = screen.getByText('2 agents behind for Friday').closest('.notice')!;
     expect(friday.querySelectorAll('li')).toHaveLength(2);
     expect(friday.textContent).toMatch(/left, 2 days to go: about \d+ a day\./);
   });
@@ -400,7 +400,7 @@ describe('the Interns screen', () => {
 
   it('says how to add the first intern when the team has none', async () => {
     renderAt(THURSDAY, { platform: server({ team: { ok: true, team: [TEAM.team[1]] } }) });
-    expect(await screen.findByRole('heading', { name: 'No interns yet' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'No agents yet' })).toBeTruthy();
     expect(screen.getByText('Add them in Settings → Team.')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
   });
@@ -431,9 +431,9 @@ describe('the Interns screen', () => {
     expect(jan.querySelector('.week-bar__count')!.textContent).toBe('3 / 10');
     expect(jan.textContent).toContain('Behind');
     // Still the day's tracker: today's posts, and the week's laggards counted.
-    expect(stat('Interns behind')).toBe('2 of 4');
+    expect(stat('Agents behind')).toBe('2 of 4');
 
-    await userEvent.click(within(card).getByRole('link', { name: 'See all interns' }));
-    expect(heading()).toBe('Interns');
+    await userEvent.click(within(card).getByRole('link', { name: 'See all agents' }));
+    expect(heading()).toBe('Agents');
   });
 });

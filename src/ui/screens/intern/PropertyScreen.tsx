@@ -56,7 +56,7 @@ const backLabels: Record<NavKey, string> = {
   find: 'Results',
   tracker: 'Tracker',
   assign: 'Assign',
-  interns: 'Interns',
+  interns: 'Agents',
   records: 'Records',
   settings: 'Settings',
 };
@@ -793,7 +793,7 @@ function InternalSection({ detail }: { readonly detail: PropertyDetail }) {
         <Icon name="warn" className="internal__icon" />
         <span className="internal__label">
           <span className="internal__title">Internal section: never posted, never copied</span>
-          <span className="meta">Agents only.</span>
+          <span className="meta">For you to read. Never in a post or a copy.</span>
         </span>
         <span className="internal__toggle" aria-hidden="true">
           <span className="internal__show">Show</span>
