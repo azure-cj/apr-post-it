@@ -128,9 +128,18 @@ describe('settings', () => {
       repostDueDays: 14,
       perWeek: 40,
       perIntern: 40,
+      queueWeeks: 2,
       pendingReminderDays: 2,
     });
-    expect(parseSettings('not json')).toEqual({ scriptUrl: '', cooldownDays: 7, repostDueDays: 14, perWeek: 40, perIntern: 40, pendingReminderDays: 2 });
+    expect(parseSettings('not json')).toEqual({
+      scriptUrl: '',
+      cooldownDays: 7,
+      repostDueDays: 14,
+      perWeek: 40,
+      perIntern: 40,
+      queueWeeks: 2,
+      pendingReminderDays: 2,
+    });
     // The reminder's days: 0 (off) to 30; anything else is the default.
     expect([0, 7, 31, -1, 1.5, '3'].map((d) => parseSettings(JSON.stringify({ pendingReminderDays: d })).pendingReminderDays)).toEqual([0, 7, 2, 2, 2, 2]);
   });

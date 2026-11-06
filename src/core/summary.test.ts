@@ -392,7 +392,7 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
 
     const taken = r.check(named('Seaside Residences 2BR'));
     expect(taken).toMatchObject({ canAdd: false, block: 'otherQueue', holder: MIKA });
-    expect(taken.reason).toBe("Already in Mika's queue for the week of 26–30 Oct.");
+    expect(taken.reason).toBe("Already in Mika's queue (due Fri 30 Oct).");
 
     expect(rules(MIKA, TODAY, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared'])).check(named('Seaside Residences 2BR')).canAdd).toBe(true); // her own queue
     expect(rules(JAN, TOMORROW, queue(MIKA, TODAY, ['Seaside Residences 2BR', 'Not Shared'])).check(named('Seaside Residences 2BR')).canAdd).toBe(false); // the same week
@@ -433,7 +433,7 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
 
   it("names the other intern in full when they share a first name with this one's", () => {
     const r = rules(JAN, TODAY, queue('Jan Reyes', TODAY, ['Seaside Residences 2BR', 'Not Shared']));
-    expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Jan Reyes's queue for the week of 26–30 Oct.");
+    expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Jan Reyes's queue (due Fri 30 Oct).");
   });
 
   it('gives search results with their check', () => {
@@ -506,7 +506,7 @@ describe('assignRules — ported from AssignmentServiceTests', () => {
       "Verdant Hills Lot 7 can't go in this queue. Posted 2 days ago by Jan. It can go in a queue from Tue 3 Nov.",
     ]);
     expect(r.validate([r.entryNamed('Seaside Residences 2BR')]).problems).toEqual([
-      "Seaside Residences 2BR can't go in this queue. Already in Mika's queue for the week of 26–30 Oct.",
+      "Seaside Residences 2BR can't go in this queue. Already in Mika's queue (due Fri 30 Oct).",
     ]);
   });
 
@@ -523,7 +523,7 @@ describe('the draft — ported from AssignViewModelTests', () => {
   it('judges a candidate on its week: this week from today, the next from its Monday', () => {
     const r = rules(JAN, TOMORROW, queue(MIKA, TOMORROW, ['Seaside Residences 2BR', 'Not Shared']));
     expect(r.check(named('Verdant Hills Lot 7'))).toMatchObject({ canAdd: false, daysLeft: 5, nextAllowed: '2026-11-03' });
-    expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Mika's queue for the week of 26–30 Oct.");
+    expect(r.check(named('Seaside Residences 2BR')).reason).toBe("Already in Mika's queue (due Fri 30 Oct).");
     // Saturday 31 Oct is next week's: judged on Monday 2 Nov.
     expect(rules(JAN, '2026-10-31').check(named('Verdant Hills Lot 7')).daysLeft).toBe(1);
   });

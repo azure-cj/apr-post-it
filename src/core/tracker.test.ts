@@ -237,12 +237,12 @@ describe('the assignments', () => {
     // No `week` from a server before v6: the week of the date (Thursday 2 Apr: the week of 30 Mar).
     const week = '2026-03-30';
     expect(rows).toEqual([
-      { date: '2026-04-02', week, assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: '1AbC', status: 'Not Shared' },
-      { date: '2026-04-02', week, assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 3', propertyId: '', status: 'Not Shared' },
+      { date: '2026-04-02', week, due: '', assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: '1AbC', status: 'Not Shared' },
+      { date: '2026-04-02', week, due: '', assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 3', propertyId: '', status: 'Not Shared' },
       // Manila's midnight on Apr 2 is 16:00 on Apr 1 in UTC.
-      { date: '2026-04-02', week, assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 9', propertyId: '', status: 'Pending' },
-      { date: '2026-04-02', week, assignedTo: 'Bea Lim', propertyName: 'Silang 40', propertyId: '', status: 'Posted' },
-      { date: '', week: '', assignedTo: 'Bea Lim', propertyName: 'Mabini', propertyId: '', status: 'Not Shared' },
+      { date: '2026-04-02', week, due: '', assignedTo: 'Jan Dela Cruz', propertyName: 'Lot 9', propertyId: '', status: 'Pending' },
+      { date: '2026-04-02', week, due: '', assignedTo: 'Bea Lim', propertyName: 'Silang 40', propertyId: '', status: 'Posted' },
+      { date: '', week: '', due: '', assignedTo: 'Bea Lim', propertyName: 'Mabini', propertyId: '', status: 'Not Shared' },
     ]);
   });
 

@@ -21,9 +21,20 @@ import {
   type QueueEntry,
   type Rules,
 } from '@/core/summary';
-import type { QueueItemInput } from '@/core/tracker';
+import type { QueueItemInput, QueueWhen } from '@/core/tracker';
 import { DEFAULT_RULES, UserFacingError, type Assignment, type PostLogEntry, type Property } from '@/core/types';
-import { addWeeks, isWeekOver, weekFriday, weekLabel, weekOf } from '@/core/week';
+import {
+  chooseQueue,
+  currentQueue,
+  freeStart,
+  isQueueOver,
+  periodLabel,
+  queuesOf,
+  queueWeeksOf,
+  weeksLabel,
+  withWeeks,
+} from '@/core/queues';
+import { weekOf } from '@/core/week';
 import { MenuButton, MoreIcon } from './AssignMenu';
 import { LibraryPanel, QuickFill, tabLabel, type CategoryTab } from './AssignLibrary';
 import { PastePanel, type Matched } from './AssignPaste';
@@ -32,13 +43,16 @@ import { heldWords, listingState, type ListingState } from './assignListing';
 import { FillQueues, type FillQueuesProps } from './FillQueues';
 import { ManagerIcon } from './ManagerIcon';
 import { DoneRow, QueueRow } from './QueueRow';
+import { LengthPicker, QueuePicker } from './QueuePicker';
 import { WeekPicker } from './WeekPicker';
 import './AssignScreen.css';
 
-/** What Save hands over: `tracker.saveQueue(save.week, save.assignedTo, save.items)` fits. */
+/** What Save hands over: `tracker.saveQueue(save.week, save.assignedTo, save.items, save.when)` fits. */
 export interface QueueSave {
-  /** The queue's week, as its Monday (yyyy-MM-dd). */
+  /** The queue's week, as its Monday (yyyy-MM-dd): the week its start is in. */
   readonly week: string;
+  /** v14: its first working day and its deadline. */
+  readonly when: QueueWhen;
   /** Whose queue, exactly as the `intern` prop spelled it: the server matches names with ===. */
   readonly assignedTo: string;
   /** In posting order. An item already saved keeps its status; a new one is Not Shared. */
@@ -50,7 +64,11 @@ export interface AssignScreenProps {
   readonly interns: readonly string[];
   /** Whose queue is shown, or null: then the screen asks whose. */
   readonly intern: string | null;
-  /** The week shown, as its Monday (yyyy-MM-dd). */
+  /**
+   * The week shown, as its Monday (yyyy-MM-dd). With an intern, it names their
+   * queue (queues.chooseQueue): the one that starts in it, or runs in it, or a
+   * new one.
+   */
   readonly week: string;
   /** Today on the tracker's calendar, yyyy-MM-dd. */
   readonly today: string;
@@ -60,11 +78,11 @@ export interface AssignScreenProps {
   readonly posts: readonly PostLogEntry[];
   /** Every Assignments row: this queue as saved, and who holds what. Read again after a save. */
   readonly assignments: readonly Assignment[];
-  /** The cooldown, repost-due and per-week rules. */
+  /** The cooldown, repost-due, per-week and queue-length rules. */
   readonly settings: Rules;
   /** Show another intern's queue, or (null) the list of interns. Only called once unsaved changes are saved or discarded. */
   readonly onInternChange: (intern: string | null) => void;
-  /** Show another week (its Monday). Only called once unsaved changes are saved or discarded. */
+  /** Show another week or queue (a week key, its Monday). Only called once unsaved changes are saved or discarded. */
   readonly onWeekChange: (week: string) => void;
   /** Save the queue. Resolve once saved; reject with a UserFacingError to have its sentence shown. */
   readonly onSave: (save: QueueSave) => Promise<unknown>;
@@ -137,6 +155,8 @@ interface Saved {
   readonly for: string;
   readonly entries: readonly QueueEntry[];
   readonly assignments: readonly Assignment[];
+  /** The length saved with them. */
+  readonly weeks: number;
 }
 
 /** The `held` refusal's list, when the error is one. */
@@ -203,23 +223,48 @@ export function AssignScreen({
   const [filling, setFilling] = useState(false);
   const { cooldownDays, repostDueDays } = settings;
   const perWeek = settings.perWeek ?? settings.perIntern ?? DEFAULT_RULES.perWeek;
-  const over = isWeekOver(week, today);
+  const defaultWeeks = queueWeeksOf(settings.queueWeeks ?? DEFAULT_RULES.queueWeeks);
+
+  // v14: whose queue, and which: a saved one, a new one, or none (a week gone by).
+  const choice = useMemo(
+    () => (intern === null ? null : chooseQueue(intern, week, assignments, today, defaultWeeks)),
+    [intern, week, assignments, today, defaultWeeks],
+  );
+  const queueFor = `${intern ?? ''}|${choice?.period.key ?? week}`;
+  // The length chosen for this queue; until one is, the saved length or the default.
+  const [length, setLength] = useState<{ readonly for: string; readonly weeks: number } | null>(null);
+  // Just saved, and the rows not read again yet: the length saved is the saved length.
+  const [saved, setSaved] = useState<Saved | null>(null);
+  const justSaved = saved && saved.for === queueFor && saved.assignments === assignments ? saved : null;
+  const savedWeeks = justSaved?.weeks ?? choice?.period.weeks ?? defaultWeeks;
+  const weeks = length && length.for === queueFor ? length.weeks : savedWeeks;
+  const period = choice ? (weeks === choice.period.weeks ? choice.period : withWeeks(choice.period, weeks)) : null;
+  const lengthChanged = Boolean(choice?.saved || justSaved) && weeks !== savedWeeks;
+  // A length may be chosen when it ends before the next queue, and (once it has started) not before today.
+  const lengthAllowed = (n: number): boolean => {
+    if (!choice) return false;
+    const due = withWeeks(choice.period, n).due;
+    if (choice.latestDue !== undefined && due > choice.latestDue) return false;
+    return !(choice.saved && due < today);
+  };
+
+  const over = intern === null ? false : choice === null || choice.past || (choice.saved && isQueueOver(choice.period, today));
   const held = useMemo(() => heldListings(assignments, today), [assignments, today]);
   const rules = useMemo<AssignRules | null>(() => {
-    if (intern === null) return null;
+    if (intern === null || !period) return null;
     const base = assignRules({
       intern,
-      week,
+      week: period.key,
+      period,
       today,
       posts,
       assignments,
       properties,
       settings: { cooldownDays, repostDueDays },
     });
-    return withHeld(base, held, intern, week);
-  }, [intern, week, today, posts, assignments, properties, cooldownDays, repostDueDays, held]);
+    return withHeld(base, held, intern, period.key);
+  }, [intern, period, today, posts, assignments, properties, cooldownDays, repostDueDays, held]);
 
-  const queueFor = `${intern ?? ''}|${week}`;
   const first = intern === null ? '' : firstName(intern);
 
   // ---- every listing's state for this queue ------------------------------
@@ -252,9 +297,7 @@ export function AssignScreen({
 
   // ---- the draft, and what it is compared with --------------------------
 
-  const [saved, setSaved] = useState<Saved | null>(null);
-  const baseline: readonly QueueEntry[] =
-    saved && saved.for === queueFor && saved.assignments === assignments ? saved.entries : (rules?.saved ?? []);
+  const baseline: readonly QueueEntry[] = justSaved ? justSaved.entries : (rules?.saved ?? []);
 
   const [draftState, setDraftState] = useState<Draft>(() => ({ for: queueFor, base: baseline, entries: baseline }));
   let draft = draftState;
@@ -269,7 +312,8 @@ export function AssignScreen({
     setDraftState(draft);
   }
   const entries = draft.entries;
-  const dirty = intern !== null && !over && !sameQueue(entries, baseline);
+  // A saved queue with a new length is a change too, even with the same listings.
+  const dirty = intern !== null && !over && (!sameQueue(entries, baseline) || (lengthChanged && entries.length > 0));
   const inQueue = useMemo(() => new Set(entries.map((e) => e.key)), [entries]);
   const open = useMemo(() => entries.filter((e) => groupOf(e.key) === 'open'), [entries, groupOf]);
 
@@ -298,7 +342,8 @@ export function AssignScreen({
   const [pending, setPending] = useState<Pending | null>(null);
   const [mode, setMode] = useState<Mode>('library');
   const [tab, setTab] = useState<CategoryTab>('all');
-  const [fillCount, setFillCount] = useState(perWeek);
+  // Per week of the queue: a 2-week queue fills twice as many.
+  const [fillCount, setFillCount] = useState(perWeek * weeks);
   const [pasteText, setPasteText] = useState('');
   const [matched, setMatched] = useState<Matched | null>(null);
   const [seed, setSeed] = useState<Seed | null>(null);
@@ -317,6 +362,11 @@ export function AssignScreen({
     setPending(null);
     setMatched(null);
   }, [queueFor]);
+
+  // Another queue, or another length: Add aims for the rules' number per week of it.
+  useEffect(() => {
+    setFillCount(perWeek * weeks);
+  }, [queueFor, weeks, perWeek]);
 
   useEffect(() => {
     if (dirty) setSavedNote(false);
@@ -388,7 +438,8 @@ export function AssignScreen({
       properties,
       posts,
       assignments,
-      week,
+      week: period?.key ?? week,
+      ...(period ? { period } : {}),
       today,
       rules: { cooldownDays, repostDueDays },
       intern,
@@ -432,18 +483,15 @@ export function AssignScreen({
     announce(`Removed the ${plural(n, 'listing', 'listings')} just added.`);
   };
 
-  // ---- missed, copied to the next open week -----------------------------------
+  // ---- missed, copied to the next queue -----------------------------------------
 
-  const nextOpen = (() => {
-    const next = addWeeks(week, 1);
-    const current = weekOf(today);
-    return next < current ? current : next;
-  })();
+  // Where a new queue would start now: the first working day from today that no queue of theirs covers.
+  const nextOpen = intern === null ? weekOf(today) : weekOf(freeStart(queuesOf(intern, assignments), today));
 
   const copyMissed = (missed: readonly QueueEntry[]) => {
-    if (intern === null) return;
+    if (intern === null || !period) return;
     const props = missed.flatMap((e) => (e.property ? [e.property] : []));
-    setSeed({ for: `${intern}|${nextOpen}`, from: week, properties: props });
+    setSeed({ for: `${intern}|${nextOpen}`, from: periodLabel(period), properties: props });
     onWeekChange(nextOpen);
   };
 
@@ -458,8 +506,8 @@ export function AssignScreen({
     }
     const note =
       fresh.length === seed.properties.length
-        ? `Copied ${fresh.length} from ${weekLabel(seed.from)}.`
-        : `Copied ${fresh.length} of ${seed.properties.length} from ${weekLabel(seed.from)}. The rest aren't free.`;
+        ? `Copied ${fresh.length} from ${seed.from}.`
+        : `Copied ${fresh.length} of ${seed.properties.length} from ${seed.from}. The rest aren't free.`;
     setFillNote(note);
     announce(note);
   }, [seed, queueFor, rules, loading, addable, setEntries, announce]);
@@ -654,6 +702,7 @@ export function AssignScreen({
 
   const resetDraft = () => {
     setDraftState((d) => ({ ...d, entries: baseline }));
+    setLength(null);
     setProblems([]);
     setRefused(new Map());
     setAddedNote(null);
@@ -672,7 +721,7 @@ export function AssignScreen({
   // ---- saving ---------------------------------------------------------------
 
   const save = async () => {
-    if (!rules || intern === null || saving || loading || over) return;
+    if (!rules || intern === null || !period || saving || loading || over) return;
     const result = rules.validate(entries);
     if (!result.ok) {
       setProblems(result.problems);
@@ -685,14 +734,14 @@ export function AssignScreen({
     setProblems([]);
     setRefused(new Map());
     try {
-      await onSave({ week, assignedTo: intern, items: result.items });
+      await onSave({ week: period.key, when: { start: period.start, due: period.due }, assignedTo: intern, items: result.items });
       if (!mounted.current) return;
-      setSaved({ for: forQueue, entries: snapshot, assignments: rowsWhenSaved });
+      setSaved({ for: forQueue, entries: snapshot, assignments: rowsWhenSaved, weeks: period.weeks });
       setAddedNote(null);
       setFill(null);
       setFillNote(null);
       setSavedNote(true);
-      announce(`Saved. ${plural(snapshot.length, 'listing', 'listings')} for ${weekLabel(week)}.`);
+      announce(`Saved. ${plural(snapshot.length, 'listing', 'listings')}, due ${shortDate(period.due)}.`);
     } catch (e) {
       if (!mounted.current) return;
       const refusals = heldOf(e);
@@ -757,16 +806,19 @@ export function AssignScreen({
 
   // ---- links to what was posted ---------------------------------------------
 
+  const from = period?.start ?? week;
+  const to = period?.due ?? week;
   const linkOf = useMemo(() => {
     if (intern === null) return () => undefined;
+    // Their posts while the queue ran.
     const theirs = posts
-      .filter((p) => p.postLink && samePerson(p.postedBy, intern) && /^\d{4}-\d{2}-\d{2}$/.test(p.date) && weekOf(p.date) === week)
+      .filter((p) => p.postLink && samePerson(p.postedBy, intern) && /^\d{4}-\d{2}-\d{2}$/.test(p.date) && p.date >= from && p.date <= to)
       .sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
     return (entry: QueueEntry): string | undefined => {
       const name = normalize(entry.propertyName);
       return theirs.find((p) => (entry.propertyId !== '' && p.propertyId === entry.propertyId) || normalize(p.title) === name)?.postLink;
     };
-  }, [posts, intern, week]);
+  }, [posts, intern, from, to]);
 
   // ---- the page -----------------------------------------------------------
 
@@ -807,9 +859,9 @@ export function AssignScreen({
             properties={properties}
             posts={posts}
             assignments={assignments}
-            rules={{ cooldownDays, repostDueDays, perWeek }}
+            rules={{ cooldownDays, repostDueDays, perWeek, queueWeeks: defaultWeeks }}
             today={today}
-            week={over ? weekOf(today) : week}
+            week={week < weekOf(today) ? weekOf(today) : week}
             onSave={onSaveQueues}
             onSaved={(note) => {
               setFilling(false);
@@ -838,7 +890,22 @@ export function AssignScreen({
 
   const pendingRows = entries.filter((e) => groupOf(e.key) === 'pending');
   const postedRows = entries.filter((e) => groupOf(e.key) === 'posted');
-  const friday = shortDate(weekFriday(week));
+  const due = period ? shortDate(period.due) : '';
+  const now = currentQueue(intern, assignments, today);
+  const currentKey = now && now.start <= today ? now.key : nextOpen;
+  const dueWords = !period
+    ? ''
+    : choice?.past
+      ? `No queue ${periodLabel(period)}`
+      : over
+        ? `Ended ${due}`
+        : !choice?.saved
+          ? `New · starts ${shortDate(period.start)} · due ${due}`
+          : today < period.start
+            ? `Starts ${shortDate(period.start)} · due ${due}`
+            : period.due === today
+              ? 'Due today'
+              : `Due ${due}`;
 
   const header = (
     <header className="page-header assign__header assign__header--queue">
@@ -855,9 +922,29 @@ export function AssignScreen({
         <h1 className="page-header__title" tabIndex={-1}>
           {intern}
         </h1>
-        <p className="assign__due">{over ? `Ended ${friday}` : `Due ${friday}`}</p>
+        <p className="assign__due">{dueWords}</p>
+        {!over && period ? (
+          <LengthPicker
+            weeks={weeks}
+            allowed={lengthAllowed}
+            disabled={saving}
+            onChange={(n) => {
+              setLength({ for: queueFor, weeks: n });
+              announce(`${weeksLabel(n)}. Due ${shortDate(withWeeks(period, n).due)}.`);
+            }}
+          />
+        ) : null}
       </div>
-      <WeekPicker week={week} today={today} onChange={requestWeek} />
+      {choice && period ? (
+        <QueuePicker
+          period={period}
+          prev={choice.prev}
+          next={choice.next}
+          current={period.key === currentKey}
+          currentKey={currentKey}
+          onChange={requestWeek}
+        />
+      ) : null}
     </header>
   );
 
@@ -875,7 +962,7 @@ export function AssignScreen({
               <span>Loading…</span>
             </div>
           ) : entries.length === 0 ? (
-            <p className="assign__quiet assign__empty">No queue that week.</p>
+            <p className="assign__quiet assign__empty">No queue then.</p>
           ) : (
             <>
               <div className="assign-review__head">
@@ -887,7 +974,7 @@ export function AssignScreen({
                 </p>
                 {missed.some((e) => e.property) ? (
                   <Button size="small" onClick={() => copyMissed(missed)}>
-                    {nextOpen === addWeeks(week, 1) ? 'Copy missed to next week' : 'Copy missed to this week'}
+                    Copy missed to next queue
                   </Button>
                 ) : null}
               </div>

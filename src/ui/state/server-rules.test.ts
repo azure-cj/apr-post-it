@@ -10,7 +10,7 @@ import { createServices } from './services';
 import { defaultAppSettings, parseSettings, serializeSettings, withServerRules } from './settings';
 import { EXEC, fakeServer, NOW } from './testing';
 
-const RULES = { cooldownDays: 3, repostDueDays: 21, perWeek: 12, perIntern: 12 };
+const RULES = { cooldownDays: 3, repostDueDays: 21, perWeek: 12, perIntern: 12, queueWeeks: 3 };
 const PING = { ok: true, name: 'Maria Santos', role: 'Admin', fbAccounts: [], version: EXPECTED_SERVER_VERSION, rules: RULES };
 
 function services(replies: Readonly<Record<string, unknown>> = {}) {

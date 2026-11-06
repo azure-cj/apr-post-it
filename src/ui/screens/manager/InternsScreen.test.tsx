@@ -148,7 +148,7 @@ describe('the Interns screen: the week', () => {
     expect(stat('Behind')).toBe('2 of 4');
 
     // Thursday: those behind are named for Friday, with what is left and how many a day.
-    const friday = screen.getByText('2 agents behind for Friday').closest('.notice')!;
+    const friday = screen.getByText('2 agents behind schedule').closest('.notice')!;
     expect(friday.querySelectorAll('li')).toHaveLength(2);
     expect(friday.textContent).toMatch(/left, 2 days to go: about \d+ a day\./);
   });

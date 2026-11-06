@@ -303,3 +303,19 @@ is none. `addPerson`, `setActive` and `newKey` reply `{ ok: false, error: 'hub-p
 `saveQueues` and `logPost`'s `postedBy` take active people on Firebase. When `listPeople` can't be
 read, the reply's error is "Couldn't read the people from Alpha Listing Hub. Try again." Calls with
 a `key` are unchanged.
+
+## v14: queues of 1 to 3 working weeks (server 2026-11-06.1)
+
+A queue runs from its start for 1, 2 or 3 weeks of working days; Saturday and Sunday don't count.
+Saved on Friday 6 Nov for 2 weeks, it is due Thursday 19 Nov (10 working days, the start counted);
+saved at the weekend, it starts on Monday. The Assignments tab's `Date` is the start and the new
+`Due` column (added on the first v14 save) the deadline. A row without `Due` is a one-week queue,
+Monday to Friday of its week. A queue's key is the Monday of its start's week, one per person.
+
+`saveQueue` and each queue in `saveQueues` take `start` and `due` (yyyy-MM-dd, working days, due on
+or after start, 3 weeks at most; else `error: 'bad-period'`). A queue that shares a working day with
+another of the same person's is refused with `error: 'overlap'`, `person`, `start`, `due`: one queue
+at a time. A save without them (an app before v14) keeps the queue's saved dates. Listings are held
+until the deadline; Not shared turns Missed the day after it. `assignments` rows carry `due`.
+The rules gain `queueWeeks` (Settings tab `Queue weeks`, 1–3, default 2): a new queue's length.
+The target of a queue is `perWeek` × its weeks; the behind warning starts on its third working day.

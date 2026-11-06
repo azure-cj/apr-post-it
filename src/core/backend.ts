@@ -136,6 +136,9 @@ export type BackendErrorCode =
   | 'bad-date'
   // saveQueue(s), v6: the week must be a Monday.
   | 'bad-week'
+  // saveQueue(s), v14: the start and due dates, and one queue at a time.
+  | 'bad-period'
+  | 'overlap'
   | 'bad-role'
   | 'bad-active'
   | 'bad-accounts'
@@ -509,6 +512,11 @@ function refusal(reply: Reply, action: Action): BackendError {
       return new BackendError('bad-date', action, 'Pick a valid date.');
     case 'bad-week':
       return new BackendError('bad-week', action, 'Pick a week: its Monday, written yyyy-MM-dd.');
+    // The server's sentences name the dates.
+    case 'bad-period':
+      return new BackendError('bad-period', action, theirs('Pick when the queue starts and when it is due.'));
+    case 'overlap':
+      return new BackendError('overlap', action, theirs('That agent already has a queue then. One queue at a time.'));
     case 'bad-role':
       return new BackendError('bad-role', action, 'Choose Intern or Admin.');
     case 'bad-active':

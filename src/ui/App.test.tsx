@@ -222,7 +222,7 @@ describe('the shell', () => {
 
   it('moves between screens from the nav, names the window, and starts at the heading', async () => {
     renderApp({ platform: fakeServer(), path: '/queue' });
-    await screen.findByText('Next week isn’t assigned yet');
+    await screen.findByText('Nothing in your queue');
     await userEvent.click(screen.getByRole('link', { name: 'Find' }));
     expect(heading()).toBe('Find');
     expect(document.title).toBe('Find · APG Post-It');
@@ -365,7 +365,7 @@ describe("the window's own controls", () => {
   it('asks the same question for Alt+F4 and the taskbar, and Escape stays', async () => {
     const platform = windowed();
     renderApp({ platform, user: intern, path: '/queue' });
-    await screen.findByText('Next week isn’t assigned yet');
+    await screen.findByText('Nothing in your queue');
 
     act(() => platform.closeFromOutside());
     expect(screen.getByRole('dialog', { name: 'Close APG Post-It?' })).toBeTruthy();

@@ -181,6 +181,12 @@ export interface Assignment {
    * with week.assignmentWeek(row), which falls back to weekOf(date).
    */
   readonly week?: string | undefined;
+  /**
+   * v14: the queue's deadline, yyyy-MM-dd, from the Due column; the Date is
+   * then the queue's start. Missing or blank: a one-week queue, due the
+   * Friday of its week (queues.assignmentPeriod reads both).
+   */
+  readonly due?: string | undefined;
   readonly assignedTo: string;
   readonly propertyName: string;
   readonly propertyId: string;
@@ -206,6 +212,8 @@ export interface Settings {
   readonly perWeek: number;
   /** @deprecated The old name of perWeek, kept equal to it while the screens switch. */
   readonly perIntern: number;
+  /** v14: how many weeks of working days a new queue runs by default, 1 to 3. */
+  readonly queueWeeks: number;
 }
 
 export const defaultSettings: Settings = {
@@ -215,6 +223,7 @@ export const defaultSettings: Settings = {
   repostDueDays: 14,
   perWeek: 40,
   perIntern: 40,
+  queueWeeks: 2,
 };
 
 /**
@@ -231,6 +240,8 @@ export interface ServerRules {
   readonly perWeek: number;
   /** @deprecated The old name of perWeek: the same value, kept while the screens switch. */
   readonly perIntern: number;
+  /** v14: how many weeks of working days a new queue runs by default, 1 to 3. A server before v14 sends none: 2. */
+  readonly queueWeeks: number;
 }
 
 /** The defaults, which are also Code.gs's CONFIG defaults. */
@@ -239,6 +250,7 @@ export const DEFAULT_RULES: ServerRules = Object.freeze({
   repostDueDays: defaultSettings.repostDueDays,
   perWeek: defaultSettings.perWeek,
   perIntern: defaultSettings.perWeek,
+  queueWeeks: defaultSettings.queueWeeks,
 });
 
 /** The whole numbers each rule may be, inclusive. Code.gs's ruleSpecs_ holds the same. */
@@ -249,6 +261,7 @@ export const RULE_LIMITS: Readonly<Record<keyof ServerRules, { readonly min: num
     perWeek: { min: 1, max: 200, label: 'Listings per week' },
     /** @deprecated perWeek's old name: the same limits. */
     perIntern: { min: 1, max: 200, label: 'Listings per week' },
+    queueWeeks: { min: 1, max: 3, label: 'The queue length' },
   });
 
 /** How the server's version compares with the one this app was built for. */

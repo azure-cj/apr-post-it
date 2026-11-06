@@ -31,7 +31,8 @@ import { normalize } from './matcher';
 import { inputWeek, readIssues, samePerson, weekReferenceDay, type DirectoryRow, type Rules } from './summary';
 import type { QueueItemInput } from './tracker';
 import { DEFAULT_RULES, queueStatus, type Assignment, type PostLogEntry } from './types';
-import { assignmentWeek, isWeekOver } from './week';
+import { isRowOver, periodReferenceDay, type QueuePeriod } from './queues';
+import { assignmentWeek } from './week';
 
 export type SkipReason = 'sold' | 'noSeparator' | 'noDocument' | 'held' | 'cooldown';
 
@@ -61,6 +62,12 @@ export interface PlanInput {
   readonly today?: string | undefined;
   readonly rules: Rules;
   /**
+   * v14: each intern's queue, when it is not simply the week's: its key names
+   * the rows kept or replaced, and it aims for perWeek × its weeks. An intern
+   * missing here has a one-week queue named by `week`.
+   */
+  readonly periods?: ReadonlyMap<string, QueuePeriod> | undefined;
+  /**
    * True: an intern's queue for that week is kept, first and as it is, and
    * counts toward `perWeek`. False: its Not Shared items are replaced, and
    * those listings are free to plan again; started items (Posted, Pending)
@@ -77,6 +84,8 @@ export interface Plan {
    * items first. Ready for Tracker.saveQueues.
    */
   readonly queues: Map<string, QueueItemInput[]>;
+  /** v14: each intern's queue planned, as `periods` gave it; missing for a one-week queue of `week`. */
+  readonly periods: ReadonlyMap<string, QueuePeriod>;
   /** How many items short of `perWeek` per intern the plan fell, in total. */
   readonly shortBy: number;
   /** Only reasons that left something out, in SKIP_REASONS order. */
@@ -190,17 +199,19 @@ function byPriority(a: Candidate, b: Candidate): number {
  */
 function takenOf(
   assignments: readonly Assignment[],
-  week: string,
+  week: string | ((name: string) => string),
   today: string,
   replaced: (name: string) => boolean,
 ): Lookup<true> {
   const taken = new Lookup<true>(() => true);
+  const keyFor = typeof week === 'string' ? () => week : week;
   for (const a of assignments) {
     const rowWeek = assignmentWeek(a);
     const open = queueStatus(a.status) === 'Not Shared';
-    if (rowWeek === week) {
+    if (rowWeek && rowWeek === keyFor(a.assignedTo)) {
       if (open && replaced(a.assignedTo)) continue;
-    } else if (!open || !rowWeek || isWeekOver(rowWeek, today)) {
+    } else if (!open || !rowWeek || isRowOver(a, today)) {
+      // v14: an open row holds its listing until its queue's deadline.
       continue;
     }
     taken.add(a.propertyId.trim(), a.propertyName, true);
@@ -286,8 +297,13 @@ function itemOf(c: Candidate): QueueItemInput {
 }
 
 export function planQueues(input: PlanInput): Plan {
-  const { week, today, ref } = whenOf(input);
+  const { week, today, ref: weekRef } = whenOf(input);
   const perWeek = perWeekOf(input);
+  const periods = input.periods ?? new Map<string, QueuePeriod>();
+  // Each intern's queue is named by its own key (v14); without one, the week's.
+  const keyFor = (name: string): string => periods.get(name)?.key ?? week;
+  // The cooldown is judged on the earliest reference day of the queues planned.
+  const ref = [...periods.values()].map((p) => periodReferenceDay(p, today)).reduce((a, b) => (b < a ? b : a), weekRef);
 
   const interns: string[] = [];
   for (const name of input.interns) if (name.trim() && !interns.includes(name)) interns.push(name);
@@ -297,7 +313,7 @@ export function planQueues(input: PlanInput): Plan {
   // Started items (Posted, Pending) are kept either way: they have happened.
   const existing = new Map<string, QueueItemInput[]>();
   for (const a of input.assignments) {
-    if (!planned.has(a.assignedTo) || assignmentWeek(a) !== week) continue;
+    if (!planned.has(a.assignedTo) || assignmentWeek(a) !== keyFor(a.assignedTo)) continue;
     if (!input.keepExisting && queueStatus(a.status) === 'Not Shared') continue;
     let list = existing.get(a.assignedTo);
     if (!list) existing.set(a.assignedTo, (list = []));
@@ -309,7 +325,7 @@ export function planQueues(input: PlanInput): Plan {
     });
   }
 
-  const taken = takenOf(input.assignments, week, today, (name) => !input.keepExisting && planned.has(name));
+  const taken = takenOf(input.assignments, keyFor, today, (name) => !input.keepExisting && planned.has(name));
   const { candidates, counts } = candidatesOf(input, ref, taken);
   const buckets = bucketsOf(candidates);
   const heads = buckets.map(() => 0);
@@ -321,7 +337,8 @@ export function planQueues(input: PlanInput): Plan {
   interns.forEach((name, i) => {
     const kept = existing.get(name) ?? [];
     queues.set(name, [...kept]);
-    need.push(Math.max(0, perWeek - kept.length));
+    // v14: per week of the queue: a 2-week queue aims for twice as many.
+    need.push(Math.max(0, perWeek * (periods.get(name)?.weeks ?? 1) - kept.length));
     cursor.push(buckets.length === 0 ? 0 : i % buckets.length);
   });
 
@@ -349,6 +366,7 @@ export function planQueues(input: PlanInput): Plan {
   return {
     week,
     queues,
+    periods: new Map([...periods].filter(([name]) => planned.has(name))),
     shortBy: need.reduce((sum, n) => sum + n, 0),
     skipped: SKIP_REASONS.filter((reason) => counts.has(reason)).map((reason) => ({
       reason,
@@ -359,6 +377,8 @@ export function planQueues(input: PlanInput): Plan {
 
 export interface PlanForInternInput
   extends Pick<PlanInput, 'properties' | 'posts' | 'assignments' | 'week' | 'date' | 'today' | 'rules'> {
+  /** v14: the queue being filled. With it, its key is the week, and the cooldown is judged on its reference day. */
+  readonly period?: QueuePeriod | undefined;
   /** Whose queue, exactly as the Team tab has the name. */
   readonly intern: string;
   /** How many to pick at most: "Add 40 for posting". Default: the rules' perWeek (perWeekOf). */
@@ -383,8 +403,10 @@ export interface PlanForInternInput
  * items carry no status: they are Not Shared when saved.
  */
 export function planForIntern(input: PlanForInternInput): QueueItemInput[] {
-  const { intern } = input;
-  const { week, today, ref } = whenOf(input);
+  const { intern, period } = input;
+  const when = whenOf(period ? { ...input, week: period.key } : input);
+  const { week, today } = when;
+  const ref = period ? periodReferenceDay(period, today) : when.ref;
   const asked = input.count ?? perWeekOf({ rules: input.rules });
   const count = Number.isFinite(asked) ? Math.max(0, Math.floor(asked)) : 0;
   if (count === 0 || !intern.trim()) return [];

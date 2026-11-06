@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-04.4';
+const SERVER_VERSION = '2026-11-06.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -48,6 +48,7 @@ const CONFIG = {
   COOLDOWN_DAYS: 7,
   REPOST_DUE_DAYS: 14,
   PER_WEEK: 40,
+  QUEUE_WEEKS: 2,   // v14: a new queue's default length, in weeks of working days (1 to 3)
   TZ: 'Asia/Manila',
 
   // The listing checker's published Index CSV (File > Share > Publish to web).
@@ -1717,18 +1718,177 @@ function requestWeek_(req) {
   return { week: fromDate };
 }
 
-/** Assignments rows as the reply gives them: each with its `week`, the Date kept as written. */
+/**
+ * Assignments rows as the reply gives them: each with its `week` (the week of
+ * its Date, which names its queue) and its `due` as a day ('' when it has
+ * none), the Date kept as written.
+ */
 function withWeeks_(rows) {
   return rows.map(function (a) {
-    return Object.assign({}, a, { week: weekOf_(sheetDay_(a.date)) });
+    return Object.assign({}, a, { week: weekOf_(sheetDay_(a.date)), due: sheetDay_(a.due) });
   });
+}
+
+// ---------------------------------------------------------------- queue periods (v14)
+//
+// A queue runs on working days, Monday to Friday, from its start for 1, 2 or
+// 3 weeks of them (5, 10 or 15 working days, the start counted): saved on a
+// Friday for 2 weeks, it is due the Thursday after next. Its rows hold the
+// start in Date and the deadline in Due, and it is named by the week its
+// start is in (weekOf_ the Date), so a person has one queue per week. One
+// queue at a time: a person's queues never share a working day. A row with no
+// Due is a one-week queue: its week, due Friday. src/core/queues.ts is the
+// same rule.
+
+/** Monday to Friday, for a day number. */
+function isWorkdayNumber_(day) {
+  var weekday = new Date(day * DAY_MS).getUTCDay();
+  return weekday !== 0 && weekday !== 6;
+}
+
+/** Working days from `from` to `to` (yyyy-MM-dd), both counted; 0 when `to` is earlier. */
+function workdaysBetween_(from, to) {
+  var a = dayNumber_(from), b = dayNumber_(to), n = 0;
+  for (var d = a; d <= b; d++) if (isWorkdayNumber_(d)) n++;
+  return n;
+}
+
+/**
+ * The period of an Assignments row: { key, start, due }. With a Due on or
+ * after its start, the Date is the start (a weekend: the Monday after);
+ * without one, its week, Monday to Friday. null when the Date can't be read.
+ */
+function rowPeriod_(a) {
+  var day = sheetDay_(a.date);
+  var key = weekOf_(day);
+  if (!key) return null;
+  var due = sheetDay_(a.due);
+  var start = isWorkdayNumber_(dayNumber_(day)) ? day : key;
+  if (due && due >= start) return { key: key, start: start, due: due };
+  return { key: key, start: key, due: isoDay_(dayNumber_(key) + 4) };
+}
+
+/** True once `today` is past the row's deadline: an open row is Missed and holds nothing. No period: over. */
+function isRowOver_(a, today) {
+  var p = rowPeriod_(a);
+  return !p || dayNumber_(today) > dayNumber_(p.due);
+}
+
+/**
+ * When a saved queue runs, from a request or one of saveQueues' queues:
+ * { start, due } both sent, each a working day, the deadline on or after the
+ * start and no more than 3 weeks of working days on. Returns { start, due },
+ * null when neither is sent, or { refusal }.
+ */
+function requestPeriod_(source) {
+  var start = textOf_(source.start).trim();
+  var due = textOf_(source.due).trim();
+  if (!start && !due) return null;
+  var bad = function (message) { return { refusal: { ok: false, error: 'bad-period', message: message } }; };
+  if (!TRACKER_DAY.test(start) || sheetDay_(start) !== start || !TRACKER_DAY.test(due) || sheetDay_(due) !== due) {
+    return bad('Send the start and due dates of the queue, written yyyy-MM-dd.');
+  }
+  if (!isWorkdayNumber_(dayNumber_(start)) || !isWorkdayNumber_(dayNumber_(due))) {
+    return bad('A queue starts and is due on a working day, Monday to Friday.');
+  }
+  if (due < start) return bad('The due date must be on or after the start.');
+  if (workdaysBetween_(start, due) > 15) return bad('A queue runs 3 weeks at most.');
+  return { start: start, due: due };
+}
+
+/**
+ * Each queue's period: the one sent with it, else the request's, else the
+ * one its rows already have (an app before v14 re-saving a queue keeps its
+ * dates), else a one-week queue of `week`. Sets key, start and due on each.
+ * The caller holds the lock.
+ */
+function placeQueues_(week, queues, shared) {
+  var periods = savedPeriods_();
+  queues.forEach(function (q) {
+    var when = q.when || shared;
+    if (when) {
+      q.key = weekOf_(when.start);
+      q.start = when.start;
+      q.due = when.due;
+      q.writeDue = true;
+      return;
+    }
+    // An app before v14: its rows' own dates kept, or written as before (a week key, no Due).
+    var had = periods[q.assignedTo + '|' + week];
+    q.key = week;
+    q.start = had && had.explicit ? had.start : week;
+    q.due = had ? had.due : isoDay_(dayNumber_(week) + 4);
+    q.writeDue = Boolean(had && had.explicit);
+  });
+}
+
+/** Every saved queue's period, as { 'person|week': { person, key, start, due } }. */
+function savedPeriods_() {
+  var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
+  var values = sh.getDataRange().getValues();
+  var periods = {};
+  if (values.length < 2) return periods;
+  var col = columnsIn_(values[0], ASSIGN_FIELDS, sh.getName());
+  var tz = zoneOf_(sh);
+  for (var r = 1; r < values.length; r++) {
+    if (!values[r].join('')) continue;
+    var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
+    var p = rowPeriod_(a);
+    if (!p) continue;
+    var id = a.assignedTo + '|' + p.key;
+    var had = periods[id];
+    var explicit = Boolean(sheetDay_(a.due)) || Boolean(had && had.explicit);
+    if (!had || p.due > had.due) periods[id] = { person: a.assignedTo, key: p.key, start: had ? had.start : p.start, due: p.due, explicit: explicit };
+    else had.explicit = explicit;
+  }
+  return periods;
+}
+
+/**
+ * The first saved queue that shares a working day with one of `queues`
+ * (placed: { assignedTo, key, start, due, items }) of the same person, as
+ * { queue, other }; null when none does. A queue being emptied takes no
+ * days, and a queue saved over its own week is a replace. The caller holds
+ * the lock.
+ */
+function overlapOf_(queues) {
+  var periods = savedPeriods_();
+  for (var q = 0; q < queues.length; q++) {
+    var queue = queues[q];
+    if (!queue.items.length) continue;
+    for (var k in periods) {
+      if (!Object.prototype.hasOwnProperty.call(periods, k)) continue;
+      var other = periods[k];
+      if (other.person !== queue.assignedTo || other.key === queue.key) continue;
+      if (other.start <= queue.due && queue.start <= other.due) return { queue: queue, other: other };
+    }
+  }
+  return null;
+}
+
+/** "Ana Reyes already has a queue 9–20 Nov. One queue at a time: ..." */
+function overlapMessage_(o) {
+  return o.queue.assignedTo + ' already has a queue ' + dayMonth_(dayNumber_(o.other.start)) + ' to ' +
+         dayMonth_(dayNumber_(o.other.due)) + '. One queue at a time: start this one after it, or shorten it.';
+}
+
+/** Adds a column with `header` to the Assignments tab when no accepted spelling of the field has one. */
+function ensureAssignColumn_(field) {
+  var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
+  var col = columnsOf_(sh, ASSIGN_FIELDS);
+  if (col[field] !== -1) return;
+  var at = Math.max(sh.getLastColumn(), 1) + 1;
+  if (at > sh.getMaxColumns()) sh.insertColumnAfter(sh.getMaxColumns());
+  sh.getRange(1, at).setValue(ASSIGN_FIELDS[field].headers[0]).setFontWeight('bold');
 }
 
 // ---------------------------------------------------------------- queues
 
 function saveQueue_(req, me) {
   requireAll_(req, ['assignedTo']);
-  var when = requestWeek_(req);
+  var period = requestPeriod_(req);
+  if (period && period.refusal) return period.refusal;
+  var when = period ? { week: weekOf_(period.start) } : requestWeek_(req);
   if (when.refusal) return when.refusal;
   var items = req.items || [];
   if (typeof items === 'string') items = JSON.parse(items);
@@ -1747,7 +1907,7 @@ function saveQueue_(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    return saveHeldChecked_(when.week, [queue]);
+    return saveHeldChecked_(when.week, [queue], period);
   } finally {
     lock.releaseLock();
   }
@@ -1759,7 +1919,9 @@ function saveQueue_(req, me) {
  * lock, so nobody sees half a week's plan or saves into the middle of it.
  */
 function saveQueues_(req, me) {
-  var when = requestWeek_(req);
+  var shared = requestPeriod_(req);
+  if (shared && shared.refusal) return shared.refusal;
+  var when = shared ? { week: weekOf_(shared.start) } : requestWeek_(req);
   if (when.refusal) return when.refusal;
   var week = when.week;
   var queues = req.queues;
@@ -1780,6 +1942,9 @@ function saveQueues_(req, me) {
       return { ok: false, error: 'bad-queues', message: person.name + ' has two queues for the week of ' + weekLabel_(week) + '. Send one.' };
     }
     seen[person.name] = true;
+    // v14: each queue may say when it runs.
+    var own = requestPeriod_(queue);
+    if (own && own.refusal) return own.refusal;
     var items = queue.items || [];
     if (!Array.isArray(items)) return { ok: false, error: 'bad-queues', message: person.name + '\'s items must be a list.' };
     var named = [];
@@ -1791,13 +1956,13 @@ function saveQueues_(req, me) {
       }
       named.push({ property: property, propertyId: textOf_(it.propertyId).trim(), status: textOf_(it.status).trim() });
     }
-    clean.push({ assignedTo: person.name, items: named });
+    clean.push({ assignedTo: person.name, items: named, when: own });
   }
 
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
   try {
-    return saveHeldChecked_(week, clean);
+    return saveHeldChecked_(week, clean, shared);
   } finally {
     lock.releaseLock();
   }
@@ -1820,16 +1985,23 @@ function saveQueues_(req, me) {
  * Saves the queues when nothing in them is held, all or none. The caller
  * holds the lock, so the check and the writing see the same rows.
  */
-function saveHeldChecked_(week, queues) {
+function saveHeldChecked_(week, queues, shared) {
   // Each item's folder id, found once: the check and the rows written agree.
   queues.forEach(function (q) {
     q.items.forEach(function (it) { it.propertyId = it.propertyId || idOf_(it.property); });
   });
+  // v14: when each queue runs, and one queue at a time.
+  placeQueues_(week, queues, shared || null);
+  var overlap = overlapOf_(queues);
+  if (overlap) {
+    return { ok: false, error: 'overlap', person: overlap.queue.assignedTo,
+             start: overlap.other.start, due: overlap.other.due, message: overlapMessage_(overlap) };
+  }
   var held = heldItems_(week, queues);
   if (held.length) {
     return { ok: false, error: 'held', held: held, message: heldMessage_(held) };
   }
-  return { ok: true, saved: replaceQueues_(week, queues) };
+  return { ok: true, saved: replaceQueues_(queues) };
 }
 
 /**
@@ -1847,7 +2019,7 @@ function heldItems_(week, queues) {
   var tz = zoneOf_(sh);
   var today = today_();
   var replaced = {};
-  queues.forEach(function (q) { replaced[q.assignedTo] = true; });
+  queues.forEach(function (q) { replaced[q.assignedTo + '|' + q.key] = true; });
 
   var open = [];
   for (var r = 1; col && r < values.length; r++) {
@@ -1856,10 +2028,10 @@ function heldItems_(week, queues) {
     if (queueStatus_(a.status) !== NOT_SHARED) continue;
     var day = sheetDay_(a.date);
     var rowWeek = weekOf_(day);
-    // Missed (its week is over), or in no week at all: it holds nothing.
-    if (!rowWeek || isWeekOver_(rowWeek, today)) continue;
+    // Missed (its deadline has passed), or in no week at all: it holds nothing.
+    if (!rowWeek || isRowOver_(a, today)) continue;
     // The rows this save replaces (replaceQueues_ deletes exactly these) hold nothing.
-    if (rowWeek === week && Object.prototype.hasOwnProperty.call(replaced, a.assignedTo)) continue;
+    if (Object.prototype.hasOwnProperty.call(replaced, a.assignedTo + '|' + rowWeek)) continue;
     open.push({ propertyId: a.propertyId, property: a.property, heldBy: a.assignedTo, date: day, week: rowWeek });
   }
 
@@ -1880,7 +2052,7 @@ function heldItems_(week, queues) {
         held.push({ propertyName: it.property, propertyId: it.propertyId || '', heldBy: holder.heldBy,
                     date: holder.date, week: holder.week });
       } else {
-        given.push({ propertyId: it.propertyId, property: it.property, heldBy: q.assignedTo, date: week, week: week });
+        given.push({ propertyId: it.propertyId, property: it.property, heldBy: q.assignedTo, date: q.start, week: q.key });
       }
     });
   });
@@ -1896,29 +2068,32 @@ function heldMessage_(held) {
 }
 
 /**
- * Replaces each named person's Assignments rows of `week` with their items,
- * and leaves everyone else's alone. Their rows of that week are the ones whose
- * Date is in it: the week key, or a day written before v6. The new rows' Date
- * is the week key. The caller holds the lock. Returns the number of rows
- * written.
+ * Replaces each queue's Assignments rows with its items, and leaves everyone
+ * else's alone. A queue (placed by placeQueues_: assignedTo, key, start, due)
+ * is its person's rows whose Date is in its week: the week key, its start, or
+ * a day written before v6. The new rows' Date is its start and Due its
+ * deadline; the Due column is added when the tab has none. The caller holds
+ * the lock. Returns the number of rows written.
  */
-function replaceQueues_(week, queues) {
+function replaceQueues_(queues) {
+  if (queues.some(function (q) { return q.writeDue && q.items.length > 0; })) ensureAssignColumn_('due');
   var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
   var values = sh.getDataRange().getValues();
   var col = columnsIn_(values[0], ASSIGN_FIELDS, sh.getName());
   var tz = zoneOf_(sh);
   var named = {};
-  queues.forEach(function (q) { named[q.assignedTo] = true; });
+  queues.forEach(function (q) { named[q.assignedTo + '|' + q.key] = true; });
 
   for (var r = values.length - 1; r >= 1; r--) {
     var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
-    if (Object.prototype.hasOwnProperty.call(named, a.assignedTo) && weekOf_(sheetDay_(a.date)) === week) sh.deleteRow(r + 1);
+    if (Object.prototype.hasOwnProperty.call(named, a.assignedTo + '|' + weekOf_(sheetDay_(a.date)))) sh.deleteRow(r + 1);
   }
   var saved = 0;
   queues.forEach(function (q) {
     q.items.forEach(function (it) {
       appendRow_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS, {
-        date:       week,
+        date:       q.start,
+        due:        q.writeDue ? q.due : '',
         assignedTo: q.assignedTo,
         property:   it.property,
         status:     queueStatus_(it.status),
@@ -2054,6 +2229,8 @@ const ASSIGN_FIELDS = {
   property:   { headers: ['Property', 'Title', 'Property Name'], required: true },
   status:     { headers: ['Status'], required: true },
   propertyId: { headers: ['PropertyId', 'Property Id', 'Folder Id'] },
+  // v14: the queue's deadline. The Date is then its start. Blank: a one-week queue, due its Friday.
+  due:        { headers: ['Due', 'Due date', 'Deadline'] },
 };
 
 // Sheets' day zero. A time of day is stored as a date on it.
@@ -2273,6 +2450,9 @@ function ruleSpecs_() {
                      key: 'repostDueDays', reads: ['repostDueDays'] },
     perWeek:       { fallback: CONFIG.PER_WEEK,        min: 1, max: 200, label: 'Listings per week',
                      key: 'Per week',      reads: ['Per week', 'Per intern'] },
+    // v14: how many weeks of working days a new queue runs by default.
+    queueWeeks:    { fallback: CONFIG.QUEUE_WEEKS,     min: 1, max: 3,   label: 'The queue length',
+                     key: 'Queue weeks',   reads: ['Queue weeks'] },
   };
 }
 
@@ -2336,6 +2516,7 @@ function setRules_(req) {
     cooldownDays: req.cooldownDays,
     repostDueDays: req.repostDueDays,
     perWeek: blank_(req.perWeek) ? req.perIntern : req.perWeek,
+    queueWeeks: req.queueWeeks,
   };
   var changes = {};
   var problem = null;

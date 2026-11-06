@@ -53,6 +53,9 @@ describe('Assign → Fill queues', () => {
     await userEvent.clear(per);
     await userEvent.type(per, '2');
     expect(within(dialog).getByRole('button', { name: 'Save all' }).hasAttribute('disabled')).toBe(true);
+    // v14: new queues run 2 weeks by default; this plan is for 1.
+    expect(within(dialog).getByRole('button', { name: '2 weeks' }).getAttribute('aria-pressed')).toBe('true');
+    await userEvent.click(within(dialog).getByRole('button', { name: '1 week' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Preview' }));
 
     const preview = within(dialog).getByRole('region', { name: 'Preview' });
@@ -66,13 +69,15 @@ describe('Assign → Fill queues', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     const sent = platform.posts.find((p) => p.action === 'saveQueues')!.body as {
       week: string;
-      queues: { assignedTo: string; items: { propertyName: string }[] }[];
+      queues: { assignedTo: string; start: string; due: string; items: { propertyName: string }[] }[];
     };
     expect(sent.week).toBe('2026-11-02');
+    // Saturday: each new queue starts on Monday, and runs the week.
+    expect(sent.queues.every((q) => q.start === '2026-11-02' && q.due === '2026-11-06')).toBe(true);
     expect(sent.queues.map((q) => q.assignedTo).sort()).toEqual([intern.name, 'Mika Reyes']);
     expect(sent.queues.every((q) => q.items.length === 2)).toBe(true);
     expect(sent.queues.flatMap((q) => q.items.map((i) => i.propertyName))).not.toContain('Kapitolyo Ground Floor Retail, Pasig');
-    expect(await screen.findByText(/Saved 2 queues for 2–6 Nov/)).toBeTruthy();
+    expect(await screen.findByText(/Saved 2 queues, 4 listings/)).toBeTruthy();
     // The assignments are read again.
     await waitFor(() => {
       const actions = platform.posts.map((p) => p.action);
@@ -87,7 +92,7 @@ describe('Assign → Fill queues', () => {
     const dialog = screen.getByRole('dialog', { name: 'Fill queues' });
     await waitFor(() => expect(within(dialog).getAllByRole('checkbox')).toHaveLength(3));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Preview' }));
-    // 5 listings for 2 interns at 40 each.
-    expect(within(dialog).getByText(/75 listings short of 40 each/)).toBeTruthy();
+    // 5 listings for 2 interns at 40 a week, for 2 weeks each.
+    expect(within(dialog).getByText(/155 listings short of 40 a week each/)).toBeTruthy();
   });
 });

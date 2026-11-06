@@ -13,7 +13,7 @@ import { loadProject, PROJECT_FILES, readServerFile, type Project } from './harn
 import { CASA, createWorld, DIRECTORY_ID, type World } from './world';
 
 // v6: perWeek (40) replaces perIntern, which is still sent, equal to it, for an older app.
-const DEFAULTS = { cooldownDays: 7, repostDueDays: 14, perWeek: 40, perIntern: 40 };
+const DEFAULTS = { cooldownDays: 7, repostDueDays: 14, perWeek: 40, perIntern: 40, queueWeeks: 2 };
 
 // ------------------------------------------------------------------ the version
 
@@ -64,7 +64,7 @@ describe('the rules', () => {
     expect(w.call('maria', 'setRules', { cooldownDays: 3 })).toEqual({ ok: true, rules: { ...DEFAULTS, cooldownDays: 3 } });
     expect(w.call('maria', 'setRules', { perWeek: '120' })).toEqual({
       ok: true,
-      rules: { cooldownDays: 3, repostDueDays: 14, perWeek: 120, perIntern: 120 },
+      rules: { cooldownDays: 3, repostDueDays: 14, perWeek: 120, perIntern: 120, queueWeeks: 2 },
     });
 
     const tab = w.admin.sheet('Settings');
@@ -74,7 +74,7 @@ describe('the rules', () => {
     w.call('maria', 'setRules', { cooldownDays: 5 });
     w.call('maria', 'setRules', { perWeek: 35 });
     expect(tab.show()).toEqual([['Key', 'Value'], ['cooldownDays', '5'], ['Per week', '35']]);
-    expect(w.call('ana', 'ping')['rules']).toEqual({ cooldownDays: 5, repostDueDays: 14, perWeek: 35, perIntern: 35 });
+    expect(w.call('ana', 'ping')['rules']).toEqual({ cooldownDays: 5, repostDueDays: 14, perWeek: 35, perIntern: 35, queueWeeks: 2 });
   });
 
   it('are the admin\'s alone', () => {

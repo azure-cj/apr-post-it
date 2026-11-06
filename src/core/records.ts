@@ -7,9 +7,10 @@
 import { addDays as plusDays, dayOf as dayNumber, MONTHS, weekdayOfDay, WEEKDAYS } from './dates';
 import { normalizeForSearch } from './directory';
 import { normalize } from './matcher';
-import { samePerson, weekProgress } from './summary';
+import { queueProgress, samePerson } from './summary';
+import { assignmentPeriod, isQueueOver, type QueuePeriod } from './queues';
 import type { Assignment, PostLogEntry, PostStatus } from './types';
-import { assignmentWeek, isWeekOver, weekFriday, weekLabel } from './week';
+import { weekLabel } from './week';
 
 export interface DailyTotal {
   readonly date: string;
@@ -590,11 +591,13 @@ export function periodTotals(posts: readonly PostLogEntry[], span: Span): Period
   return { posts: posted + pending, posted, pending, interns: people.size, busiest };
 }
 
-/** One intern's queue for one week, as it ended (or stands). */
+/** One intern's queue, as it ended (or stands). */
 export interface QueueWeek {
   readonly intern: string;
-  /** Its Monday. */
+  /** The Monday of the week it started in: the queue's key. */
   readonly week: string;
+  /** v14: its deadline. */
+  readonly due: string;
   readonly target: number;
   readonly posted: number;
   readonly pending: number;
@@ -604,8 +607,8 @@ export interface QueueWeek {
 }
 
 /**
- * Every weekly queue whose Friday (its deadline) falls in the span, one line
- * per intern and week, counted as the Interns monitor counts it (weekProgress).
+ * Every queue whose deadline falls in the span, one line per intern and
+ * queue, counted as the Interns monitor counts it (queueProgress).
  */
 export function queueWeeks(
   assignments: readonly Assignment[],
@@ -613,34 +616,43 @@ export function queueWeeks(
   span: Span,
   today: string,
 ): QueueWeek[] {
-  const queues = new Map<string, { intern: string; week: string }>();
+  const queues = new Map<string, { intern: string; period: QueuePeriod }>();
   for (const row of assignments) {
-    const week = assignmentWeek(row);
+    const period = assignmentPeriod(row);
     const intern = row.assignedTo.trim();
-    if (!week || !intern) continue;
-    const friday = weekFriday(week);
-    if (friday < span.from || friday > span.to) continue;
-    const key = `${week}|${intern.toLowerCase()}`;
-    if (!queues.has(key)) queues.set(key, { intern, week });
+    if (!period || !intern) continue;
+    const key = `${period.key}|${intern.toLowerCase()}`;
+    const had = queues.get(key);
+    if (!had || period.due > had.period.due) queues.set(key, { intern: had?.intern ?? intern, period });
   }
   return [...queues.values()]
-    .sort((a, b) => (a.week < b.week ? -1 : a.week > b.week ? 1 : a.intern.localeCompare(b.intern)))
-    .map(({ intern, week }) => {
-      const p = weekProgress(intern, week, assignments, posts, today);
-      return { intern, week, target: p.target, posted: p.posted, pending: p.pending, missed: p.missed, over: isWeekOver(week, today) };
+    .filter(({ period }) => period.due >= span.from && period.due <= span.to)
+    .sort((a, b) => (a.period.key < b.period.key ? -1 : a.period.key > b.period.key ? 1 : a.intern.localeCompare(b.intern)))
+    .map(({ intern, period }) => {
+      const p = queueProgress(intern, period, assignments, posts, today);
+      return {
+        intern,
+        week: period.key,
+        due: period.due,
+        target: p.target,
+        posted: p.posted,
+        pending: p.pending,
+        missed: p.missed,
+        over: isQueueOver(period, today),
+      };
     });
 }
 
 export interface MissedInPeriod {
-  /** Queue items not posted by their Friday, in weeks that are over. */
+  /** Queue items not posted by their deadline, in queues that are over. */
   readonly total: number;
-  /** Weeks over whose Friday falls in the span. 0: nothing can be missed yet. */
+  /** Deadlines passed in the span (by queue start week). 0: nothing can be missed yet. */
   readonly weeksOver: number;
   /** By intern, as the Assignments tab spells them (first spelling met). */
   readonly byIntern: ReadonlyMap<string, number>;
 }
 
-/** What was missed in the span: from the weekly queues whose Friday falls in it and is past. */
+/** What was missed in the span: from the queues whose deadline falls in it and is past. */
 export function missedInPeriod(weeks: readonly QueueWeek[]): MissedInPeriod {
   let total = 0;
   const overWeeks = new Set<string>();

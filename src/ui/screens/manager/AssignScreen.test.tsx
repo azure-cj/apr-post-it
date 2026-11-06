@@ -190,7 +190,18 @@ describe('Assign, the week picker and the link', () => {
   }
   const week = (path: string) => new URLSearchParams(path.split('?')[1]).get('week');
 
-  function renderShell(now: number, at = '/assign', platform = fakeServer()) {
+  // Jan's queues on the server: last week's and this week's, each Monday to Friday.
+  const JAN_ROWS = {
+    assignments: {
+      ok: true,
+      assignments: [
+        { date: LAST_WEEK, week: LAST_WEEK, assignedTo: janUser.name, property: 'Valenzuela Warehouse A', status: 'Posted', propertyId: 'w1' },
+        { date: WEEK, week: WEEK, assignedTo: janUser.name, property: 'Sta. Rosa Lot 22', status: 'Not Shared', propertyId: 'f5' },
+      ],
+    },
+  };
+
+  function renderShell(now: number, at = '/assign', platform = fakeServer(JAN_ROWS)) {
     let path = '';
     render(
       <AppStateProvider platform={platform} initialUser={manager} initialSettings={{ scriptUrl: EXEC }} now={() => now}>
@@ -216,10 +227,12 @@ describe('Assign, the week picker and the link', () => {
     expect(week(path())).toBe(WEEK);
     expect(screen.getByText('Due Fri 30 Oct')).toBeTruthy();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    // The next queue starts the Monday after this one's deadline, for 2 weeks.
+    await userEvent.click(screen.getByRole('button', { name: 'Queue after' }));
     expect(week(path())).toBe(NEXT_WEEK);
-    expect(weekShown()).toBe('2–6 Nov');
-    await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
+    expect(weekShown()).toBe('2–13 Nov');
+    expect(screen.getByText('New · starts Mon 2 Nov · due Fri 13 Nov')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Queue before' }));
     expect(week(path())).toBe(WEEK);
 
     await userEvent.click(screen.getByRole('button', { name: 'All agents' }));
@@ -247,7 +260,7 @@ describe('Assign, the week picker and the link', () => {
       hasIssues: false,
     }));
     const at = `/assign?intern=${encodeURIComponent(janUser.name)}&week=${WEEK}&page=2`;
-    const path = renderShell(Date.parse('2026-10-28T02:00:00Z'), at, fakeServer({ properties: { ok: true, properties: many } }));
+    const path = renderShell(Date.parse('2026-10-28T02:00:00Z'), at, fakeServer({ ...JAN_ROWS, properties: { ok: true, properties: many } }));
     await screen.findByRole('heading', { level: 1, name: janUser.name });
     await waitFor(() => expect(listNames()[0]).toBe('Marikina Warehouse 11'));
     const nav = screen.getByRole('navigation', { name: 'Pages' });
@@ -261,10 +274,10 @@ describe('Assign, the week picker and the link', () => {
     await waitFor(() => expect(new URLSearchParams(path().split('?')[1]).get('page')).toBeNull());
     expect(listNames()[0]).toBe('Marikina Warehouse 01');
 
-    // Another week starts at the first page too.
+    // Another queue starts at the first page too.
     await userEvent.click(within(screen.getByRole('navigation', { name: 'Pages' })).getByRole('button', { name: 'Page 2' }));
     expect(new URLSearchParams(path().split('?')[1]).get('page')).toBe('2');
-    await userEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Queue after' }));
     expect(new URLSearchParams(path().split('?')[1]).get('page')).toBeNull();
   });
 
@@ -414,7 +427,7 @@ describe('Assign, quick fill', () => {
   it('an empty week says so, and offers the fill', async () => {
     render(<Harness week={NEXT_WEEK} />);
     expect(screen.getByText('Nothing queued.')).toBeTruthy();
-    const add = within(screen.getByRole('region', { name: 'Queue' })).getByRole('button', { name: 'Add 40' });
+    const add = within(screen.getByRole('region', { name: 'Queue' })).getByRole('button', { name: 'Add 80' });
     await userEvent.click(add);
     expect(queueNames().length).toBeGreaterThan(0);
   });
@@ -454,23 +467,55 @@ describe('Assign, the week’s queue by status', () => {
     expect(screen.queryByRole('searchbox', { name: 'Search listings' })).toBeNull();
   });
 
-  it('copies what was missed to next week, ready to save', async () => {
+  it('copies what was missed to the next queue, after the one running, ready to save', async () => {
     const onSaveSpy = vi.fn();
     const onWeekChange = vi.fn();
     render(<Harness week={LAST_WEEK} onSaveSpy={onSaveSpy} onWeekChange={onWeekChange} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Copy missed to next week' }));
-    expect(onWeekChange).toHaveBeenCalledWith(WEEK);
-    expect(weekShown()).toBe('26–30 Oct');
+    await userEvent.click(screen.getByRole('button', { name: 'Copy missed to next queue' }));
+    // This week's queue runs to Friday: the next one starts on Monday.
+    expect(onWeekChange).toHaveBeenCalledWith(NEXT_WEEK);
+    expect(weekShown()).toBe('2–13 Nov');
     await waitFor(() => expect(document.querySelector('.assign-fill')?.textContent).toContain('Copied 2 from 19–23 Oct.'));
-    expect(queueNames()).toEqual(['Verdant Hills Lot 12', 'Sta. Rosa Lot 22', 'Meycauayan Warehouse B', 'Calamba Warehouse C']);
+    expect(queueNames()).toEqual(['Meycauayan Warehouse B', 'Calamba Warehouse C']);
     expect(document.querySelectorAll('.queue-row--preview')).toHaveLength(2);
 
     await userEvent.click(screen.getByRole('button', { name: /^Save queue/ }));
     const save = onSaveSpy.mock.calls[0]?.[0] as QueueSave;
-    expect(save.week).toBe(WEEK);
+    expect(save.week).toBe(NEXT_WEEK);
+    expect(save.when).toEqual({ start: NEXT_WEEK, due: '2026-11-13' });
     expect(save.items.map((i) => i.propertyName)).toEqual(
       expect.arrayContaining(['Meycauayan Warehouse B', 'Calamba Warehouse C']),
     );
+  });
+});
+
+describe('Assign, the queue length', () => {
+  it('starts a new queue for 2 weeks, and 3 weeks moves its deadline', async () => {
+    const onSaveSpy = vi.fn();
+    render(<Harness week={NEXT_WEEK} onSaveSpy={onSaveSpy} />);
+    expect(screen.getByText('New · starts Mon 2 Nov · due Fri 13 Nov')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2 weeks' }).getAttribute('aria-pressed')).toBe('true');
+
+    await userEvent.click(screen.getByRole('button', { name: '3 weeks' }));
+    expect(screen.getByText('New · starts Mon 2 Nov · due Fri 20 Nov')).toBeTruthy();
+    expect(weekShown()).toBe('2–20 Nov');
+    await userEvent.click(screen.getByRole('button', { name: 'Add Casa Amara House & Lot' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Save queue/ }));
+    const save = onSaveSpy.mock.calls[0]?.[0] as QueueSave;
+    expect(save).toMatchObject({ week: NEXT_WEEK, assignedTo: JAN, when: { start: NEXT_WEEK, due: '2026-11-20' } });
+  });
+
+  it('lengthens the queue running, from its start, as a change to save', async () => {
+    const onSaveSpy = vi.fn();
+    render(<Harness onSaveSpy={onSaveSpy} />);
+    expect(screen.getByText('Due Fri 30 Oct')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '1 week' }).getAttribute('aria-pressed')).toBe('true');
+
+    await userEvent.click(screen.getByRole('button', { name: '2 weeks' }));
+    expect(screen.getByText('Due Fri 6 Nov')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: /^Save queue/ }));
+    const save = onSaveSpy.mock.calls[0]?.[0] as QueueSave;
+    expect(save).toMatchObject({ week: WEEK, when: { start: WEEK, due: '2026-11-06' } });
   });
 });
 
@@ -589,7 +634,7 @@ describe('Assign, kept from before', () => {
     const onWeekChange = vi.fn();
     render(<Harness onWeekChange={onWeekChange} />);
     await userEvent.click(screen.getByRole('button', { name: 'Remove Sta. Rosa Lot 22' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Queue after' }));
     expect(onWeekChange).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(onWeekChange).toHaveBeenCalledWith(NEXT_WEEK);

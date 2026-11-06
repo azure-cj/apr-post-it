@@ -16,7 +16,8 @@ import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearc
 import { BUILT_IN_SCRIPT_URL } from '@/config';
 import { activeInterns, addDays, isDate, peopleIn, samePerson } from '@/core/summary';
 import { periodFromQuery, periodQuery } from '@/core/records';
-import { assignmentWeek, weekOf } from '@/core/week';
+import { currentQueue, rowsOf } from '@/core/queues';
+import { weekOf } from '@/core/week';
 import { canManage, DEFAULT_RULES, isAdmin, UserFacingError, type Role, type User } from '@/core/types';
 import {
   Button,
@@ -630,9 +631,9 @@ function useQueueCount(user: User | null): number {
   }, [intern, assignments]);
 
   if (!intern || !snapshot.data) return 0;
-  // The week's queue: this week, and from Saturday the coming one.
-  const week = weekOf(app.today());
-  return snapshot.data.filter((a) => assignmentWeek(a) === week && samePerson(a.assignedTo, user.name) && a.status !== 'Posted').length;
+  // Their queue now: the one running, else the next to start.
+  const queue = currentQueue(user.name, snapshot.data, app.today());
+  return queue ? rowsOf(user.name, queue.key, snapshot.data).filter((a) => a.status !== 'Posted').length : 0;
 }
 
 /** A wait before anything can be shown, said in words. */
@@ -886,7 +887,10 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
   };
 
   const { tracker, directory, platform } = app;
-  const onSave = useCallback((save: QueueSave) => tracker.saveQueue(save.week, save.assignedTo, save.items), [tracker]);
+  const onSave = useCallback(
+    (save: QueueSave) => tracker.saveQueue(save.week, save.assignedTo, save.items, save.when),
+    [tracker],
+  );
   const notify = useNotify();
 
   return (
@@ -1082,7 +1086,12 @@ function SettingsRoute() {
   const rules =
     server.rules ??
     (server.known || asked
-      ? { cooldownDays: app.settings.cooldownDays, repostDueDays: app.settings.repostDueDays, perWeek: DEFAULT_RULES.perWeek }
+      ? {
+          cooldownDays: app.settings.cooldownDays,
+          repostDueDays: app.settings.repostDueDays,
+          perWeek: DEFAULT_RULES.perWeek,
+          queueWeeks: DEFAULT_RULES.queueWeeks,
+        }
       : null);
   return (
     <SettingsScreen

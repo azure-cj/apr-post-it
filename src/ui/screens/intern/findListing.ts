@@ -11,7 +11,7 @@ import { normalizeForSearch } from '@/core/directory';
 import { normalize } from '@/core/matcher';
 import { ago, daysBetween, firstName, heldBy, heldListings, lastPostOf, postingProblem, samePerson } from '@/core/summary';
 import type { Assignment, PostLogEntry, Property, Settings } from '@/core/types';
-import { assignmentWeek, weekOf } from '@/core/week';
+import { currentQueue, rowsOf } from '@/core/queues';
 import { categoryKind, type CategoryKind, type Tone } from '../../components';
 import type { FindFilters, FindSort } from '../../state';
 import { dayMonth, shortDate } from './format';
@@ -78,13 +78,11 @@ export function listingFacts(list: readonly Property[], input: FactsInput): Map<
   const known = posts !== null;
   const history = posts ?? [];
 
-  // An intern: what's in their queue this week (from Saturday, the coming one). An admin: who holds what.
-  const week = weekOf(today);
+  // An intern: what's in their queue now (the one running, else the next). An admin: who holds what.
   const mine = new Set<string>();
-  if (!viewer.manager) {
-    for (const row of assignments ?? []) {
-      if (samePerson(row.assignedTo, viewer.name) && assignmentWeek(row) === week) mine.add(keyOfRow(row));
-    }
+  if (!viewer.manager && assignments) {
+    const queue = currentQueue(viewer.name, assignments, today);
+    if (queue) for (const row of rowsOf(viewer.name, queue.key, assignments)) mine.add(keyOfRow(row));
   }
   const held = viewer.manager && assignments ? heldListings(assignments, today) : null;
 

@@ -62,12 +62,12 @@ describe('My queue: this week', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('My queue');
     await screen.findByRole('region', { name: 'Next up' });
     // Posted and pending both count toward the week.
-    expect(week().querySelector('.queue__week-title')!.textContent).toBe('This week · 2 of 4');
+    expect(week().querySelector('.queue__week-title')!.textContent).toBe('This queue · 2 of 4');
     expect(week().querySelector('.queue__due')!.textContent).toBe('Due Fri 6 Nov');
     expect(week().querySelector('.queue__due--today')).toBeNull();
     expect((week().querySelector('.queue__bar-posted') as HTMLElement).style.width).toBe('25%');
     expect((week().querySelector('.queue__bar-pending') as HTMLElement).style.width).toBe('25%');
-    const counts = screen.getByRole('list', { name: "This week's counts" }).textContent;
+    const counts = screen.getByRole('list', { name: "This queue's counts" }).textContent;
     expect(counts).toContain('1 posted');
     expect(counts).toContain('1 pending');
     expect(counts).toContain('2 not shared');
@@ -86,8 +86,8 @@ describe('My queue: this week', () => {
     const fresh = { ok: true, assignments: QUEUE.assignments.map((a) => ({ ...a, status: 'Not Shared' })) };
     renderApp({ platform: fakeServer({ assignments: fresh, posts: { ok: true, posts: [] } }), path: '/queue' });
     await screen.findByRole('region', { name: 'Next up' });
-    expect(week().querySelector('.queue__week-title')!.textContent).toBe('Next week · 0 of 4');
-    expect(week().querySelector('.queue__due')!.textContent).toBe('Starts Mon 2 Nov');
+    expect(week().querySelector('.queue__week-title')!.textContent).toBe('Next queue · 0 of 4');
+    expect(week().querySelector('.queue__due')!.textContent).toBe('Starts Mon 2 Nov · due Fri 6 Nov');
     // Last week's leftover isn't shown.
     expect(screen.queryByText('BGC Uptown Office 18F, 240 sqm')).toBeNull();
   });
@@ -95,7 +95,7 @@ describe('My queue: this week', () => {
   it("says so at the weekend when next week isn't assigned yet", async () => {
     const lastWeekOnly = { ok: true, assignments: QUEUE.assignments.map((a) => ({ ...a, date: '2026-10-26' })) };
     renderApp({ platform: fakeServer({ assignments: lastWeekOnly }), path: '/queue' });
-    expect(await screen.findByText('Next week isn’t assigned yet')).toBeTruthy();
+    expect(await screen.findByText('Nothing in your queue')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Find a property' })).toBeTruthy();
     expect(document.querySelector('.queue__week')).toBeNull();
   });
@@ -104,9 +104,33 @@ describe('My queue: this week', () => {
     const lagging = { ok: true, assignments: QUEUE.assignments.map((a) => (a.propertyId === '1Kapitolyo' ? { ...a, status: 'Not Shared' } : a)) };
     renderOn(THURSDAY, fakeServer({ assignments: lagging, posts: POSTS }));
     await screen.findByRole('region', { name: 'Next up' });
-    expect(week().querySelector('.queue__week-title')!.textContent).toBe('This week · 2 of 4');
+    expect(week().querySelector('.queue__week-title')!.textContent).toBe('This queue · 2 of 4');
     const kapitolyo = screen.getByRole('link', { name: 'Kapitolyo Ground Floor Retail, Pasig' }).closest('li')!;
     expect(kapitolyo.querySelector('.pill')!.textContent).toBe('Posted');
+  });
+});
+
+describe('My queue: a queue of 2 weeks (v14)', () => {
+  // Saved on Friday 6 Nov for 2 weeks: due Thursday 19 Nov. The weekends don't count.
+  const twoWeeks = {
+    ok: true,
+    assignments: QUEUE.assignments.slice(0, 4).map((a) => ({ ...a, date: '2026-11-06', due: '2026-11-19' })),
+  };
+
+  it('runs past Friday: the week after, it is still this queue, due on its own deadline', async () => {
+    renderOn(at('2026-11-10'), fakeServer({ assignments: twoWeeks, posts: { ok: true, posts: [] } }));
+    await screen.findByRole('region', { name: 'Next up' });
+    expect(week().querySelector('.queue__week-title')!.textContent).toBe('This queue · 2 of 4');
+    expect(week().querySelector('.queue__due')!.textContent).toBe('Due Thu 19 Nov');
+  });
+
+  it('says "Due today" on its deadline, and is gone the day after', async () => {
+    const { unmount } = renderOn(at('2026-11-19'), fakeServer({ assignments: twoWeeks, posts: { ok: true, posts: [] } }));
+    await screen.findByRole('region', { name: 'Next up' });
+    expect(week().querySelector('.queue__due')!.textContent).toBe('Due today');
+    unmount();
+    renderOn(at('2026-11-20'), fakeServer({ assignments: twoWeeks, posts: { ok: true, posts: [] } }));
+    expect(await screen.findByText('Nothing in your queue')).toBeTruthy();
   });
 });
 
@@ -204,7 +228,7 @@ describe('My queue', () => {
     const forty = Array.from({ length: 40 }, (_, i) => item(`Queue listing ${String(i + 1).padStart(2, '0')}`, `q${i}`, 'Not Shared'));
     renderOn(THURSDAY, fakeServer({ assignments: { ok: true, assignments: forty }, posts: { ok: true, posts: [] } }));
     // None of these is in the property list, so none is "next up": all forty are listed.
-    const list = await screen.findByRole('list', { name: 'This week' });
+    const list = await screen.findByRole('list', { name: 'This queue' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(10);
     const nav = screen.getByRole('navigation', { name: 'Pages' });
     expect(nav.closest('.pagination')!.textContent).toContain('1–10 of 40');
@@ -227,7 +251,7 @@ describe('My queue', () => {
 
   it('says plainly when nothing is assigned this week', async () => {
     renderOn(THURSDAY, fakeServer());
-    expect(await screen.findByText('Nothing in your queue this week')).toBeTruthy();
+    expect(await screen.findByText('Nothing in your queue')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Find a property' })).toBeTruthy();
   });
 

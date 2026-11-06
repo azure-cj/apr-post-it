@@ -82,7 +82,14 @@ export function readRules(value: unknown): ServerRules | null {
   const rule = (name: keyof ServerRules): number => valid(name) ?? DEFAULT_RULES[name];
   // v6: perWeek; a server before it sends only perIntern, its old name.
   const perWeek = valid('perWeek') ?? valid('perWeek', 'perIntern') ?? DEFAULT_RULES.perWeek;
-  return { cooldownDays: rule('cooldownDays'), repostDueDays: rule('repostDueDays'), perWeek, perIntern: perWeek };
+  return {
+    cooldownDays: rule('cooldownDays'),
+    repostDueDays: rule('repostDueDays'),
+    perWeek,
+    perIntern: perWeek,
+    // v14; a server before it sends none: the default length.
+    queueWeeks: rule('queueWeeks'),
+  };
 }
 
 // yyyy-MM-dd.n, as SERVER_VERSION is written.

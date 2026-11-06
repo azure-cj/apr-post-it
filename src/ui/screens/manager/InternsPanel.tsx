@@ -1,7 +1,8 @@
 import { forwardRef, useId, useMemo, type KeyboardEvent } from 'react';
 import { Button, Icon, PAGE_SIZE, Pagination, usePaged } from '../../components';
 import { isDate, lastPostOf, samePerson, shortDate, weekProgress, type TeamWeekRow } from '@/core/summary';
-import { addWeeks, assignmentWeek, isWeekOver, weekLabel, weekOf } from '@/core/week';
+import { isQueueOver, queueInWeek, rowsOf } from '@/core/queues';
+import { addWeeks, weekLabel, weekOf } from '@/core/week';
 import { initials, queueStatus, type Assignment, type FbProfile, type PostLogEntry } from '@/core/types';
 import { PacePill, WeekBar } from './InternsParts';
 
@@ -191,9 +192,10 @@ function ItemGroup({
 }
 
 /**
- * The intern's queue for `week`, each item with where it is: its own status,
- * or their post of it dated that week when the queue's row lags (as
- * weekProgress counts it). Not shared turns Missed once the week is over.
+ * The intern's queue running in `week` (v14: it may have started in an
+ * earlier one), each item with where it is: its own status, or their post of
+ * it dated while the queue ran when the queue's row lags (as weekProgress
+ * counts it). Not shared turns Missed once its deadline has passed.
  */
 export function weekItems(
   intern: string,
@@ -202,13 +204,18 @@ export function weekItems(
   assignments: readonly Assignment[],
   posts: readonly PostLogEntry[],
 ): Item[] {
-  const monday = weekOf(week);
-  const over = isWeekOver(monday, today);
+  const period = queueInWeek(intern, weekOf(week), assignments, today);
+  if (!period) return [];
+  const over = isQueueOver(period, today);
   const theirs = posts.filter(
-    (p) => (p.status === 'Posted' || p.status === 'Pending') && samePerson(p.postedBy, intern) && isDate(p.date) && weekOf(p.date) === monday,
+    (p) =>
+      (p.status === 'Posted' || p.status === 'Pending') &&
+      samePerson(p.postedBy, intern) &&
+      isDate(p.date) &&
+      p.date >= period.start &&
+      p.date <= period.due,
   );
-  return assignments
-    .filter((a) => samePerson(a.assignedTo, intern) && assignmentWeek(a) === monday)
+  return rowsOf(intern, period.key, assignments)
     .map((a): Item => {
       const post = lastPostOf(theirs, { id: a.propertyId.trim(), name: a.propertyName });
       let status = queueStatus(a.status);

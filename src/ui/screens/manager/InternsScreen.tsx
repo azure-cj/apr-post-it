@@ -78,7 +78,7 @@ export function InternsScreen({
     () => (team ? teamWeek(activeInterns(team), week, assignments, posts, today) : []),
     [team, week, assignments, posts, today],
   );
-  // Warnings before Friday: from Wednesday of the week shown, who is behind and by how much, most left first.
+  // Warnings before each queue's deadline: from its third working day, who is behind and by how much, most left first.
   const behindForFriday = useMemo(
     () =>
       rows
@@ -178,7 +178,7 @@ export function InternsScreen({
             <Notice
               tone="warn"
               className="interns__friday"
-              title={behindForFriday.length === 1 ? '1 agent behind for Friday' : `${behindForFriday.length} agents behind for Friday`}
+              title={behindForFriday.length === 1 ? '1 agent behind schedule' : `${behindForFriday.length} agents behind schedule`}
             >
               <ul className="interns__friday-list">
                 {behindForFriday.map(({ name, warning }) => (

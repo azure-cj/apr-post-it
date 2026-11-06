@@ -88,6 +88,18 @@ export interface QueueItemInput {
 export interface QueueInput {
   readonly assignedTo: string;
   readonly items: readonly QueueItemInput[];
+  /** v14: when this queue runs. Missing: the call's `when`, else a one-week queue of its week. */
+  readonly when?: QueueWhen | undefined;
+}
+
+/**
+ * v14: when a queue runs: its first working day and its deadline, both
+ * yyyy-MM-dd (queues.periodFrom makes one). The queue is saved under the
+ * week its start is in.
+ */
+export interface QueueWhen {
+  readonly start: string;
+  readonly due: string;
 }
 
 /** A new Team row. */
@@ -147,7 +159,7 @@ export interface Tracker {
    * that week, older daily rows included, are replaced. Resolves with how
    * many were saved.
    */
-  saveQueue(week: string, assignedTo: string, items: readonly QueueItemInput[]): Promise<number>;
+  saveQueue(week: string, assignedTo: string, items: readonly QueueItemInput[], when?: QueueWhen): Promise<number>;
 
   /**
    * Moves one queue item to `status`. With Posted, the server also marks the
@@ -160,11 +172,13 @@ export interface Tracker {
    * Replaces several interns' queues for one week at once, under one lock. A
    * planner's Map fits as it is. An intern given no items has their queue for
    * that week emptied. `week` is read as saveQueue reads it. Resolves with how
-   * many rows were saved.
+   * many rows were saved. v14: each queue's `when` (else `when`) says when
+   * it runs; its start's week is the one it is saved under.
    */
   saveQueues(
     week: string,
     queues: ReadonlyMap<string, readonly QueueItemInput[]> | readonly QueueInput[],
+    when?: QueueWhen,
   ): Promise<number>;
 
   /** Adds a person to the Team tab (Admin). The key comes back once: show it, then forget it. */
@@ -331,8 +345,9 @@ export function createTracker(deps: TrackerDeps): Tracker {
       return addLink(original, edited.postLink);
     },
 
-    async saveQueue(day: string, assignedTo: string, items: readonly QueueItemInput[]): Promise<number> {
-      const week = queueWeek(day);
+    async saveQueue(day: string, assignedTo: string, items: readonly QueueItemInput[], when?: QueueWhen): Promise<number> {
+      const period = when ? checkedWhen(when) : undefined;
+      const week = period ? queueWeek(period.start) : queueWeek(day);
       if (!week) throw new UserFacingError('Pick a week for the queue.');
       if (!assignedTo.trim()) throw new UserFacingError('Choose who the queue is for.');
       if (items.some((item) => !item.propertyName.trim())) {
@@ -340,6 +355,7 @@ export function createTracker(deps: TrackerDeps): Tracker {
       }
       const reply = await backend.call('saveQueue', {
         week,
+        ...(period ? { start: period.start, due: period.due } : {}),
         assignedTo,
         items: items.map((item) => ({
           property: item.propertyName,
@@ -369,8 +385,9 @@ export function createTracker(deps: TrackerDeps): Tracker {
       return { ...item, status };
     },
 
-    async saveQueues(day, queues): Promise<number> {
-      const week = queueWeek(day);
+    async saveQueues(day, queues, when): Promise<number> {
+      const shared = when ? checkedWhen(when) : undefined;
+      const week = shared ? queueWeek(shared.start) : queueWeek(day);
       if (!week) throw new UserFacingError('Pick a week for the queues.');
       const list: readonly QueueInput[] = isQueueMap(queues)
         ? [...queues].map(([assignedTo, items]) => ({ assignedTo, items }))
@@ -389,8 +406,10 @@ export function createTracker(deps: TrackerDeps): Tracker {
       }
       const reply = await backend.call('saveQueues', {
         week,
+        ...(shared ? { start: shared.start, due: shared.due } : {}),
         queues: list.map((queue) => ({
           assignedTo: queue.assignedTo,
+          ...(queue.when ? (({ start, due }) => ({ start, due }))(checkedWhen(queue.when)) : {}),
           items: queue.items.map((item) => ({
             propertyName: item.propertyName,
             status: item.status ?? NOT_SHARED,
@@ -567,6 +586,17 @@ function queueWeek(day: string): string {
   return text && readSheetDate(text) === text ? weekOf(text) : '';
 }
 
+/** A queue's start and deadline, checked: real days, the deadline not before the start. */
+function checkedWhen(when: QueueWhen): QueueWhen {
+  const start = typeof when.start === 'string' ? when.start.trim() : '';
+  const due = typeof when.due === 'string' ? when.due.trim() : '';
+  if (readSheetDate(start) !== start || readSheetDate(due) !== due || !start || !due) {
+    throw new UserFacingError('Pick when the queue starts and when it is due.');
+  }
+  if (due < start) throw new UserFacingError('The deadline must be on or after the start.');
+  return { start, due };
+}
+
 function isQueueMap(
   queues: ReadonlyMap<string, readonly QueueItemInput[]> | readonly QueueInput[],
 ): queues is ReadonlyMap<string, readonly QueueItemInput[]> {
@@ -635,6 +665,8 @@ function readAssignment(row: Readonly<Record<string, unknown>>): Assignment {
     date,
     // The server's week; a server before v6 sends none, and the date's week is read.
     week: isWeekKey(sent) ? sent : assignmentWeek({ date }),
+    // v14: the deadline; blank from a server before it, or a row written before it.
+    due: readSheetDate(row['due']),
     assignedTo: asText(row['assignedTo']),
     propertyName: asText(row['property']),
     propertyId: asText(row['propertyId']),

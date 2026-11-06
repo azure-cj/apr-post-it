@@ -246,7 +246,7 @@ describe('Settings → Rules', () => {
     renderApp({ platform, user: admin, path: '/settings?tab=rules' });
     const per = (await screen.findByLabelText('Listings per week')) as HTMLInputElement;
     await waitFor(() => expect(per.value).toBe('40'));
-    expect(screen.getByText('Each agent’s weekly target. Due Friday.')).toBeTruthy();
+    expect(screen.getByText('Each agent’s target per week of a queue.')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Fewer: Listings per week' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Saved')).toBeTruthy();
@@ -303,5 +303,25 @@ describe('Settings → App', () => {
     renderApp({ platform: fakeServer(), user: admin, path: '/settings?tab=app' });
     const about = screen.getByRole('region', { name: 'About' });
     expect(within(about).getByText('Version').nextElementSibling?.textContent).toBe('1.1.3');
+  });
+});
+
+describe('Settings → Rules: the queue length (v14)', () => {
+  it('reads the queue length, and saves it as queueWeeks', async () => {
+    const V14 = { cooldownDays: 7, repostDueDays: 14, perWeek: 40, queueWeeks: 2 };
+    const platform = fakeServer({
+      ping: ping(EXPECTED_SERVER_VERSION, V14),
+      setRules: (body) => ({ ok: true, rules: { ...V14, ...body } }),
+    });
+    renderApp({ platform, user: admin, path: '/settings?tab=rules' });
+    const length = (await screen.findByLabelText('Queue length')) as HTMLInputElement;
+    await waitFor(() => expect(length.value).toBe('2'));
+    await userEvent.click(screen.getByRole('button', { name: 'More: Queue length' }));
+    expect(length.value).toBe('3');
+    // 3 weeks is the longest.
+    expect((screen.getByRole('button', { name: 'More: Queue length' }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Saved')).toBeTruthy();
+    expect(platform.posts.find((p) => p.action === 'setRules')!.body).toMatchObject({ queueWeeks: 3 });
   });
 });

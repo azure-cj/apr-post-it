@@ -17,7 +17,8 @@ import {
   type TeamMember,
 } from '@/core/summary';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
-import { assignmentWeek, weekLabel } from '@/core/week';
+import { rowsInWeek } from '@/core/queues';
+import { weekLabel } from '@/core/week';
 import { DayPicker } from './DayPicker';
 import { isBehind, monitorWeek, PacePill, WeekBar } from './InternsParts';
 import { Stat } from './Stat';
@@ -112,7 +113,7 @@ export function TrackerScreen({
     const names = team
       ? activeInterns(team)
       : peopleIn(
-          assignments.filter((a) => assignmentWeek(a) === week),
+          rowsInWeek(assignments, week, today),
           [],
         );
     return teamWeek(names, week, assignments, posts, today);

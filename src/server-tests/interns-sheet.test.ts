@@ -69,8 +69,9 @@ describe('a new Posts tab', () => {
     w.call('maria', 'saveQueues', { date: '2026-10-26', queues: [{ assignedTo: 'Jan Dela Cruz', items: [{ propertyName: CASA.name }] }] });
 
     expect(w.tracker.sheet('Assignments (new)').show()).toEqual([
-      ['Date', 'Assigned To', 'Property', 'Status', 'PropertyId'],
-      ['2026-10-26', 'Jan Dela Cruz', 'Casa Amara', 'Not Shared', CASA.id],
+      ['Date', 'Assigned To', 'Property', 'Status', 'PropertyId', 'Due'],
+      // An app before v14 sends no dates: the week key, and no Due.
+      ['2026-10-26', 'Jan Dela Cruz', 'Casa Amara', 'Not Shared', CASA.id, ''],
     ]);
   });
 });

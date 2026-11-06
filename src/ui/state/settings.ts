@@ -24,6 +24,8 @@ export interface AppSettings {
   readonly perWeek: number;
   /** @deprecated perWeek's old name: always the same value, kept while the screens switch. */
   readonly perIntern: number;
+  /** v14: how many weeks a new queue runs by default, 1 to 3. The server's rule, as cooldownDays. */
+  readonly queueWeeks: number;
   /** A Windows notification when a post has waited this many days for approval (PI-88). 0: never. This PC's own. */
   readonly pendingReminderDays: number;
 }
@@ -37,6 +39,7 @@ export const defaultAppSettings: AppSettings = Object.freeze({
   repostDueDays: defaultSettings.repostDueDays,
   perWeek: defaultSettings.perWeek,
   perIntern: defaultSettings.perWeek,
+  queueWeeks: defaultSettings.queueWeeks,
   pendingReminderDays: 2,
 });
 
@@ -52,7 +55,8 @@ export function withServerRules(settings: AppSettings, rules: ServerRules | null
     settings.cooldownDays === rules.cooldownDays &&
     settings.repostDueDays === rules.repostDueDays &&
     settings.perWeek === rules.perWeek &&
-    settings.perIntern === rules.perWeek
+    settings.perIntern === rules.perWeek &&
+    settings.queueWeeks === rules.queueWeeks
   ) {
     return settings;
   }
@@ -62,6 +66,7 @@ export function withServerRules(settings: AppSettings, rules: ServerRules | null
     repostDueDays: rules.repostDueDays,
     perWeek: rules.perWeek,
     perIntern: rules.perWeek,
+    queueWeeks: rules.queueWeeks,
   };
 }
 
@@ -97,6 +102,7 @@ export function parseSettings(text: string | null | undefined): AppSettings {
     repostDueDays: wholeDays(saved['repostDueDays'], defaultAppSettings.repostDueDays),
     perWeek,
     perIntern: perWeek,
+    queueWeeks: inRange(saved['queueWeeks'], RULE_LIMITS.queueWeeks, defaultAppSettings.queueWeeks),
     pendingReminderDays: reminderDays(saved['pendingReminderDays']),
   });
 }
@@ -107,6 +113,7 @@ export function serializeSettings(settings: AppSettings): string {
     cooldownDays: settings.cooldownDays,
     repostDueDays: settings.repostDueDays,
     perWeek: settings.perWeek,
+    queueWeeks: settings.queueWeeks,
     pendingReminderDays: settings.pendingReminderDays,
   });
 }

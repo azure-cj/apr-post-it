@@ -26,7 +26,7 @@ describe('heldListings', () => {
     );
 
     expect([...held.keys()]).toEqual(['id:F1', 'name:sunrise homes block 3 lot 9']);
-    expect(held.get('id:F1')).toEqual({ heldBy: 'Jan', date: '2026-11-02', week: '2026-11-02', propertyName: 'Casa Amara', propertyId: 'F1' });
+    expect(held.get('id:F1')).toEqual({ heldBy: 'Jan', date: '2026-11-02', week: '2026-11-02', due: '2026-11-06', propertyName: 'Casa Amara', propertyId: 'F1' });
     expect(held.get('name:sunrise homes block 3 lot 9')).toMatchObject({ heldBy: 'Ana', date: '2026-11-12', week: '2026-11-09' });
   });
 

@@ -52,7 +52,7 @@ describe('saveQueues', () => {
     w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Jan Dela Cruz', items: [{ propertyName: CASA.name }] }] });
 
     expect(w.call('jan', 'assignments')['assignments']).toEqual([
-      { date: DAY, week: DAY, assignedTo: 'Jan Dela Cruz', property: 'Casa Amara', status: 'Not Shared', propertyId: CASA.id },
+      { date: DAY, week: DAY, due: '', assignedTo: 'Jan Dela Cruz', property: 'Casa Amara', status: 'Not Shared', propertyId: CASA.id },
     ]);
   });
 

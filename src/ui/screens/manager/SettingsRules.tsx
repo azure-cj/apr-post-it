@@ -8,6 +8,8 @@ export interface RuleValues {
   readonly cooldownDays: number;
   readonly repostDueDays: number;
   readonly perWeek: number;
+  /** v14: how many weeks a new queue runs, 1 to 3. */
+  readonly queueWeeks: number;
 }
 
 type RuleKey = keyof RuleValues;
@@ -21,13 +23,14 @@ interface RuleDef {
   readonly max: number;
 }
 
-const { cooldownDays, repostDueDays, perWeek } = RULE_LIMITS;
+const { cooldownDays, repostDueDays, perWeek, queueWeeks } = RULE_LIMITS;
 
 /** The ranges are the server's (RULE_LIMITS, as Code.gs holds them). */
 export const RULES: readonly RuleDef[] = [
   { key: 'cooldownDays', label: 'Cooldown', what: 'Days before a listing can be posted again.', unit: ['day', 'days'], min: cooldownDays.min, max: cooldownDays.max },
   { key: 'repostDueDays', label: 'Due for repost', what: 'Days without a post before a listing is due again.', unit: ['day', 'days'], min: repostDueDays.min, max: repostDueDays.max },
-  { key: 'perWeek', label: 'Listings per week', what: 'Each agent’s weekly target. Due Friday.', unit: ['listing', 'listings'], min: perWeek.min, max: perWeek.max },
+  { key: 'perWeek', label: 'Listings per week', what: 'Each agent’s target per week of a queue.', unit: ['listing', 'listings'], min: perWeek.min, max: perWeek.max },
+  { key: 'queueWeeks', label: 'Queue length', what: 'Working weeks a new queue runs. Weekends don’t count.', unit: ['week', 'weeks'], min: queueWeeks.min, max: queueWeeks.max },
 ];
 
 /** The problem with a typed value, or null. */
@@ -65,7 +68,12 @@ export function SettingsRules({ rules, onSave }: SettingsRulesProps) {
 }
 
 function RulesForm({ saved, onSave }: { readonly saved: RuleValues; readonly onSave?: ((rules: RuleValues) => Promise<RuleValues>) | undefined }) {
-  const asText = (r: RuleValues) => ({ cooldownDays: String(r.cooldownDays), repostDueDays: String(r.repostDueDays), perWeek: String(r.perWeek) });
+  const asText = (r: RuleValues) => ({
+    cooldownDays: String(r.cooldownDays),
+    repostDueDays: String(r.repostDueDays),
+    perWeek: String(r.perWeek),
+    queueWeeks: String(r.queueWeeks),
+  });
   /** What the server holds: the props at first, then what each Save kept. */
   const [base, setBase] = useState(saved);
   const [values, setValues] = useState<Record<RuleKey, string>>(asText(saved));
@@ -100,6 +108,7 @@ function RulesForm({ saved, onSave }: { readonly saved: RuleValues; readonly onS
         cooldownDays: Number(values.cooldownDays),
         repostDueDays: Number(values.repostDueDays),
         perWeek: Number(values.perWeek),
+        queueWeeks: Number(values.queueWeeks),
       });
       setBase(kept);
       setValues(asText(kept));

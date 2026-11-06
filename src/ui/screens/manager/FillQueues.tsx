@@ -2,9 +2,11 @@ import { useMemo, useRef, useState } from 'react';
 import { Button, Notice, TextInput } from '../../components';
 import { DEFAULT_PER_WEEK, planQueues, type Plan, type SkipReason } from '@/core/planner';
 import { firstName, plural, type DirectoryRow, type Rules } from '@/core/summary';
-import type { QueueItemInput } from '@/core/tracker';
-import { UserFacingError, type Assignment, type PostLogEntry } from '@/core/types';
-import { weekLabel } from '@/core/week';
+import { chooseQueue, periodLabel, queueWeeksOf, withWeeks, type QueuePeriod } from '@/core/queues';
+import { shortDate } from '@/core/summary';
+import type { QueueInput } from '@/core/tracker';
+import { DEFAULT_RULES, UserFacingError, type Assignment, type PostLogEntry } from '@/core/types';
+import { LengthPicker } from './QueuePicker';
 import { WeekPicker } from './WeekPicker';
 import { Dialog } from './Dialog';
 import './FillQueues.css';
@@ -20,8 +22,8 @@ export interface FillQueuesProps {
   readonly today: string;
   /** The week to start on, as its Monday: the one Assign shows. */
   readonly week: string;
-  /** Saves every planned queue at once (tracker.saveQueues). Resolves with how many rows were saved. */
-  readonly onSave: (week: string, queues: ReadonlyMap<string, readonly QueueItemInput[]>) => Promise<number>;
+  /** Saves every planned queue at once (tracker.saveQueues), each with when it runs. Resolves with how many rows were saved. */
+  readonly onSave: (week: string, queues: readonly QueueInput[]) => Promise<number>;
   /** Saved: closes, with what to say. */
   readonly onSaved: (note: string) => void;
   readonly onClose: () => void;
@@ -36,14 +38,48 @@ export const SKIP_WORDS: Record<SkipReason, string> = {
 };
 
 /**
- * Fill several interns' queues for one week at once: choose who, how many and
- * which week, preview the plan, and save it in one go. Nothing is written
- * until Save all.
+ * The queue each intern would get for `week` (v14, queues.chooseQueue): the
+ * one they have running in it, else a new one of `weeks` weeks, shortened to
+ * end before their next queue. Left out: a week gone by, or no room.
+ */
+export function fillPeriods(
+  interns: readonly string[],
+  week: string,
+  assignments: readonly Assignment[],
+  today: string,
+  weeks: number,
+): Map<string, QueuePeriod> {
+  const out = new Map<string, QueuePeriod>();
+  for (const name of interns) {
+    const choice = chooseQueue(name, week, assignments, today, weeks);
+    if (choice.past) continue;
+    if (choice.saved) {
+      out.set(name, choice.period);
+      continue;
+    }
+    // A new queue: as long as asked, or as long as fits before the next one.
+    for (let n = weeks; n >= 1; n--) {
+      const period = withWeeks(choice.period, n);
+      if (choice.latestDue === undefined || period.due <= choice.latestDue) {
+        out.set(name, period);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Fill several interns' queues at once: choose who, how many a week, which
+ * week and how long a new queue runs, preview the plan, and save it in one
+ * go. Someone with a queue running that week has it filled; anyone else gets
+ * a new one. Nothing is written until Save all.
  */
 export function FillQueues({ interns, properties, posts, assignments, rules, today, week: startWeek, onSave, onSaved, onClose }: FillQueuesProps) {
   const [perText, setPerText] = useState(String(rules.perWeek ?? rules.perIntern ?? DEFAULT_PER_WEEK));
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set(interns));
   const [week, setWeek] = useState(startWeek);
+  const [weeks, setWeeks] = useState(() => queueWeeksOf(rules.queueWeeks ?? DEFAULT_RULES.queueWeeks));
   const [keep, setKeep] = useState(true);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [saving, setSaving] = useState(false);
@@ -66,7 +102,9 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
       perRef.current?.focus();
       return;
     }
-    setPlan(planQueues({ properties, posts, assignments, interns: who, perWeek: per, week, today, rules, keepExisting: keep }));
+    const periods = fillPeriods(who, week, assignments, today, weeks);
+    const planned = who.filter((name) => periods.has(name));
+    setPlan(planQueues({ properties, posts, assignments, interns: planned, perWeek: per, week, today, rules, keepExisting: keep, periods }));
   };
 
   const save = async () => {
@@ -74,8 +112,12 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
     setSaving(true);
     setError(null);
     try {
-      const saved = await onSave(plan.week, plan.queues);
-      onSaved(`Saved ${plural(plan.queues.size, 'queue', 'queues')} for ${weekLabel(plan.week)}, ${plural(saved, 'listing', 'listings')}.`);
+      const queues: QueueInput[] = [...plan.queues].map(([assignedTo, items]) => {
+        const period = plan.periods.get(assignedTo);
+        return { assignedTo, items, ...(period ? { when: { start: period.start, due: period.due } } : {}) };
+      });
+      const saved = await onSave(plan.week, queues);
+      onSaved(`Saved ${plural(plan.queues.size, 'queue', 'queues')}, ${plural(saved, 'listing', 'listings')}.`);
     } catch (err) {
       setError(err instanceof UserFacingError ? err.message : "Couldn't save the queues. Check your connection, then try again.");
       setSaving(false);
@@ -130,6 +172,9 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
           </span>
           <WeekPicker week={week} today={today} onChange={changed(setWeek)} />
         </div>
+        <div className="fill__field">
+          <LengthPicker weeks={weeks} allowed={() => true} disabled={saving} onChange={changed(setWeeks)} />
+        </div>
         <label className="fill__check fill__keep">
           <input type="checkbox" checked={keep} disabled={saving} onChange={(e) => changed(setKeep)(e.target.checked)} />
           Keep existing queues
@@ -155,6 +200,11 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
       </fieldset>
 
       {plan ? <PlanPreview plan={plan} per={per} total={total} /> : null}
+      {plan && plan.queues.size < who.length ? (
+        <Notice tone="warn" live>
+          {plural(who.length - plan.queues.size, 'agent has', 'agents have')} no room for a queue that week.
+        </Notice>
+      ) : null}
 
       {error ? (
         <Notice tone="danger" live>
@@ -176,18 +226,29 @@ function PlanPreview({ plan, per, total }: { readonly plan: Plan; readonly per: 
 
       {plan.shortBy > 0 ? (
         <Notice tone="warn" live>
-          {plural(plan.shortBy, 'listing', 'listings')} short of {per} each. Not enough are free.
+          {plural(plan.shortBy, 'listing', 'listings')} short of {per} a week each. Not enough are free.
         </Notice>
       ) : null}
 
       <ul className="fill__queues">
-        {queues.map(([name, items]) => (
+        {queues.map(([name, items]) => {
+          const period = plan.periods.get(name);
+          const aim = per * (period?.weeks ?? 1);
+          return (
           <li key={name}>
             <details className="fill__queue">
               <summary>
-                <span className="fill__name">{name}</span>
+                <span className="fill__name">
+                  {name}
+                  {period ? (
+                    <span className="fill__muted tabular">
+                      {' '}
+                      {periodLabel(period)} · due {shortDate(period.due)}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="fill__bar" aria-hidden="true">
-                  <span style={{ transform: `scaleX(${Math.min(1, items.length / Math.max(per, 1))})` }} />
+                  <span style={{ transform: `scaleX(${Math.min(1, items.length / Math.max(aim, 1))})` }} />
                 </span>
                 <span className="tabular">{items.length}</span>
               </summary>
@@ -202,7 +263,8 @@ function PlanPreview({ plan, per, total }: { readonly plan: Plan; readonly per: 
               )}
             </details>
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       {plan.skipped.length > 0 ? (

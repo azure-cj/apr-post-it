@@ -177,7 +177,7 @@ describe('reading the tracker (bugs 2 and 6)', () => {
       expect.objectContaining({ title: '1201', type: '1', time: '09:00', fbAccount: 'TRUE', postLink: '917' }),
     ]);
     expect(queue).toEqual([
-      { date: '2026-03-09', week: '2026-03-09', assignedTo: 'Jan Dela Cruz', property: '1201', status: 'To post', propertyId: '' },
+      { date: '2026-03-09', week: '2026-03-09', due: '', assignedTo: 'Jan Dela Cruz', property: '1201', status: 'To post', propertyId: '' },
     ]);
     for (const row of [...posts, ...queue]) {
       for (const value of Object.values(row)) expect(typeof value).toBe('string');
@@ -207,7 +207,7 @@ describe('reading the tracker (bugs 2 and 6)', () => {
     w.assignments.type(['2026-03-09', 'Jan Dela Cruz', 'Casa Amara', 'Pending', CASA.id]);
 
     expect(await w.app('jan').tracker.assignments()).toEqual([
-      { date: '2026-03-09', week: '2026-03-09', assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: CASA.id, status: 'Pending' },
+      { date: '2026-03-09', week: '2026-03-09', due: '', assignedTo: 'Jan Dela Cruz', propertyName: 'Casa Amara', propertyId: CASA.id, status: 'Pending' },
     ]);
   });
 });

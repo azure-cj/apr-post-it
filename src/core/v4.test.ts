@@ -79,7 +79,7 @@ describe('ping', () => {
     await expect(ping(backend)).resolves.toEqual({
       user: { name: 'Maria Santos', role: 'Admin', fbAccounts: [] },
       // A server before v6 sends perIntern only: read as perWeek.
-      server: { version: '2026-10-31.1', rules: { cooldownDays: 5, repostDueDays: 30, perWeek: 12, perIntern: 12 } },
+      server: { version: '2026-10-31.1', rules: { cooldownDays: 5, repostDueDays: 30, perWeek: 12, perIntern: 12, queueWeeks: 2 } },
     });
     await expect(signIn(backend)).resolves.toEqual({ name: 'Maria Santos', role: 'Admin', fbAccounts: [] });
   });
@@ -108,7 +108,12 @@ describe('readRules', () => {
       repostDueDays: 120,
       perWeek: 200,
       perIntern: 200,
+      queueWeeks: 2,
     });
+    // v14: the queue length, 1 to 3 weeks; a server before it sends none.
+    expect(readRules({ queueWeeks: 3 })?.queueWeeks).toBe(3);
+    expect(readRules({ queueWeeks: '1' })?.queueWeeks).toBe(1);
+    expect(readRules({ queueWeeks: 4 })?.queueWeeks).toBe(2);
   });
 
   describe('perWeek (v6)', () => {
@@ -151,7 +156,7 @@ describe('tracker.setRules', () => {
   it('sends only the rules given, and gives back all three as the server has them', async () => {
     const { tracker, sent } = answering({ ok: true, rules: { cooldownDays: 3, repostDueDays: 14, perWeek: 20, perIntern: 20 } });
 
-    await expect(tracker.setRules({ cooldownDays: 3 })).resolves.toEqual({ cooldownDays: 3, repostDueDays: 14, perWeek: 20, perIntern: 20 });
+    await expect(tracker.setRules({ cooldownDays: 3 })).resolves.toEqual({ cooldownDays: 3, repostDueDays: 14, perWeek: 20, perIntern: 20, queueWeeks: 2 });
     expect(sent).toEqual([{ cooldownDays: 3, action: 'setRules', key: 'k' }]);
   });
 
