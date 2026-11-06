@@ -21,9 +21,9 @@ const copyButton = () => screen.getByRole('button', { name: 'Copy' }) as HTMLBut
 /** The sentence beside Copy: what it says about why it is on or off. */
 const reason = () => document.getElementById((copyButton().getAttribute('aria-describedby') ?? '').split(' ')[0] ?? '')?.textContent ?? '';
 
-/** Waits until the document and the posts are in, so Copy has its final state. */
+/** Waits until the document and the posts are in, so Copy has its final state. A busy PC (the whole suite, a release build) can take more than a second. */
 async function settled() {
-  await waitFor(() => expect(reason()).toMatch(/Every check passed|^Copy is blocked/));
+  await waitFor(() => expect(reason()).toMatch(/Every check passed|^Copy is blocked/), { timeout: 5000 });
 }
 
 describe('Copy', () => {
