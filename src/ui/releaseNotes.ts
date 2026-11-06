@@ -10,6 +10,14 @@ export interface ReleaseNotes {
 
 export const RELEASE_NOTES: readonly ReleaseNotes[] = [
   {
+    version: '1.1.4',
+    items: [
+      "Queues run 1, 2 or 3 working weeks; weekends don't count.",
+      'A queue saved on Friday carries on Monday.',
+      'Set the default length in Settings → Rules, or pick it per queue in Assign.',
+    ],
+  },
+  {
     version: '1.1.3',
     items: [
       "The team comes from Alpha Listing Hub's People screen: add people, give roles and turn them off there.",
