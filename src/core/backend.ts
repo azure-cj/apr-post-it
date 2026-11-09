@@ -42,7 +42,9 @@ export type Action =
   | 'indexCheck'
   | 'setRules'
   | 'rebuildDirectory'
-  | 'directoryStatus';
+  | 'directoryStatus'
+  | 'spotChecks'
+  | 'saveSpotCheck';
 
 /** Where the web app is, and who is asking. Blank, null or missing means "not set". */
 export interface BackendConfig {
@@ -274,6 +276,8 @@ const DOING: Readonly<Record<Action, string>> = {
   setRules: 'save the rules',
   rebuildDirectory: 'start rebuilding the directory',
   directoryStatus: 'check the directory rebuild',
+  spotChecks: 'load the spot checks',
+  saveSpotCheck: 'save the spot check',
 };
 
 /** Completes "Google sent … in a form Post-It could not read". */
@@ -297,6 +301,8 @@ const WHAT: Readonly<Record<Action, string>> = {
   setRules: 'the rules',
   rebuildDirectory: 'its answer',
   directoryStatus: 'the rebuild\'s progress',
+  spotChecks: 'the spot checks',
+  saveSpotCheck: 'its answer',
 };
 
 /** Calls that change the sheet. When one times out it may still have gone through. */
@@ -312,6 +318,7 @@ const WRITES: ReadonlySet<Action> = new Set<Action>([
   'saveQueues',
   'setRules',
   'rebuildDirectory',
+  'saveSpotCheck',
 ]);
 
 const TIMED_OUT = Symbol('timed out');

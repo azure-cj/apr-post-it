@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-09.1';
+const SERVER_VERSION = '2026-11-09.2';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -161,6 +161,8 @@ function route_(req) {
       case 'setRules':    return json_(setRules_(req));
       case 'rebuildDirectory': return json_(rebuildDirectory_());
       case 'directoryStatus':  return json_(directoryStatus_());
+      case 'spotChecks':  return json_({ ok: true, checks: spotChecks_() });
+      case 'saveSpotCheck': return json_(saveSpotCheck_(req, me));
       default:            return json_({ ok: false, error: 'unknown action: ' + req.action });
     }
   } catch (err) {
@@ -1550,6 +1552,81 @@ function addLink_(req, me) {
       return { ok: true, row: r + 1 };
     }
     return { ok: false, error: 'notfound', message: 'No pending post for that property.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------------------------------------------------------------- spot checks (v16)
+//
+// Nothing confirms a logged post is on Facebook, about the right listing, or
+// still up, and Facebook can't be read by a script. So each week an admin
+// opens a few of each agent's posts (the app picks them) and says what they
+// found. The results are kept on the admin sheet's own Spot checks tab, one
+// row per post; the tracker itself is not changed. Admins only: PERMISSIONS
+// gives an intern neither action.
+
+const SPOT_TAB = 'Spot checks';
+const SPOT_HEADERS = ['Post', 'Link', 'Agent', 'Posted', 'Property', 'Property ID', 'Result', 'Checked by', 'Checked at'];
+const SPOT_RESULTS = ['Verified', 'Not found', 'Wrong listing'];
+
+/** Every spot check, oldest first: { postKey, link, agent, posted, property, propertyId, result, checkedBy, checkedAt }. */
+function spotChecks_() {
+  var sh = plainTab_(SPOT_TAB, SPOT_HEADERS);
+  if (sh.getLastRow() < 2) return [];
+  var values = sh.getDataRange().getValues();
+  var head = values[0].map(function (h) { return textOf_(h).trim(); });
+  var tz = zoneOf_(sh);
+  function at(r, h) { var i = head.indexOf(h); return i === -1 ? '' : cellText_(r[i], tz, h === 'Posted' ? 'date' : ''); }
+  return values.slice(1).filter(function (r) { return r.join(''); }).map(function (r) {
+    return {
+      postKey: at(r, 'Post'), link: at(r, 'Link'), agent: at(r, 'Agent'), posted: at(r, 'Posted'),
+      property: at(r, 'Property'), propertyId: at(r, 'Property ID'), result: at(r, 'Result'),
+      checkedBy: at(r, 'Checked by'), checkedAt: at(r, 'Checked at'),
+    };
+  });
+}
+
+/**
+ * saveSpotCheck { postLink, result }: what an admin found on opening a post,
+ * Verified, Not found or Wrong listing. The post must be on the tracker; its
+ * agent, day and listing are taken from there. Checking a post again replaces
+ * its result. Replies { check }.
+ */
+function saveSpotCheck_(req, me) {
+  requireAll_(req, ['postLink', 'result']);
+  var result = textOf_(req.result).trim();
+  if (SPOT_RESULTS.indexOf(result) === -1) {
+    return { ok: false, error: 'bad-result', message: 'A spot check is Verified, Not found or Wrong listing.' };
+  }
+  var key = postKey_(req.postLink);
+  if (!key) return postLinkProblem_(req.postLink);
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
+  try {
+    var post = postWithLink_(req.postLink);
+    if (!post) return { ok: false, error: 'notfound', message: 'That post isn\'t on the tracker any more. Refresh.' };
+    var day = sheetDay_(post.date);
+    var check = {
+      postKey: key, link: textOf_(post.postLink).trim(), agent: post.postedBy, posted: day || textOf_(post.date),
+      property: post.title, propertyId: post.propertyId, result: result, checkedBy: me.name, checkedAt: now_(),
+    };
+    var row = [check.postKey, check.link, check.agent, check.posted, check.property, check.propertyId,
+               check.result, check.checkedBy, check.checkedAt];
+
+    var sh = plainTab_(SPOT_TAB, SPOT_HEADERS);
+    var values = sh.getDataRange().getValues();
+    var keyCol = values[0].map(function (h) { return textOf_(h).trim(); }).indexOf('Post');
+    for (var r = 1; r < values.length; r++) {
+      if (keyCol !== -1 && textOf_(values[r][keyCol]).trim().toLowerCase() === key) {
+        var range = sh.getRange(r + 1, 1, 1, row.length);
+        range.setNumberFormat('@');
+        range.setValues([row]);
+        return { ok: true, check: check };
+      }
+    }
+    appendText_(sh, row, row.map(function (_, i) { return i; }));
+    return { ok: true, check: check };
   } finally {
     lock.releaseLock();
   }

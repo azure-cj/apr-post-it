@@ -36,6 +36,7 @@ import {
   queueStatus,
 } from './types';
 import { propertyType } from './records';
+import { isSpotResult, type SpotCheck, type SpotResult } from './spotchecks';
 import { assignmentWeek, isWeekKey, weekOf } from './week';
 
 /** What adding a person gives back. `warning` says something was not saved. */
@@ -215,6 +216,12 @@ export interface Tracker {
 
   /** How a rebuild of the directory is going, and when the last one finished (Admin). */
   directoryStatus(): Promise<DirectoryBuildStatus>;
+
+  /** Every spot check on the Spot checks tab (Admin, v16). */
+  spotChecks(): Promise<readonly SpotCheck[]>;
+
+  /** Saves what an admin found on opening `post` (Admin, v16). Checking it again replaces the result. */
+  saveSpotCheck(post: PostLogEntry, result: SpotResult): Promise<SpotCheck>;
 }
 
 const ONLY_THE_LINK =
@@ -538,6 +545,46 @@ export function createTracker(deps: TrackerDeps): Tracker {
       const total = count(reply['total']);
       return { running, done: Math.min(done, total || done), total, builtAt: asText(reply['builtAt']).trim() };
     },
+
+    async spotChecks(): Promise<readonly SpotCheck[]> {
+      const reply = await backend.call('spotChecks');
+      const rows = asList(reply['checks']);
+      if (!rows) throw unreadableReply('spotChecks');
+      return rows.flatMap((raw) => {
+        const check = readSpotCheck(raw);
+        return check ? [check] : [];
+      });
+    },
+
+    async saveSpotCheck(post: PostLogEntry, result: SpotResult): Promise<SpotCheck> {
+      const postLink = post.postLink.trim();
+      const problem = postLinkProblem(postLink);
+      if (problem) throw new UserFacingError(problem);
+      const reply = await backend.call('saveSpotCheck', { postLink, result });
+      const check = readSpotCheck(reply['check']);
+      if (!check) throw unreadableReply('saveSpotCheck');
+      return check;
+    },
+  };
+}
+
+/** A Spot checks row, or null when it has no post or no result the app knows. */
+function readSpotCheck(value: unknown): SpotCheck | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const postKey = asText(row['postKey']).trim().toLowerCase();
+  const result = asText(row['result']).trim();
+  if (!postKey || !isSpotResult(result)) return null;
+  return {
+    postKey,
+    link: asText(row['link']).trim(),
+    agent: asText(row['agent']).trim(),
+    posted: asText(row['posted']).trim(),
+    property: asText(row['property']).trim(),
+    propertyId: asText(row['propertyId']).trim(),
+    result,
+    checkedBy: asText(row['checkedBy']).trim(),
+    checkedAt: asText(row['checkedAt']).trim(),
   };
 }
 

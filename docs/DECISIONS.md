@@ -285,3 +285,16 @@ they go. Copies of one link (m. or web., a tracking query, a trailing slash, let
 repeat, and logged by anyone else is refused with who logged it and when (`link-taken`). Add link
 applies the same rules to a pending post. The app checks the link before it asks; the server
 checks again. Older rows keep their links; the rules apply to new logs only.
+
+### D23. Spot checks: an admin opens a few of each agent's posts a week (Nov 9, 2026)
+
+Facebook can't be read by a script (logins, private groups), so nothing else confirms a logged
+post is up and about the listing logged. Each week the app picks 3 of each agent's Posted posts
+with a post's link, dated that week. The pick is a fixed shuffle of the week, the agent and the
+post: every admin sees the same posts, agents can't tell which, and a post once checked stays
+picked. On the Agents screen, the agent's panel lists them: Open, then Verified, Not found or
+Wrong listing. The table's Checks column shows how far the week's check is, and a failure is a red
+pill. Results are kept on the admin sheet's own Spot checks tab, one row per post, with who
+checked and when: the interns' tracker is not changed, so the owner's sheet keeps its shape.
+Checking a post again replaces its result. A web app before v16 has no spot checks, and the
+Agents screen goes on without them.

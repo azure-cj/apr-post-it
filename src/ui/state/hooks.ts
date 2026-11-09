@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import type { SpotCheck } from '@/core/spotchecks';
 import type { Assignment, PostLogEntry, Property, TeamMember, User } from '@/core/types';
 import { useApp } from './AppState';
 import type { Remote, RemoteResource } from './remote';
@@ -62,6 +63,11 @@ export function usePosts(options: RemoteOptions = {}): RemoteView<readonly PostL
 /** The Assignments rows you may see: your own queue as an intern. Read on arrival. */
 export function useAssignments(options: RemoteOptions = {}): RemoteView<readonly Assignment[]> {
   return useRemote(useApp().assignments, options);
+}
+
+/** The Spot checks tab (Admin only, v16). Read on arrival. */
+export function useSpotChecks(options: RemoteOptions = {}): RemoteView<readonly SpotCheck[]> {
+  return useRemote(useApp().spotChecks, options);
 }
 
 /** The Team tab without its keys. Admin only: the server refuses anyone else. Read on arrival. */

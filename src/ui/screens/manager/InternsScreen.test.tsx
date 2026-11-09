@@ -437,3 +437,73 @@ describe('the Interns screen', () => {
     expect(heading()).toBe('Agents');
   });
 });
+
+describe('the Agents screen: spot checks (v16)', () => {
+  const check = (link: string, result: string, by = manager.name) => ({
+    postKey: link.replace('https://www.facebook.com/', '').replace(/\/$/, ''),
+    link,
+    agent: intern.name,
+    posted: '2026-11-02',
+    property: 'Kapitolyo Ground Floor Retail, Pasig',
+    propertyId: '1Kapitolyo',
+    result,
+    checkedBy: by,
+    checkedAt: '2026-11-05T09:00:00+08:00',
+  });
+  const checksCell = (row: HTMLElement) => row.querySelectorAll('td')[4]!.textContent;
+
+  it('shows each agent’s checks in the table, a failure standing out', async () => {
+    renderAt(THURSDAY, { platform: server({ spotChecks: { ok: true, checks: [check(JAN_KAPITOLYO, 'Not found')] } }) });
+    expect(await screen.findByRole('columnheader', { name: 'Checks' })).toBeTruthy();
+
+    const jan = await rowOf(intern.name);
+    expect(within(jan).getByText('1 failed').classList.contains('pill--danger')).toBe(true);
+    // Carlo's two posts are both picked; Mika posted four, so three are; Bea posted none.
+    expect(checksCell(await rowOf('Carlo Mendoza'))).toBe('0 of 2 checked');
+    expect(checksCell(await rowOf('Mika Reyes'))).toBe('0 of 3 checked');
+    expect(checksCell(await rowOf('Bea Lim'))).toBe('–');
+  });
+
+  it("lists the agent's picked posts in their panel, and saves what was found", async () => {
+    const user = userEvent.setup();
+    const saved: Record<string, unknown>[] = [];
+    let checks = [check(JAN_KAPITOLYO, 'Not found')];
+    const platform = server({
+      spotChecks: () => ({ ok: true, checks }),
+      saveSpotCheck: (body: Readonly<Record<string, unknown>>) => {
+        saved.push({ postLink: body['postLink'], result: body['result'] });
+        const made = { ...check(String(body['postLink']), String(body['result'])), property: 'BGC Uptown Office 18F, 240 sqm' };
+        checks = [...checks, made];
+        return { ok: true, check: made };
+      },
+    });
+    renderAt(THURSDAY, { platform });
+    await user.click(within(await rowOf(intern.name)).getByRole('button', { name: new RegExp(intern.name) }));
+
+    const panel = screen.getByRole('complementary', { name: intern.name });
+    const section = within(panel).getByRole('region', { name: /Spot check/ });
+    // Only Posted posts: the pending Seaside post isn't one to check.
+    const items = section.querySelectorAll('.spot-item');
+    expect(Array.from(items, (i) => i.querySelector('.spot-item__name')!.textContent)).toEqual([
+      'Kapitolyo Ground Floor Retail, Pasig',
+      'BGC Uptown Office 18F, 240 sqm',
+    ]);
+    expect(items[0]!.classList.contains('spot-item--failed')).toBe(true);
+    expect(items[0]!.textContent).toContain(`Not found, checked by ${manager.name}`);
+    expect(within(items[0] as HTMLElement).getByRole('button', { name: 'Not found' }).getAttribute('aria-pressed')).toBe('true');
+
+    await user.click(within(items[1] as HTMLElement).getByRole('button', { name: 'Open the post of BGC Uptown Office 18F, 240 sqm' }));
+    expect(platform.opened).toContain('https://www.facebook.com/groups/apgmain/posts/112/');
+
+    await user.click(within(screen.getByRole('group', { name: 'What you found: BGC Uptown Office 18F, 240 sqm' })).getByRole('button', { name: 'Verified' }));
+    expect(saved).toEqual([{ postLink: 'https://www.facebook.com/groups/apgmain/posts/112/', result: 'Verified' }]);
+    await waitFor(() => expect(within(screen.getByRole('region', { name: /Spot check/ })).getByText(/Verified, checked by/)).toBeTruthy());
+    expect(await screen.findByText('Saved: Verified.')).toBeTruthy();
+  });
+
+  it('goes on without them on a web app before v16', async () => {
+    renderAt(THURSDAY, { platform: server() });
+    await rowOf(intern.name);
+    expect(screen.queryByRole('columnheader', { name: 'Checks' })).toBeNull();
+  });
+});

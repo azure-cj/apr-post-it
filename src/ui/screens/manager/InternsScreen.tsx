@@ -13,11 +13,13 @@ import {
   type TeamMember,
   type TeamWeekRow,
 } from '@/core/summary';
+import { spotSample, type SpotCheck, type SpotItem, type SpotResult } from '@/core/spotchecks';
 import { isWeekOver, weekDays } from '@/core/week';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
 import { cleanProfiles, profilesOf as memberProfiles } from './FbAccountsField';
 import { DAY_LETTERS, isBehind, lastPostWords, PacePill, WeekBar, WeekDays } from './InternsParts';
 import { InternPanel } from './InternsPanel';
+import { SpotCell } from './InternsSpotCheck';
 import { WhoPosted } from './InternsWhoPosted';
 import { Stat } from './Stat';
 import { WeekPicker } from './WeekPicker';
@@ -49,6 +51,10 @@ export interface InternsScreenProps {
   readonly onOpenQueue?: ((intern: string, week: string) => void) | undefined;
   /** Opens a link in the browser (platform.open). Without it, no Open buttons. */
   readonly onOpenLink?: ((url: string) => void) | undefined;
+  /** The Spot checks tab; null until read, or when it can't be (a server before v16). Without it, no spot checks. */
+  readonly spotChecks?: readonly SpotCheck[] | null | undefined;
+  /** Saves a spot check. Rejects when it couldn't be saved, having said why. Without it, no spot checks. */
+  readonly onSpotCheck?: ((post: PostLogEntry, result: SpotResult) => Promise<void>) | undefined;
 }
 
 /**
@@ -69,6 +75,8 @@ export function InternsScreen({
   updatedAt,
   onOpenQueue,
   onOpenLink,
+  spotChecks,
+  onSpotCheck,
 }: InternsScreenProps) {
   const [open, setOpen] = useState<string | null>(null);
   const panelHeading = useRef<HTMLHeadingElement>(null);
@@ -98,6 +106,12 @@ export function InternsScreen({
     }
     return out.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
   }, [team, rows]);
+
+  // Each agent's posts to spot check this week, by name: only once the checks are read.
+  const spots = useMemo<ReadonlyMap<string, readonly SpotItem[]> | null>(() => {
+    if (!spotChecks || !onSpotCheck) return null;
+    return new Map(rows.map((r) => [r.name, spotSample(posts, r.name, week, spotChecks)]));
+  }, [spotChecks, onSpotCheck, rows, posts, week]);
 
   const openRow = rows.find((r) => open !== null && samePerson(r.name, open));
   const profilesOf = (name: string) => cleanProfiles(memberProfiles(team?.find((m) => samePerson(m.name, name)) ?? null)).filter((p) => p.link);
@@ -200,6 +214,7 @@ export function InternsScreen({
                   week={week}
                   today={today}
                   posts={posts}
+                  spots={spots}
                   open={openRow?.name ?? null}
                   onOpen={(name, button) => {
                     opener.current = button;
@@ -222,6 +237,7 @@ export function InternsScreen({
                 onClose={close}
                 onOpenQueue={onOpenQueue ? () => onOpenQueue(openRow.name, week) : undefined}
                 onOpenLink={onOpenLink}
+                spot={spots && onSpotCheck ? { items: spots.get(openRow.name) ?? [], onCheck: onSpotCheck } : undefined}
               />
             ) : null}
           </div>
@@ -240,12 +256,14 @@ interface WeekTableProps {
   readonly week: string;
   readonly today: string;
   readonly posts: readonly PostLogEntry[];
+  /** Each agent's spot check this week; null: no Checks column. */
+  readonly spots: ReadonlyMap<string, readonly SpotItem[]> | null;
   /** Whose week is open beside the table. */
   readonly open: string | null;
   readonly onOpen: (name: string, button: HTMLButtonElement) => void;
 }
 
-function WeekTable({ rows, week, today, posts, open, onOpen }: WeekTableProps) {
+function WeekTable({ rows, week, today, posts, spots, open, onOpen }: WeekTableProps) {
   const days = weekDays(week);
   return (
     <div className="week-table__wrap">
@@ -266,6 +284,7 @@ function WeekTable({ rows, week, today, posts, open, onOpen }: WeekTableProps) {
             </th>
             <th scope="col">Pace</th>
             <th scope="col">Waiting</th>
+            {spots ? <th scope="col">Checks</th> : null}
             <th scope="col" className="week-table__last">
               Last post
             </th>
@@ -311,6 +330,11 @@ function WeekTable({ rows, week, today, posts, open, onOpen }: WeekTableProps) {
                     <span className="interns__quiet">None</span>
                   )}
                 </td>
+                {spots ? (
+                  <td>
+                    <SpotCell items={spots.get(row.name) ?? []} />
+                  </td>
+                ) : null}
                 <td className="week-table__last tabular">{last ? lastPostWords(last, today) : <span className="interns__quiet">Never</span>}</td>
               </tr>
             );

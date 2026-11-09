@@ -330,3 +330,14 @@ a missing link stays `link-required` and a link that isn't Facebook's `bad-link`
 post match whatever their host, query, slash or case. A post already on the tracker under the same
 poster is still a `repeat`; under anyone else, or on `addLink` for another listing, the reply is
 `{ ok: false, error: 'link-taken', message: 'That post is already logged, by NAME on Mon 9 Nov 2026.' }`.
+
+## v16: spot checks (server 2026-11-09.2)
+
+Admins only. `spotChecks` replies `{ checks: [{ postKey, link, agent, posted, property,
+propertyId, result, checkedBy, checkedAt }] }`, every row of the admin sheet's Spot checks tab
+(`Post`, `Link`, `Agent`, `Posted`, `Property`, `Property ID`, `Result`, `Checked by`,
+`Checked at`), made on the first check. `saveSpotCheck { postLink, result }`, result `Verified`,
+`Not found` or `Wrong listing`, finds the post on the tracker by any copy of its link and writes
+its agent, day and listing with the caller's name and the time; the same post again replaces its
+row. Replies `{ check }`, else `bad-result`, `not-a-post`, `bad-link` or `notfound`. Which posts
+to check is the app's (src/core/spotchecks.ts); the server keeps only the results.

@@ -54,7 +54,9 @@ import {
   useNotify,
   usePosts,
   useStore,
+  useSpotChecks,
   useTeam,
+  sentenceOf,
   useUser,
   navKeys,
   type FromList,
@@ -987,6 +989,8 @@ function InternsRoute() {
   const team = useTeam({ maxAgeMs: 300_000, pollMs: 600_000 });
   const posts = usePosts({ pollMs: 120_000 });
   const assignments = useAssignments({ pollMs: 120_000 });
+  const spotChecks = useSpotChecks({ maxAgeMs: 60_000, pollMs: 600_000 });
+  const notify = useNotify();
   const loadedAt = posts.loadedAt;
 
   return (
@@ -1007,6 +1011,17 @@ function InternsRoute() {
       updatedAt={loadedAt === null ? null : manilaTime(loadedAt)}
       onOpenQueue={(intern, monday) => navigate(assignPath(intern, monday))}
       onOpenLink={(url) => void app.platform.open(url)}
+      // A server before v16 has no spot checks: the screen goes on without them.
+      spotChecks={spotChecks.error ? null : spotChecks.data}
+      onSpotCheck={async (post, result) => {
+        try {
+          await app.tracker.saveSpotCheck(post, result);
+          notify(result === 'Verified' ? 'Saved: Verified.' : `Saved: ${result}.`, result === 'Verified' ? 'ok' : 'warn');
+        } catch (err) {
+          notify(sentenceOf(err), 'danger');
+          throw err;
+        }
+      }}
     />
   );
 }

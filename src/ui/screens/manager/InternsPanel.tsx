@@ -4,7 +4,9 @@ import { isDate, lastPostOf, samePerson, shortDate, weekProgress, type TeamWeekR
 import { isQueueOver, queueInWeek, rowsOf } from '@/core/queues';
 import { addWeeks, weekLabel, weekOf } from '@/core/week';
 import { initials, queueStatus, type Assignment, type FbProfile, type PostLogEntry } from '@/core/types';
+import type { SpotItem, SpotResult } from '@/core/spotchecks';
 import { PacePill, WeekBar } from './InternsParts';
+import { SpotCheckSection } from './InternsSpotCheck';
 
 /** How many weeks before the one shown the history covers. */
 export const HISTORY_WEEKS = 4;
@@ -21,6 +23,13 @@ export interface InternPanelProps {
   /** Open Assign on their queue for this week. */
   readonly onOpenQueue?: (() => void) | undefined;
   readonly onOpenLink?: ((url: string) => void) | undefined;
+  /** Their week's spot check. Without it, none. */
+  readonly spot?:
+    | {
+        readonly items: readonly SpotItem[];
+        readonly onCheck: (post: PostLogEntry, result: SpotResult) => Promise<void>;
+      }
+    | undefined;
 }
 
 type Group = 'Not shared' | 'Pending' | 'Posted' | 'Missed';
@@ -41,7 +50,7 @@ interface Item {
  * is, the last four weeks as bars, and the way to their queue in Assign.
  */
 export const InternPanel = forwardRef<HTMLHeadingElement, InternPanelProps>(function InternPanel(
-  { row, week, today, posts, assignments, profiles, onClose, onOpenQueue, onOpenLink },
+  { row, week, today, posts, assignments, profiles, onClose, onOpenQueue, onOpenLink, spot },
   headingRef,
 ) {
   const titleId = useId();
@@ -102,6 +111,8 @@ export const InternPanel = forwardRef<HTMLHeadingElement, InternPanelProps>(func
             : null}
         </div>
       ) : null}
+
+      {spot ? <SpotCheckSection items={spot.items} onCheck={spot.onCheck} onOpenLink={onOpenLink} /> : null}
 
       <section className="intern-panel__history" aria-label="Last 4 weeks">
         <h3 className="intern-panel__label">Last 4 weeks</h3>

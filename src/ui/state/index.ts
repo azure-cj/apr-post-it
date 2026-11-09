@@ -28,6 +28,7 @@ export {
   useFindState,
   usePosts,
   useSavedFolder,
+  useSpotChecks,
   useTeam,
   useUser,
   type RemoteOptions,

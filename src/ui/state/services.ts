@@ -2,6 +2,7 @@ import { createBackend, type Action, type Backend, type Payload, type Reply } fr
 import { createDirectory, type Directory } from '@/core/directory';
 import { readServerInfo, serverVersionStatus } from '@/core/session';
 import { createTracker, type Tracker } from '@/core/tracker';
+import type { SpotCheck } from '@/core/spotchecks';
 import {
   canManage,
   type Assignment,
@@ -100,6 +101,8 @@ export interface Services {
   readonly assignments: RemoteResource<readonly Assignment[]>;
   /** The Team tab (Admin only): names, roles, FB accounts, active. Never keys. */
   readonly team: RemoteResource<readonly TeamMember[]>;
+  /** The Spot checks tab (Admin only, v16). */
+  readonly spotChecks: RemoteResource<readonly SpotCheck[]>;
   readonly find: Store<FindState>;
   /** Where each listing's photos were saved this session, by property id: for Open folder. */
   readonly savedFolders: Store<ReadonlyMap<string, string>>;
@@ -178,6 +181,7 @@ export function createServices(
   const posts = createRemote(() => raw.posts(), now);
   const assignments = createRemote(() => raw.assignments(), now);
   const team = createRemote(() => raw.team(), now);
+  const spotChecks = createRemote(() => raw.spotChecks(), now);
 
   /**
    * After a write, or an attempt at one: what was read before may no longer
@@ -231,6 +235,15 @@ export function createServices(
     },
     rebuildDirectory: () => raw.rebuildDirectory(),
     directoryStatus: () => raw.directoryStatus(),
+    spotChecks: () => raw.spotChecks(),
+    async saveSpotCheck(post, result) {
+      try {
+        return await raw.saveSpotCheck(post, result);
+      } finally {
+        spotChecks.invalidate();
+        void spotChecks.refresh();
+      }
+    },
   };
 
   const outbox = createOutbox(p, tracker, now);
@@ -258,6 +271,7 @@ export function createServices(
     posts,
     assignments,
     team,
+    spotChecks,
     find,
     savedFolders,
     outbox,
@@ -281,6 +295,7 @@ export function createServices(
       posts.reset();
       assignments.reset();
       team.reset();
+      spotChecks.reset();
       directoryStatus.set(IDLE);
       server.set(UNKNOWN_SERVER);
       find.set(EMPTY_FIND);
