@@ -23,7 +23,7 @@ Every call is a POST of `{ action, key, ... }`. Every reply is `{ ok, ... }`, or
 |---|---|---|---|
 | `ping` | all | — | `{ name, role, fbAccounts, time }` (unchanged) |
 | `properties` | all | — | rows, each with `issues` (the Directory's Issues text) and these extra optional fields: `city, size, dealType, availability ('Available'\|'Sold'\|'')`, `inChecker:boolean`. They come from the checker CSV, joined on Folder ID. `CONFIG.CHECKER_INDEX_CSV_URL` set to `''` turns the join off, and then the fields are absent. |
-| `logPost` | all | `{ property, propertyId, fbAccount, postLink, status: 'Posted'\|'Pending', type?, postedBy? (admin only) }` | `{ status, date, time, type, postedBy }`. `date` is `yyyy-MM-dd`, `time` is `HH:mm`. `type` is the Property type written: the Directory's category for `propertyId`, title cased; the request's `type` (the app sends the listing's category) only when the Directory has no such row. The app no longer sends "Group post". **`postLink` is REQUIRED**: it must be an https link on facebook.com, fb.com, m.facebook.com or fb.me. Otherwise `error:'link-required'` or `'bad-link'`. `status` is required: `Pending` means posted in a group, waiting for the group admin's approval. |
+| `logPost` | all | `{ property, propertyId, fbAccount, postLink, status: 'Posted'\|'Pending', type?, postedBy? (admin only) }` | `{ status, date, time, type, postedBy }`. `date` is `yyyy-MM-dd`, `time` is `HH:mm`. `type` is the Property type written: the Directory's category for `propertyId`, title cased; the request's `type` (the app sends the listing's category) only when the Directory has no such row. The app no longer sends "Group post". **`postLink` is REQUIRED**: it must be an https link to one Facebook post (see v15). Otherwise `error:'link-required'`, `'bad-link'` or `'not-a-post'`; a post already logged by someone else is `'link-taken'`. `status` is required: `Pending` means posted in a group, waiting for the group admin's approval. |
 | `setStatus` | all (own rows) / admin | `status: 'Not Shared'\|'Pending'\|'Posted'` (`'To post'` is accepted and written `Not Shared`) | unchanged (Pending → Posted). With `Posted`, the assignee's newest Pending Posts row for that listing becomes Posted too. |
 | `property` | all | `{ id }` | the detail, with the same checker fields as `properties`, joined the same way. |
 | `addLink` | unchanged | | kept for old rows that have no link |
@@ -319,3 +319,14 @@ at a time. A save without them (an app before v14) keeps the queue's saved dates
 until the deadline; Not shared turns Missed the day after it. `assignments` rows carry `due`.
 The rules gain `queueWeeks` (Settings tab `Queue weeks`, 1–3, default 2): a new queue's length.
 The target of a queue is `perWeek` × its weeks; the behind warning starts on its third working day.
+
+## v15: only a post's link, one post one person (server 2026-11-09.1)
+
+`logPost` and `addLink` take a `postLink` only when it is a Facebook post's: on facebook.com (www,
+m, web) or fb.com, a group post, a page's or person's post, `permalink.php`/`story.php` with
+`story_fbid`, `/share/p/`, a photo with `fbid`, or a Marketplace item. fb.me is no longer accepted.
+A Facebook link that isn't a post's is refused `{ ok: false, error: 'not-a-post', message }`;
+a missing link stays `link-required` and a link that isn't Facebook's `bad-link`. Links to the same
+post match whatever their host, query, slash or case. A post already on the tracker under the same
+poster is still a `repeat`; under anyone else, or on `addLink` for another listing, the reply is
+`{ ok: false, error: 'link-taken', message: 'That post is already logged, by NAME on Mon 9 Nov 2026.' }`.

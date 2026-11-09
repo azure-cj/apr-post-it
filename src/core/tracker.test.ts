@@ -729,10 +729,10 @@ describe('logging a post (v3)', () => {
 
   it('sends the status and the trimmed link', async () => {
     const { post, sent } = scripted({ ok: true, date: '2026-03-09', postedBy: 'Jan' });
-    const saved = await trackerOver(post).logPost(logInput({ status: 'Pending', postLink: ' https://fb.me/x ' }));
+    const saved = await trackerOver(post).logPost(logInput({ status: 'Pending', postLink: ' https://www.facebook.com/groups/x/posts/1/ ' }));
 
     expect(sent[0]!.body['status']).toBe('Pending');
-    expect(sent[0]!.body['postLink']).toBe('https://fb.me/x');
+    expect(sent[0]!.body['postLink']).toBe('https://www.facebook.com/groups/x/posts/1/');
     expect(saved.status).toBe('Pending');
   });
 

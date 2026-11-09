@@ -1,17 +1,52 @@
-import { facebookProfileProblem, isFacebookPostLink, normalizeProfileLink, postLinkProblem } from './links';
+import { facebookProfileProblem, isFacebookPostLink, normalizeProfileLink, postKeyOf, postLinkProblem } from './links';
 
-describe('a post link', () => {
+const NOT_POST = "That's a Facebook link, but not a post's. Open the post (click its date) and copy that address.";
+
+describe("a post link (v14: a post's address, not any Facebook page)", () => {
   it.each([
-    'https://www.facebook.com/groups/x/posts/1/',
-    'https://facebook.com/share/p/abc',
-    'https://m.facebook.com/story.php?id=1',
-    'https://web.facebook.com/groups/x/permalink/2',
-    'https://fb.com/1',
-    'https://fb.me/abc',
-    '  https://WWW.Facebook.com/x  ',
-  ])('%s is a Facebook link', (url) => {
+    ['https://www.facebook.com/groups/x/posts/1/', 'groups/x/posts/1'],
+    ['https://web.facebook.com/groups/x/permalink/2', 'groups/x/posts/2'],
+    ['https://m.facebook.com/groups/123456/posts/789?mibextid=abc', 'groups/123456/posts/789'],
+    ['https://facebook.com/share/p/1AbCdEf/', 'share/p/1abcdef'],
+    ['https://m.facebook.com/story.php?story_fbid=5&id=6', 'story/5'],
+    ['https://www.facebook.com/permalink.php?story_fbid=pfbid0Ab&id=6', 'story/pfbid0ab'],
+    ['https://www.facebook.com/photo/?fbid=7&set=a.8', 'photo/7'],
+    ['https://www.facebook.com/photo.php?fbid=7', 'photo/7'],
+    ['https://www.facebook.com/marketplace/item/9/', 'marketplace/9'],
+    ['https://www.facebook.com/apg.realty/posts/pfbid02XyZ', 'apg.realty/posts/pfbid02xyz'],
+    ['https://fb.com/groups/x/posts/1', 'groups/x/posts/1'],
+    ['  https://WWW.Facebook.com/groups/X/posts/1/#top  ', 'groups/x/posts/1'],
+  ])('%s is a post: %s', (url, key) => {
     expect(isFacebookPostLink(url)).toBe(true);
     expect(postLinkProblem(url)).toBeNull();
+    expect(postKeyOf(url)).toBe(key);
+  });
+
+  it('gives every copy of one post the same key', () => {
+    const copies = [
+      'https://www.facebook.com/groups/apg/posts/123/',
+      'https://m.facebook.com/groups/apg/permalink/123/?mibextid=Nif5oz',
+      'https://web.facebook.com/groups/APG/posts/123',
+    ];
+    expect(new Set(copies.map(postKeyOf))).toEqual(new Set(['groups/apg/posts/123']));
+  });
+
+  it.each([
+    'https://www.facebook.com',
+    'https://www.facebook.com/',
+    'https://www.facebook.com/cyrus.orbano',
+    'https://facebook.com/profile.php?id=100012345',
+    'https://www.facebook.com/groups/apg/',
+    'https://www.facebook.com/groups/apg/posts/',
+    'https://m.facebook.com/story.php?id=1',
+    'https://www.facebook.com/photo/?set=a.8',
+    'https://www.facebook.com/groups/x/posts/=1/',
+    'https://www.facebook.com/x',
+    'https://fb.com/1',
+  ])('%s is Facebook, but not a post', (url) => {
+    expect(isFacebookPostLink(url)).toBe(false);
+    expect(postKeyOf(url)).toBeNull();
+    expect(postLinkProblem(url)).toBe(NOT_POST);
   });
 
   it.each([
@@ -20,11 +55,12 @@ describe('a post link', () => {
     'https://evilfacebook.com/x',
     'https://l.facebook.com/x',
     'https://www.fb.com/x',
+    'https://fb.me/abc',
     'https://instagram.com/p/1',
     'facebook.com/groups/x',
     'https://www.facebook.com/a b',
     'not a link',
-  ])('%s is not', (url) => {
+  ])('%s is not Facebook', (url) => {
     expect(isFacebookPostLink(url)).toBe(false);
     expect(postLinkProblem(url)).toBe("That isn't a Facebook link.");
   });

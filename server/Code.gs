@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-06.1';
+const SERVER_VERSION = '2026-11-09.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -1335,6 +1335,8 @@ function logPost_(req, me) {
       return { ok: true, repeat: true, status: postStatus_(earlier.status), date: sheetDay_(earlier.date),
                time: sheetTime_(earlier.time), type: earlier.type, postedBy: earlier.postedBy };
     }
+    // Someone else's post, logged again under another name (v14).
+    if (earlier) return linkTaken_(earlier);
 
     // One reading of the clock for the check and the row, so the two cannot
     // fall either side of midnight. A retry says when it was logged (v12).
@@ -1374,8 +1376,10 @@ function logPost_(req, me) {
 function postWithLink_(link) {
   var want = textOf_(link).trim();
   if (!want) return null;
+  var key = postKey_(want);
   return readRows_(CONFIG.POSTS_TAB, POST_FIELDS).filter(function (p) {
-    return textOf_(p.postLink).trim() === want;
+    var theirs = textOf_(p.postLink).trim();
+    return theirs === want || (key !== null && postKey_(theirs) === key);
   })[0] || null;
 }
 
@@ -1442,28 +1446,84 @@ function cooldownFor_(propertyId, propertyName, when) {
   };
 }
 
-// A Facebook post's address: https, on one of Facebook's own hosts. The app
-// applies the same rule before it asks (src/core/links.ts).
-const FACEBOOK_HOSTS = ['facebook.com', 'www.facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.com', 'fb.me'];
+// A Facebook post's address (v14): https, on one of Facebook's own hosts, and
+// one post's: a group post, a page's or person's post, permalink.php or
+// story.php with story_fbid, /share/p/, a photo with fbid, a Marketplace item.
+// A profile, a group's front page or the home page is not a post. The app
+// applies the same rule before it asks (src/core/links.ts, postKeyOf).
+const FACEBOOK_HOSTS = ['facebook.com', 'www.facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.com'];
+const FACEBOOK_LINK = /^https:\/\/([^\/?#\s]+)(\/[^?#\s]*)?(\?[^#\s]*)?(#\S*)?$/i;
+const FACEBOOK_ID = /^[A-Za-z0-9_.-]+$/;
 
-/** A refusal for a post link that is missing or not Facebook's, else null. */
+/**
+ * The post a link is to, the same for every copy of that link (m. or web.,
+ * a tracking query, a trailing slash, letter case, /permalink/ or /posts/):
+ * "groups/apg/posts/123". Null when it isn't a Facebook post's link.
+ */
+function postKey_(value) {
+  var m = FACEBOOK_LINK.exec(textOf_(value).trim());
+  if (!m || FACEBOOK_HOSTS.indexOf(m[1].toLowerCase()) === -1) return null;
+  var parts = (m[2] || '').split('/').filter(String).map(function (x) { return x.toLowerCase(); });
+  var query = {};
+  (m[3] || '').replace(/^\?/, '').split('&').forEach(function (pair) {
+    if (!pair) return;
+    var at = pair.indexOf('=');
+    var name = (at === -1 ? pair : pair.slice(0, at)).toLowerCase();
+    if (!(name in query)) query[name] = at === -1 ? '' : pair.slice(at + 1);
+  });
+  function id(v) { return (v !== undefined && FACEBOOK_ID.test(v)) ? v.toLowerCase() : null; }
+  var a = parts[0], b = parts[1], c = parts[2], d = parts[3];
+
+  if (a === 'groups' && (c === 'posts' || c === 'permalink')) {
+    return id(b) && id(d) ? 'groups/' + id(b) + '/posts/' + id(d) : null;
+  }
+  if (a === 'share' && b === 'p') return id(c) ? 'share/p/' + id(c) : null;
+  if (a === 'marketplace' && b === 'item') return id(c) ? 'marketplace/' + id(c) : null;
+  if (parts.length === 1 && (a === 'permalink.php' || a === 'story.php')) {
+    return id(query.story_fbid) ? 'story/' + id(query.story_fbid) : null;
+  }
+  if (parts.length <= 2 && (a === 'photo.php' || a === 'photo') && (b === undefined || b === '')) {
+    return id(query.fbid) ? 'photo/' + id(query.fbid) : null;
+  }
+  if (a !== undefined && a !== 'groups' && b === 'posts') {
+    return id(a) && id(c) ? id(a) + '/posts/' + id(c) : null;
+  }
+  return null;
+}
+
+/** A refusal for a post link that is missing, not Facebook's, or not a post's, else null. */
 function postLinkProblem_(value) {
   var text = textOf_(value).trim();
   if (!text) return { ok: false, error: 'link-required', message: 'Paste the post\'s link.' };
-  var m = /^https:\/\/([^\/?#\s]+)(?:[\/?#][^\s]*)?$/i.exec(text);
+  var m = FACEBOOK_LINK.exec(text);
   if (!m || FACEBOOK_HOSTS.indexOf(m[1].toLowerCase()) === -1) {
     return { ok: false, error: 'bad-link', message: 'That isn\'t a Facebook link.' };
   }
+  if (!postKey_(text)) {
+    return { ok: false, error: 'not-a-post',
+             message: 'That\'s a Facebook link, but not a post\'s. Open the post (click its date) and copy that address.' };
+  }
   return null;
+}
+
+/** The refusal for a post already logged by someone else (v14): one post, one person. */
+function linkTaken_(earlier) {
+  var day = sheetDay_(earlier.date);
+  return { ok: false, error: 'link-taken',
+           message: 'That post is already logged, by ' + earlier.postedBy + (day ? ' on ' + fullDate_(dayNumber_(day)) : '') + '.' };
 }
 
 /** Turn a Pending row into Posted once the live link exists. */
 function addLink_(req, me) {
   requireAll_(req, ['postLink']);
   if (!req.propertyId && !req.property) throw new Error('missing: property');
+  var problem = postLinkProblem_(req.postLink);
+  if (problem) return problem;
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
+    // The link already on the tracker (v14): this pending row's own is fine; anyone else's post, or another listing's, is not.
+    var earlier = postWithLink_(req.postLink);
     var sh = sheetFor_(CONFIG.POSTS_TAB, POST_FIELDS);
     var values = sh.getDataRange().getValues();
     var col = columnsIn_(values[0], POST_FIELDS, sh.getName());
@@ -1480,6 +1540,9 @@ function addLink_(req, me) {
       if (!sameProperty_(p.propertyId, p.title, id, key)) continue;
       if (postStatus_(p.status) !== 'Pending') continue;
       if (me.role === 'Intern' && p.postedBy !== me.name) continue;  // not yours
+      if (earlier && (earlier.postedBy !== p.postedBy || !sameProperty_(earlier.propertyId, earlier.title, id, key))) {
+        return linkTaken_(earlier);
+      }
 
       setText_(sh.getRange(r + 1, col.status + 1), 'Posted');
       setText_(sh.getRange(r + 1, col.postLink + 1), String(req.postLink).trim());

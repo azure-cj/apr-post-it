@@ -273,3 +273,15 @@ the names `listPeople` last gave, by email, so an intern's own posts are credite
 name the admin's screens show. Each person's FB accounts and profile links stay in the sheets,
 on the Team tab row with their email (made when there is none). A copy still on a key keeps the
 Team tab as before. Queues and logging on someone's behalf take only active people on Firebase.
+
+### D22. Only a post's link, and one post is one person's (Nov 9, 2026)
+
+A logged post must be checkable, so its link has to open that one post: a group post, a page's or
+person's post, `permalink.php` or `story.php` with `story_fbid`, `/share/p/`, a photo with `fbid`,
+or a Marketplace item, on facebook.com (www, m, web) or fb.com. A profile, a group's front page or
+the home page is refused ("not a post's"), and fb.me short links are gone because they hide where
+they go. Copies of one link (m. or web., a tracking query, a trailing slash, letter case,
+/permalink/ for /posts/) are the same post, so the same post logged again by its poster is still a
+repeat, and logged by anyone else is refused with who logged it and when (`link-taken`). Add link
+applies the same rules to a pending post. The app checks the link before it asks; the server
+checks again. Older rows keep their links; the rules apply to new logs only.

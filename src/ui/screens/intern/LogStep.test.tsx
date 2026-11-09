@@ -40,7 +40,10 @@ describe('the log step', () => {
     expect(posted().disabled).toBe(true);
     expect(pending().disabled).toBe(true);
 
+    // A group's page is Facebook, but not a post: still off.
     await userEvent.type(link, 'https://www.facebook.com/groups/x/posts/');
+    expect(posted().disabled).toBe(true);
+    await userEvent.type(link, '1');
     expect(posted().disabled).toBe(false);
     expect(pending().disabled).toBe(false);
 

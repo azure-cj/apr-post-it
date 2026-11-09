@@ -25,9 +25,12 @@ describe('the post link is required, and must be Facebook\'s', () => {
     ['https://m.facebook.com/story.php?story_fbid=1&id=2'],
     ['https://web.facebook.com/groups/apg/permalink/3/'],
     ['https://fb.com/groups/apg/posts/1'],
-    ['https://fb.me/abc123'],
     ['HTTPS://WWW.FACEBOOK.COM/groups/apg/posts/1/'],
-    ['https://www.facebook.com'],
+    ['https://www.facebook.com/share/p/1AbCdEfGh/'],
+    ['https://www.facebook.com/apg.realty/posts/pfbid02AbC'],
+    ['https://www.facebook.com/permalink.php?story_fbid=5&id=6'],
+    ['https://www.facebook.com/photo/?fbid=7&set=a.8'],
+    ['https://www.facebook.com/marketplace/item/9/'],
   ])('accepts %s', (postLink) => {
     const w = createWorld();
 
@@ -204,12 +207,16 @@ describe('a retried post (v12): never logged twice, dated when it was logged', (
     expect(w.posts.lastRow).toBe(2);
   });
 
-  it("does not take someone else's row with the same link as a retry", () => {
+  it("does not take someone else's row with the same link as a retry: one post, one person (v14)", () => {
     const w = createWorld();
     w.logPost('jan', CASA, { postLink: LINK });
 
-    expect(w.logPost('ana', TOWER, { postLink: LINK })).toMatchObject({ ok: true, postedBy: 'Ana Reyes' });
-    expect(w.posts.lastRow).toBe(3);
+    expect(w.logPost('ana', TOWER, { postLink: LINK })).toEqual({
+      ok: false,
+      error: 'link-taken',
+      message: 'That post is already logged, by Jan Dela Cruz on Mon 9 Mar 2026.',
+    });
+    expect(w.posts.lastRow).toBe(2);
   });
 
   it('is dated when the app logged it, within the last few days', () => {
@@ -232,5 +239,55 @@ describe('a retried post (v12): never logged twice, dated when it was logged', (
     w.project.clock.set('2026-03-10 09:00');
 
     expect(w.logPost('jan', CASA, { postLink: LINK, loggedAt })).toMatchObject({ ok: true, date: '2026-03-10', time: '09:00' });
+  });
+});
+
+describe('one post, one person (v14)', () => {
+  const LINK = 'https://www.facebook.com/groups/apg/posts/555/';
+
+  it("refuses someone else's post, even as another copy of its link", () => {
+    const w = createWorld();
+    w.logPost('jan', CASA, { postLink: LINK });
+
+    for (const copy of [
+      'https://m.facebook.com/groups/apg/permalink/555/?mibextid=Nif5oz',
+      'https://web.facebook.com/groups/APG/posts/555',
+    ]) {
+      expect(w.logPost('ana', TOWER, { postLink: copy })).toMatchObject({ ok: false, error: 'link-taken' });
+    }
+    expect(w.posts.lastRow).toBe(2);
+  });
+
+  it("gives the same person's copy of the link back as the same post, not a second row", () => {
+    const w = createWorld();
+    w.logPost('jan', CASA, { postLink: LINK });
+
+    expect(w.logPost('jan', CASA, { postLink: 'https://m.facebook.com/groups/apg/posts/555?mibextid=x' })).toMatchObject({ ok: true, repeat: true });
+    expect(w.posts.lastRow).toBe(2);
+  });
+
+  it("refuses Add link with someone else's post, or a profile, and leaves the pending row as it was", () => {
+    const w = createWorld();
+    w.logPost('ana', TOWER, { postLink: LINK });
+    w.logPost('jan', CASA, { status: 'Pending', postLink: 'https://www.facebook.com/groups/apg/posts/556/' });
+
+    expect(w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: LINK })).toMatchObject({
+      ok: false,
+      error: 'link-taken',
+      message: 'That post is already logged, by Ana Reyes on Mon 9 Mar 2026.',
+    });
+    expect(w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: 'https://www.facebook.com/jan' })).toMatchObject({
+      ok: false,
+      error: 'not-a-post',
+    });
+    expect(w.posts.row(3)[4]).toBe('Pending');
+  });
+
+  it("refuses a profile or Facebook's home page for a post", () => {
+    const w = createWorld();
+    for (const postLink of ['https://www.facebook.com/', 'https://www.facebook.com/cyrus.orbano', 'https://www.facebook.com/groups/apg/']) {
+      expect(w.logPost('jan', CASA, { postLink })).toMatchObject({ ok: false, error: 'not-a-post' });
+    }
+    expect(w.posts.lastRow).toBe(1);
   });
 });
