@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-10.1';
+const SERVER_VERSION = '2026-11-11.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -163,6 +163,8 @@ function route_(req) {
       case 'directoryStatus':  return json_(directoryStatus_());
       case 'spotChecks':  return json_({ ok: true, checks: spotChecks_() });
       case 'saveSpotCheck': return json_(saveSpotCheck_(req, me));
+      case 'refusedPosts':  return json_({ ok: true, refused: refusedPosts_() });
+      case 'handleRefused': return json_(handleRefused_(req, me));
       default:            return json_({ ok: false, error: 'unknown action: ' + req.action });
     }
   } catch (err) {
@@ -1344,6 +1346,11 @@ function logPost_(req, me) {
     // fall either side of midnight. A retry says when it was logged (v12).
     var when = loggedAt_(req.loggedAt, new Date());
     var guard = cooldownFor_(req.propertyId, req.property, when);
+    // A retry from the outbox (it says when it was logged) is a post already
+    // on Facebook: refused all the same, but written down for the admin (v18).
+    if (guard && textOf_(req.loggedAt).trim()) {
+      return refusedRetry_(guard, req, link, postedBy, when, poster === me);
+    }
     if (guard) return guard;
 
     // The date as ISO text, which the app reads; the time as the interns'
@@ -1423,14 +1430,9 @@ function loggedAt_(sent, now) {
  * - A date the app cannot read is skipped, as the app skips it.
  */
 function cooldownFor_(propertyId, propertyName, when) {
-  var key = normalizeName_(propertyName);
-  var latest = '';
-  readRows_(CONFIG.POSTS_TAB, POST_FIELDS).forEach(function (p) {
-    if (!sameProperty_(p.propertyId, p.title, propertyId, key)) return;
-    var day = sheetDay_(p.date);
-    if (day && day > latest) latest = day;
-  });
-  if (!latest) return null;
+  var row = latestPost_(propertyId, propertyName);
+  if (!row) return null;
+  var latest = row.day;
 
   var cooldownDays = rules_().cooldownDays;
   var last = dayNumber_(latest);
@@ -1449,6 +1451,22 @@ function cooldownFor_(propertyId, propertyName, when) {
     message: 'Posted ' + ago_(daysAgo) + ' (' + dayMonth_(last) + '). The cooldown is ' +
              days_(cooldownDays) + ' \u{2014} it can be posted again on ' + fullDate_(next) + '.',
   };
+}
+
+/**
+ * The property's latest Posts row by day, as { day, postedBy }, or null when
+ * it has none. The rule of cooldownFor_: by folder id when both have one, else
+ * by name; a date that can't be read is skipped; the first row of a day wins.
+ */
+function latestPost_(propertyId, propertyName) {
+  var key = normalizeName_(propertyName);
+  var latest = null;
+  readRows_(CONFIG.POSTS_TAB, POST_FIELDS).forEach(function (p) {
+    if (!sameProperty_(p.propertyId, p.title, propertyId, key)) return;
+    var day = sheetDay_(p.date);
+    if (day && (!latest || day > latest.day)) latest = { day: day, postedBy: textOf_(p.postedBy).trim() };
+  });
+  return latest;
 }
 
 // A Facebook post's address (v14): https, on one of Facebook's own hosts, and
@@ -1654,6 +1672,107 @@ function saveSpotCheck_(req, me) {
     }
     appendText_(sh, row, row.map(function (_, i) { return i; }));
     return { ok: true, check: check };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------------------------------------------------------------- refused posts (v18)
+//
+// A post the app kept on its PC (the outbox) and sent again later is already
+// on Facebook. When that later save falls inside the cooldown, the cooldown
+// still decides: it is refused, and nothing goes on the tracker. But it is
+// written on the admin sheet's own Refused posts tab, one row per post, so an
+// admin sees it and decides what to do on Facebook. Admins only: PERMISSIONS
+// gives an intern neither action.
+
+const REFUSED_TAB = 'Refused posts';
+const REFUSED_HEADERS = ['Post', 'Link', 'Agent', 'Logged at', 'Property', 'Property ID', 'FB account',
+                         'Last posted', 'Last posted by', 'Next allowed', 'Handled by', 'Handled at'];
+
+/**
+ * logPost's answer to a retry inside the cooldown: the refusal, worded for a
+ * post already made, after writing it on the Refused posts tab. A post
+ * refused before keeps its row as it is. Holds no lock: logPost_ does.
+ */
+function refusedRetry_(guard, req, link, postedBy, when, own) {
+  var key = postKey_(link) || link.toLowerCase();
+  var last = latestPost_(req.propertyId, req.property) || { day: guard.lastPosted, postedBy: '' };
+  var sh = plainTab_(REFUSED_TAB, REFUSED_HEADERS);
+  var values = sh.getDataRange().getValues();
+  var keyCol = values[0].map(function (h) { return textOf_(h).trim(); }).indexOf('Post');
+  var known = values.slice(1).some(function (r) { return keyCol !== -1 && textOf_(r[keyCol]).trim().toLowerCase() === key; });
+  if (!known) {
+    var row = [key, link, postedBy, Utilities.formatDate(when, CONFIG.TZ, "yyyy-MM-dd'T'HH:mm:ssXXX"), req.property,
+               textOf_(req.propertyId), textOf_(req.fbAccount), guard.lastPosted, last.postedBy, guard.nextAllowed, '', ''];
+    appendText_(sh, row, row.map(function (_, i) { return i; }));
+  }
+
+  var loggedDay = Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd');
+  var by = !last.postedBy ? 'it was posted'
+         : last.postedBy === postedBy ? (own ? 'you posted it' : postedBy + ' posted it')
+         : last.postedBy + ' posted it';
+  return {
+    ok: false,
+    error: 'cooldown',
+    lastPosted: guard.lastPosted,
+    nextAllowed: guard.nextAllowed,
+    lastPostedBy: last.postedBy,
+    reported: true,
+    message: 'Logged ' + dayMonth_(dayNumber_(loggedDay)) + ' at ' + clockTime_(Utilities.formatDate(when, CONFIG.TZ, 'HH:mm')) +
+             ', but ' + by + ' on ' + dayMonth_(dayNumber_(guard.lastPosted)) + ', inside the cooldown of ' +
+             days_(rules_().cooldownDays) + '. It is on Facebook but not on the tracker. Your admin has been told.',
+  };
+}
+
+/** Every refused post, oldest first: { postKey, link, agent, loggedAt, property, propertyId, fbAccount, lastPosted, lastPostedBy, nextAllowed, handledBy, handledAt }. */
+function refusedPosts_() {
+  var sh = plainTab_(REFUSED_TAB, REFUSED_HEADERS);
+  if (sh.getLastRow() < 2) return [];
+  var values = sh.getDataRange().getValues();
+  var head = values[0].map(function (h) { return textOf_(h).trim(); });
+  var tz = zoneOf_(sh);
+  function at(r, h) {
+    var i = head.indexOf(h);
+    return i === -1 ? '' : cellText_(r[i], tz, h === 'Last posted' || h === 'Next allowed' ? 'date' : '');
+  }
+  return values.slice(1).filter(function (r) { return r.join(''); }).map(function (r) {
+    return {
+      postKey: at(r, 'Post'), link: at(r, 'Link'), agent: at(r, 'Agent'), loggedAt: at(r, 'Logged at'),
+      property: at(r, 'Property'), propertyId: at(r, 'Property ID'), fbAccount: at(r, 'FB account'),
+      lastPosted: at(r, 'Last posted'), lastPostedBy: at(r, 'Last posted by'), nextAllowed: at(r, 'Next allowed'),
+      handledBy: at(r, 'Handled by'), handledAt: at(r, 'Handled at'),
+    };
+  });
+}
+
+/**
+ * handleRefused { postLink }: an admin has dealt with a refused post on
+ * Facebook. Writes who and when on its row; the tracker is not changed.
+ * Replies { refused } with the row as it now is.
+ */
+function handleRefused_(req, me) {
+  requireAll_(req, ['postLink']);
+  var key = postKey_(req.postLink);
+  if (!key) return postLinkProblem_(req.postLink);
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
+  try {
+    var sh = plainTab_(REFUSED_TAB, REFUSED_HEADERS);
+    var values = sh.getDataRange().getValues();
+    var head = values[0].map(function (h) { return textOf_(h).trim(); });
+    var keyCol = head.indexOf('Post'), byCol = head.indexOf('Handled by'), atCol = head.indexOf('Handled at');
+    if (keyCol === -1 || byCol === -1 || atCol === -1) {
+      return { ok: false, error: 'notfound', message: 'The Refused posts tab is missing a column. Check its headers.' };
+    }
+    for (var r = 1; r < values.length; r++) {
+      if (textOf_(values[r][keyCol]).trim().toLowerCase() !== key) continue;
+      setText_(sh.getRange(r + 1, byCol + 1), me.name);
+      setText_(sh.getRange(r + 1, atCol + 1), now_());
+      var item = refusedPosts_().filter(function (p) { return p.postKey.toLowerCase() === key; })[0];
+      return { ok: true, refused: item };
+    }
+    return { ok: false, error: 'notfound', message: 'That refused post isn\'t on the list any more. Refresh.' };
   } finally {
     lock.releaseLock();
   }

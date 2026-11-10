@@ -1,4 +1,4 @@
-import { EMPTY_OUTBOX, keepsForRetry, OUTBOX_KEY, readOutbox, type KeptPost, type Outbox } from '@/core/outbox';
+import { EMPTY_OUTBOX, keepsForRetry, OUTBOX_KEY, readOutbox, refusedWords, type KeptPost, type Outbox } from '@/core/outbox';
 import type { LogPostInput, Tracker } from '@/core/tracker';
 import type { Platform } from '@/platform';
 import { sentenceOf } from './remote';
@@ -80,7 +80,7 @@ export function createOutbox(p: Pick<Platform, 'readLocal' | 'writeLocal'>, trac
               // Still no way through: the rest would fail the same way. Try again later.
               break;
             }
-            const refused = { id: post.id, who, title: post.input.propertyName, message: sentenceOf(err) };
+            const refused = { id: post.id, who, title: post.input.propertyName, message: refusedWords(err, sentenceOf(err)) };
             await save({ kept: others, refused: [...current.refused, refused] });
           }
         }

@@ -36,6 +36,7 @@ import {
   queueStatus,
 } from './types';
 import { propertyType } from './records';
+import { readReportedPost, type ReportedPost } from './refused';
 import { isSpotResult, type SpotCheck, type SpotResult } from './spotchecks';
 import { assignmentWeek, isWeekKey, weekOf } from './week';
 
@@ -222,6 +223,12 @@ export interface Tracker {
 
   /** Saves what an admin found on opening `post` (Admin, v16). Checking it again replaces the result. */
   saveSpotCheck(post: PostLogEntry, result: SpotResult): Promise<SpotCheck>;
+
+  /** Every post on the Refused posts tab: retries refused for the cooldown (Admin, v18). */
+  refusedPosts(): Promise<readonly ReportedPost[]>;
+
+  /** Marks a refused post handled by the signed-in admin (Admin, v18). Resolves with it as it now is. */
+  handleRefused(post: ReportedPost): Promise<ReportedPost>;
 }
 
 const ONLY_THE_LINK =
@@ -564,6 +571,26 @@ export function createTracker(deps: TrackerDeps): Tracker {
       const check = readSpotCheck(reply['check']);
       if (!check) throw unreadableReply('saveSpotCheck');
       return check;
+    },
+
+    async refusedPosts(): Promise<readonly ReportedPost[]> {
+      const reply = await backend.call('refusedPosts');
+      const rows = asList(reply['refused']);
+      if (!rows) throw unreadableReply('refusedPosts');
+      return rows.flatMap((raw) => {
+        const post = readReportedPost(raw);
+        return post ? [post] : [];
+      });
+    },
+
+    async handleRefused(post: ReportedPost): Promise<ReportedPost> {
+      const postLink = post.link.trim();
+      const problem = postLinkProblem(postLink);
+      if (problem) throw new UserFacingError(problem);
+      const reply = await backend.call('handleRefused', { postLink });
+      const handled = readReportedPost(reply['refused']);
+      if (!handled) throw unreadableReply('handleRefused');
+      return handled;
     },
   };
 }

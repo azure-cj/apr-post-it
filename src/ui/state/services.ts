@@ -2,6 +2,7 @@ import { createBackend, type Action, type Backend, type Payload, type Reply } fr
 import { createDirectory, type Directory } from '@/core/directory';
 import { readServerInfo, serverVersionStatus } from '@/core/session';
 import { createTracker, type Tracker } from '@/core/tracker';
+import type { ReportedPost } from '@/core/refused';
 import type { SpotCheck } from '@/core/spotchecks';
 import {
   canManage,
@@ -103,6 +104,8 @@ export interface Services {
   readonly team: RemoteResource<readonly TeamMember[]>;
   /** The Spot checks tab (Admin only, v16). */
   readonly spotChecks: RemoteResource<readonly SpotCheck[]>;
+  /** The Refused posts tab (Admin only, v18). */
+  readonly refusedPosts: RemoteResource<readonly ReportedPost[]>;
   readonly find: Store<FindState>;
   /** Where each listing's photos were saved this session, by property id: for Open folder. */
   readonly savedFolders: Store<ReadonlyMap<string, string>>;
@@ -182,6 +185,7 @@ export function createServices(
   const assignments = createRemote(() => raw.assignments(), now);
   const team = createRemote(() => raw.team(), now);
   const spotChecks = createRemote(() => raw.spotChecks(), now);
+  const refusedPosts = createRemote(() => raw.refusedPosts(), now);
 
   /**
    * After a write, or an attempt at one: what was read before may no longer
@@ -244,6 +248,15 @@ export function createServices(
         void spotChecks.refresh();
       }
     },
+    refusedPosts: () => raw.refusedPosts(),
+    async handleRefused(post) {
+      try {
+        return await raw.handleRefused(post);
+      } finally {
+        refusedPosts.invalidate();
+        void refusedPosts.refresh();
+      }
+    },
   };
 
   const outbox = createOutbox(p, tracker, now);
@@ -272,6 +285,7 @@ export function createServices(
     assignments,
     team,
     spotChecks,
+    refusedPosts,
     find,
     savedFolders,
     outbox,
@@ -296,6 +310,7 @@ export function createServices(
       assignments.reset();
       team.reset();
       spotChecks.reset();
+      refusedPosts.reset();
       directoryStatus.set(IDLE);
       server.set(UNKNOWN_SERVER);
       find.set(EMPTY_FIND);

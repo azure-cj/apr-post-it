@@ -66,6 +66,18 @@ export function keepsForRetry(err: unknown): boolean {
   return err instanceof BackendError && ON_THE_WAY.has(err.code);
 }
 
+/**
+ * What to tell the agent about a kept post the web app refused. A server from
+ * v18 words a cooldown refusal for a post already made, and has told the
+ * admin; an older one sends the usual sentence, so the agent is asked to.
+ */
+export function refusedWords(err: unknown, sentence: string): string {
+  if (err instanceof BackendError && err.code === 'cooldown' && !err.reported) {
+    return `${sentence} This post is on Facebook but not on the tracker: tell your admin.`;
+  }
+  return sentence;
+}
+
 /** The outbox as kept, read leniently: anything damaged is dropped, never thrown. */
 export function readOutbox(text: string | null): Outbox {
   if (!text) return EMPTY_OUTBOX;

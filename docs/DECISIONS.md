@@ -309,3 +309,18 @@ leaves it blank. The cell holds the group as the link names it (a short name or 
 readable names for the numbers are AID-191's, a list the admin keeps. The column is added
 after the tab's last one on the first post with a group, as `Due` was on Assignments, so the
 owner's own columns keep their order. Rows logged before it stay blank.
+
+### D26. A retry refused for the cooldown goes to the admin (Nov 11, 2026)
+
+A post kept on an agent's PC (D20) is already on Facebook when it is sent again. If, in the
+meantime, someone else posted the same listing, the later save falls inside the cooldown. The
+cooldown still decides (ROLES.md: nobody posts inside it, admins included): the save is refused
+and nothing goes on the tracker. Before, only the agent saw it, on their own PC, in the words
+meant for someone about to post, and once dismissed it was gone. Now the server writes it on
+the admin sheet's own Refused posts tab, under the same lock as the check, and words the refusal
+for a post already made. The admin sees the open ones on the Agents screen, opens each on
+Facebook, decides there (take it down or leave it), and marks it handled. There is no "log it
+anyway": that would be posting inside the cooldown. Only retries are written: a first try refused
+on the spot is seen by the agent at once, and the app already blocks Copy inside the cooldown.
+The tracker gets no new tab. A server before v18 doesn't tell the admin, so the app asks the
+agent to.

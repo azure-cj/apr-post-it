@@ -351,3 +351,21 @@ The Posts tab gains `FB Group`, added after its last column on the first post th
 (`apgmain`, or the group's number); `Marketplace` for a Marketplace item; blank for any other
 post's link. `posts` rows carry `fbGroup` (`''` when blank or the tab has no column). Requests
 are unchanged.
+
+## v18: refused posts (server 2026-11-11.1)
+
+A `logPost` that sends `loggedAt` is a retry from the app's outbox: a post already on Facebook.
+Inside the cooldown it is refused as before (`error: 'cooldown'`, `lastPosted`, `nextAllowed`),
+nothing goes on the tracker, and the reply adds `lastPostedBy` and `reported: true`, with a
+sentence for a post already made ("Logged 10 Mar at 2:10 PM, but Ana Reyes posted it on 10 Mar,
+inside the cooldown of 7 days. It is on Facebook but not on the tracker. Your admin has been
+told."). The post is written on the admin sheet's own `Refused posts` tab (`Post`, `Link`,
+`Agent`, `Logged at`, `Property`, `Property ID`, `FB account`, `Last posted`, `Last posted by`,
+`Next allowed`, `Handled by`, `Handled at`), one row per post: sent again, it keeps its row. A
+first try, without `loggedAt`, is refused as before and not written.
+
+New, Admin only: `refusedPosts` replies `{ refused: [{ postKey, link, agent, loggedAt, property,
+propertyId, fbAccount, lastPosted, lastPostedBy, nextAllowed, handledBy, handledAt }] }`, oldest
+first. `handleRefused { postLink }` (any copy of the link) writes the caller's name and the time
+in `Handled by` and `Handled at` and replies `{ refused }`, else `not-a-post` or `notfound`. The
+tracker is not changed.

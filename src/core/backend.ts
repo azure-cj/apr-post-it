@@ -44,7 +44,9 @@ export type Action =
   | 'rebuildDirectory'
   | 'directoryStatus'
   | 'spotChecks'
-  | 'saveSpotCheck';
+  | 'saveSpotCheck'
+  | 'refusedPosts'
+  | 'handleRefused';
 
 /** Where the web app is, and who is asking. Blank, null or missing means "not set". */
 export interface BackendConfig {
@@ -176,6 +178,10 @@ export class BackendError extends UserFacingError {
   /** For a cooldown refusal, the server's own dates (yyyy-MM-dd). Blank otherwise. */
   readonly lastPosted: string;
   readonly nextAllowed: string;
+  /** v18: for a retry refused for the cooldown, who posted the listing last ('' when not said). */
+  readonly lastPostedBy: string;
+  /** v18: the server wrote the refused retry down for the admin (the Refused posts tab). */
+  readonly reported: boolean;
   /** For a `held` refusal, every item refused, in request order. Empty otherwise. */
   readonly held: readonly HeldItem[];
 
@@ -187,6 +193,8 @@ export class BackendError extends UserFacingError {
       readonly cause?: unknown;
       readonly lastPosted?: string;
       readonly nextAllowed?: string;
+      readonly lastPostedBy?: string;
+      readonly reported?: boolean;
       readonly held?: readonly HeldItem[];
     } = {},
   ) {
@@ -195,6 +203,8 @@ export class BackendError extends UserFacingError {
     this.action = action;
     this.lastPosted = extra.lastPosted ?? '';
     this.nextAllowed = extra.nextAllowed ?? '';
+    this.lastPostedBy = extra.lastPostedBy ?? '';
+    this.reported = extra.reported ?? false;
     this.held = extra.held ?? [];
   }
 }
@@ -278,6 +288,8 @@ const DOING: Readonly<Record<Action, string>> = {
   directoryStatus: 'check the directory rebuild',
   spotChecks: 'load the spot checks',
   saveSpotCheck: 'save the spot check',
+  refusedPosts: 'load the refused posts',
+  handleRefused: 'mark it handled',
 };
 
 /** Completes "Google sent … in a form Post-It could not read". */
@@ -303,6 +315,8 @@ const WHAT: Readonly<Record<Action, string>> = {
   directoryStatus: 'the rebuild\'s progress',
   spotChecks: 'the spot checks',
   saveSpotCheck: 'its answer',
+  refusedPosts: 'the refused posts',
+  handleRefused: 'its answer',
 };
 
 /** Calls that change the sheet. When one times out it may still have gone through. */
@@ -319,6 +333,7 @@ const WRITES: ReadonlySet<Action> = new Set<Action>([
   'setRules',
   'rebuildDirectory',
   'saveSpotCheck',
+  'handleRefused',
 ]);
 
 const TIMED_OUT = Symbol('timed out');
@@ -482,7 +497,9 @@ function refusal(reply: Reply, action: Action): BackendError {
       const fallback = nextAllowed
         ? `This property was posted too recently. It can be posted again on ${nextAllowed}.`
         : 'This property is still inside its cooldown.';
-      return new BackendError('cooldown', action, theirs(fallback), { lastPosted, nextAllowed });
+      const lastPostedBy = asText(reply['lastPostedBy']).trim();
+      const reported = reply['reported'] === true;
+      return new BackendError('cooldown', action, theirs(fallback), { lastPosted, nextAllowed, lastPostedBy, reported });
     }
     case 'busy':
       // A rebuild already running is not a moment's wait: say so, with the server's count.

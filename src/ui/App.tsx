@@ -54,6 +54,7 @@ import {
   useNotify,
   usePosts,
   useStore,
+  useRefusedPosts,
   useSpotChecks,
   useTeam,
   sentenceOf,
@@ -990,6 +991,7 @@ function InternsRoute() {
   const posts = usePosts({ pollMs: 120_000 });
   const assignments = useAssignments({ pollMs: 120_000 });
   const spotChecks = useSpotChecks({ maxAgeMs: 60_000, pollMs: 600_000 });
+  const refused = useRefusedPosts({ maxAgeMs: 60_000, pollMs: 300_000 });
   const notify = useNotify();
   const loadedAt = posts.loadedAt;
 
@@ -1005,6 +1007,7 @@ function InternsRoute() {
         team.reload();
         posts.reload();
         assignments.reload();
+        refused.reload();
       }}
       refreshing={team.loading || posts.loading || assignments.loading}
       error={team.error ?? posts.error ?? assignments.error}
@@ -1017,6 +1020,17 @@ function InternsRoute() {
         try {
           await app.tracker.saveSpotCheck(post, result);
           notify(result === 'Verified' ? 'Saved: Verified.' : `Saved: ${result}.`, result === 'Verified' ? 'ok' : 'warn');
+        } catch (err) {
+          notify(sentenceOf(err), 'danger');
+          throw err;
+        }
+      }}
+      // A server before v18 has no refused posts: the screen goes on without them.
+      refused={refused.error ? null : refused.data}
+      onHandleRefused={async (post) => {
+        try {
+          await app.tracker.handleRefused(post);
+          notify(`Handled: ${post.agent}'s post of ${post.property}.`, 'ok');
         } catch (err) {
           notify(sentenceOf(err), 'danger');
           throw err;

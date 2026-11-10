@@ -649,3 +649,37 @@
   color: var(--danger-text);
   font-weight: var(--weight-label);
 }
+
+/* ---- refused posts (v18) ------------------------------------------------------- */
+
+.refused__hint {
+  margin: 0 0 var(--space-8);
+}
+
+.refused__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-8);
+}
+
+.refused__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-12);
+}
+
+.refused__text {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.refused__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: none;
+}

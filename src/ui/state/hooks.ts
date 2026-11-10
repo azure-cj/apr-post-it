@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import type { ReportedPost } from '@/core/refused';
 import type { SpotCheck } from '@/core/spotchecks';
 import type { Assignment, PostLogEntry, Property, TeamMember, User } from '@/core/types';
 import { useApp } from './AppState';
@@ -68,6 +69,11 @@ export function useAssignments(options: RemoteOptions = {}): RemoteView<readonly
 /** The Spot checks tab (Admin only, v16). Read on arrival. */
 export function useSpotChecks(options: RemoteOptions = {}): RemoteView<readonly SpotCheck[]> {
   return useRemote(useApp().spotChecks, options);
+}
+
+/** The Refused posts tab (Admin only, v18). Read on arrival. */
+export function useRefusedPosts(options: RemoteOptions = {}): RemoteView<readonly ReportedPost[]> {
+  return useRemote(useApp().refusedPosts, options);
 }
 
 /** The Team tab without its keys. Admin only: the server refuses anyone else. Read on arrival. */

@@ -51,8 +51,26 @@ describe('a post whose save fails on the way', () => {
     expect(await screen.findByText(`Not saved: ${CLEAN.name}`)).toBeTruthy();
     expect(screen.queryByText('1 post waiting to save')).toBeNull();
 
+    // A web app before v18 didn't tell the admin: the agent is asked to.
+    expect(screen.getByText('Posted 2 days ago (29 Oct). This post is on Facebook but not on the tracker: tell your admin.')).toBeTruthy();
+
     await userEvent.click(screen.getByRole('button', { name: `Dismiss: ${CLEAN.name}` }));
     expect(screen.queryByText(`Not saved: ${CLEAN.name}`)).toBeNull();
+  });
+
+  it("shows the web app's own words when it has told the admin (v18)", async () => {
+    const platform = fakeServer({ logPost: new Error('offline') });
+    renderApp({ platform, path: PATH });
+    await logIt();
+    await screen.findByText('1 post waiting to save');
+
+    const words =
+      'Logged 31 Oct at 9:00 AM, but Ana Reyes posted it on 29 Oct, inside the cooldown of 7 days. ' +
+      'It is on Facebook but not on the tracker. Your admin has been told.';
+    platform.reply('logPost', { ok: false, error: 'cooldown', message: words, nextAllowed: '2026-11-05', lastPostedBy: 'Ana Reyes', reported: true });
+    await userEvent.click(screen.getByRole('button', { name: 'Retry now' }));
+    expect(await screen.findByText(`Not saved: ${CLEAN.name}`)).toBeTruthy();
+    expect(screen.getByText(words)).toBeTruthy();
   });
 
   it('is not kept when the server refuses it at once: the refusal shows, as before', async () => {

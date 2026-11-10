@@ -507,3 +507,57 @@ describe('the Agents screen: spot checks (v16)', () => {
     expect(screen.queryByRole('columnheader', { name: 'Checks' })).toBeNull();
   });
 });
+
+describe('the Agents screen: refused posts (v18)', () => {
+  const REFUSED_LINK = 'https://www.facebook.com/groups/apgmain/posts/700/';
+  const refused = (link: string, handledBy = '') => ({
+    postKey: link.replace('https://www.facebook.com/', '').replace(/\/$/, ''),
+    link,
+    agent: intern.name,
+    loggedAt: '2026-11-04T14:10:00+08:00',
+    property: 'Kapitolyo Ground Floor Retail, Pasig',
+    propertyId: '1Kapitolyo',
+    fbAccount: 'APG Main',
+    lastPosted: '2026-11-03',
+    lastPostedBy: 'Mika Reyes',
+    nextAllowed: '2026-11-10',
+    handledBy,
+    handledAt: handledBy ? '2026-11-05T09:00:00+08:00' : '',
+  });
+
+  it('lists the open ones, to open on Facebook and mark handled', async () => {
+    const user = userEvent.setup();
+    const handled: unknown[] = [];
+    let rows = [refused(REFUSED_LINK), refused('https://www.facebook.com/groups/apgmain/posts/701/', manager.name)];
+    const platform = server({
+      refusedPosts: () => ({ ok: true, refused: rows }),
+      handleRefused: (body: Readonly<Record<string, unknown>>) => {
+        handled.push(body['postLink']);
+        rows = rows.map((r) => (r.link === body['postLink'] ? refused(r.link, admin.name) : r));
+        return { ok: true, refused: refused(String(body['postLink']), admin.name) };
+      },
+    });
+    renderAt(THURSDAY, { platform });
+
+    // Only the open one: the handled one is left out.
+    const notice = (await screen.findByText('1 post refused for the cooldown')).closest('.refused') as HTMLElement;
+    expect(notice.querySelectorAll('.refused__item')).toHaveLength(1);
+    expect(notice.textContent).toContain(
+      `${intern.name}: Kapitolyo Ground Floor Retail, Pasig, logged Wed 4 Nov, 2:10 PM. Mika Reyes had posted it on Tue 3 Nov; it could be posted again from Tue 10 Nov.`,
+    );
+
+    await user.click(within(notice).getByRole('button', { name: 'Open the post of Kapitolyo Ground Floor Retail, Pasig' }));
+    expect(platform.opened).toContain(REFUSED_LINK);
+
+    await user.click(within(notice).getByRole('button', { name: `Mark handled: ${intern.name}'s post of Kapitolyo Ground Floor Retail, Pasig` }));
+    expect(handled).toEqual([REFUSED_LINK]);
+    expect(await screen.findByText(`Handled: ${intern.name}'s post of Kapitolyo Ground Floor Retail, Pasig.`)).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/refused for the cooldown/)).toBeNull());
+  });
+
+  it('shows nothing when none are open, or on a web app before v18', async () => {
+    renderAt(THURSDAY, { platform: server() });
+    await rowOf(intern.name);
+    expect(screen.queryByText(/refused for the cooldown/)).toBeNull();
+  });
+});

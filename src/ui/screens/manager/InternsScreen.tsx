@@ -13,12 +13,14 @@ import {
   type TeamMember,
   type TeamWeekRow,
 } from '@/core/summary';
+import type { ReportedPost } from '@/core/refused';
 import { spotSample, type SpotCheck, type SpotItem, type SpotResult } from '@/core/spotchecks';
 import { isWeekOver, weekDays } from '@/core/week';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
 import { cleanProfiles, profilesOf as memberProfiles } from './FbAccountsField';
 import { DAY_LETTERS, isBehind, lastPostWords, PacePill, WeekBar, WeekDays } from './InternsParts';
 import { InternPanel } from './InternsPanel';
+import { RefusedPosts } from './InternsRefused';
 import { SpotCell } from './InternsSpotCheck';
 import { WhoPosted } from './InternsWhoPosted';
 import { Stat } from './Stat';
@@ -55,6 +57,10 @@ export interface InternsScreenProps {
   readonly spotChecks?: readonly SpotCheck[] | null | undefined;
   /** Saves a spot check. Rejects when it couldn't be saved, having said why. Without it, no spot checks. */
   readonly onSpotCheck?: ((post: PostLogEntry, result: SpotResult) => Promise<void>) | undefined;
+  /** The Refused posts tab (v18); null until read, or when it can't be (an older server). Without it, none shown. */
+  readonly refused?: readonly ReportedPost[] | null | undefined;
+  /** Marks a refused post handled. Rejects when it couldn't be saved, having said why. */
+  readonly onHandleRefused?: ((post: ReportedPost) => Promise<void>) | undefined;
 }
 
 /**
@@ -77,6 +83,8 @@ export function InternsScreen({
   onOpenLink,
   spotChecks,
   onSpotCheck,
+  refused,
+  onHandleRefused,
 }: InternsScreenProps) {
   const [open, setOpen] = useState<string | null>(null);
   const panelHeading = useRef<HTMLHeadingElement>(null);
@@ -167,6 +175,8 @@ export function InternsScreen({
           {error}
         </Notice>
       ) : null}
+
+      {refused && onHandleRefused ? <RefusedPosts refused={refused} onHandle={onHandleRefused} onOpenLink={onOpenLink} /> : null}
 
       <WhoPosted posts={posts} today={today} onOpenLink={onOpenLink} />
 
