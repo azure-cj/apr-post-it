@@ -18,6 +18,8 @@ declare module '@server/Separators.gs' {
 
   export function splitAtSeparator_(text: string | null | undefined): Cut;
   export function markerKind_(line: string | null | undefined): string;
+  /** The separator the app copies for a document that has none (AID-176). */
+  export function standardSeparator_(): string;
   /** 0-based lines of an unseparated document that may hold the owner's or the broker's details (D15). */
   export function flaggedLines_(text: string | null | undefined): number[];
 }

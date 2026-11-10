@@ -5,6 +5,7 @@
 //! move to a Cloud Function as it is. What lives here:
 //!
 //! - `save_photos`: photos from Google Drive into `Downloads\APG Post-It\<listing>`.
+//! - `copy_photo`: one of those photos onto the clipboard, to paste into Facebook.
 //! - `read_key` / `write_key`: the person's key, kept by the OS credential store.
 //! - The plugins, each scoped in `capabilities/default.json`: the clipboard (write
 //!   only), HTTP (Google only), the file system (the app's own folders only),
@@ -12,6 +13,7 @@
 //!   window's place and size, a small settings store, and signed updates with
 //!   a restart.
 
+mod copy_photo;
 mod hosts;
 mod key;
 mod names;
@@ -64,6 +66,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             photos::save_photos,
+            copy_photo::copy_photo,
             key::read_key,
             key::write_key,
         ])

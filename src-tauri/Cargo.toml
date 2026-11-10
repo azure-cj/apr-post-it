@@ -35,6 +35,10 @@ tauri-build = { version = "=2.7.3", features = [] }
 [dependencies]
 tauri = { version = "=2.12.4", features = [] }
 tauri-plugin-clipboard-manager = "=2.5.0"
+# Copy photo (AID-245): reads a listing photo to put it on the clipboard. The
+# clipboard plugin already brings this version in; these are the formats Drive
+# serves listing photos in.
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 tauri-plugin-dialog = "=2.8.3"
 tauri-plugin-fs = "=2.7.1"
 # The defaults minus `cookies`: the web app needs none, and the jar would be

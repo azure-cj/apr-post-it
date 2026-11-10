@@ -20,7 +20,7 @@ pub const DOWNLOADS_SUBFOLDER: &str = "APG Post-It";
 /// More than any listing has. A request for more is a bug, not a listing.
 const MAX_PHOTOS: usize = 200;
 /// Listing photos are 2–5 MB. Anything near this is not a listing photo.
-const MAX_PHOTO_BYTES: usize = 50 * 1024 * 1024;
+pub(crate) const MAX_PHOTO_BYTES: usize = 50 * 1024 * 1024;
 const MAX_REDIRECTS: usize = 10;
 /// Downloads at once. Enough to be quick, few enough not to look like a scraper to Drive.
 const PARALLEL: usize = 4;
@@ -202,6 +202,13 @@ pub(crate) struct PhotoFile {
     ext: &'static str,
 }
 
+impl PhotoFile {
+    /// The bytes, for `copy_photo`, which decodes them rather than saving them.
+    pub(crate) fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Failure {
     /// Drive sent the download to Google's sign-in page.
@@ -220,7 +227,7 @@ pub(crate) enum Failure {
 }
 
 impl Failure {
-    fn describe(&self, name: &str, folder: &Path) -> String {
+    pub(crate) fn describe(&self, name: &str, folder: &Path) -> String {
         match self {
             Failure::SignIn => format!(
                 "Google asked for a sign-in before sending \"{name}\": its Drive file is not shared with \"Anyone with the link\"."

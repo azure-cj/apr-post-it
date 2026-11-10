@@ -277,11 +277,12 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       copied.push(text);
     },
 
-    async copyPhoto(url) {
+    async copyPhoto(url, name) {
       await begin('copyPhoto');
+      // As in Rust (copy_photo.rs): the address first, then the download.
       const refusal = refuse(url);
-      if (refusal) throw new UserFacingError(`Refused to copy the photo: its address ${refusal}.`);
-      if (failing.has(url)) throw new UserFacingError('Could not copy the photo. Try again, or download it instead.');
+      if (refusal) throw new UserFacingError(`Refused to download "${name}": its address ${refusal}.`);
+      if (failing.has(url) || failing.has(name)) throw new UserFacingError(`Could not download "${name}": the connection failed.`);
       copiedPhotos.push(url);
     },
 

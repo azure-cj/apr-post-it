@@ -324,3 +324,18 @@ anyway": that would be posting inside the cooldown. Only retries are written: a 
 on the spot is seen by the agent at once, and the app already blocks Copy inside the cooldown.
 The tracker gets no new tab. A server before v18 doesn't tell the admin, so the app asks the
 agent to.
+
+### D27. Copy one photo goes through Rust; Copy separator copies `---` (Nov 11, 2026)
+
+Copy photo (AID-245) puts one listing photo on the clipboard, to paste into a Facebook post
+with Ctrl+V. It is a Rust command, `copy_photo`, not the WebView's clipboard: it fetches the
+photo exactly as Download photos does (Drive only, a photo's bytes only, a sign-in page said
+in words), turns it the way the camera held it (a pasted bitmap carries no EXIF), scales it to
+2048 px on its longest side (the largest Facebook keeps; a phone photo is a quarter the size on
+the clipboard) and writes it with the same clipboard plugin as Copy. A WebView version written
+earlier, never wired to a button, is gone: it fetched through a second path with none of those
+checks. HEIC and AVIF photos can't be copied; the message says to download them.
+
+Copy separator (AID-176) is on the "No separator" notice, for admins. It copies `---`, which
+1,079 of the 1,474 documents already use, and the marker comes from `Separators.gs`
+(`standardSeparator_`, D13), so what is copied is always a marker the cut recognises.

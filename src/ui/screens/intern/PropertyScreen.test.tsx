@@ -6,6 +6,7 @@
  */
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { splitAtSeparator_ } from '@server/Separators.gs';
 import { CLEAN, fakeServer, intern, manager, PROPERTIES, propertyReply, renderApp, TODAY } from '../../state/testing';
 
 const PATH = `/property/${CLEAN.id}`;
@@ -226,7 +227,7 @@ describe('a document nobody has separated, shown to be checked (D15)', () => {
     renderApp({ platform, user: manager, path: PATH });
 
     expect(await screen.findByText('No separator. Check before posting.')).toBeTruthy();
-    expect(screen.getByText(/Add a separator to fix it\./)).toBeTruthy();
+    expect(screen.getByText(/Add a separator to fix it:/)).toBeTruthy();
     // Both numbers are flagged: the app can't tell the agent's from the owner's.
     expect(flaggedRows().map((r) => r.textContent)).toEqual(['Not copied: Contact: 0917 555 0142', 'Not copied: Mr. Lim 0918 555 0135']);
     expect(screen.queryByText(/Interns see none of it/)).toBeNull();
@@ -234,6 +235,26 @@ describe('a document nobody has separated, shown to be checked (D15)', () => {
     await userEvent.click(tick());
     await userEvent.click(copyButton());
     await waitFor(() => expect(platform.copied).toEqual(['FOR SALE: 320 sqm lot in Verdant Hills\nPrice: ₱4.2M']));
+  });
+
+  it("gives an admin the separator to paste, Separators.gs's own, which cuts the text (AID-176)", async () => {
+    const platform = fakeServer({
+      property: propertyReply({ hasInternal: false, withheld: false, internalText: '', cutAt: '', publicText: `${CLEAN.publicText}\nMr. Lim 0918 555 0135` }),
+    });
+    renderApp({ platform, user: manager, path: PATH });
+    await screen.findByText('No separator. Check before posting.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy separator' }));
+    await waitFor(() => expect(platform.copied).toEqual(['---']));
+    expect(await screen.findByText('Separator copied. Paste it on its own line where the public text ends.')).toBeTruthy();
+    // Pasted on its own line, it is a separator: the owner's line is cut off.
+    expect(splitAtSeparator_(`For sale\n${platform.copied[0]}\nMr. Lim 0918 555 0135`)).toMatchObject({ found: true, posting: 'For sale' });
+  });
+
+  it('gives an intern no separator to copy', async () => {
+    renderApp({ platform: fakeServer({ property: UNSEPARATED }), path: PATH });
+    await screen.findByText('No separator. Check before posting.');
+    expect(screen.queryByRole('button', { name: 'Copy separator' })).toBeNull();
   });
 });
 
@@ -465,6 +486,36 @@ describe('photos', () => {
     expect(await screen.findByText(/1 photo saved to/)).toBeTruthy();
     expect(platform.saves.at(-1)?.photos.map((p) => p.name)).toEqual(['photo 2']);
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('copies one photo, full size from Drive, to paste into Facebook (AID-245)', async () => {
+    const platform = fakeServer({ property: withThumbs });
+    renderApp({ platform, path: PATH });
+    await settled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download photos' }));
+    const picker = screen.getByRole('dialog', { name: 'Download photos' });
+    await userEvent.click(within(picker).getByRole('button', { name: 'Copy photo 2' }));
+
+    expect(await within(picker).findByText('Photo 2 copied. Paste it into Facebook with Ctrl+V.')).toBeTruthy();
+    expect(platform.copiedPhotos).toEqual(['https://drive.google.com/uc?export=download&id=ph2']);
+    // Copying ticks nothing and downloads nothing.
+    expect(within(picker).getByText(/of 3 photos ticked/)).toBeTruthy();
+    expect(platform.saves).toEqual([]);
+  });
+
+  it('says why a photo could not be copied, in the dialog', async () => {
+    const elsewhere = propertyReply({ photos: [{ id: 'x1', name: 'photo 1', url: 'https://example.com/a.jpg', thumb: '' }] });
+    const platform = fakeServer({ property: elsewhere });
+    renderApp({ platform, path: PATH });
+    await settled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download photos' }));
+    const picker = screen.getByRole('dialog', { name: 'Download photos' });
+    await userEvent.click(within(picker).getByRole('button', { name: 'Copy photo 1' }));
+
+    expect(await within(picker).findByText(/^Refused to download "Photo 1": its address /)).toBeTruthy();
+    expect(platform.copiedPhotos).toEqual([]);
   });
 
   it('cancels without saving anything', async () => {

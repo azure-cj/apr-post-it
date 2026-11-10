@@ -61,6 +61,15 @@ function splitAtSeparator_(text) {
 }
 
 /**
+ * The separator to add to a document that has none: what the app's Copy
+ * separator button copies (AID-176). '---', which 1,079 of the 1,474 documents
+ * already use. On a line of its own it is a divider, so the text is cut there.
+ */
+function standardSeparator_() {
+  return '---';
+}
+
+/**
  * True when a marker line is only a label: once its decoration and the marker
  * words are taken away, nothing is left. "agent's" is listed before "agents?",
  * or "agents?" takes the "Agent" and leaves "'s" behind. "Commission" and "owner" are not

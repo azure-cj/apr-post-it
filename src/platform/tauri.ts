@@ -115,23 +115,14 @@ export function createTauriPlatform(): Platform {
       }
     },
 
-    async copyPhoto(url) {
-      const board = typeof navigator === 'undefined' ? undefined : navigator.clipboard;
-      if (!board || typeof board.write !== 'function' || typeof ClipboardItem === 'undefined') {
-        throw new UserFacingError('This PC cannot copy a photo. Download it instead.');
-      }
-      // The item takes the download as a promise, at once: the click is still
-      // the reason to write when the photo arrives seconds later.
-      let failure: unknown = null;
-      const png = photoAsPng(url).catch((err: unknown) => {
-        failure = err;
-        throw err;
-      });
+    async copyPhoto(url, name) {
+      // Rust fetches it as Download does (Drive only, a photo's bytes only),
+      // turns it upright, scales it to 2048 px at most, and puts it on the
+      // clipboard as an image (src-tauri/src/copy_photo.rs).
       try {
-        await board.write([new ClipboardItem({ 'image/png': png })]);
+        await invoke('copy_photo', { name, url });
       } catch (err) {
-        if (failure instanceof UserFacingError) throw failure;
-        throw new UserFacingError('Could not copy the photo. Try again, or download it instead.', failure ?? err);
+        throw fromRust(err, `Could not copy ${name}`);
       }
     },
 
@@ -281,59 +272,6 @@ function parseJson(text: string): unknown {
 function fromRust(err: unknown, doing: string): UserFacingError {
   if (typeof err === 'string' && err.trim()) return new UserFacingError(err, err);
   return new UserFacingError(`${doing}: ${errorText(err)}`, err);
-}
-
-/**
- * The longest edge of a copied photo. Facebook shows nothing larger, and a
- * smaller image reaches the clipboard in a fraction of the time.
- */
-export const COPY_MAX_EDGE = 2048;
-
-/** The size to draw a photo at so its longer edge is at most `max`, keeping its shape. */
-export function fitWithin(width: number, height: number, max: number): { width: number; height: number } {
-  const longest = Math.max(width, height);
-  if (longest <= max || longest === 0) return { width, height };
-  const scale = max / longest;
-  return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
-}
-
-/** One photo from Drive, as a PNG for the clipboard (the one image type it takes from a page). */
-async function photoAsPng(url: string): Promise<Blob> {
-  let response: Response;
-  try {
-    response = await fetch(url, { method: 'GET', connectTimeout: 20_000 });
-  } catch (err) {
-    const failure = fetchFailure(err, url);
-    if (failure instanceof UserFacingError) throw failure;
-    throw new UserFacingError('Could not reach Drive for the photo. Check the connection and try again.', err);
-  }
-  if (!response.ok) throw new UserFacingError(`Drive answered with HTTP ${response.status}, so the photo was not copied.`);
-  const bytes = await response.blob();
-
-  let bitmap: ImageBitmap;
-  try {
-    bitmap = await createImageBitmap(bytes);
-  } catch (err) {
-    // A sign-in page instead of the photo, or a type the WebView can't draw (HEIC).
-    throw new UserFacingError('That file is not a photo this PC can copy. Download it instead.', err);
-  }
-  const size = fitWithin(bitmap.width, bitmap.height, COPY_MAX_EDGE);
-  const canvas = document.createElement('canvas');
-  canvas.width = size.width;
-  canvas.height = size.height;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    bitmap.close();
-    throw new UserFacingError('Could not copy the photo. Try again, or download it instead.');
-  }
-  context.drawImage(bitmap, 0, 0, size.width, size.height);
-  bitmap.close();
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((png) => {
-      if (png) resolve(png);
-      else reject(new UserFacingError('Could not copy the photo. Try again, or download it instead.'));
-    }, 'image/png');
-  });
 }
 
 /** Plugins reject with a string; JavaScript with an Error. */

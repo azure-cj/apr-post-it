@@ -1,7 +1,7 @@
 /**
  * The Tauri platform against a mocked IPC: which command each call makes, with
  * which arguments, and how what comes back is put into words. The argument
- * names are the contract with src-tauri/src (save_photos, read_key, write_key)
+ * names are the contract with src-tauri/src (save_photos, copy_photo, read_key, write_key)
  * and with the plugins' versions pinned in package.json.
  */
 
@@ -186,6 +186,28 @@ describe('copyText', () => {
       throw 'clipboard error: Unknown error while interacting with the clipboard';
     });
     await expect(createTauriPlatform().copyText('x')).rejects.toThrow(/^Could not copy to the clipboard\./);
+  });
+});
+
+describe('copyPhoto', () => {
+  it('calls copy_photo with the name the person sees and the address', async () => {
+    ipc(() => null);
+    await createTauriPlatform().copyPhoto('https://drive.google.com/uc?export=download&id=a', 'Photo 3');
+    expect(calls).toEqual([{ cmd: 'copy_photo', args: { name: 'Photo 3', url: 'https://drive.google.com/uc?export=download&id=a' } }]);
+  });
+
+  it("passes Rust's sentence on as it is, and says what it was doing otherwise", async () => {
+    const sentence = "Could not copy \"Photo 3\": Post-It can't copy a .heic photo. Use Download instead.";
+    ipc(() => {
+      throw sentence;
+    });
+    await expect(createTauriPlatform().copyPhoto('https://drive.google.com/x', 'Photo 3')).rejects.toThrow(sentence);
+    ipc(() => {
+      throw new Error('copy_photo not allowed');
+    });
+    await expect(createTauriPlatform().copyPhoto('https://drive.google.com/x', 'Photo 3')).rejects.toThrow(
+      'Could not copy Photo 3: copy_photo not allowed',
+    );
   });
 });
 

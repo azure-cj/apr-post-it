@@ -4,7 +4,7 @@ import { BackendError } from '@/core/backend';
 import { runChecks } from '@/core/checks';
 import { cooldown, lastPostedOn } from '@/core/cooldown';
 import { normalize } from '@/core/matcher';
-import { copyTextFor, flaggedLinesOf, linesOf } from '@/core/posting-text';
+import { copyTextFor, flaggedLinesOf, linesOf, STANDARD_SEPARATOR } from '@/core/posting-text';
 import {
   canManage,
   type CheckResult,
@@ -193,6 +193,16 @@ function PropertyPage({ id }: { readonly id: string }) {
       setCopyError(sentenceOf(err));
     } finally {
       setCopying(false);
+    }
+  };
+
+  // An admin fixing a document with no separator: the marker to paste where its public text ends (AID-176).
+  const copySeparator = async () => {
+    try {
+      await app.platform.copyText(STANDARD_SEPARATOR);
+      notify('Separator copied. Paste it on its own line where the public text ends.');
+    } catch (err) {
+      notify(sentenceOf(err), 'danger');
     }
   };
 
@@ -399,7 +409,15 @@ function PropertyPage({ id }: { readonly id: string }) {
                 }
               >
                 Lines that may hold owner or commission details are marked and won’t be copied.
-                {manager ? ' Add a separator to fix it.' : ''}
+                {manager ? (
+                  <>
+                    {' Add a separator to fix it: '}
+                    <Button variant="link" onClick={() => void copySeparator()}>
+                      Copy separator
+                    </Button>
+                    , then paste it on its own line in the document, where the public text ends.
+                  </>
+                ) : null}
               </Notice>
             ) : null}
 
@@ -536,6 +554,7 @@ function PropertyPage({ id }: { readonly id: string }) {
           photos={photos}
           onDownload={(chosen) => void download(chosen)}
           onClose={() => setPicking(false)}
+          onCopy={(photo, label) => app.platform.copyPhoto(photo.url, label)}
         />
       ) : null}
     </div>

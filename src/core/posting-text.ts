@@ -13,7 +13,7 @@
  * went through the gap.
  */
 
-import { flaggedLines_, splitAtSeparator_ } from '@server/Separators.gs';
+import { flaggedLines_, splitAtSeparator_, standardSeparator_ } from '@server/Separators.gs';
 import type { PropertyDetail } from './types';
 
 export interface PostingText {
@@ -43,6 +43,9 @@ const METADATA_LINE = new RegExp(
 
 const BLANK = new RegExp(String.raw`^${S}*$`, 'u');
 const SPACE = new RegExp(S, 'u');
+
+/** The separator to paste into a document that has none (Separators.gs, AID-176). */
+export const STANDARD_SEPARATOR: string = standardSeparator_();
 
 /** Parses the raw text of a posting document: any line endings, optional byte-order mark. */
 export function parsePostingText(raw: string | null | undefined): PostingText {
