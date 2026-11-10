@@ -298,3 +298,14 @@ pill. Results are kept on the admin sheet's own Spot checks tab, one row per pos
 checked and when: the interns' tracker is not changed, so the owner's sheet keeps its shape.
 Checking a post again replaces its result. A web app before v16 has no spot checks, and the
 Agents screen goes on without them.
+
+### D25. The FB group is read from the post's link (Nov 10, 2026)
+
+The tracker said which FB account posted, not where. The owner agreed to one more column on
+the Posts tab, `FB Group`. It is filled from the link the agent already pastes, so logging
+takes no extra step: a group post's link names its group (`groups/apgmain/posts/123`), a
+Marketplace item is `Marketplace`, and a page's or person's post, a share link or a photo
+leaves it blank. The cell holds the group as the link names it (a short name or a number);
+readable names for the numbers are AID-191's, a list the admin keeps. The column is added
+after the tab's last one on the first post with a group, as `Due` was on Assignments, so the
+owner's own columns keep their order. Rows logged before it stay blank.

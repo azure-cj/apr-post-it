@@ -306,6 +306,11 @@ headers, in this order:
 7. **Share posting**: `Posted` or `Pending` (posted in a group, awaiting its admin).
 8. **Posted by**: ours. Who it is credited to, from the key.
 9. **Property ID**: ours. The listing's folder id, for the records and the cooldown.
+10. **FB Group**: ours (v17). Where it was posted, read from the link: the group as its link
+    names it (`facebook.com/groups/apgmain/posts/…` → `apgmain`, or the group's number),
+    or `Marketplace`. Blank when the link doesn't say: a page's or person's post, a share
+    link, a photo. An existing tab gets this column after its last one, on the first post
+    that has a group; `addLink` fills it with the live link.
 
 The older spellings are still read, so an existing tab keeps working: `Type` / `Category`,
 `Title` / `Property` / `Property Name`, `FB Account` / `Account` / `Facebook Account` / `FB`,

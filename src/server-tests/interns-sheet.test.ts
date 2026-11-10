@@ -14,6 +14,7 @@ import { CASA, createWorld, LOT_9, TOWER, type Listing } from './world';
 const LINK = 'https://www.facebook.com/groups/apg/posts/1/';
 const NEW_HEADERS = [
   'Date', 'Property type', 'Property title', 'FB account name', 'Link', 'Time posted', 'Share posting', 'Posted by', 'Property ID',
+  'FB Group',
 ];
 
 /** A world whose Posts tab does not exist yet, so the script creates it. */
@@ -24,7 +25,7 @@ function freshTabs() {
 }
 
 describe('a new Posts tab', () => {
-  it('gets the interns\' sheet\'s headers, in its order, then Posted by and Property ID', () => {
+  it('gets the interns\' sheet\'s headers, in its order, then Posted by, Property ID and FB Group', () => {
     const w = freshTabs();
     expect(w.logPost('jan', CASA)).toMatchObject({ ok: true });
 
@@ -32,7 +33,7 @@ describe('a new Posts tab', () => {
     expect(tab.row(1)).toEqual(NEW_HEADERS);
     expect(tab.row(2)).toEqual([
       '2026-10-26', 'Condo / House and Lot', 'Casa Amara', 'APG Main', 'https://www.facebook.com/groups/apg/posts/1/', '10:23 AM',
-      'Posted', 'Jan Dela Cruz', CASA.id,
+      'Posted', 'Jan Dela Cruz', CASA.id, 'apg',
     ]);
   });
 
@@ -85,7 +86,7 @@ describe('a Posts tab with the old headers', () => {
     expect(w.call('maria', 'posts')['posts']).toEqual([
       {
         date: '2026-03-02', type: 'CONDO', title: 'Casa Amara', time: '14:30', status: 'Pending',
-        fbAccount: 'APG Main', postLink: LINK, postedBy: 'Jan Dela Cruz', propertyId: CASA.id,
+        fbAccount: 'APG Main', postLink: LINK, postedBy: 'Jan Dela Cruz', propertyId: CASA.id, fbGroup: '',
       },
     ]);
   });
@@ -95,7 +96,9 @@ describe('a Posts tab with the old headers', () => {
     w.logPost('jan', LOT_9);
 
     expect(w.posts.row(1)[0]).toBe('Date');
-    expect(w.posts.row(2)).toEqual(['2026-03-09', LOT_9.name, 'Lot', '9:05 AM', 'Posted', 'APG Main', LINK, 'Jan Dela Cruz', LOT_9.id, '']);
+    // FB Group (v17) is added after the tab's own last column, Notes.
+    expect(w.posts.row(1)[10]).toBe('FB Group');
+    expect(w.posts.row(2)).toEqual(['2026-03-09', LOT_9.name, 'Lot', '9:05 AM', 'Posted', 'APG Main', LINK, 'Jan Dela Cruz', LOT_9.id, '', 'apg']);
   });
 
   it('matches the new names in any case, and a mix of old and new', () => {
@@ -104,7 +107,7 @@ describe('a Posts tab with the old headers', () => {
     w.project.configure({ POSTS_TAB: 'Mixed' });
     w.logPost('jan', CASA);
 
-    expect(tab.row(2)).toEqual(['2026-03-09', 'Casa Amara', 'Condo / House and Lot', 'APG Main', LINK, '9:40 PM', 'Posted', 'Jan Dela Cruz', CASA.id]);
+    expect(tab.row(2)).toEqual(['2026-03-09', 'Casa Amara', 'Condo / House and Lot', 'APG Main', LINK, '9:40 PM', 'Posted', 'Jan Dela Cruz', CASA.id, 'apg']);
   });
 });
 

@@ -41,7 +41,8 @@ The Posts tab records what the interns' own sheet, "POSTING TRACKER - INTERNS", 
 its column names, words and formats (server/README.md has the detail).
 
 - **Posts**, as a new tab gets them: `Date`, `Property type`, `Property title`,
-  `FB account name`, `Link`, `Time posted`, `Share posting`, `Posted by`, `Property ID`.
+  `FB account name`, `Link`, `Time posted`, `Share posting`, `Posted by`, `Property ID`,
+  `FB Group` (v17).
   The older header names (`Title`, `Type`, `Time`, `Status`, `FB Account`, `Post Link`,
   `PropertyId`, …) are still read, so an existing tab keeps working.
   - `Date` is written and read as `yyyy-MM-dd` text. How the sheet displays it is not the
@@ -341,3 +342,12 @@ propertyId, result, checkedBy, checkedAt }] }`, every row of the admin sheet's S
 its agent, day and listing with the caller's name and the time; the same post again replaces its
 row. Replies `{ check }`, else `bad-result`, `not-a-post`, `bad-link` or `notfound`. Which posts
 to check is the app's (src/core/spotchecks.ts); the server keeps only the results.
+
+## v17: the FB group, from the link (server 2026-11-10.1)
+
+The Posts tab gains `FB Group`, added after its last column on the first post that has one.
+`logPost` writes, and `addLink` writes with the live link, the group the link names: from
+`groups/<group>/posts/…` or `/permalink/…`, the group as the link has it, lower case
+(`apgmain`, or the group's number); `Marketplace` for a Marketplace item; blank for any other
+post's link. `posts` rows carry `fbGroup` (`''` when blank or the tab has no column). Requests
+are unchanged.

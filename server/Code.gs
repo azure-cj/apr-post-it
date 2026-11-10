@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-09.2';
+const SERVER_VERSION = '2026-11-10.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -1354,6 +1354,8 @@ function logPost_(req, me) {
     // the Directory has no row for it.
     var type = propertyTypeOf_(req.propertyId, req.type);
 
+    var group = postGroup_(link);
+    if (group) ensurePostColumn_('fbGroup');
     appendRow_(CONFIG.POSTS_TAB, POST_FIELDS, {
       date:       date,
       type:       type,
@@ -1364,6 +1366,7 @@ function logPost_(req, me) {
       status:     status,
       postedBy:   postedBy,
       propertyId: req.propertyId,
+      fbGroup:    group,
     });
     setAssignmentStatus_(req.propertyId, req.property, postedBy, status);
     // The row as written. The app shows these, never its own clock or user.
@@ -1515,6 +1518,29 @@ function linkTaken_(earlier) {
            message: 'That post is already logged, by ' + earlier.postedBy + (day ? ' on ' + fullDate_(dayNumber_(day)) : '') + '.' };
 }
 
+/**
+ * Where a post went, read from its link (v17): the group's name as the link
+ * has it ("apgmain", or the group's number), "Marketplace", or '' when the
+ * link doesn't say (a page's or person's post, a share link, a photo).
+ */
+function postGroup_(value) {
+  var key = postKey_(value);
+  if (!key) return '';
+  var parts = key.split('/');
+  if (parts[0] === 'groups') return parts[1];
+  if (parts[0] === 'marketplace') return 'Marketplace';
+  return '';
+}
+
+/** Writes the post's group in row `row` of the Posts tab, adding the column first when it has none. Holds no lock: the caller does. */
+function setPostGroup_(sh, row, link) {
+  var group = postGroup_(link);
+  if (!group) return;
+  ensurePostColumn_('fbGroup');
+  var col = columnsOf_(sh, POST_FIELDS);
+  setText_(sh.getRange(row, col.fbGroup + 1), group);
+}
+
 /** Turn a Pending row into Posted once the live link exists. */
 function addLink_(req, me) {
   requireAll_(req, ['postLink']);
@@ -1548,6 +1574,7 @@ function addLink_(req, me) {
 
       setText_(sh.getRange(r + 1, col.status + 1), 'Posted');
       setText_(sh.getRange(r + 1, col.postLink + 1), String(req.postLink).trim());
+      setPostGroup_(sh, r + 1, req.postLink);
       setAssignmentStatus_(id, name, p.postedBy, 'Posted');
       return { ok: true, row: r + 1 };
     }
@@ -2012,6 +2039,16 @@ function overlapMessage_(o) {
          dayMonth_(dayNumber_(o.other.due)) + '. One queue at a time: start this one after it, or shorten it.';
 }
 
+/** Adds a column for `field` to the Posts tab, after the last, when no accepted spelling of it has one (v17). */
+function ensurePostColumn_(field) {
+  var sh = sheetFor_(CONFIG.POSTS_TAB, POST_FIELDS);
+  var col = columnsOf_(sh, POST_FIELDS);
+  if (col[field] !== -1) return;
+  var at = Math.max(sh.getLastColumn(), 1) + 1;
+  if (at > sh.getMaxColumns()) sh.insertColumnAfter(sh.getMaxColumns());
+  sh.getRange(1, at).setValue(POST_FIELDS[field].headers[0]).setFontWeight('bold');
+}
+
 /** Adds a column with `header` to the Assignments tab when no accepted spelling of the field has one. */
 function ensureAssignColumn_(field) {
   var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
@@ -2361,6 +2398,8 @@ const POST_FIELDS = {
   status:     { headers: ['Share posting', 'Status'], required: true },
   postedBy:   { headers: ['Posted by', 'Intern', 'By'], required: true },
   propertyId: { headers: ['Property ID', 'PropertyId', 'Folder Id'] },
+  // v17: where it was posted, read from the link (postGroup_). Added on the first post that has one.
+  fbGroup:    { headers: ['FB Group'] },
 };
 
 const ASSIGN_FIELDS = {
