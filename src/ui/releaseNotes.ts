@@ -10,6 +10,16 @@ export interface ReleaseNotes {
 
 export const RELEASE_NOTES: readonly ReleaseNotes[] = [
   {
+    version: '1.1.5',
+    items: [
+      'Copy one photo in Download photos and paste it straight into a Facebook post.',
+      "Only a Facebook post's link is accepted, and a post someone else already logged is refused.",
+      "Admins: spot check 3 of each agent's posts a week on the Agents screen.",
+      'Admins: a post saved late and refused for the cooldown now comes to you on the Agents screen.',
+      'Admins: Copy separator, for a document that has none.',
+    ],
+  },
+  {
     version: '1.1.4',
     items: [
       "Queues run 1, 2 or 3 working weeks; weekends don't count.",

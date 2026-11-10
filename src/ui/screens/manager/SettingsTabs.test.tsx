@@ -302,7 +302,7 @@ describe('Settings → App', () => {
   it("shows this app's version", () => {
     renderApp({ platform: fakeServer(), user: admin, path: '/settings?tab=app' });
     const about = screen.getByRole('region', { name: 'About' });
-    expect(within(about).getByText('Version').nextElementSibling?.textContent).toBe('1.1.4');
+    expect(within(about).getByText('Version').nextElementSibling?.textContent).toBe('1.1.5');
   });
 });
 
