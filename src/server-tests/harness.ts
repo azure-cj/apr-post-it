@@ -42,7 +42,7 @@ export const SERVER_DIR =
   process.env['POSTIT_APPS_SCRIPT_DIR'] ?? fileURLToPath(new URL('../../server/', import.meta.url));
 
 /** The project's files in the order Apps Script loads them. */
-export const PROJECT_FILES: readonly string[] = ['Separators.gs', 'Code.gs', 'BuildDirectory.gs'];
+export const PROJECT_FILES: readonly string[] = ['Separators.gs', 'Code.gs', 'BuildDirectory.gs', 'ImportPosts.gs'];
 
 /** A reply from the web app, parsed. */
 export type Reply = Record<string, unknown>;

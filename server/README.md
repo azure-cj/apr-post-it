@@ -29,6 +29,7 @@ All of these go into **one** Apps Script project:
 | `Code.gs` | The web app: every action below. |
 | `Separators.gs` | **Required.** The one place that decides where a listing's postable text ends (D13). `Code.gs` calls it whenever a property is opened; without it, opening a property fails with "Separators.gs is missing from this Apps Script project", and `SETUP` says the same. Paste it unchanged. It is pure ASCII so the editor cannot corrupt a rule, and its rules are never copied into another file. |
 | `BuildDirectory.gs` | Builds the directory sheet from the Drive library (`START`, `STATUS`, `CONTINUE`, `STOP`, `RESTART`, `VERIFY`, `FIND_ROOT`), and `RESTART_FROM_APP`, which the app's rebuild button runs on a trigger. |
+| `ImportPosts.gs` | Optional, once: copies the interns' old posts from their own sheet onto Posts (`PREVIEW_IMPORT`, `RUN_IMPORT`). See below. |
 | `appsscript.json` | The manifest. |
 
 Apps Script gives every file in a project **one global scope**. A top-level name declared in
@@ -402,11 +403,42 @@ the web app calls now ends in `_`, so the list holds only these:
 | RESTART | Throw a build away and start again. The app's rebuild button does the same. |
 | VERIFY | After a build: is everything in Drive in the sheet? |
 | FIND_ROOT | When `START` cannot open the library folder. |
+| PREVIEW_IMPORT, RUN_IMPORT | Once: the interns' old posts onto Posts (below). |
 
 `doGet` and `doPost` are the web app, `onOpen` and `promptAddTeamMember` the spreadsheet
 menu, and `RESTART_FROM_APP` the app's rebuild trigger: none of these is for the Run button.
 A trigger can only call a function without the `_`, which is why those keep their names. A
 test in `src/server-tests` holds the list to exactly these.
+
+## Bringing in the interns' old posts
+
+`ImportPosts.gs` copies the posts on the interns' own **POSTING TRACKER - INTERNS** sheet,
+one tab per intern, onto the Posts tab, so the cooldown, the link check and the records carry
+on from them. The interns' sheet is only read. Run it once, from the editor:
+
+1. Add `ImportPosts.gs` to the project, and set `IMPORT.SOURCE_SHEET_ID` at its top to the
+   interns' sheet's id: the long part of its link, between `/d/` and `/edit`.
+2. Run **PREVIEW_IMPORT**. It writes the **Import preview** tab on the tracker and nothing
+   else: a `Tab` row for each intern's tab with who it is credited to, an `Add` row for each
+   post it would add, and a `Skip` row for each one it leaves out, with why.
+3. Check the `Tab` rows. A tab is credited to the one person on the Team tab whose name begins
+   with the tab's ("Christopher" is Christopher Reyes). A tab credited to nobody, or to the
+   wrong person, goes in `IMPORT.NAMES` (`'Prince': 'Prince Villanueva'`), spelled as the app
+   names them; then run PREVIEW_IMPORT again.
+4. Run **RUN_IMPORT**. The posts are added below Posts' last row, oldest first.
+
+What it reads: the day in the first column, written once beside the day's rows, holds for
+the rows under it; `10/26/26` is 26 Oct 2026. Posted and Pending rows are added; Not Shared
+rows were never posted and are left out. A row with no title, no link or no day it can read
+is skipped, and the preview says which. The Property ID is the Directory's listing of the
+same name, when there is exactly one; the cooldown matches the others by name. The FB Group
+is read from the link.
+
+Nothing is added twice: a post whose link is already on Posts, or on two intern tabs, is
+added once, and RUN_IMPORT run again adds nothing. A group's "pending posts" link stands
+for many posts, so for those the day, the listing and who posted it tell them apart.
+
+The Import preview tab can be deleted afterwards, and `ImportPosts.gs` removed from the project.
 
 ## The server's version
 
