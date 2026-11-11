@@ -4,12 +4,17 @@
 //! The WebView can't write to Downloads, so this is Rust's job. It downloads only
 //! from Google Drive (see `hosts`), keeps only bytes that are a photo, and never
 //! replaces a file that is already there.
+//!
+//! A WebP photo is saved as a JPG: Facebook's upload box and most people's
+//! tools take a JPG anywhere. Only the downloaded copy is converted; the file
+//! on Drive is never touched. Each step is sent to the window as a
+//! `photos-progress` event, so the app can say what is happening.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, Url};
+use tauri::{AppHandle, Emitter, Manager, Url};
 use tauri_plugin_http::reqwest;
 
 use crate::{hosts, names};
@@ -26,6 +31,11 @@ const MAX_REDIRECTS: usize = 10;
 const PARALLEL: usize = 4;
 
 const USER_AGENT: &str = concat!("APG Post-It/", env!("CARGO_PKG_VERSION"));
+/// A WebP saved as a JPG: high enough that Facebook's own recompression is the
+/// only loss anyone sees.
+const JPEG_QUALITY: u8 = 92;
+/// The event each step of a save is sent as.
+pub const PROGRESS_EVENT: &str = "photos-progress";
 
 /// One photo to save: what to call it, and where Drive serves it.
 #[derive(Debug, Clone, Deserialize)]
@@ -41,7 +51,35 @@ pub struct PhotoSource {
 pub struct SavedPhoto {
     pub name: String,
     pub path: String,
+    /// True when Drive had it as a WebP and it was saved as a JPG.
+    pub converted: bool,
 }
+
+/// What a save is doing, one photo at a time, for the window.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Step {
+    /// A WebP has arrived and is being turned into a JPG.
+    Converting,
+    Saved,
+    Failed,
+}
+
+/// One `photos-progress` event. `done` counts the photos finished before this
+/// one, so the step is about photo `done + 1` of `total`.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Progress {
+    /// The id the app gave this save, so it hears only its own.
+    pub job: String,
+    pub name: String,
+    pub step: Step,
+    pub done: usize,
+    pub total: usize,
+}
+
+/// Hears each step of a save: the photo's name, the step, `done`, `total`.
+pub(crate) type Report<'a> = &'a (dyn Fn(&str, Step, usize, usize) + Send + Sync);
 
 /// Downloads each photo into `<Downloads>\APG Post-It\<listing>\` and returns
 /// where each one went, in the order asked.
@@ -56,12 +94,21 @@ pub async fn save_photos(
     app: AppHandle,
     property: String,
     photos: Vec<PhotoSource>,
+    job: Option<String>,
 ) -> Result<Vec<SavedPhoto>, String> {
     let downloads = app
         .path()
         .download_dir()
         .map_err(|e| format!("Could not find your Downloads folder: {e}"))?;
     let client = client(hosts::check, true)?;
+    let job = job.unwrap_or_default();
+    let report = move |name: &str, step: Step, done: usize, total: usize| {
+        // Only for the window to show: the save goes on whether it hears or not.
+        let _ = app.emit(
+            PROGRESS_EVENT,
+            Progress { job: job.clone(), name: name.to_string(), step, done, total },
+        );
+    };
     save_all(
         &downloads,
         &property,
@@ -69,6 +116,7 @@ pub async fn save_photos(
         hosts::check,
         &client,
         MAX_PHOTO_BYTES,
+        &report,
     )
     .await
 }
@@ -110,6 +158,7 @@ pub(crate) async fn save_all(
     gate: Gate,
     client: &reqwest::Client,
     max_bytes: usize,
+    report: Report<'_>,
 ) -> Result<Vec<SavedPhoto>, String> {
     if photos.len() > MAX_PHOTOS {
         return Err(format!(
@@ -146,6 +195,8 @@ pub(crate) async fn save_all(
 
     let mut saved = Vec::with_capacity(photos.len());
     let mut failures = Vec::new();
+    let total = photos.len();
+    let mut done = 0;
 
     let jobs: Vec<(&PhotoSource, Url)> = photos.iter().zip(urls).collect();
     for batch in jobs.chunks(PARALLEL) {
@@ -171,16 +222,35 @@ pub(crate) async fn save_all(
                 folder_made = true;
             }
             let result = match fetched {
-                Ok(photo_file) => write(&folder, &photo.name, photo_file).await,
+                Ok(photo_file) if photo_file.ext == "webp" => {
+                    report(&photo.name, Step::Converting, done, total);
+                    match as_jpeg(photo_file).await {
+                        Ok(jpeg) => write(&folder, &photo.name, jpeg)
+                            .await
+                            .map(|path| (path, true)),
+                        Err(failure) => Err(failure),
+                    }
+                }
+                Ok(photo_file) => write(&folder, &photo.name, photo_file)
+                    .await
+                    .map(|path| (path, false)),
                 Err(failure) => Err(failure),
             };
             match result {
-                Ok(path) => saved.push(SavedPhoto {
-                    name: photo.name.clone(),
-                    path: path.to_string_lossy().into_owned(),
-                }),
-                Err(failure) => failures.push(failure.describe(&photo.name, &folder)),
+                Ok((path, converted)) => {
+                    saved.push(SavedPhoto {
+                        name: photo.name.clone(),
+                        path: path.to_string_lossy().into_owned(),
+                        converted,
+                    });
+                    report(&photo.name, Step::Saved, done, total);
+                }
+                Err(failure) => {
+                    failures.push(failure.describe(&photo.name, &folder));
+                    report(&photo.name, Step::Failed, done, total);
+                }
             }
+            done += 1;
         }
     }
 
@@ -224,6 +294,8 @@ pub(crate) enum Failure {
     TooBig,
     Network(String),
     Disk(String),
+    /// A WebP that could not be turned into a JPG.
+    Convert(String),
 }
 
 impl Failure {
@@ -260,6 +332,9 @@ impl Failure {
                 MAX_PHOTO_BYTES / (1024 * 1024)
             ),
             Failure::Network(reason) => format!("Could not download \"{name}\": {reason}."),
+            Failure::Convert(reason) => format!(
+                "\"{name}\" is a WebP photo that could not be turned into a JPG ({reason}), so it was not saved."
+            ),
             Failure::Disk(reason) => {
                 format!(
                     "Could not save \"{name}\" in {}: {reason}.",
@@ -337,6 +412,35 @@ pub(crate) async fn fetch(
         None if content_type.is_empty() => Err(Failure::NotAPhoto("unknown type".to_string())),
         None => Err(Failure::NotAPhoto(content_type)),
     }
+}
+
+/// A WebP photo, as a JPG. Off the async threads: a large photo takes a moment.
+async fn as_jpeg(photo: PhotoFile) -> Result<PhotoFile, Failure> {
+    tauri::async_runtime::spawn_blocking(move || webp_to_jpeg(&photo.bytes))
+        .await
+        .map_err(|e| Failure::Convert(e.to_string()))?
+        .map(|bytes| PhotoFile { bytes, ext: "jpg" })
+        .map_err(Failure::Convert)
+}
+
+/// Decodes a WebP and encodes it as a JPG. A JPG can't be see-through, so any
+/// transparent part is laid on white.
+pub(crate) fn webp_to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let photo = image::load_from_memory_with_format(bytes, image::ImageFormat::WebP)
+        .map_err(|e| e.to_string())?;
+    let rgba = photo.into_rgba8();
+    let mut rgb = image::RgbImage::new(rgba.width(), rgba.height());
+    for (out, px) in rgb.pixels_mut().zip(rgba.pixels()) {
+        let alpha = u32::from(px[3]);
+        for c in 0..3 {
+            out[c] = ((u32::from(px[c]) * alpha + 255 * (255 - alpha) + 127) / 255) as u8;
+        }
+    }
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, JPEG_QUALITY)
+        .encode_image(&rgb)
+        .map_err(|e| e.to_string())?;
+    Ok(jpeg)
 }
 
 async fn write(folder: &Path, name: &str, photo: PhotoFile) -> Result<PathBuf, Failure> {
@@ -488,6 +592,8 @@ mod tests {
         match path {
             "/photo.jpg" => ok("image/jpeg", JPEG),
             "/photo.png" => ok("application/octet-stream", PNG),
+            "/photo.webp" => ok("image/webp", &webp(4, 3, 255)),
+            "/broken.webp" => ok("image/webp", b"RIFF\x24\0\0\0WEBPVP8 broken"),
             "/via-redirect" => redirect("/photo.png".to_string()),
             "/away" => redirect(format!("http://localhost:{port}/photo.jpg")),
             "/sign-in" => redirect(
@@ -648,10 +754,105 @@ mod tests {
         property: &str,
         photos: &[PhotoSource],
     ) -> Result<Vec<SavedPhoto>, String> {
+        save_reporting(downloads, property, photos, &|_, _, _, _| {})
+    }
+
+    fn save_reporting(
+        downloads: &Path,
+        property: &str,
+        photos: &[PhotoSource],
+        report: Report<'_>,
+    ) -> Result<Vec<SavedPhoto>, String> {
         let client = client(local_only, false).unwrap();
         tauri::async_runtime::block_on(save_all(
-            downloads, property, photos, local_only, &client, 1024,
+            downloads, property, photos, local_only, &client, 1024, report,
         ))
+    }
+
+    /// A real WebP, lossless, of one red at this opacity.
+    fn webp(width: u32, height: u32, alpha: u8) -> Vec<u8> {
+        let rgba = image::RgbaImage::from_pixel(width, height, image::Rgba([220, 20, 20, alpha]));
+        let mut out = Vec::new();
+        image::codecs::webp::WebPEncoder::new_lossless(&mut out)
+            .encode(rgba.as_raw(), width, height, image::ExtendedColorType::Rgba8)
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn saves_a_webp_as_a_jpg_and_says_it_is_converting() {
+        let base = drive();
+        let downloads = scratch_downloads("webp");
+        let photos = [
+            photo("photo 1", format!("{base}/photo.jpg")),
+            photo("photo 2", format!("{base}/photo.webp")),
+        ];
+        let steps = std::sync::Mutex::new(Vec::new());
+        let saved = save_reporting(&downloads, "Lot 7", &photos, &|name, step, done, total| {
+            steps.lock().unwrap().push((name.to_string(), step, done, total));
+        })
+        .unwrap();
+
+        let folder = downloads.join("APG Post-It").join("Lot 7");
+        assert_eq!(saved[0].path, folder.join("photo 1.jpg").to_string_lossy());
+        assert!(!saved[0].converted);
+        assert_eq!(saved[1].path, folder.join("photo 2.jpg").to_string_lossy());
+        assert!(saved[1].converted);
+        let jpg = std::fs::read(folder.join("photo 2.jpg")).unwrap();
+        assert_eq!(sniff(&jpg), Some("jpg"));
+        let decoded = image::load_from_memory(&jpg).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (4, 3));
+        assert!(!folder.join("photo 2.webp").exists());
+        assert_eq!(
+            *steps.lock().unwrap(),
+            [
+                ("photo 1".to_string(), Step::Saved, 0, 2),
+                ("photo 2".to_string(), Step::Converting, 1, 2),
+                ("photo 2".to_string(), Step::Saved, 1, 2),
+            ]
+        );
+        std::fs::remove_dir_all(&downloads).unwrap();
+    }
+
+    #[test]
+    fn lays_a_see_through_webp_on_white() {
+        let jpg = webp_to_jpeg(&webp(8, 8, 0)).unwrap();
+        let px = image::load_from_memory(&jpg).unwrap().into_rgb8();
+        let p = px.get_pixel(0, 0);
+        assert!(p[0] > 245 && p[1] > 245 && p[2] > 245, "{p:?}");
+    }
+
+    #[test]
+    fn says_why_a_broken_webp_was_not_saved_and_saves_the_rest() {
+        let base = drive();
+        let downloads = scratch_downloads("broken-webp");
+        let photos = [
+            photo("photo 1", format!("{base}/broken.webp")),
+            photo("photo 2", format!("{base}/photo.png")),
+        ];
+        let steps = std::sync::Mutex::new(Vec::new());
+        let saved = save_reporting(&downloads, "Lot 7", &photos, &|name, step, _, _| {
+            steps.lock().unwrap().push((name.to_string(), step));
+        })
+        .unwrap();
+        assert_eq!(
+            saved.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            ["photo 2"]
+        );
+        assert_eq!(
+            *steps.lock().unwrap(),
+            [
+                ("photo 1".to_string(), Step::Converting),
+                ("photo 1".to_string(), Step::Failed),
+                ("photo 2".to_string(), Step::Saved),
+            ]
+        );
+        let alone = save(&downloads, "Lot 8", &photos[..1]).unwrap_err();
+        assert!(
+            alone.starts_with("\"photo 1\" is a WebP photo that could not be turned into a JPG ("),
+            "{alone}"
+        );
+        std::fs::remove_dir_all(&downloads).unwrap();
     }
 
     #[test]
@@ -809,6 +1010,7 @@ mod tests {
             hosts::check,
             &client,
             1024,
+            &|_, _, _, _| {},
         ))
         .unwrap_err();
         assert!(error.contains("is not an https:// address"), "{error}");

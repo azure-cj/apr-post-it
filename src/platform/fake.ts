@@ -182,8 +182,9 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
   };
 
   /** The path a photo would be saved to, numbered as Explorer does when the name is taken. */
-  const claim = (folder: string, name: string): string => {
-    const { stem, ext } = safeFileName(name);
+  const claim = (folder: string, name: string, asJpeg = false): string => {
+    const { stem, ext: own } = safeFileName(name);
+    const ext = asJpeg ? 'jpg' : own;
     for (let n = 1; ; n++) {
       const path = `${folder}\\${n === 1 ? stem : `${stem} (${n})`}.${ext}`;
       if (!files.has(path.toLowerCase())) {
@@ -301,7 +302,7 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       return throughJson(reply);
     },
 
-    async savePhotos(property, photos) {
+    async savePhotos(property, photos, onProgress) {
       const asked = photos.map(({ name, url }) => ({ name, url }));
       const record = (saved: readonly SavedPhoto[]): void => {
         saves.push({ property, photos: asked, saved });
@@ -323,9 +324,26 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       }
 
       const folder = `${FAKE_PHOTOS_FOLDER}\\${safeFolderName(property)}`;
-      const saved = asked
-        .filter((photo) => !failing.has(photo.name) && !failing.has(photo.url))
-        .map((photo) => ({ name: photo.name, path: claim(folder, photo.name) }));
+      // As in Rust: a WebP (here, one whose name or address says webp) is saved
+      // as a JPG, and each step is reported as it happens.
+      const saved: SavedPhoto[] = [];
+      const total = asked.length;
+      for (const [done, photo] of asked.entries()) {
+        const step = (s: 'converting' | 'saved' | 'failed'): void => onProgress?.({ name: photo.name, step: s, done, total });
+        if (failing.has(photo.name) || failing.has(photo.url)) {
+          step('failed');
+          continue;
+        }
+        const webp = /webp/i.test(photo.name) || /webp/i.test(photo.url);
+        if (webp) {
+          step('converting');
+          if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+          saved.push({ name: photo.name, path: claim(folder, photo.name, true), converted: true });
+        } else {
+          saved.push({ name: photo.name, path: claim(folder, photo.name) });
+        }
+        step('saved');
+      }
       record(saved);
 
       // As in Rust: the ones that worked are returned; none at all is an error.

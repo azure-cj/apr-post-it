@@ -4,7 +4,8 @@
 //! the posting-text split, the checks, the cooldown, queues — is TypeScript, so it can
 //! move to a Cloud Function as it is. What lives here:
 //!
-//! - `save_photos`: photos from Google Drive into `Downloads\APG Post-It\<listing>`.
+//! - `save_photos`: photos from Google Drive into `Downloads\APG Post-It\<listing>`,
+//!   a WebP saved as a JPG, each step sent to the window as `photos-progress`.
 //! - `copy_photo`: one of those photos onto the clipboard, to paste into Facebook.
 //! - `read_key` / `write_key`: the person's key, kept by the OS credential store.
 //! - The plugins, each scoped in `capabilities/default.json`: the clipboard (write

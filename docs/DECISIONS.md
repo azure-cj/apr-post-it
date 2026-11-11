@@ -339,3 +339,17 @@ checks. HEIC and AVIF photos can't be copied; the message says to download them.
 Copy separator (AID-176) is on the "No separator" notice, for admins. It copies `---`, which
 1,079 of the 1,474 documents already use, and the marker comes from `Separators.gs`
 (`standardSeparator_`, D13), so what is copied is always a marker the cut recognises.
+
+### D28. A WebP photo is saved as a JPG, on the PC only (Nov 11, 2026)
+
+Some listing folders on Drive hold WebP photos, which Facebook's upload box and many people's
+tools don't take everywhere. Download photos now saves a WebP as a JPG (quality 92; anything
+see-through is laid on white, since a JPG can't be). Only the downloaded copy is converted:
+Post-It never writes to Drive, and the file there stays a WebP. The conversion runs in Rust
+(`photos.rs`), off the download threads, after the bytes prove it is a WebP: a photo's name on
+the server has no extension, so nothing is known before it arrives. Each step of a save is sent
+to the window as a `photos-progress` event, tagged with that save's id. While a WebP is being
+converted, the photos section says so in the accent colour ("Converting photo 4 of 10 from WebP
+to JPG… The file on Drive is not changed."), and the "saved" message says how many were
+converted. A WebP that can't be read is left out, with the reason, and the others are saved.
+Copy photo already reads WebP (D27).

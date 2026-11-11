@@ -5,11 +5,12 @@
  * and with the plugins' versions pinned in package.json.
  */
 
+import { emit } from '@tauri-apps/api/event';
 import { clearMocks, mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserFacingError } from '../core/types';
-import { createTauriPlatform, HttpStatusError, LOCAL_STORE_FILE } from './tauri';
+import { createTauriPlatform, HttpStatusError, LOCAL_STORE_FILE, PHOTOS_PROGRESS } from './tauri';
 
 type Args = Record<string, unknown>;
 type Handler = (cmd: string, args: Args) => unknown;
@@ -224,6 +225,37 @@ describe('savePhotos', () => {
         args: { property: 'Lot 7', photos: [{ name: 'photo 1', url: 'https://drive.google.com/uc?export=download&id=a' }] },
       },
     ]);
+  });
+
+  it('hears its own photos-progress events while saving, with a job id, and stops listening after', async () => {
+    const saved = [{ name: 'photo 1', path: 'C:\\x\\photo 1.jpg', converted: true }];
+    mockIPC(
+      async (cmd, args) => {
+        const a = (args ?? {}) as Args;
+        calls.push({ cmd, args: a });
+        const job = a['job'] as string;
+        await emit(PHOTOS_PROGRESS, { job: 'someone-else', name: 'photo 9', step: 'saved', done: 0, total: 1 });
+        await emit(PHOTOS_PROGRESS, { job, name: 'photo 1', step: 'converting', done: 0, total: 1 });
+        await emit(PHOTOS_PROGRESS, { job, name: 'photo 1', step: 'saved', done: 0, total: 1 });
+        return saved;
+      },
+      { shouldMockEvents: true },
+    );
+    calls = [];
+    const heard: unknown[] = [];
+    const photo = { name: 'photo 1', url: 'https://drive.google.com/uc?export=download&id=a' };
+
+    await expect(createTauriPlatform().savePhotos('Lot 7', [photo], (p) => heard.push(p))).resolves.toEqual(saved);
+
+    expect(calls.map((c) => c.cmd)).toEqual(['save_photos']);
+    expect(calls[0]?.args).toMatchObject({ property: 'Lot 7', photos: [photo], job: expect.stringMatching(/^photos-/) });
+    expect(heard).toEqual([
+      { name: 'photo 1', step: 'converting', done: 0, total: 1 },
+      { name: 'photo 1', step: 'saved', done: 0, total: 1 },
+    ]);
+    // Unlistened: an event after the save reaches no one.
+    await emit(PHOTOS_PROGRESS, { job: calls[0]?.args['job'], name: 'photo 1', step: 'saved', done: 0, total: 1 });
+    expect(heard).toHaveLength(2);
   });
 
   it("passes Rust's sentence on as it is", async () => {

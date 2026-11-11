@@ -500,3 +500,23 @@
   margin: 0;
   padding-inline-start: var(--space-10);
 }
+
+/* While photos download; a WebP being turned into a JPG gets the accent. */
+.photos__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-2) var(--space-6);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-row);
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+}
+
+.photos__progress--converting {
+  background: var(--info-bg);
+  border-color: var(--info-line);
+  color: var(--info-text);
+  font-weight: var(--weight-label);
+}

@@ -24,6 +24,20 @@ export interface AppUpdate {
 export interface SavedPhoto {
   readonly name: string;
   readonly path: string;
+  /** Drive had it as a WebP; the copy saved is a JPG. Drive's file is unchanged. */
+  readonly converted?: boolean;
+}
+
+/**
+ * One step of a save, as it happens. `done` counts the photos finished before
+ * this one, so the step is about photo `done + 1` of `total`.
+ */
+export interface PhotoProgress {
+  readonly name: string;
+  /** `converting`: a WebP has arrived and is being turned into a JPG. */
+  readonly step: 'converting' | 'saved' | 'failed';
+  readonly done: number;
+  readonly total: number;
 }
 
 export interface Platform {
@@ -40,8 +54,16 @@ export interface Platform {
   /** POST JSON to the Apps Script web app, through Rust so cross-site limits don't apply. */
   post(url: string, body: unknown): Promise<unknown>;
 
-  /** Download every photo to Downloads\APG Post-It\<property>. Returns where they went. */
-  savePhotos(property: string, photos: readonly { name: string; url: string }[]): Promise<readonly SavedPhoto[]>;
+  /**
+   * Download every photo to Downloads\APG Post-It\<property>. Returns where they
+   * went. A WebP is saved as a JPG; only the downloaded copy is converted.
+   * `onProgress` hears each step as it happens.
+   */
+  savePhotos(
+    property: string,
+    photos: readonly { name: string; url: string }[],
+    onProgress?: (progress: PhotoProgress) => void,
+  ): Promise<readonly SavedPhoto[]>;
 
   /** Open a folder in Explorer, or a link in the browser. */
   open(target: string): Promise<void>;

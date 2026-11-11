@@ -14,7 +14,8 @@ import {
   type Property,
   type PropertyDetail,
 } from '@/core/types';
-import { Button, Card, CategoryDot, CheckList, Icon, Notice, Pill, categoryKind, categoryLabel } from '../../components';
+import type { PhotoProgress } from '@/platform';
+import { Button, Card, CategoryDot, CheckList, Icon, Notice, Pill, Spinner, categoryKind, categoryLabel } from '../../components';
 import {
   manilaTime,
   paths,
@@ -208,6 +209,8 @@ function PropertyPage({ id }: { readonly id: string }) {
 
   const [savedFolder, rememberFolder] = useSavedFolder(id);
   const [saving, setSaving] = useState(false);
+  // The step the save is on, as Rust reports it: shows a WebP being turned into a JPG.
+  const [saveStep, setSaveStep] = useState<PhotoProgress | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const photosRef = useRef<HTMLButtonElement>(null);
   const photos = detail?.photos ?? [];
@@ -218,23 +221,26 @@ function PropertyPage({ id }: { readonly id: string }) {
     setPicking(false);
     if (!detail || saving || chosen.length === 0) return;
     setSaving(true);
+    setSaveStep(null);
     setPhotoError(null);
     try {
-      const saved = await app.platform.savePhotos(detail.name, chosen);
+      const saved = await app.platform.savePhotos(detail.name, chosen, setSaveStep);
       const first = saved[0];
       const folder = first ? folderOf(first.path) : null;
       if (folder) rememberFolder(folder);
       const where = folder ? ` to ${friendlyFolder(folder)}` : '';
       const missing = chosen.length - saved.length;
+      const converted = convertedWords(saved.filter((s) => s.converted).length);
       if (missing > 0) {
-        notify(`${saved.length} of ${count(chosen.length, 'photo', 'photos')} saved${where}. ${count(missing, 'photo', 'photos')} could not be downloaded.`, 'warn');
+        notify(`${saved.length} of ${count(chosen.length, 'photo', 'photos')} saved${where}. ${count(missing, 'photo', 'photos')} could not be downloaded.${converted}`, 'warn');
       } else {
-        notify(`${count(saved.length, 'photo', 'photos')} saved${where}.`);
+        notify(`${count(saved.length, 'photo', 'photos')} saved${where}.${converted}`);
       }
     } catch (err) {
       setPhotoError(sentenceOf(err));
     } finally {
       setSaving(false);
+      setSaveStep(null);
     }
   };
 
@@ -483,6 +489,7 @@ function PropertyPage({ id }: { readonly id: string }) {
                 ) : null}
               </div>
             </div>
+            {saving ? <SaveProgress step={saveStep} /> : null}
             {savedFolder ? <p className="meta">Saved to {friendlyFolder(savedFolder)}</p> : null}
             {!app.platform.hasFileSystem && detail !== null && photos.length > 0 ? (
               <p className="meta">Saving photos works in the desktop app only.</p>
@@ -954,4 +961,32 @@ function postsOf(posts: readonly PostLogEntry[], property: { readonly id: string
     )
     .sort((a, b) => b.post.date.localeCompare(a.post.date) || b.post.time.localeCompare(a.post.time) || b.index - a.index)
     .map(({ post }) => post);
+}
+
+/**
+ * While photos download: how far it has got, and, while a WebP is being turned
+ * into a JPG, a line of its own in the accent colour so the wait is explained.
+ */
+function SaveProgress({ step }: { readonly step: PhotoProgress | null }) {
+  const converting = step?.step === 'converting';
+  return (
+    <p className={`photos__progress${converting ? ' photos__progress--converting' : ''}`} role="status">
+      <Spinner size="small" />
+      <span>{saveStepWords(step)}</span>
+    </p>
+  );
+}
+
+export function saveStepWords(step: PhotoProgress | null): string {
+  if (!step) return 'Downloading photos…';
+  if (step.step === 'converting') {
+    return `Converting photo ${step.done + 1} of ${step.total} from WebP to JPG… The file on Drive is not changed.`;
+  }
+  return `Downloading… ${step.done + 1} of ${step.total} done.`;
+}
+
+/** Added to the "saved" message when some were WebP. */
+export function convertedWords(converted: number): string {
+  if (converted === 0) return '';
+  return ` ${converted === 1 ? '1 WebP photo was' : `${converted} WebP photos were`} saved as JPG; the files on Drive are not changed.`;
 }

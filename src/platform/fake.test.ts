@@ -222,6 +222,31 @@ describe('savePhotos', () => {
     expect(saved.map((p) => p.name)).toEqual(['photo 1']);
   });
 
+  it('saves a WebP as a JPG, and reports each step as it happens', async () => {
+    const fake = createFakePlatform({ failingPhotos: ['photo 3'] });
+    const steps: string[] = [];
+    const saved = await fake.savePhotos(
+      'Lot 7',
+      [
+        { name: 'photo 1', url: drive('a') },
+        { name: 'cover.webp', url: drive('b') },
+        { name: 'photo 3', url: drive('c') },
+      ],
+      (p) => steps.push(`${p.name}: ${p.step} ${p.done}/${p.total}`),
+    );
+
+    expect(saved).toEqual([
+      { name: 'photo 1', path: `${FAKE_PHOTOS_FOLDER}\\Lot 7\\photo 1.jpg` },
+      { name: 'cover.webp', path: `${FAKE_PHOTOS_FOLDER}\\Lot 7\\cover.jpg`, converted: true },
+    ]);
+    expect(steps).toEqual([
+      'photo 1: saved 0/3',
+      'cover.webp: converting 1/3',
+      'cover.webp: saved 1/3',
+      'photo 3: failed 2/3',
+    ]);
+  });
+
   it('fails when none could be saved, as the real platform does', async () => {
     const fake = createFakePlatform({ failingPhotos: ['photo 1', 'photo 2'] });
     await expect(

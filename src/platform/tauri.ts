@@ -10,6 +10,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { appLocalDataDir, join } from '@tauri-apps/api/path';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
@@ -18,8 +19,12 @@ import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import { load, type Store } from '@tauri-apps/plugin-store';
 
 import { UserFacingError } from '../core/types';
-import type { AppUpdate, Platform, SavedPhoto } from './index';
+import type { AppUpdate, PhotoProgress, Platform, SavedPhoto } from './index';
 import type { FirebaseAccess } from './firebase';
+
+/** The event save_photos sends each step as (src-tauri/src/photos.rs PROGRESS_EVENT). */
+export const PHOTOS_PROGRESS = 'photos-progress';
+let saveCount = 0;
 
 /**
  * Where readLocal and writeLocal keep their values: one JSON file in
@@ -143,14 +148,31 @@ export function createTauriPlatform(): Platform {
       return parseJson(text);
     },
 
-    async savePhotos(property, photos) {
+    async savePhotos(property, photos, onProgress) {
+      const asked = { property, photos: photos.map(({ name, url }) => ({ name, url })) };
+      // Rust sends each step as a `photos-progress` event, marked with this
+      // save's id so two saves at once each hear only their own.
+      let stop: UnlistenFn | null = null;
+      let job: string | undefined;
+      if (onProgress) {
+        job = `photos-${Date.now()}-${++saveCount}`;
+        const mine = job;
+        try {
+          stop = await listen<PhotoProgress & { job: string }>(PHOTOS_PROGRESS, ({ payload }) => {
+            if (payload.job !== mine) return;
+            const { name, step, done, total } = payload;
+            onProgress({ name, step, done, total });
+          });
+        } catch {
+          // No progress to show; the save itself still works.
+        }
+      }
       try {
-        return await invoke<SavedPhoto[]>('save_photos', {
-          property,
-          photos: photos.map(({ name, url }) => ({ name, url })),
-        });
+        return await invoke<SavedPhoto[]>('save_photos', job ? { ...asked, job } : asked);
       } catch (err) {
         throw fromRust(err, 'Could not save the photos');
+      } finally {
+        stop?.();
       }
     },
 

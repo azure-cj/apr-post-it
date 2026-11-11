@@ -4,7 +4,7 @@
  * never sees or copies the owner's details or the commission. These tests
  * hold the screen to it even when the server's reply is wrong.
  */
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { splitAtSeparator_ } from '@server/Separators.gs';
 import { CLEAN, fakeServer, intern, manager, PROPERTIES, propertyReply, renderApp, TODAY } from '../../state/testing';
@@ -467,6 +467,35 @@ describe('photos', () => {
     await waitFor(() =>
       expect(platform.opened).toEqual(['C:\\Users\\Intern\\Downloads\\APG Post-It\\Verdant Hills Lot 12, Tagaytay']),
     );
+  });
+
+  it('shows a WebP being turned into a JPG while it saves, then says it was', async () => {
+    const platform = fakeServer();
+    const real = platform.savePhotos.bind(platform);
+    let finish: () => void = () => {};
+    platform.savePhotos = async (property, photos, onProgress) => {
+      onProgress?.({ name: 'photo 1', step: 'saved', done: 0, total: 2 });
+      onProgress?.({ name: 'photo 2', step: 'converting', done: 1, total: 2 });
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const saved = await real(property, photos);
+      return saved.map((s) => (s.name === 'photo 2' ? { ...s, converted: true } : s));
+    };
+    renderApp({ platform, path: PATH });
+    await settled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download photos' }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Download 2 photos' }));
+
+    const cue = await screen.findByText('Converting photo 2 of 2 from WebP to JPG… The file on Drive is not changed.');
+    expect(cue.closest('.photos__progress--converting')?.getAttribute('role')).toBe('status');
+
+    act(() => finish());
+    expect(
+      await screen.findByText(/^2 photos saved to .+\. 1 WebP photo was saved as JPG; the files on Drive are not changed\.$/),
+    ).toBeTruthy();
+    expect(document.querySelector('.photos__progress')).toBeNull();
   });
 
   it('downloads only the ticked photos, and none until one is ticked', async () => {
