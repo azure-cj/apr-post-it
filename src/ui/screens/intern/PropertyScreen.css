@@ -62,6 +62,71 @@
   min-width: 132px;
 }
 
+/* Beside Copy, at the right of the heading (AID-129). */
+.post-text__reword {
+  margin-inline-start: auto;
+}
+
+/* ---- the original and Claude's reword, side by side: Copy takes the chosen one */
+
+.post-text__choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-10);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.post-text__option {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.post-text__choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 44px;
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+  cursor: pointer;
+}
+
+.post-text__choice:has(input:disabled) {
+  color: var(--placeholder);
+  cursor: not-allowed;
+}
+
+.post-text__choice input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  /* Chosen is "selected": one of gold's four jobs. */
+  accent-color: var(--gold);
+  cursor: inherit;
+}
+
+/* Only the chosen text carries the green "may be copied" edge. */
+.post-text--ready .post-text__option:not(.post-text__option--chosen) .post-text__body {
+  border-color: var(--border);
+}
+
+.post-text__reword-blocked {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  color: var(--danger-text);
+}
+
+.post-text__reword-blocked svg {
+  flex: none;
+  margin-top: 3px;
+}
+
 .post-text__status {
   min-height: var(--lh-body);
 }

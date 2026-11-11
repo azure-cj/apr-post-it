@@ -5,6 +5,7 @@ import { runChecks } from '@/core/checks';
 import { cooldown, lastPostedOn } from '@/core/cooldown';
 import { normalize } from '@/core/matcher';
 import { copyTextFor, flaggedLinesOf, linesOf, STANDARD_SEPARATOR } from '@/core/posting-text';
+import { rewordProblem } from '@/core/reword';
 import {
   canManage,
   type CheckResult,
@@ -45,6 +46,13 @@ import { PhotoPicker, Thumb } from './PhotoPicker';
 import { PhotoViewer } from './PhotoViewer';
 import { BackLink, Key, Waiting } from './shared';
 import './PropertyScreen.css';
+
+/** Claude's reword of the public text (AID-129). `from` is the text it reworded. */
+type RewordState =
+  | { readonly status: 'idle' }
+  | { readonly status: 'asking' }
+  | { readonly status: 'failed'; readonly error: string }
+  | { readonly status: 'ready'; readonly from: string; readonly text: string };
 
 type Load =
   | { readonly status: 'loading' }
@@ -154,19 +162,43 @@ function PropertyPage({ id }: { readonly id: string }) {
   // "I checked it": once per listing, since the page is keyed by it.
   const [checked, setChecked] = useState(false);
 
+  // ---- a reword from Claude (AID-129) ---------------------------------------
+  // Offered for a separated document whose public text passes every check: only
+  // what Copy would copy is sent, never the internal section. The reword gets
+  // the same checks, and one whose numbers differ from the original's can't be
+  // chosen. Copy takes whichever the person chooses.
+  const [reword, setReword] = useState<RewordState>({ status: 'idle' });
+  const [chooseReword, setChooseReword] = useState(false);
+  const mayReword =
+    app.usesAccounts &&
+    detail !== null &&
+    detail.hasInternal &&
+    !unseparated &&
+    !withheld &&
+    !sold &&
+    copyText.trim() !== '' &&
+    checks.every((c) => c.status !== 'fail');
+  // A reword of text that has since changed (the document re-read) is dropped.
+  const rewordText = reword.status === 'ready' && reword.from === copyText ? reword.text : null;
+  const rewordChecks: readonly CheckResult[] = rewordText === null ? [] : runChecks({ publicText: rewordText, hasInternal: true });
+  const rewordBlocked = rewordText === null ? null : rewordProblem(copyText, rewordText, rewordChecks);
+  const usingReword = mayReword && chooseReword && rewordText !== null && rewordBlocked === null;
+  const chosenText = usingReword ? rewordText : copyText;
+  const chosenChecks = usingReword ? rewordChecks : checks;
+
   const mine = posts.data && name ? postsOf(posts.data, { id, name }) : [];
   const cool: CooldownState | null = posts.data && name ? cooldown(lastPostedOn(posts.data, { id, name }), app.today(), app.settings) : null;
 
   const gate = copyGate({
     detail,
-    copyText,
+    copyText: chosenText,
     sold,
     withheld,
     noDocument,
     unseparated,
     checked,
     hitLine,
-    checks,
+    checks: chosenChecks,
     cool,
     manager,
     checkingCooldown: posts.data === null && posts.loading,
@@ -185,15 +217,34 @@ function PropertyPage({ id }: { readonly id: string }) {
     setCopying(true);
     setCopyError(null);
     try {
-      // The public text and nothing else: never the internal section, never a flagged line.
-      await app.platform.copyText(copyText);
+      // The public text, or its checked reword, and nothing else: never the internal section, never a flagged line.
+      await app.platform.copyText(chosenText);
       setCopiedAt(manilaTime(app.now()));
-      notify('Copied. Paste it into Facebook.');
+      notify(usingReword ? 'Copied the reword. Paste it into Facebook.' : 'Copied. Paste it into Facebook.');
     } catch (err) {
       setCopyError(sentenceOf(err));
     } finally {
       setCopying(false);
     }
+  };
+
+  const askReword = async () => {
+    if (!mayReword || reword.status === 'asking') return;
+    const from = copyText;
+    setReword({ status: 'asking' });
+    try {
+      const text = await app.reword(from);
+      setReword({ status: 'ready', from, text });
+      setChooseReword(false);
+      setCopiedAt(null);
+    } catch (err) {
+      setReword({ status: 'failed', error: sentenceOf(err) });
+    }
+  };
+
+  const choose = (useIt: boolean) => {
+    setChooseReword(useIt);
+    setCopiedAt(null);
   };
 
   // An admin fixing a document with no separator: the marker to paste where its public text ends (AID-176).
@@ -278,6 +329,8 @@ function PropertyPage({ id }: { readonly id: string }) {
   const checkId = useId();
   const textTitleId = useId();
   const photosTitleId = useId();
+  const choiceName = useId();
+  const rewordWhyId = useId();
 
   // ---- the screen --------------------------------------------------------------
 
@@ -344,6 +397,15 @@ function PropertyPage({ id }: { readonly id: string }) {
                 </h2>
                 {wholeDocument ? <p className="meta">Not separated: may hold owner and commission details.</p> : null}
               </div>
+              {mayReword ? (
+                <Button
+                  className="post-text__reword"
+                  busy={reword.status === 'asking'}
+                  onClick={() => void askReword()}
+                >
+                  {reword.status === 'asking' ? 'Rewording…' : rewordText !== null ? 'Reword again' : 'Reword'}
+                </Button>
+              ) : null}
               <Button
                 ref={copyRef}
                 variant={copiedAt ? 'ghost' : 'primary'}
@@ -421,16 +483,66 @@ function PropertyPage({ id }: { readonly id: string }) {
               </Notice>
             ) : null}
 
-            <PostText
-              detail={detail}
-              withheld={withheld}
-              noDocument={noDocument}
-              blocked={gate.kind === 'blocked'}
-              copyable={canCopy}
-              unseparated={unseparated}
-              flagged={flagged}
-              hitLine={hitLine?.index ?? null}
-            />
+            {mayReword && reword.status === 'failed' ? (
+              <Notice tone="warn" live title="No reword">
+                {reword.error}
+              </Notice>
+            ) : null}
+
+            {mayReword && rewordText !== null ? (
+              <div className="post-text__compare">
+                <fieldset className="post-text__choices">
+                  <legend className="post-text__sr">Which text Copy takes</legend>
+                  <div className={`post-text__option${usingReword ? '' : ' post-text__option--chosen'}`}>
+                    <label className="post-text__choice">
+                      <input type="radio" name={choiceName} checked={!usingReword} onChange={() => choose(false)} />
+                      Original
+                    </label>
+                    <PostText
+                      detail={detail}
+                      withheld={withheld}
+                      noDocument={noDocument}
+                      blocked={gate.kind === 'blocked'}
+                      copyable={canCopy && !usingReword}
+                      unseparated={unseparated}
+                      flagged={flagged}
+                      hitLine={hitLine?.index ?? null}
+                    />
+                  </div>
+                  <div className={`post-text__option${usingReword ? ' post-text__option--chosen' : ''}`}>
+                    <label className="post-text__choice">
+                      <input
+                        type="radio"
+                        name={choiceName}
+                        checked={usingReword}
+                        disabled={rewordBlocked !== null}
+                        aria-describedby={rewordBlocked !== null ? rewordWhyId : undefined}
+                        onChange={() => choose(true)}
+                      />
+                      Reword <span className="meta">by Claude</span>
+                    </label>
+                    <RewordText text={rewordText} copyable={canCopy && usingReword} blocked={rewordBlocked !== null} />
+                    {rewordBlocked !== null ? (
+                      <p id={rewordWhyId} className="post-text__reword-blocked">
+                        <Icon name="fail" size={18} />
+                        <span>Can’t be posted. {rewordBlocked} Post the original, or reword again.</span>
+                      </p>
+                    ) : null}
+                  </div>
+                </fieldset>
+              </div>
+            ) : (
+              <PostText
+                detail={detail}
+                withheld={withheld}
+                noDocument={noDocument}
+                blocked={gate.kind === 'blocked'}
+                copyable={canCopy}
+                unseparated={unseparated}
+                flagged={flagged}
+                hitLine={hitLine?.index ?? null}
+              />
+            )}
           </section>
 
           {detail?.hasInternal && detail.internalText !== undefined ? <InternalSection detail={detail} /> : null}
@@ -515,7 +627,10 @@ function PropertyPage({ id }: { readonly id: string }) {
             ) : withheld ? (
               <p className="meta">Run once the document is separated.</p>
             ) : (
-              <CheckList checks={checks} label="Pre-post checks" />
+              <>
+                {usingReword ? <p className="meta">On the reword</p> : null}
+                <CheckList checks={chosenChecks} label="Pre-post checks" />
+              </>
             )}
           </Card>
 
@@ -805,6 +920,25 @@ function PostText({
  * The part that is never posted, folded away under a warning, and where the cut
  * was made. Everyone may read it (D1); nobody can select or copy it.
  */
+/** Claude's reword, beside the original. Like it, not copied by hand until Copy may take it. */
+function RewordText({ text, copyable, blocked }: { readonly text: string; readonly copyable: boolean; readonly blocked: boolean }) {
+  const refuse = (event: ClipboardEvent) => {
+    if (!copyable) event.preventDefault();
+  };
+  return (
+    <div
+      className={`post-text__body post-text__body--reword${blocked ? ' post-text__body--blocked' : ''}`}
+      onCopy={refuse}
+      onCut={refuse}
+      tabIndex={0}
+      role="document"
+      aria-label={blocked ? 'Reword, blocked from copying' : 'Reword'}
+    >
+      {text}
+    </div>
+  );
+}
+
 function InternalSection({ detail }: { readonly detail: PropertyDetail }) {
   return (
     <details className="internal" onCopy={(e) => e.preventDefault()}>
