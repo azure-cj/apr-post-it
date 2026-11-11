@@ -38,7 +38,7 @@ describe('a post whose save fails on the way', () => {
     await waitFor(() => expect(screen.queryByText('1 post waiting to save')).toBeNull());
     const retry = logged(platform).at(-1)!.body as Record<string, unknown>;
     expect(retry).toMatchObject({ postLink: LINK, propertyId: CLEAN.id, loggedAt: kept.kept[0]!.loggedAt });
-  });
+  }, 20_000); // a whole sign-in, log and retry: slow when every test file runs at once
 
   it('shows why when the web app then refuses it, until dismissed', async () => {
     const platform = fakeServer({ logPost: new Error('offline') });

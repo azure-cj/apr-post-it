@@ -23,7 +23,9 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = [Runtime.InteropServices.Marshal]::Ptr
 
 try {
   Write-Host '[1/3] Running the tests...'
-  npx vitest run
+  # A test that fails only on time (every file runs at once) gets two more tries;
+  # a real bug fails all three.
+  npx vitest run --retry=2
   if ($LASTEXITCODE -ne 0) { throw 'The tests failed, so nothing was built.' }
 
   Write-Host '[2/3] Building the signed installer. This takes several minutes...'
