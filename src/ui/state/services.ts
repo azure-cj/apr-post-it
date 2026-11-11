@@ -13,6 +13,7 @@ import {
   type ServerVersionStatus,
   type TeamMember,
   type User,
+  UserFacingError,
 } from '@/core/types';
 import type { Platform } from '@/platform';
 import type { FirebaseAccess } from '@/platform/firebase';
@@ -121,6 +122,13 @@ export interface Services {
   startDirectory(): Promise<void>;
   /** A listing as this person may see it: see `forViewer`. */
   openProperty(id: string, viewer: User): Promise<PropertyDetail>;
+  /**
+   * Claude's reword of a posting text (AID-129), through Post-It's `paraphrase`
+   * function on the hub's key and within the hub's limits. Send only what Copy
+   * would copy: never the internal section. Rejects with a sentence (a limit
+   * reached, Claude off or down).
+   */
+  reword(text: string): Promise<string>;
   /** Forgets everything held for the person signing out. The key is the caller's to remove. */
   forget(): void;
 }
@@ -304,6 +312,21 @@ export function createServices(
       return forViewer(await directory.detail(id), viewer);
     },
 
+    async reword(text) {
+      const firebase = getFirebase();
+      if (!firebase) throw new UserFacingError('Rewording needs you signed in with your account.');
+      let reply: { readonly text?: unknown };
+      try {
+        reply = await firebase.call<{ readonly text?: unknown }>('paraphrase', { text });
+      } catch (err) {
+        throw new UserFacingError(rewordFailure(err), err);
+      }
+      if (typeof reply.text !== 'string' || !reply.text.trim()) {
+        throw new UserFacingError("Claude's reword came back empty. Try again, or post the original.");
+      }
+      return reply.text;
+    },
+
     forget() {
       directory.clear();
       posts.reset();
@@ -355,4 +378,17 @@ export function forViewer(detail: PropertyDetail, viewer: User): PropertyDetail 
   if (detail.hasInternal) return detail;
   if (detail.unseparated === true && detail.withheld !== true) return publicOnly;
   return { ...publicOnly, publicText: '' };
+}
+
+/**
+ * The sentence for a reword that didn't come back. The function's refusals (a
+ * limit reached, Claude switched off) are written to be shown as they are.
+ * Firebase's own failures on the way there say only their code ("internal").
+ */
+function rewordFailure(err: unknown): string {
+  const code = typeof err === 'object' && err !== null ? (err as { readonly code?: unknown }).code : undefined;
+  const message = err instanceof Error ? err.message.trim() : '';
+  const fromFunction =
+    typeof code === 'string' && code.startsWith('functions/') && message !== '' && message.toLowerCase() !== code.slice('functions/'.length);
+  return fromFunction ? message : "Claude didn't answer. Try again, or post the original.";
 }

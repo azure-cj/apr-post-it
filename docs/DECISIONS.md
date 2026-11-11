@@ -353,3 +353,21 @@ converted, the photos section says so in the accent colour ("Converting photo 4 
 to JPG… The file on Drive is not changed."), and the "saved" message says how many were
 converted. A WebP that can't be read is left out, with the reason, and the others are saved.
 Copy photo already reads WebP (D27).
+
+### D29. Rewording a post is Post-It's own Firebase function, on the hub's Claude key (Nov 11, 2026)
+
+Reword (AID-129) asks Claude (`claude-haiku-5-5`) for a fresh wording of the public text, so
+the same listing can be posted again without reading the same. It replaces plan rows PI-93 to
+PI-97, which had Apps Script call Claude with a key of its own in Script Properties. Instead,
+Post-It has its own `firebase/` folder with one callable function, `paraphrase`, deployed as
+the codebase `post-it` beside the hub's `default` (two repos deploying one codebase delete each
+other's functions). It uses the hub's `CLAUDE_API_KEY` secret and the hub's limits: it reads
+`config/claude` (never writes it), refuses past a person's day or the month, both apps counted
+together, and adds each call to `claudeUsage` under the job `paraphrase`. Firestore and Storage
+rules stay the hub's; Post-It never deploys them.
+
+Only what Copy would copy is sent: never the internal section, and never a document nobody has
+separated (D15), which isn't offered a reword until it is fixed. The reword is shown beside the
+original and gets the same pre-post checks; one whose numbers differ from the original's (a
+price, a size, a phone) can't be chosen. Copy takes the one the person chooses. The posts log
+doesn't yet record which was posted (PI-96's last part).
