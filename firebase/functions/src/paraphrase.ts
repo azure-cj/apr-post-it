@@ -24,7 +24,9 @@ const JOB = "paraphrase";
 
 const db = () => getFirestore();
 
-export const paraphrase = onCall({ secrets: [CLAUDE_API_KEY], timeoutSeconds: 120 }, async (request) => {
+// invoker "public": Cloud Run lets the call in, and caller() then holds it to a signed-in agent or admin. Without
+// it, Cloud Run turns the app away before this code runs, with no CORS headers, and the app sees "internal [0]".
+export const paraphrase = onCall({ secrets: [CLAUDE_API_KEY], timeoutSeconds: 120, invoker: "public" }, async (request) => {
   const { uid, email } = caller(request);
   const text = textOf(request);
 
@@ -87,7 +89,7 @@ async function askClaude(text: string): Promise<Anthropic.Message> {
     return await client.messages.create({
       model: MODEL,
       max_tokens: 16000,
-      // A reword needs little thought, and thinking is billed as output.
+      // A reword needs little thought, and thinking is billed as output. The app checks any per-sqm rate it works out.
       output_config: { effort: "low" },
       system: SYSTEM,
       messages: [{ role: "user", content: postMessage(text) }],

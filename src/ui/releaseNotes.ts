@@ -12,7 +12,7 @@ export const RELEASE_NOTES: readonly ReleaseNotes[] = [
   {
     version: '1.1.5',
     items: [
-      'Reword a post with Claude, beside Copy: it runs the same checks, and you choose which one to copy.',
+      "Reword a post with Claude, beside Copy: a fresh Facebook caption with the agency's details. It runs the same checks, and you choose which one to copy.",
       'Copy one photo in Download photos and paste it straight into a Facebook post.',
       "WebP photos download as JPG, ready for Facebook. The photos on Drive aren't changed.",
       "Only a Facebook post's link is accepted, and a post someone else already logged is refused.",

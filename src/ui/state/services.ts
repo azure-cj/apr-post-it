@@ -387,7 +387,12 @@ export function forViewer(detail: PropertyDetail, viewer: User): PropertyDetail 
  */
 function rewordFailure(err: unknown): string {
   const code = typeof err === 'object' && err !== null ? (err as { readonly code?: unknown }).code : undefined;
-  const message = err instanceof Error ? err.message.trim() : '';
+  // Firebase's SDK ends each message with the HTTP status: "Claude is busy. … [503]".
+  const raw = err instanceof Error ? err.message.trim() : '';
+  const status = /\[(\d+)\]$/.exec(raw)?.[1];
+  // No answer the app could read: offline, or turned away before the function ran.
+  if (status === '0') return "Couldn't reach Claude. Try again, or post the original.";
+  const message = raw.replace(/\s*\[\d+\]$/, '');
   const fromFunction =
     typeof code === 'string' && code.startsWith('functions/') && message !== '' && message.toLowerCase() !== code.slice('functions/'.length);
   return fromFunction ? message : "Claude didn't answer. Try again, or post the original.";

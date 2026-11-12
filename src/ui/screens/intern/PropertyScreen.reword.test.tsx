@@ -123,7 +123,8 @@ describe('rewording with Claude', () => {
 
   it("says why when the hub's limit is reached, and the original stays", async () => {
     const message = "You've used today's $5 of Claude. Claude is back tomorrow.";
-    const platform = platformWith(fakeFirebase(async () => Promise.reject(refused('resource-exhausted', message))));
+    // As Firebase's SDK words it: the function's message, then the HTTP status.
+    const platform = platformWith(fakeFirebase(async () => Promise.reject(refused('resource-exhausted', `${message} [429]`))));
     renderApp({ platform, path: PATH });
     await ready();
 
@@ -133,13 +134,18 @@ describe('rewording with Claude', () => {
     expect(copyButton().disabled).toBe(false);
   });
 
-  it("puts Firebase's own failures in words", async () => {
-    const platform = platformWith(fakeFirebase(async () => Promise.reject(refused('internal', 'internal'))));
+  it.each([
+    ['internal', 'internal [500]', "Claude didn't answer. Try again, or post the original."],
+    ['internal', 'internal', "Claude didn't answer. Try again, or post the original."],
+    // No answer it could read: offline, or turned away before the function ran.
+    ['internal', 'internal [0]', "Couldn't reach Claude. Try again, or post the original."],
+  ])("puts Firebase's own failure %s %j in words", async (code, raw, words) => {
+    const platform = platformWith(fakeFirebase(async () => Promise.reject(refused(code, raw))));
     renderApp({ platform, path: PATH });
     await ready();
 
     await userEvent.click(await rewordButton());
-    expect(await screen.findByText("Claude didn't answer. Try again, or post the original.")).toBeTruthy();
+    expect(await screen.findByText(words)).toBeTruthy();
   });
 
   it('is not offered without an account', async () => {

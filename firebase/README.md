@@ -7,7 +7,11 @@ hub's repo. Each repo deploys only its own codebase, so neither deletes the othe
 
 | Function | What it does |
 |---|---|
-| `paraphrase` | Rewords a post with Claude (`claude-haiku-5-5`), on the hub's `CLAUDE_API_KEY` and within the hub's limits in `config/claude`. Each call is added to `claudeUsage` under the job `paraphrase`. |
+| `paraphrase` | Rewords a post with Claude (`claude-haiku-5-5`) as a fresh Facebook caption in Alpha Premier Realty's style (`functions/src/prompt.ts`), on the hub's `CLAUDE_API_KEY` and within the hub's limits in `config/claude`. Each call is added to `claudeUsage` under the job `paraphrase`. |
+
+The caption ends with the agency's phone numbers and may show a per-sqm rate, and the app only accepts those
+new numbers from version 1.1.5's rebuild on (`src/core/reword.ts`). Deploy a prompt change after the app that
+accepts it is out, or the app refuses every caption. The agency's numbers are written in both files; change both.
 
 This folder deploys **functions only**. Firestore and Storage rules and indexes are the hub's:
 `firebase.json` here has no `firestore` or `storage` section, so a deploy from here can't
@@ -47,6 +51,11 @@ firebase deploy --only functions:post-it --project apr-listing-live
 
 `functions:post-it` names the codebase, so only Post-It's functions are deployed, and only
 Post-It's are ever deleted. The hub's (`default`) are left as they are.
+
+`paraphrase` is deployed with `invoker: "public"`, so Cloud Run lets the app's call in; the
+function itself then refuses anyone not signed in as an agent or admin. Without it, Cloud Run
+turns every call away before the function runs ("The request was not authenticated" in the
+function's log), and the app can only say it couldn't reach Claude.
 
 Before the first deploy, check the hub has no function called `paraphrase` of its own (the
 Functions list in the Firebase console). The limits are set on the hub, in `config/claude`:

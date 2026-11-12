@@ -28,6 +28,38 @@ describe('the numbers in a reword', () => {
   });
 });
 
+describe('the new numbers a caption may add', () => {
+  const AGENCY = 'Alpha Premier Realty\n📞 0927 555 5803 | 0915 888 9482 | 0921 217 4555';
+
+  it("passes the agency's numbers, however they are written", () => {
+    const reword = `${ORIGINAL}\n${AGENCY}`;
+    expect(numberChanges(ORIGINAL, reword)).toEqual({ added: [], missing: [] });
+    expect(numberChanges(ORIGINAL, `${ORIGINAL}\n+63 927-555-5803, 09158889482`)).toEqual({ added: [], missing: [] });
+  });
+
+  it("refuses an agency number that's wrong, or one the original had and the reword dropped", () => {
+    expect(numberChanges(ORIGINAL, `${ORIGINAL}\n0927 555 5804`).added).toEqual(['0927', '5804']);
+    expect(numberChanges(`${ORIGINAL}\n0927 555 5803`, ORIGINAL)).toEqual({ added: [], missing: ['0927 555 5803'] });
+  });
+
+  it('passes a per-sqm rate worked out from the price and the area', () => {
+    expect(numberChanges(ORIGINAL, `${ORIGINAL}\nJust ₱13,125/sqm`)).toEqual({ added: [], missing: [] });
+    expect(numberChanges('Lot, 320 sqm. ₱4.2M', 'Lot, 320 sqm. ₱4.2M (about ₱13,125 per sqm)')).toEqual({ added: [], missing: [] });
+    const lease = 'Office for lease, 240 sqm\nRent: ₱180,000 / month\nCall 0917 555 0142';
+    expect(numberChanges(lease, `${lease}\n₱750/sqm`)).toEqual({ added: [], missing: [] });
+  });
+
+  it('passes a monthly total worked out from a rate and the area, rounded', () => {
+    const lease = 'Warehouse, 1,250 sqm\n₱285/sqm per month\nCall 0917 555 0142';
+    expect(numberChanges(lease, `${lease}\nAbout ₱356,250 a month`)).toEqual({ added: [], missing: [] });
+    expect(numberChanges(lease, `${lease}\nAbout ₱356K a month`)).toEqual({ added: [], missing: [] });
+  });
+
+  it('refuses a rate that was worked out wrong', () => {
+    expect(numberChanges(ORIGINAL, `${ORIGINAL}\nJust ₱14,125/sqm`)).toEqual({ added: ['14,125'], missing: [] });
+  });
+});
+
 describe('the checks on a reword', () => {
   it('refuses commission wording Claude added', () => {
     const reword = `${ORIGINAL}\nCommission ready`;
