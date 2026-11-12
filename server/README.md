@@ -427,10 +427,24 @@ on from them. The interns' sheet is only read. Run it once, from the editor:
    names them; then run PREVIEW_IMPORT again.
 4. Run **RUN_IMPORT**. The posts are added below Posts' last row, oldest first.
 
-What it reads: the day in the first column, written once beside the day's rows, holds for
-the rows under it; `10/26/26` is 26 Oct 2026. Posted and Pending rows are added; Not Shared
-rows were never posted and are left out. A row with no title, no link or no day it can read
-is skipped, and the preview says which. The Property ID is the Directory's listing of the
+What it reads: each tab's header row, found by its column names (Property title or Place,
+Link, Date, Status...) or, for a Link column with no name, by the Facebook links in it. A
+tab with no header row, or with Sheets' "Column 1", "Column 2"..., is read in the template's
+order. A merged cell counts on every row it covers. The day, written once beside the day's
+rows, holds for the rows under it, written as the interns write it: `10/26/26`,
+`08|14/2026`, `8/112026`, `Sept. 1, 2026`, or `March 03` (the latest such day not after
+today), or day first (`15/09/2025`) on a tab that writes them so. Rows marked posted
+(Posted, Shared, Done, a ticked box) or pending (Pending, Scheduled) are added, and so is a
+row not marked either way (no Status column, a blank, a word like "Post") that holds a
+Facebook link, since a post has a link only once it is posted. Rows marked not posted (Not
+Shared, Limit, Archived) are left out, link or not, and each tab's `Tab` row counts them by
+what they are marked. A row marked posted with no link is added too, its Link
+empty, so the record is whole. A row marked Pending is saved as Posted: it was posted months
+ago, and a Pending post would wait in its agent's My queue. A day written `Sched 13` is the
+13th after the day read before it. Where a header disagrees with its rows, the rows win: the day
+comes from the column holding days, a header a column off is lined up by its links, and a
+Status column with no name is found by the words in it. A row with no title or no day it can
+read is skipped, and the preview says which. The Property ID is the Directory's listing of the
 same name, when there is exactly one; the cooldown matches the others by name. The FB Group
 is read from the link.
 

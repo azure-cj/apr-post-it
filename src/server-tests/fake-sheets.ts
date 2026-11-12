@@ -238,6 +238,8 @@ class SheetState {
   maxColumns: number;
   frozenRows = 0;
   hidden = false;
+  /** Merged cells, 1-based: Sheets keeps a merge's value in its top-left cell only. */
+  readonly merges: { row: number; column: number; rows: number; columns: number }[] = [];
 
   constructor(
     readonly book: BookState,
@@ -529,6 +531,16 @@ class FakeRange {
     });
   }
 
+  /** The merges inside this range or overlapping it, as Range.getMergedRanges(). */
+  getMergedRanges(): FakeRange[] {
+    return this.#op('getMergedRanges', () =>
+      this.#s.merges
+        .filter((m) =>
+          m.row < this.#row + this.#rows && m.row + m.rows > this.#row &&
+          m.column < this.#column + this.#columns && m.column + m.columns > this.#column)
+        .map((m) => new FakeRange(this.#s, this.#shared, m.row, m.column, m.rows, m.columns)));
+  }
+
   getValue(): unknown {
     return this.#op('getValue', () => read(this.#s.peek(this.#row, this.#column), this.#s.book.offset, this.#shared.host));
   }
@@ -780,6 +792,17 @@ export class Tab {
   typeAt(row: number, column: number, value: string): this {
     const cell = this.#s.cell(row, column);
     cell.value = value === '' ? EMPTY : cell.format === PLAIN_TEXT ? { kind: 'text', text: value } : asTyped(value);
+    return this;
+  }
+
+  /** Merges cells, 1-based, as Format > Merge does: only the top-left cell keeps its value. */
+  merge(row: number, column: number, rows: number, columns = 1): this {
+    for (let r = row; r < row + rows; r++) {
+      for (let c = column; c < column + columns; c++) {
+        if (r !== row || c !== column) this.#s.cell(r, c).value = EMPTY;
+      }
+    }
+    this.#s.merges.push({ row, column, rows, columns });
     return this;
   }
 

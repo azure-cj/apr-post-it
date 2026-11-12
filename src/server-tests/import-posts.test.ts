@@ -70,15 +70,18 @@ const run = (w: ReturnType<typeof createWorld>, name: 'PREVIEW_IMPORT' | 'RUN_IM
 describe('RUN_IMPORT', () => {
   it('adds each posted row to Posts as logPost writes one, the day carried down from its first row', () => {
     const { w } = world();
-    expect(run(w, 'RUN_IMPORT')).toMatchObject({ added: 4, skipped: 1, notPosted: 1 });
+    expect(run(w, 'RUN_IMPORT')).toMatchObject({ added: 5, skipped: 0, notPosted: 1 });
 
     const pending = 'https://www.facebook.com/groups/870973150864070/my_pending_content';
     expect(postsOf(w)).toEqual([
       post('2026-10-26', 'Condo / House and Lot', '*Casa Amara', share('A1'), '10:23 AM', 'Posted', CASA.id, ''),
       post('2026-10-26', 'Lot', 'Verdant Hills Lot 9', 'https://www.facebook.com/groups/apgmain/posts/77/', '11:35 AM', 'Posted', LOT_9.id, 'apgmain'),
-      post('2026-10-26', 'Warehouse', 'Pasig, 741 Santolan', pending, '1:16 PM', 'Pending', '', ''),
+      // Pending then: saved as Posted, so it is not waiting in anyone's My queue.
+      post('2026-10-26', 'Warehouse', 'Pasig, 741 Santolan', pending, '1:16 PM', 'Posted', '', ''),
       // A "pending posts" link stands for many posts: the day and the listing tell them apart.
-      post('2026-10-27', 'Warehouse', 'Pasig, 741 Acacia', pending, '8:21 AM', 'Pending', '', ''),
+      post('2026-10-27', 'Warehouse', 'Pasig, 741 Acacia', pending, '8:21 AM', 'Posted', '', ''),
+      // Marked Posted with no link: added, its Link empty.
+      post('2026-10-27', 'Warehouse', 'Pulilan, 1728 Jolly Industrial', '', '10:21 AM', 'Posted', '', ''),
     ]);
   });
 
@@ -88,7 +91,7 @@ describe('RUN_IMPORT', () => {
     w.logPost('jan', LOT_9, { postLink: 'https://m.facebook.com/groups/APGMAIN/permalink/77?ref=x' });
     put(jan, 12, ['', 'Lot', 'Verdant Hills Lot 9', 'APG Main', 'https://www.facebook.com/groups/apgmain/posts/77/', '3:00 PM', 'Posted']);
 
-    expect(run(w, 'RUN_IMPORT')).toMatchObject({ added: 3, skipped: 3 });
+    expect(run(w, 'RUN_IMPORT')).toMatchObject({ added: 4, skipped: 2 });
     const after = w.posts.lastRow;
     expect(run(w, 'RUN_IMPORT')).toMatchObject({ added: 0 });
     expect(w.posts.lastRow).toBe(after);
@@ -133,11 +136,11 @@ describe('PREVIEW_IMPORT', () => {
       ['Add', 'Jan', '5'],
       ['Add', 'Jan', '6'],
       ['Add', 'Jan', '10'],
-      ['Skip', 'Jan', '11'],
+      ['Add', 'Jan', '11'],
     ].map((r) => r));
-    expect(rows[0]![1]).toMatch(/^4 to add, 1 skipped\. matched on the Team tab$/);
+    expect(rows[0]![1]).toBe('5 to add (1 with no link; 2 Pending, saved as Posted), 0 skipped. 1 not imported for their status ("Not Shared" 1). matched on the Team tab');
     expect(rows[0]![11]).toBe(PEOPLE.jan.name);
-    expect(rows[5]![1]).toBe('no link');
+    expect(rows[5]![8]).toBe('');
   });
 
   it('is written afresh each time', () => {
@@ -185,7 +188,244 @@ describe('who a tab is credited to', () => {
     source.addSheet('Notes').typeAt(1, 1, 'Reminders for the week');
     const tabs = run(w, 'PREVIEW_IMPORT').tabs;
     expect(tabs.map((t) => t.tab)).toEqual(['Jan', 'Notes']);
-    expect(tabs[1]!.note).toMatch(/^no header row with Property title and Link/);
+    expect(tabs[1]!.note).toBe('no header row with Property title and Link, so not read. Its first row: "Reminders for the week".');
+  });
+
+  it('says a tab is empty, and reads "Ana " as Ana', () => {
+    const { w, source } = world();
+    source.addSheet('Blank');
+    const ana = source.addSheet('Ana ', HEADERS);
+    put(ana, 4, ['10/20/26', 'Lot', 'Ana listing', 'APG Main', share('X-ana'), '9:00 AM', 'Posted']);
+    const tabs = run(w, 'PREVIEW_IMPORT').tabs;
+    expect(tabs.find((t) => t.tab === 'Blank')!.note).toMatch(/The tab is empty\.$/);
+    expect(tabs.find((t) => t.tab === 'Ana')!.postedBy).toBe(PEOPLE.ana.name);
+  });
+
+  it('counts why rows were skipped, and shows a day it could not read', () => {
+    const { w, source } = world();
+    const kim = source.addSheet('Kim', HEADERS);
+    put(kim, 4, ['sometime', 'Lot', 'Kim one', 'APG Main', share('X-k1'), '9:00 AM', 'Posted']);
+    put(kim, 5, ['', 'Lot', 'Kim two', 'APG Main', share('X-k2'), '9:00 AM', 'Posted']);
+    const tab = run(w, 'PREVIEW_IMPORT').tabs.find((t) => t.tab === 'Kim')!;
+    expect(tab).toMatchObject({ add: 0, skip: 2, why: { 'no date it can read': 2 } });
+    expect(tabRow(w, 'Kim')[1]).toMatch(/^0 to add, 2 skipped \(2 no date it can read\)\. A day it could not read: "sometime"\./);
+  });
+});
+
+/** The Import preview's Tab row for `tab`. */
+function tabRow(w: ReturnType<typeof createWorld>, tab: string): string[] {
+  const preview = w.tracker.sheet('Import preview');
+  return Array.from({ length: preview.lastRow }, (_, i) => preview.row(i + 1)).find((r) => r[0] === 'Tab' && r[2] === tab)!;
+}
+
+/** A world whose interns' sheet has one tab, `name`, set up by `fill`; returns the posts it would add. */
+function oneTab(fill: (source: ReturnType<ReturnType<typeof createWorld>['project']['sheets']['create']>) => void) {
+  const w = createWorld({ now: '2026-10-28 10:00' });
+  const source = w.project.sheets.create(SOURCE_ID);
+  fill(source);
+  w.project.evaluate(`(IMPORT.SOURCE_SHEET_ID = '${SOURCE_ID}', 0)`);
+  const summary = run(w, 'PREVIEW_IMPORT');
+  const preview = w.tracker.sheet('Import preview');
+  const added = Array.from({ length: preview.lastRow - 1 }, (_, i) => preview.row(i + 2))
+    .filter((r) => r[0] === 'Add')
+    .map((r) => ({ row: r[3], date: r[4], type: r[5], title: r[6], fb: r[7], link: r[8], time: r[9], status: r[10] }));
+  return { w, summary, added };
+}
+
+describe('the layouts the interns\' tabs have', () => {
+  it('reads Type, Place, Facebook name and Status by those names, Place as the title', () => {
+    const { added } = oneTab((source) => {
+      const tab = source.addSheet('Lorraine', ['DATE SCHEDULED/POSTED', 'TYPE', 'PLACE', 'FACEBOOK NAME', 'LINK', 'STATUS', 'TIME SCHEDULED/POSTED']);
+      tab.writeText(['10/20/2026', 'Office', 'Makati, Ayala Ave', 'Luna Mae', share('L1'), 'Posted', '9:00 AM']);
+    });
+    expect(added).toEqual([{ row: '2', date: '2026-10-20', type: 'Office', title: 'Makati, Ayala Ave', fb: 'Luna Mae', link: share('L1'), time: '9:00 AM', status: 'Posted' }]);
+  });
+
+  it('finds the Link column by the Facebook links below a header row that does not name it', () => {
+    const { added, summary } = oneTab((source) => {
+      const tab = source.addSheet('Frederik', ['OFFICE SPACE FOR RENT', 'PROPERTY TYPE', 'PROPERTY TITLE', 'FB ACCOUNT', '', 'TIME', 'STATUS']);
+      tab.writeText(['10/20/2026', 'Office', 'BGC Tower', 'Luna Mae', share('F1'), '9:00 AM', 'Posted']);
+    });
+    expect(summary.tabs[0]).toMatchObject({ add: 1 });
+    expect(added[0]).toMatchObject({ title: 'BGC Tower', link: share('F1') });
+  });
+
+  it('reads a table of "Column 1", "Column 2"..., and a tab with no header row, in the template\'s order', () => {
+    const { added } = oneTab((source) => {
+      source.addSheet('Bea', ['Column 1', 'Column 2', 'Column 3', 'Column 4', 'Column 5', 'Column 6', 'Column 7'])
+        .writeText(['10/20/2026', 'Lot', 'Bea lot', 'Luna Mae', share('B1'), '9:00 AM', 'Posted']);
+      source.addSheet('Kristel')
+        .writeText(['10/21/2026', 'Virtual Office', 'New Virtual Office', 'Luna Mae', share('K1'), '4:33 PM', 'Posted']);
+    });
+    expect(added.map((a) => [a.title, a.date, a.row])).toEqual([['Bea lot', '2026-10-20', '2'], ['New Virtual Office', '2026-10-21', '1']]);
+  });
+
+  it('gives a merged cell\'s value to every row it covers', () => {
+    const { added } = oneTab((source) => {
+      const tab = source.addSheet('Ishi', HEADERS);
+      tab.writeText(
+        ['10/20/2026', 'Lot', 'Merged lot', 'APG Main', share('M1'), '9:00 AM', 'Posted'],
+        ['', '', '', 'APG Main', share('M2'), '9:05 AM', 'Posted'],
+      );
+      tab.merge(2, 2, 2).merge(2, 3, 2);
+    });
+    expect(added.map((a) => [a.type, a.title, a.link])).toEqual([['Lot', 'Merged lot', share('M1')], ['Lot', 'Merged lot', share('M2')]]);
+  });
+
+  it('passes over the header written again further down', () => {
+    const { summary } = oneTab((source) => {
+      source.addSheet('Mcximoz', HEADERS).writeText(
+        ['10/20/2026', 'Lot', 'First lot', 'APG Main', share('X1'), '9:00 AM', 'Posted'],
+        ['DATE', 'PROPERTY TYPE', 'PROPERTY TITLE', 'FB ACCOUNT NAME', 'LINK', 'TIME POSTED', 'SHARE POSTING'],
+        ['10/21/2026', 'Lot', 'Second lot', 'APG Main', share('X2'), '9:00 AM', 'Posted'],
+      );
+    });
+    expect(summary.tabs[0]).toMatchObject({ add: 2, skip: 0, note: expect.not.stringContaining('could not read') });
+  });
+});
+
+describe('the status, as the interns mark it', () => {
+  it('imports Posted, Shared, Done and a ticked box as Posted; counts the rest by what they say', () => {
+    const { w, summary, added } = oneTab((source) => {
+      source.addSheet('Jan', HEADERS).writeText(
+        ['10/20/2026', 'Lot', 'One', 'APG Main', share('S1'), '9:00 AM', 'Shared'],
+        ['', 'Lot', 'Two', 'APG Main', share('S2'), '9:00 AM', 'done'],
+        ['', 'Lot', 'Three', 'APG Main', share('S3'), '9:00 AM', 'TRUE'],
+        ['', 'Lot', 'Four', 'APG Main', share('S4'), '9:00 AM', 'Scheduled'],
+        ['', 'Lot', 'Five', 'APG Main', '', '', 'Not Shared'],
+        ['', 'Lot', 'Six', 'APG Main', share('S6'), '9:00 AM', 'Not Shared'],
+        ['', 'Lot', 'Seven', 'APG Main', share('S7'), '9:00 AM', 'LIMIT'],
+        ['', 'Lot', 'Eight', 'APG Main', '', '', 'maybe'],
+      );
+    });
+    // Scheduled is Pending, saved as Posted.
+    expect(added.map((a) => [a.title, a.status])).toEqual([['One', 'Posted'], ['Two', 'Posted'], ['Three', 'Posted'], ['Four', 'Posted']]);
+    expect(summary.notPosted).toBe(4);
+    expect(tabRow(w, 'Jan')[1]).toContain('4 not imported for their status ("Not Shared" 2, 1 with a link; "LIMIT" 1, 1 with a link; "maybe" 1).');
+  });
+
+  it('imports a row not marked either way that holds a Facebook link, as posted', () => {
+    const { w, added } = oneTab((source) => {
+      source.addSheet('Jan', HEADERS).writeText(
+        ['10/20/2026', 'Lot', 'One', 'APG Main', share('U1'), '9:00 AM', ''],
+        ['', 'Lot', 'Two', 'APG Main', share('U2'), '9:00 AM', 'Post (Group Page)'],
+        ['', 'Lot', 'Three', 'APG Main', 'https://www.facebook.com/groups/1/my_pending_content', '9:00 AM', ''],
+        ['', 'Lot', 'Four', 'APG Main', '', '', ''],
+      );
+    });
+    expect(added.map((a) => [a.title, a.status])).toEqual([['One', 'Posted'], ['Two', 'Posted'], ['Three', 'Posted']]);
+    expect(tabRow(w, 'Jan')[1]).toMatch(
+      /^3 to add \(3 not marked, posted by their link; 1 Pending, saved as Posted\), 0 skipped\. 1 not imported for their status \(blank 1\)\./);
+  });
+
+  it('reads every row with a link as posted on a tab with no Status column', () => {
+    const { added, summary } = oneTab((source) => {
+      source.addSheet('Jan', ['DATE', 'PROPERTY TITLE', 'LINK']).writeText(['10/20/2026', 'One', share('N1')], ['', 'Two', '']);
+    });
+    expect(added.map((a) => [a.title, a.status])).toEqual([['One', 'Posted']]);
+    expect(summary.tabs[0]).toMatchObject({ add: 1, byLink: 1, notPosted: 1 });
+  });
+
+  it('takes a link typed in another column, and adds a row marked Posted with no link, its Link empty', () => {
+    const { w, added } = oneTab((source) => {
+      source.addSheet('Ralph', HEADERS).writeText(
+        ['10/20/2026', 'Lot', 'One', 'APG Main', '', '9:00 AM', 'Posted', share('R1')],
+        ['', 'Lot', 'Two', 'APG Main', '', '9:00 AM', 'Posted'],
+        ['', 'Lot', 'Three', 'APG Main', 'Facebook Page', '9:00 AM', 'Posted'],
+      );
+    });
+    expect(added.map((a) => [a.title, a.link])).toEqual([['One', share('R1')], ['Two', ''], ['Three', '']]);
+    expect(tabRow(w, 'Ralph')[1]).toMatch(/^3 to add \(2 with no link\), 0 skipped\./);
+  });
+
+  it('shows the header and a row left out when little is added', () => {
+    const { w } = oneTab((source) => {
+      source.addSheet('Princess', HEADERS).writeText(
+        ['10/20/2026', 'Lot', 'One', 'APG Main', '', '9:00 AM', 'Archived'],
+        ['', 'Lot', 'Two', 'APG Main', share('P2'), '9:00 AM', 'Posted'],
+      );
+    });
+    expect(tabRow(w, 'Princess')[1]).toContain(
+      'Header row 1: "Column 1 | PROPERTY TYPE | PROPERTY TITLE | FB ACCOUNT NAME | LINK | TIME POSTED: | SHARE POSTING:". ' +
+      'First row left out, row 2: "10/20/2026 | Lot | One | APG Main |  | 9:00 AM | Archived".');
+  });
+});
+
+describe('a header that disagrees with its rows', () => {
+  it('reads the day from the column holding days, of two named "Column 1"', () => {
+    const { added } = oneTab((source) => {
+      source.addSheet('Jeremy', ['Column 1', 'Column 1', 'PROPERTY TYPE', 'PROPERTY TITLE', 'FB ACCOUNT NAME', 'LINK', 'TIME POSTED:', 'SHARE POSTING:'])
+        .writeText(['', '06/24/2026', 'Warehouse', 'Novaliches', 'Xer Sam', share('J1'), '12:46 PM', 'Posted']);
+    });
+    expect(added.map((a) => [a.title, a.date])).toEqual([['Novaliches', '2026-06-24']]);
+  });
+
+  it('lines up a header one column off its rows by its Link column', () => {
+    const { added } = oneTab((source) => {
+      source.addSheet('John', ['', 'Elevate', 'PROPERTY TYPE', 'PROPERTY TITLE', 'FB ACCOUNT NAME', 'LINK', 'TIME POSTED:']).writeText(
+        ['11/26/2025', 'virtual office', 'Office one', 'jan', share('H1'), '9:54 AM'],
+        ['', 'virtual office', 'Office two', 'jan', share('H2'), '9:55 AM'],
+        ['', 'virtual office', 'Office three', 'jan', share('H3'), '9:56 AM'],
+      );
+    });
+    expect(added.map((a) => [a.date, a.type, a.title, a.fb, a.link])).toEqual([
+      ['2025-11-26', 'virtual office', 'Office one', 'jan', share('H1')],
+      ['2025-11-26', 'virtual office', 'Office two', 'jan', share('H2')],
+      ['2025-11-26', 'virtual office', 'Office three', 'jan', share('H3')],
+    ]);
+  });
+
+  it('finds a Status column with no name by the Posted and Not Shared in it', () => {
+    const { added, summary } = oneTab((source) => {
+      source.addSheet('Kurt', ['', 'PROPERTY TYPE', 'PROPERTY TITLE', '', 'LINK']).writeText(
+        ['10/20/2026', 'Office', 'One', 'Alpha Premier', share('K1'), '9:25 AM', 'Posted'],
+        ['', 'Office', 'Two', 'Alpha Premier', share('K2'), '9:26 AM', 'Not Shared'],
+        ['', 'Office', 'Three', 'Alpha Premier', '', '9:27 AM', 'Posted'],
+      );
+    });
+    expect(added.map((a) => [a.title, a.status])).toEqual([['One', 'Posted'], ['Three', 'Posted']]);
+    expect(summary.tabs[0]).toMatchObject({ notPosted: 1, byLink: 0 });
+  });
+});
+
+describe('the day as "Sched 13"', () => {
+  it('is that day of the month of the day before it, or of the next month once it has gone by', () => {
+    const { added } = oneTab((source) => {
+      source.addSheet('Kristel').writeText(
+        ['10/05/2026', 'Warehouse', 'One', 'PAGE', share('K1'), '11:40 AM', 'Shared'],
+        ['Sched 13', 'Warehouse', 'Two', 'PAGE', '', '11:40 AM', 'Shared'],
+        ['Sched 2', 'Warehouse', 'Three', 'PAGE', '', '11:40 AM', 'Shared'],
+        // No year: the year of the day before it, the next once the month is far behind.
+        ['Sched 12/01', 'Warehouse', 'Four', 'PAGE', '', '11:40 AM', 'Shared'],
+        ['Sched 3/01', 'Warehouse', 'Five', 'PAGE', '', '11:40 AM', 'Shared'],
+      );
+    });
+    expect(added.map((a) => [a.title, a.date])).toEqual([
+      ['One', '2026-10-05'], ['Two', '2026-10-13'], ['Three', '2026-11-02'], ['Four', '2026-12-01'], ['Five', '2027-03-01'],
+    ]);
+  });
+});
+
+describe('the day, on a tab that writes it day first', () => {
+  it('reads every day on the tab day first once one begins past 12', () => {
+    const { added } = oneTab((source) => {
+      source.addSheet('Mcximoz', HEADERS).writeText(
+        ['05/09/2025', 'Lot', 'One', 'APG Main', share('D1'), '9:00 AM', 'Posted'],
+        ['15/09/2025', 'Lot', 'Two', 'APG Main', share('D2'), '9:00 AM', 'Posted'],
+      );
+    });
+    expect(added.map((a) => [a.title, a.date])).toEqual([['One', '2025-09-05'], ['Two', '2025-09-15']]);
+  });
+
+  it('leaves a tab month first when its days are', () => {
+    const { added } = oneTab((source) => {
+      source.addSheet('Jan', HEADERS).writeText(
+        ['05/09/2026', 'Lot', 'One', 'APG Main', share('E1'), '9:00 AM', 'Posted'],
+        ['09/15/2026', 'Lot', 'Two', 'APG Main', share('E2'), '9:00 AM', 'Posted'],
+        ["03/30/2026'", 'Lot', 'Three', 'APG Main', share('E3'), '9:00 AM', 'Posted'],
+      );
+    });
+    expect(added.map((a) => [a.title, a.date])).toEqual([['Three', '2026-03-30'], ['One', '2026-05-09'], ['Two', '2026-09-15']]);
   });
 });
 
@@ -195,6 +435,19 @@ describe('the day, as the interns write it', () => {
     ['1/5/27', '2027-01-05'],
     ['10/26/2026', '2026-10-26'],
     ['2026-10-26', '2026-10-26'],
+    ['08|14/2026', '2026-08-14'],
+    ['06/ 16/ 2026', '2026-06-16'],
+    ['03/30,2026', '2026-03-30'],
+    ['03/03.26', '2026-03-03'],
+    ['03/024/26', '2026-03-24'],
+    ['8/112026', '2026-08-11'],
+    ['1/32026', '2026-01-03'],
+    ['Sept 10, 2026', '2026-09-10'],
+    ['Sept. 1, 2026', '2026-09-01'],
+    // No year: the latest that is not after today, 1 Feb 2027.
+    ['March 03', '2026-03-03'],
+    ['SEPT. 8', '2026-09-08'],
+    ['Jan 5', '2027-01-05'],
   ])('reads %j as %s, typed or as text', (written, day) => {
     for (const asText of [false, true]) {
       const w = createWorld({ now: '2027-02-01 10:00' });
