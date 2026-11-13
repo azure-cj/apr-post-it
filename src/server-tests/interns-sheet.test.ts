@@ -57,10 +57,11 @@ describe('a new Posts tab', () => {
     ]);
   });
 
-  it('works for the cooldown, addLink and setStatus as the old one did', () => {
+  it('works for a second post inside the cooldown, addLink and setStatus as the old one did', () => {
     const w = freshTabs();
     w.logPost('jan', CASA, { status: 'Pending' });
-    expect(w.logPost('ana', CASA)).toMatchObject({ ok: false, error: 'cooldown' });
+    expect(w.logPost('ana', CASA)).toMatchObject({ ok: true, status: 'Posted' });
+    expect(w.tracker.sheet('Posts (new)').lastRow).toBe(3);
     expect(w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: LINK })).toMatchObject({ ok: true });
     expect(w.tracker.sheet('Posts (new)').row(2)[6]).toBe('Posted');
   });

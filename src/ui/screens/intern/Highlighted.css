@@ -1,0 +1,55 @@
+/* Highlighted listings: advertise these first. */
+.highlighted {
+  display: grid;
+  gap: var(--space-4);
+  border-inline-start: 3px solid var(--gold);
+}
+
+.highlighted__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.highlighted__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+  border-block-start: var(--border-width) solid var(--border);
+}
+
+.highlighted__row:first-child {
+  border-block-start: 0;
+}
+
+.highlighted__what {
+  display: grid;
+  min-width: 0;
+}
+
+.highlighted__name {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.highlighted__note,
+.highlighted__meta,
+.highlighted__error {
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.highlighted__note {
+  color: var(--text);
+}
+
+.highlighted__error {
+  color: var(--danger-text);
+}

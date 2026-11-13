@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-11.1';
+const SERVER_VERSION = '2026-11-13.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -98,7 +98,7 @@ const ROLES = ['Intern', 'Admin'];
 // Two roles. The Admin assigns the postings and sees everything; an Intern posts.
 // A Team row that still says "Manager" (the old middle role) counts as Admin.
 const PERMISSIONS = {
-  Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink', 'setStatus'],
+  Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink', 'setStatus', 'highlights'],
   Admin:   ['*'],
 };
 
@@ -165,6 +165,8 @@ function route_(req) {
       case 'saveSpotCheck': return json_(saveSpotCheck_(req, me));
       case 'refusedPosts':  return json_({ ok: true, refused: refusedPosts_() });
       case 'handleRefused': return json_(handleRefused_(req, me));
+      case 'highlights':    return json_({ ok: true, highlights: highlights_() });
+      case 'setHighlight':  return json_(setHighlight_(req, me));
       default:            return json_({ ok: false, error: 'unknown action: ' + req.action });
     }
   } catch (err) {
@@ -1238,6 +1240,9 @@ function getProperty_(id, includeInternal) {
   }
   // The same join as the list's, so the screen can rely on the detail alone.
   joinChecker_(out, checkerIndex_(false), row.id);
+  // v19: when anyone last posted it, for the "Posted recently" warning.
+  var last = latestPost_(row.id, row.name);
+  if (last) out.lastPosted = { date: last.day, by: last.postedBy };
   return out;
 }
 
@@ -1293,8 +1298,7 @@ function elementText_(el, counters) {
 
 // ---------------------------------------------------------------- posting
 //
-// The cooldown is enforced here, under a lock. Two interns clicking Save on
-// the same property at the same time cannot both get through.
+// Saved under a lock, so two saves of one post can't both get through.
 
 function logPost_(req, me) {
   requireAll_(req, ['property', 'propertyId', 'fbAccount']);
@@ -1342,16 +1346,10 @@ function logPost_(req, me) {
     // Someone else's post, logged again under another name (v14).
     if (earlier) return linkTaken_(earlier);
 
-    // One reading of the clock for the check and the row, so the two cannot
-    // fall either side of midnight. A retry says when it was logged (v12).
+    // A retry says when it was logged (v12). The cooldown no longer refuses a
+    // post (v19): a listing may need advertising again at once, so the app
+    // shows it as posted recently and the post is saved like any other.
     var when = loggedAt_(req.loggedAt, new Date());
-    var guard = cooldownFor_(req.propertyId, req.property, when);
-    // A retry from the outbox (it says when it was logged) is a post already
-    // on Facebook: refused all the same, but written down for the admin (v18).
-    if (guard && textOf_(req.loggedAt).trim()) {
-      return refusedRetry_(guard, req, link, postedBy, when, poster === me);
-    }
-    if (guard) return guard;
 
     // The date as ISO text, which the app reads; the time as the interns'
     // own sheet writes it, "10:23 AM", on Manila's clock.
@@ -1413,56 +1411,19 @@ function loggedAt_(sent, now) {
 }
 
 /**
- * Returns a refusal object when the property is inside its cooldown, else null.
- * The cooldown is the live rule (rules_), which the admin sets from the app.
- *
- * The app applies the same rule before it asks (src/core/cooldown.ts), and
- * the two must agree:
- *
- * - Every row counts, Pending as much as Posted: a post still waiting for the
- *   group admin's approval must stop a second intern posting the same listing. The app reads any
- *   status but Pending as Posted, so no row is left out there either.
- * - A row is the property's when the folder ids agree, if both have one, so a
- *   renamed folder keeps its history; otherwise when the names agree as the
- *   app's matcher normalises them.
- * - Days are calendar days in Manila. Counting 24-hour spans from UTC midnight
- *   refused until 08:00 on the day the app said posting was allowed again.
- * - A date the app cannot read is skipped, as the app skips it.
- */
-function cooldownFor_(propertyId, propertyName, when) {
-  var row = latestPost_(propertyId, propertyName);
-  if (!row) return null;
-  var latest = row.day;
-
-  var cooldownDays = rules_().cooldownDays;
-  var last = dayNumber_(latest);
-  var today = dayNumber_(Utilities.formatDate(when || new Date(), CONFIG.TZ, 'yyyy-MM-dd'));
-  // A row dated after today, from a skewed clock, counts as posted today.
-  var daysAgo = Math.max(0, today - last);
-  if (daysAgo >= cooldownDays) return null;
-
-  var next = last + cooldownDays;
-  return {
-    ok: false,
-    error: 'cooldown',
-    lastPosted:  latest,
-    nextAllowed: isoDay_(next),
-    // The app's own sentence for the same refusal (cooldown.ts).
-    message: 'Posted ' + ago_(daysAgo) + ' (' + dayMonth_(last) + '). The cooldown is ' +
-             days_(cooldownDays) + ' \u{2014} it can be posted again on ' + fullDate_(next) + '.',
-  };
-}
-
-/**
- * The property's latest Posts row by day, as { day, postedBy }, or null when
- * it has none. The rule of cooldownFor_: by folder id when both have one, else
- * by name; a date that can't be read is skipped; the first row of a day wins.
+ * The property's latest Posted or Pending row by day, as { day, postedBy }, or
+ * null when it has none: by folder id when both have one, else by name; a date
+ * that can't be read is skipped; the first row of a day wins. Since v19 the
+ * listing's detail carries it, so every agent sees a recent post, not only
+ * the one who made it (the posts reply holds an intern's own rows only).
  */
 function latestPost_(propertyId, propertyName) {
   var key = normalizeName_(propertyName);
   var latest = null;
   readRows_(CONFIG.POSTS_TAB, POST_FIELDS).forEach(function (p) {
     if (!sameProperty_(p.propertyId, p.title, propertyId, key)) return;
+    var status = textOf_(p.status).trim();
+    if (status !== 'Posted' && status !== 'Pending') return;
     var day = sheetDay_(p.date);
     if (day && (!latest || day > latest.day)) latest = { day: day, postedBy: textOf_(p.postedBy).trim() };
   });
@@ -1677,53 +1638,86 @@ function saveSpotCheck_(req, me) {
   }
 }
 
+// ---------------------------------------------------------------- highlighted listings (v19)
+//
+// A listing an admin or owner wants advertised now: every agent sees it at the
+// top of My queue, with the admin's note, and Fill queues gives it out first.
+// It stays highlighted until an admin takes it off. Kept on the admin sheet's
+// own Highlights tab, one row per listing. Everyone may read the list;
+// PERMISSIONS gives an intern only highlights, not setHighlight.
+
+const HIGHLIGHT_TAB = 'Highlights';
+const HIGHLIGHT_HEADERS = ['Property ID', 'Property', 'Note', 'Highlighted by', 'Highlighted at'];
+const HIGHLIGHT_NOTE_MAX = 280;
+
+/** Every highlighted listing, newest first: { propertyId, property, note, by, at }. */
+function highlights_() {
+  var sh = plainTab_(HIGHLIGHT_TAB, HIGHLIGHT_HEADERS);
+  if (sh.getLastRow() < 2) return [];
+  var values = sh.getDataRange().getValues();
+  var head = values[0].map(function (h) { return textOf_(h).trim(); });
+  function at(r, h) { var i = head.indexOf(h); return i === -1 ? '' : textOf_(r[i]).trim(); }
+  return values.slice(1)
+    .map(function (r) {
+      return { propertyId: at(r, 'Property ID'), property: at(r, 'Property'), note: at(r, 'Note'),
+               by: at(r, 'Highlighted by'), at: at(r, 'Highlighted at') };
+    })
+    .filter(function (h) { return h.propertyId; })
+    .reverse();
+}
+
+/**
+ * setHighlight { propertyId, property, on, note? }: Admin only. on true adds the
+ * listing, or changes its note; on false takes it off. Replies { highlights }.
+ */
+function setHighlight_(req, me) {
+  requireAll_(req, ['propertyId']);
+  var id = textOf_(req.propertyId).trim();
+  var on = truthy_(req.on) || req.on === undefined;
+  var note = textOf_(req.note).trim().replace(/\s+/g, ' ');
+  if (note.length > HIGHLIGHT_NOTE_MAX) {
+    return { ok: false, error: 'too-long', message: 'Keep the note under ' + HIGHLIGHT_NOTE_MAX + ' characters.' };
+  }
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'busy', message: 'Someone else is saving. Try again.' };
+  try {
+    var sh = plainTab_(HIGHLIGHT_TAB, HIGHLIGHT_HEADERS);
+    var values = sh.getDataRange().getValues();
+    var idCol = values[0].map(function (h) { return textOf_(h).trim(); }).indexOf('Property ID');
+    var found = -1;
+    for (var r = 1; r < values.length; r++) {
+      if (idCol !== -1 && textOf_(values[r][idCol]).trim() === id) { found = r; break; }
+    }
+    if (!on) {
+      if (found !== -1) sh.deleteRow(found + 1);
+      return { ok: true, highlights: highlights_() };
+    }
+    var name = textOf_(req.property).trim() || id;
+    var row = [id, name, note, me.name, now_()];
+    if (found !== -1) {
+      var range = sh.getRange(found + 1, 1, 1, row.length);
+      range.setNumberFormat('@');
+      range.setValues([row]);
+    } else {
+      appendText_(sh, row, row.map(function (_, i) { return i; }));
+    }
+    return { ok: true, highlights: highlights_() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ---------------------------------------------------------------- refused posts (v18)
 //
-// A post the app kept on its PC (the outbox) and sent again later is already
-// on Facebook. When that later save falls inside the cooldown, the cooldown
-// still decides: it is refused, and nothing goes on the tracker. But it is
-// written on the admin sheet's own Refused posts tab, one row per post, so an
-// admin sees it and decides what to do on Facebook. Admins only: PERMISSIONS
-// gives an intern neither action.
+// A post the app kept on its PC (the outbox) and sent again later, inside the
+// cooldown, was refused and written on the admin sheet's own Refused posts
+// tab, so an admin could decide what to do on Facebook. Since v19 the cooldown
+// refuses nothing, so no new rows are written; the ones before stay, to be
+// handled. Admins only: PERMISSIONS gives an intern neither action.
 
 const REFUSED_TAB = 'Refused posts';
 const REFUSED_HEADERS = ['Post', 'Link', 'Agent', 'Logged at', 'Property', 'Property ID', 'FB account',
                          'Last posted', 'Last posted by', 'Next allowed', 'Handled by', 'Handled at'];
-
-/**
- * logPost's answer to a retry inside the cooldown: the refusal, worded for a
- * post already made, after writing it on the Refused posts tab. A post
- * refused before keeps its row as it is. Holds no lock: logPost_ does.
- */
-function refusedRetry_(guard, req, link, postedBy, when, own) {
-  var key = postKey_(link) || link.toLowerCase();
-  var last = latestPost_(req.propertyId, req.property) || { day: guard.lastPosted, postedBy: '' };
-  var sh = plainTab_(REFUSED_TAB, REFUSED_HEADERS);
-  var values = sh.getDataRange().getValues();
-  var keyCol = values[0].map(function (h) { return textOf_(h).trim(); }).indexOf('Post');
-  var known = values.slice(1).some(function (r) { return keyCol !== -1 && textOf_(r[keyCol]).trim().toLowerCase() === key; });
-  if (!known) {
-    var row = [key, link, postedBy, Utilities.formatDate(when, CONFIG.TZ, "yyyy-MM-dd'T'HH:mm:ssXXX"), req.property,
-               textOf_(req.propertyId), textOf_(req.fbAccount), guard.lastPosted, last.postedBy, guard.nextAllowed, '', ''];
-    appendText_(sh, row, row.map(function (_, i) { return i; }));
-  }
-
-  var loggedDay = Utilities.formatDate(when, CONFIG.TZ, 'yyyy-MM-dd');
-  var by = !last.postedBy ? 'it was posted'
-         : last.postedBy === postedBy ? (own ? 'you posted it' : postedBy + ' posted it')
-         : last.postedBy + ' posted it';
-  return {
-    ok: false,
-    error: 'cooldown',
-    lastPosted: guard.lastPosted,
-    nextAllowed: guard.nextAllowed,
-    lastPostedBy: last.postedBy,
-    reported: true,
-    message: 'Logged ' + dayMonth_(dayNumber_(loggedDay)) + ' at ' + clockTime_(Utilities.formatDate(when, CONFIG.TZ, 'HH:mm')) +
-             ', but ' + by + ' on ' + dayMonth_(dayNumber_(guard.lastPosted)) + ', inside the cooldown of ' +
-             days_(rules_().cooldownDays) + '. It is on Facebook but not on the tracker. Your admin has been told.',
-  };
-}
 
 /** Every refused post, oldest first: { postKey, link, agent, loggedAt, property, propertyId, fbAccount, lastPosted, lastPostedBy, nextAllowed, handledBy, handledAt }. */
 function refusedPosts_() {

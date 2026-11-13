@@ -2,6 +2,7 @@ import { createBackend, type Action, type Backend, type Payload, type Reply } fr
 import { createDirectory, type Directory } from '@/core/directory';
 import { readServerInfo, serverVersionStatus } from '@/core/session';
 import { createTracker, type Tracker } from '@/core/tracker';
+import type { Highlight } from '@/core/highlights';
 import type { ReportedPost } from '@/core/refused';
 import type { SpotCheck } from '@/core/spotchecks';
 import {
@@ -107,6 +108,8 @@ export interface Services {
   readonly spotChecks: RemoteResource<readonly SpotCheck[]>;
   /** The Refused posts tab (Admin only, v18). */
   readonly refusedPosts: RemoteResource<readonly ReportedPost[]>;
+  /** The highlighted listings (everyone, v19). */
+  readonly highlights: RemoteResource<readonly Highlight[]>;
   readonly find: Store<FindState>;
   /** Where each listing's photos were saved this session, by property id: for Open folder. */
   readonly savedFolders: Store<ReadonlyMap<string, string>>;
@@ -194,6 +197,7 @@ export function createServices(
   const team = createRemote(() => raw.team(), now);
   const spotChecks = createRemote(() => raw.spotChecks(), now);
   const refusedPosts = createRemote(() => raw.refusedPosts(), now);
+  const highlights = createRemote(() => raw.highlights(), now);
 
   /**
    * After a write, or an attempt at one: what was read before may no longer
@@ -256,6 +260,18 @@ export function createServices(
         void spotChecks.refresh();
       }
     },
+    highlights: () => raw.highlights(),
+    async setHighlight(input) {
+      try {
+        const list = await raw.setHighlight(input);
+        highlights.store.set({ data: list, loadedAt: now(), loading: false, error: null });
+        return list;
+      } catch (err) {
+        highlights.invalidate();
+        void highlights.refresh();
+        throw err;
+      }
+    },
     refusedPosts: () => raw.refusedPosts(),
     async handleRefused(post) {
       try {
@@ -294,6 +310,7 @@ export function createServices(
     team,
     spotChecks,
     refusedPosts,
+    highlights,
     find,
     savedFolders,
     outbox,
@@ -334,6 +351,7 @@ export function createServices(
       team.reset();
       spotChecks.reset();
       refusedPosts.reset();
+      highlights.reset();
       directoryStatus.set(IDLE);
       server.set(UNKNOWN_SERVER);
       find.set(EMPTY_FIND);

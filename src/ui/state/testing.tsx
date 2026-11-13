@@ -95,6 +95,7 @@ export function fakeServer(
       property: propertyReply(),
       posts: { ok: true, posts: [] },
       assignments: { ok: true, assignments: [] },
+      highlights: { ok: true, highlights: [] },
       team: TEAM,
       ...replies,
     },

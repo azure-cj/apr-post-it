@@ -264,3 +264,24 @@ describe('My queue', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 });
+
+describe('My queue: highlighted listings (1.1.6)', () => {
+  it("tops the page with what the admins highlighted, each with its note and a link to it", async () => {
+    const platform = fakeServer({
+      assignments: QUEUE,
+      posts: POSTS,
+      highlights: { ok: true, highlights: [{ propertyId: '1Casa', property: 'Casa Amara House & Lot', note: 'Owner wants it out this week', by: 'Maria Santos', at: '2026-11-04 09:00' }] },
+    });
+    renderOn(THURSDAY, platform);
+    const list = await screen.findByRole('region', { name: 'Highlighted listing' });
+    expect(within(list).getByRole('link', { name: 'Casa Amara House & Lot' }).getAttribute('href')).toBe('/property/1Casa');
+    expect(within(list).getByText('Owner wants it out this week')).toBeTruthy();
+    expect(within(list).queryByRole('button', { name: /Remove/ })).toBeNull();
+  });
+
+  it('shows nothing when none are highlighted, or the list fails', async () => {
+    renderOn(THURSDAY, fakeServer({ assignments: QUEUE, posts: POSTS, highlights: { ok: false, error: 'boom' } }));
+    await screen.findByText('Verdant Hills Lot 12, Tagaytay');
+    expect(screen.queryByRole('region', { name: /highlighted/i })).toBeNull();
+  });
+});

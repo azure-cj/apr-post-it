@@ -46,7 +46,9 @@ export type Action =
   | 'spotChecks'
   | 'saveSpotCheck'
   | 'refusedPosts'
-  | 'handleRefused';
+  | 'handleRefused'
+  | 'highlights'
+  | 'setHighlight';
 
 /** Where the web app is, and who is asking. Blank, null or missing means "not set". */
 export interface BackendConfig {
@@ -290,6 +292,8 @@ const DOING: Readonly<Record<Action, string>> = {
   saveSpotCheck: 'save the spot check',
   refusedPosts: 'load the refused posts',
   handleRefused: 'mark it handled',
+  highlights: 'load the highlighted listings',
+  setHighlight: 'save the highlight',
 };
 
 /** Completes "Google sent … in a form Post-It could not read". */
@@ -317,6 +321,8 @@ const WHAT: Readonly<Record<Action, string>> = {
   saveSpotCheck: 'its answer',
   refusedPosts: 'the refused posts',
   handleRefused: 'its answer',
+  highlights: 'the highlighted listings',
+  setHighlight: 'its answer',
 };
 
 /** Calls that change the sheet. When one times out it may still have gone through. */
@@ -334,6 +340,7 @@ const WRITES: ReadonlySet<Action> = new Set<Action>([
   'rebuildDirectory',
   'saveSpotCheck',
   'handleRefused',
+  'setHighlight',
 ]);
 
 const TIMED_OUT = Symbol('timed out');

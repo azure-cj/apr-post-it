@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { cooldown, lastPostedOn } from '../core/cooldown';
 import type { Tab } from './fake-sheets';
 import { CASA, createWorld, LOT_9, PEOPLE } from './world';
 
@@ -97,11 +98,17 @@ describe('RUN_IMPORT', () => {
     expect(w.posts.lastRow).toBe(after);
   });
 
-  it('makes the cooldown carry on from the old posts', () => {
+  it('makes the cooldown carry on from the old posts', async () => {
     const { w } = world();
     run(w, 'RUN_IMPORT');
-    // Casa Amara was posted on 26 Oct, two days ago, on the interns' sheet.
-    expect(w.logPost('ana', CASA)).toMatchObject({ ok: false, error: 'cooldown', lastPosted: '2026-10-26' });
+    // Casa Amara was posted on 26 Oct, two days ago, on the interns' sheet: the app shows it as posted recently.
+    const rows = await w.app('maria').tracker.posts();
+    expect(cooldown(lastPostedOn(rows, CASA), '2026-10-28', { cooldownDays: 7 })).toMatchObject({
+      blocked: true,
+      lastPosted: '2026-10-26',
+    });
+    // The server warns, it doesn't block (v19): a post now is saved.
+    expect(w.logPost('ana', CASA)).toMatchObject({ ok: true });
   });
 
   it('only reads the interns\' sheet', () => {

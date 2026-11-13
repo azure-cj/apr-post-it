@@ -21,8 +21,9 @@
  * - cooldown: posted (or pending) within the cooldown, by cooldown.ts, judged
  *   on summary.weekReferenceDay: today inside the week, its Monday before it.
  *
- * What comes first: listings never posted, then the longest since last
- * posted, ties by name. Each intern draws from the categories in turn,
+ * What comes first: highlighted listings (v19), dealt out one to each intern
+ * in turn and never left out for the cooldown; then listings never posted,
+ * then the longest since last posted, ties by name. Each intern draws from the categories in turn,
  * starting at a different one, so every queue gets a mix.
  */
 
@@ -74,6 +75,8 @@ export interface PlanInput {
    * are kept either way.
    */
   readonly keepExisting: boolean;
+  /** v19: the highlighted listings' folder ids. They come first, and the cooldown doesn't leave them out. */
+  readonly highlighted?: ReadonlySet<string> | undefined;
 }
 
 export interface Plan {
@@ -177,9 +180,11 @@ interface Candidate {
   /** Undefined: never posted. */
   readonly last: string | undefined;
   readonly nameKey: string;
+  readonly highlighted: boolean;
 }
 
 function byPriority(a: Candidate, b: Candidate): number {
+  if (a.highlighted !== b.highlighted) return a.highlighted ? -1 : 1;
   if (a.last !== b.last) {
     if (a.last === undefined) return -1;
     if (b.last === undefined) return 1;
@@ -221,7 +226,7 @@ function takenOf(
 
 /** The listings that may be planned, in priority order, and what was left out. */
 function candidatesOf(
-  input: Pick<PlanInput, 'properties' | 'posts' | 'rules'>,
+  input: Pick<PlanInput, 'properties' | 'posts' | 'rules' | 'highlighted'>,
   date: string,
   taken: Lookup<true>,
 ): { candidates: Candidate[]; counts: Map<SkipReason, number> } {
@@ -266,11 +271,12 @@ function candidatesOf(
       continue;
     }
     const last = lastPosted.get(id, row.name);
-    if (last !== undefined && cooldown(last, date, rules).blocked) {
+    const highlighted = id !== '' && (input.highlighted?.has(id) ?? false);
+    if (!highlighted && last !== undefined && cooldown(last, date, rules).blocked) {
       skip('cooldown');
       continue;
     }
-    candidates.push({ row, last, nameKey: lastPosted.key(row.name) });
+    candidates.push({ row, last, nameKey: lastPosted.key(row.name), highlighted });
   }
   candidates.sort(byPriority);
   return { candidates, counts };
@@ -326,7 +332,10 @@ export function planQueues(input: PlanInput): Plan {
   }
 
   const taken = takenOf(input.assignments, keyFor, today, (name) => !input.keepExisting && planned.has(name));
-  const { candidates, counts } = candidatesOf(input, ref, taken);
+  const { candidates: all, counts } = candidatesOf(input, ref, taken);
+  // Highlighted listings are dealt first, one to each intern in turn; the rest by category.
+  const top = all.filter((c) => c.highlighted);
+  const candidates = all.filter((c) => !c.highlighted);
   const buckets = bucketsOf(candidates);
   const heads = buckets.map(() => 0);
   let left = candidates.length;
@@ -341,6 +350,17 @@ export function planQueues(input: PlanInput): Plan {
     need.push(Math.max(0, perWeek * (periods.get(name)?.weeks ?? 1) - kept.length));
     cursor.push(buckets.length === 0 ? 0 : i % buckets.length);
   });
+
+  let turn = 0;
+  for (const c of top) {
+    const start = turn;
+    while (need[turn % interns.length]! <= 0 && turn - start < interns.length) turn++;
+    const i = turn % interns.length;
+    if (interns.length === 0 || need[i]! <= 0) break;
+    queues.get(interns[i]!)!.push(itemOf(c));
+    need[i]!--;
+    turn++;
+  }
 
   // Round by round, each intern who still needs one takes the head of the
   // next category that has anything left.
@@ -376,7 +396,7 @@ export function planQueues(input: PlanInput): Plan {
 }
 
 export interface PlanForInternInput
-  extends Pick<PlanInput, 'properties' | 'posts' | 'assignments' | 'week' | 'date' | 'today' | 'rules'> {
+  extends Pick<PlanInput, 'properties' | 'posts' | 'assignments' | 'week' | 'date' | 'today' | 'rules' | 'highlighted'> {
   /** v14: the queue being filled. With it, its key is the week, and the cooldown is judged on its reference day. */
   readonly period?: QueuePeriod | undefined;
   /** Whose queue, exactly as the Team tab has the name. */
@@ -423,11 +443,14 @@ export function planForIntern(input: PlanForInternInput): QueueItemInput[] {
   const category = normalize(input.category ?? '');
   if (category) candidates = candidates.filter((c) => normalize(c.row.category) === category);
 
+  // Highlighted listings first, then a mix of the rest by category.
+  const picked: QueueItemInput[] = candidates.filter((c) => c.highlighted).slice(0, count).map(itemOf);
+  candidates = candidates.filter((c) => !c.highlighted);
   const buckets = bucketsOf(candidates);
   const heads = buckets.map(() => 0);
-  const picked: QueueItemInput[] = [];
+  const target = picked.length + candidates.length;
   let b = 0;
-  while (picked.length < count && picked.length < candidates.length) {
+  while (picked.length < count && picked.length < target) {
     for (let tries = 0; tries < buckets.length && heads[b]! >= buckets[b]!.length; tries++) {
       b = (b + 1) % buckets.length;
     }

@@ -42,6 +42,7 @@ import {
   longDate,
   shortDate,
 } from './format';
+import { HighlightControl } from './HighlightControl';
 import { LogStep } from './LogStep';
 import { PhotoPicker, Thumb } from './PhotoPicker';
 import { PhotoViewer } from './PhotoViewer';
@@ -85,7 +86,7 @@ const SHORTCUTS = { copy: 'KeyC', photos: 'KeyP', log: 'KeyL' } as const;
 
 /**
  * One listing, the whole job on one screen: its public text with Copy, the
- * pre-post checks (any failure blocks Copy), the photos, the cooldown, and
+ * pre-post checks (any failure blocks Copy), the photos, when it was last posted, and
  * the log step under the text. Keyed by the listing, so opening the next one
  * starts clean.
  */
@@ -188,7 +189,13 @@ function PropertyPage({ id }: { readonly id: string }) {
   const chosenChecks = usingReword ? rewordChecks : checks;
 
   const mine = posts.data && name ? postsOf(posts.data, { id, name }) : [];
-  const cool: CooldownState | null = posts.data && name ? cooldown(lastPostedOn(posts.data, { id, name }), app.today(), app.settings) : null;
+  // Your own posts, and (v19) anyone's latest from the listing's detail: the later of the two.
+  const ownLast = posts.data && name ? lastPostedOn(posts.data, { id, name }) : undefined;
+  const anyLast = detail?.lastPosted?.date;
+  const lastAny = ownLast === undefined ? anyLast : anyLast === undefined || ownLast >= anyLast ? ownLast : anyLast;
+  const cool: CooldownState | null = posts.data && name ? cooldown(lastAny, app.today(), app.settings) : null;
+  // Who, when someone else's post is the later one.
+  const lastBy = lastAny !== undefined && lastAny === anyLast && lastAny !== ownLast ? detail?.lastPosted?.by || undefined : undefined;
 
   const gate = copyGate({
     detail,
@@ -200,9 +207,7 @@ function PropertyPage({ id }: { readonly id: string }) {
     checked,
     hitLine,
     checks: chosenChecks,
-    cool,
     manager,
-    checkingCooldown: posts.data === null && posts.loading,
   });
   const canCopy = gate.kind === 'ready';
 
@@ -570,6 +575,8 @@ function PropertyPage({ id }: { readonly id: string }) {
         <aside className="two-pane__side" aria-label="Before you post">
           <Verdict gate={gate} cool={cool} manager={manager} />
 
+          {id && name ? <HighlightControl propertyId={id} property={name} manager={manager} /> : null}
+
           {/* ---- photos ---- */}
           <section className="photos" aria-labelledby={photosTitleId}>
             <div className="photos__head">
@@ -647,6 +654,7 @@ function PropertyPage({ id }: { readonly id: string }) {
               loading={posts.loading}
               error={posts.error}
               cool={cool}
+              by={lastBy}
               history={mine}
               manager={manager}
               today={app.today()}
@@ -726,12 +734,12 @@ type CopyGate =
   | { readonly kind: 'waiting'; readonly text: string }
   /** Nothing blocks, but nobody has separated the document: it waits for "I checked it" (D15). */
   | { readonly kind: 'confirm'; readonly text: string }
-  | { readonly kind: 'blocked'; readonly cause: 'sold' | 'no-document' | 'withheld' | 'check' | 'empty' | 'cooldown'; readonly text: string };
+  | { readonly kind: 'blocked'; readonly cause: 'sold' | 'no-document' | 'withheld' | 'check' | 'empty'; readonly text: string };
 
 /**
  * Every failed check blocks Copy; so do a sold listing, a withheld or missing
- * document, an empty text, and a cooldown this screen can see. It waits, too, until it
- * knows when the listing was last posted.
+ * document, and an empty text. The cooldown doesn't (1.1.6): a listing posted
+ * inside it is shown as posted recently, and may be posted again.
  */
 function copyGate(input: {
   detail: PropertyDetail | null;
@@ -744,11 +752,9 @@ function copyGate(input: {
   checked: boolean;
   hitLine: CommissionLine | null;
   checks: readonly CheckResult[];
-  cool: CooldownState | null;
   manager: boolean;
-  checkingCooldown: boolean;
 }): CopyGate {
-  const { detail, withheld, noDocument, checks, cool, manager } = input;
+  const { detail, withheld, noDocument, checks, manager } = input;
   if (input.sold) return { kind: 'blocked', cause: 'sold', text: 'Copy is blocked: this listing is sold.' };
   if (!detail) return { kind: 'waiting', text: 'Reading the document…' };
   if (noDocument) {
@@ -771,11 +777,7 @@ function copyGate(input: {
         : 'the document is empty.';
     return { kind: 'blocked', cause: 'empty', text: `Copy is blocked: ${why}` };
   }
-  if (cool?.blocked && cool.nextAllowed) {
-    return { kind: 'blocked', cause: 'cooldown', text: `Copy is blocked: it is in its cooldown until ${longDate(cool.nextAllowed)}.` };
-  }
   if (input.unseparated && !input.checked) return { kind: 'confirm', text: 'Tick “I checked it” to copy.' };
-  if (input.checkingCooldown) return { kind: 'waiting', text: 'Checking when it was last posted…' };
   return { kind: 'ready' };
 }
 
@@ -981,6 +983,9 @@ function Verdict({
   readonly manager: boolean;
 }) {
   const [tone, word, line] = ((): readonly ['ok' | 'warn' | 'danger' | 'neutral', string, string] => {
+    if (gate.kind === 'ready' && cool?.blocked && cool.daysAgo !== undefined) {
+      return ['warn', 'Posted recently', `Last posted ${daysAgo(cool.daysAgo)}. You can still post it.`];
+    }
     if (gate.kind === 'ready') return ['ok', 'Ready to post', 'Copy, post, then log the link.'];
     if (gate.kind === 'waiting') return ['neutral', 'Checking…', gate.text];
     if (gate.kind === 'confirm') return ['warn', 'Check before posting', 'The document has no separator.'];
@@ -991,8 +996,6 @@ function Verdict({
         return ['danger', 'No document', 'Nothing to post from yet.'];
       case 'withheld':
         return ['danger', 'Not separated', 'An admin must add a separator first.'];
-      case 'cooldown':
-        return ['danger', 'In cooldown', cool?.nextAllowed ? `Next allowed ${longDate(cool.nextAllowed)}.` : 'Posted too recently.'];
       case 'empty':
         return ['danger', 'Nothing to post', 'The document has no public text.'];
       case 'check':
@@ -1012,6 +1015,7 @@ function CooldownLines({
   loading,
   error,
   cool,
+  by,
   history,
   manager,
   today,
@@ -1022,6 +1026,8 @@ function CooldownLines({
   readonly loading: boolean;
   readonly error: string | null;
   readonly cool: CooldownState | null;
+  /** Who posted it last, when it wasn't you. */
+  readonly by?: string | undefined;
   readonly history: readonly PostLogEntry[];
   readonly manager: boolean;
   readonly today: string;
@@ -1039,7 +1045,7 @@ function CooldownLines({
           </Button>
         }
       >
-        {error ?? 'The posts did not load.'} The server still checks when you log.
+        {error ?? 'The posts did not load.'}
       </Notice>
     );
   }
@@ -1047,15 +1053,15 @@ function CooldownLines({
   const last = cool?.lastPosted;
   return (
     <div className="cooldown">
-      {cool?.blocked ? (
-        <Notice tone="danger" title="In cooldown">
-          {cool.message}
+      {cool?.blocked && last ? (
+        <Notice tone="warn" title="Posted recently">
+          Last posted {dayMonth(last)}{by ? ` by ${by}` : ''}, {daysAgo(daysBetween(last, today))}, inside the {cooldownDays}-day cooldown. You can still post it.
         </Notice>
       ) : last ? (
         <p className="cooldown__line">
           <Icon name="pass" size={18} className="cooldown__ok" />
           <span>
-            Last posted {dayMonth(last)}, {daysAgo(daysBetween(last, today))}. Outside the {cooldownDays}-day cooldown.
+            Last posted {dayMonth(last)}{by ? ` by ${by}` : ''}, {daysAgo(daysBetween(last, today))}. Outside the {cooldownDays}-day cooldown.
           </span>
         </p>
       ) : (

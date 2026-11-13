@@ -52,6 +52,7 @@ import {
   useAssignments,
   useDirectoryList,
   useNotify,
+  useHighlights,
   usePosts,
   useStore,
   useRefusedPosts,
@@ -895,6 +896,7 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
     [tracker],
   );
   const notify = useNotify();
+  const highlights = useHighlights({ maxAgeMs: 60_000 });
 
   return (
     <AssignScreen
@@ -919,6 +921,11 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
         notify(note, 'ok');
       }}
       onOpenLink={(url) => void platform.open(url)}
+      highlights={highlights.data ?? []}
+      onRemoveHighlight={async (h) => {
+        await tracker.setHighlight({ propertyId: h.propertyId, property: h.property, on: false });
+        notify(`No longer highlighted: ${h.property || h.propertyId}.`, 'ok');
+      }}
       libraryPage={libraryPage}
       onLibraryPageChange={(page) => {
         const next = new URLSearchParams(params);

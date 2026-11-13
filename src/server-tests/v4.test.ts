@@ -177,30 +177,27 @@ describe('the rules', () => {
     });
   });
 
-  it('drive the server\'s own cooldown', () => {
+  it('give the app its cooldown, which no longer refuses a post on the server (v19)', () => {
     const w = createWorld();
     w.call('maria', 'setRules', { cooldownDays: 3 });
+    expect(w.call('jan', 'ping')['rules']).toMatchObject({ cooldownDays: 3 });
     expect(w.logPost('jan', CASA)).toMatchObject({ ok: true });
 
+    // Inside the shorter cooldown: saved all the same.
     w.project.clock.set('2026-03-11 10:00');
-    expect(w.logPost('ana', CASA)).toMatchObject({
-      ok: false,
-      error: 'cooldown',
-      nextAllowed: '2026-03-12',
-      message: expect.stringContaining('The cooldown is 3 days'),
-    });
-
-    w.project.clock.set('2026-03-12 00:05');
     expect(w.logPost('ana', CASA)).toMatchObject({ ok: true });
+    expect(w.posts.lastRow).toBe(3);
   });
 
-  it('take effect at once: a longer cooldown refuses what the shorter one allowed', () => {
+  it('take effect at once, and a longer cooldown refuses nothing either', () => {
     const w = createWorld();
     w.logPost('jan', CASA);
     w.project.clock.set('2026-03-17 10:00');
     w.call('maria', 'setRules', { cooldownDays: 14 });
 
-    expect(w.logPost('ana', CASA)).toMatchObject({ ok: false, error: 'cooldown', nextAllowed: '2026-03-23' });
+    expect(w.call('ana', 'ping')['rules']).toMatchObject({ cooldownDays: 14 });
+    expect(w.logPost('ana', CASA)).toMatchObject({ ok: true });
+    expect(w.posts.lastRow).toBe(3);
   });
 
   it('reach the app\'s client, which checks them before asking', async () => {

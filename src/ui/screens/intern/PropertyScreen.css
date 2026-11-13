@@ -585,3 +585,25 @@
   color: var(--info-text);
   font-weight: var(--weight-label);
 }
+
+/* 1.1.6: a listing's highlight. */
+.highlight-control__form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.highlight-control__line {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.highlight-control__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-block-start: var(--space-4);
+}
+
+.highlight-control__form .highlight-control__actions {
+  margin-block-start: 0;
+}

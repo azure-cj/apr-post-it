@@ -655,3 +655,41 @@ describe('Assign, kept from before', () => {
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
   });
 });
+
+describe('Assign, highlighted listings (1.1.6)', () => {
+  const highlight = (propertyId: string, property: string, note = '') => ({ propertyId, property, note, by: 'Maria Santos', at: '2026-10-28 09:00' });
+
+  it('Add gives the highlighted ones first, even one in its cooldown', async () => {
+    render(
+      <Harness
+        intern={DANA}
+        settings={{ cooldownDays: 7, repostDueDays: 14, perWeek: 2 }}
+        // Casa Amara was posted yesterday: in its cooldown.
+        posts={[...POSTS, post('2026-10-27', 'Casa Amara House & Lot', 'f3', 'Posted', 33)]}
+        highlights={[highlight('f3', 'Casa Amara House & Lot'), highlight('w2', 'Meycauayan Warehouse B')]}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add 2' }));
+    const added = Array.from(document.querySelectorAll('.queue-row--preview .queue-row__name')).map((n) => n.textContent);
+    expect(added.sort()).toEqual(['Casa Amara House & Lot', 'Meycauayan Warehouse B']);
+  });
+
+  it('lists them on step one, with Remove', async () => {
+    const onRemoveHighlight = vi.fn(async () => undefined);
+    render(
+      <MemoryRouter future={routerFuture}>
+        <Harness intern={null} highlights={[highlight('f3', 'Casa Amara House & Lot', 'Owner wants it out')]} onRemoveHighlight={onRemoveHighlight} />
+      </MemoryRouter>,
+    );
+    const list = screen.getByRole('region', { name: 'Highlighted listing' });
+    expect(within(list).getByRole('link', { name: 'Casa Amara House & Lot' })).toBeTruthy();
+    expect(within(list).getByText('Owner wants it out')).toBeTruthy();
+    await userEvent.click(within(list).getByRole('button', { name: 'Remove the highlight on Casa Amara House & Lot' }));
+    expect(onRemoveHighlight).toHaveBeenCalledWith(expect.objectContaining({ propertyId: 'f3' }));
+  });
+
+  it('shows nothing when there are none', () => {
+    render(<Harness intern={null} highlights={[]} />);
+    expect(screen.queryByRole('region', { name: /highlighted/i })).toBeNull();
+  });
+});

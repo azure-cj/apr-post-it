@@ -120,13 +120,15 @@ describe('the status is required: Posted or Pending', () => {
     },
   );
 
-  it('checks the link before the status, and both before the cooldown', () => {
+  it('checks the link before the status, and saves a post inside the cooldown once both are right', () => {
     const w = createWorld();
     w.logPost('ana', CASA);
 
     expect(w.logPost('jan', CASA, { postLink: '', status: 'Nope' })).toMatchObject({ error: 'link-required' });
     expect(w.logPost('jan', CASA, { status: 'Nope' })).toMatchObject({ error: 'bad-status' });
-    expect(w.logPost('jan', CASA)).toMatchObject({ error: 'cooldown' });
+    expect(w.posts.lastRow).toBe(2);
+    expect(w.logPost('jan', CASA)).toMatchObject({ ok: true, status: 'Posted' });
+    expect(w.posts.lastRow).toBe(3);
   });
 });
 

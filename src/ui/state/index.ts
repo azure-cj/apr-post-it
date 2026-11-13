@@ -28,6 +28,7 @@ export {
   useFindState,
   usePosts,
   useSavedFolder,
+  useHighlights,
   useRefusedPosts,
   useSpotChecks,
   useTeam,

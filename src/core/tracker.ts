@@ -37,6 +37,7 @@ import {
 } from './types';
 import { propertyType } from './records';
 import { readReportedPost, type ReportedPost } from './refused';
+import { readHighlight, type Highlight, type HighlightInput } from './highlights';
 import { isSpotResult, type SpotCheck, type SpotResult } from './spotchecks';
 import { assignmentWeek, isWeekKey, weekOf } from './week';
 
@@ -223,6 +224,12 @@ export interface Tracker {
 
   /** Saves what an admin found on opening `post` (Admin, v16). Checking it again replaces the result. */
   saveSpotCheck(post: PostLogEntry, result: SpotResult): Promise<SpotCheck>;
+
+  /** The listings an admin highlighted, newest first (everyone, v19). */
+  highlights(): Promise<readonly Highlight[]>;
+
+  /** Highlights a listing, changes its note, or takes it off (Admin, v19). Resolves with the list as it now is. */
+  setHighlight(input: HighlightInput): Promise<readonly Highlight[]>;
 
   /** Every post on the Refused posts tab: retries refused for the cooldown (Admin, v18). */
   refusedPosts(): Promise<readonly ReportedPost[]>;
@@ -573,6 +580,20 @@ export function createTracker(deps: TrackerDeps): Tracker {
       return check;
     },
 
+    async highlights(): Promise<readonly Highlight[]> {
+      return readHighlights(await backend.call('highlights'), 'highlights');
+    },
+
+    async setHighlight(input: HighlightInput): Promise<readonly Highlight[]> {
+      const reply = await backend.call('setHighlight', {
+        propertyId: input.propertyId,
+        property: input.property,
+        on: input.on,
+        note: input.note ?? '',
+      });
+      return readHighlights(reply, 'setHighlight');
+    },
+
     async refusedPosts(): Promise<readonly ReportedPost[]> {
       const reply = await backend.call('refusedPosts');
       const rows = asList(reply['refused']);
@@ -593,6 +614,15 @@ export function createTracker(deps: TrackerDeps): Tracker {
       return handled;
     },
   };
+}
+
+function readHighlights(reply: Readonly<Record<string, unknown>>, action: 'highlights' | 'setHighlight'): readonly Highlight[] {
+  const rows = asList(reply['highlights']);
+  if (!rows) throw unreadableReply(action);
+  return rows.flatMap((raw) => {
+    const highlight = readHighlight(raw);
+    return highlight ? [highlight] : [];
+  });
 }
 
 /** A Spot checks row, or null when it has no post or no result the app knows. */

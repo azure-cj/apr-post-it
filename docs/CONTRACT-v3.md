@@ -369,3 +369,18 @@ propertyId, fbAccount, lastPosted, lastPostedBy, nextAllowed, handledBy, handled
 first. `handleRefused { postLink }` (any copy of the link) writes the caller's name and the time
 in `Handled by` and `Handled at` and replies `{ refused }`, else `not-a-post` or `notfound`. The
 tracker is not changed.
+
+## v19: the cooldown warns, and highlights (server 2026-11-13.1)
+
+`logPost` no longer refuses a post inside the cooldown, a first try or a retry: it is saved like
+any other, and nothing new is written on the Refused posts tab (its rows are still listed and
+handled). The app shows the listing as posted recently, and Fill queues still skips it unless it
+is highlighted. A `property` reply adds `lastPosted: { date, by }`, anyone's latest Posted or
+Pending post of the listing (absent when none), since the `posts` reply holds an intern's own rows only.
+
+New: `highlights` (everyone) replies `{ highlights: [{ propertyId, property, note, by, at }] }`,
+newest first, from the admin sheet's own `Highlights` tab (`Property ID`, `Property`, `Note`,
+`Highlighted by`, `Highlighted at`). `setHighlight { propertyId, property?, on, note? }` (Admin)
+highlights a listing (one row per listing: again, it changes the note and who) or, with `on`
+false, takes it off; a note over 280 characters is `'too-long'`. It replies `{ highlights }`.
+A highlight lasts until an admin removes it.

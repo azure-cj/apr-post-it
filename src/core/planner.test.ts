@@ -446,3 +446,48 @@ describe('the week planned (v6)', () => {
     expect(size({ rules: { ...RULES, perWeek: 11 } })).toBe(11);
   });
 });
+
+describe('highlighted listings (1.1.6)', () => {
+  const properties = Array.from({ length: 12 }, (_, i) => prop(`P${i}`, { category: `C${i % 3}` }));
+
+  it('gives them out first, one to each intern in turn, even in their cooldown', () => {
+    const result = plan({
+      properties,
+      // P10 was posted yesterday: in its cooldown.
+      posts: [posted('P10', '2026-11-01')],
+      interns: ['Jan', 'Bea'],
+      perIntern: 3,
+      highlighted: new Set(['P10', 'P11']),
+    });
+    const firsts = [ids(result.queues.get('Jan'))[0], ids(result.queues.get('Bea'))[0]];
+    expect(firsts.sort()).toEqual(['P10', 'P11']);
+  });
+
+  it('still skips a cooling listing that is not highlighted', () => {
+    const result = plan({ properties, posts: [posted('P10', '2026-11-01')], perIntern: 12 });
+    expect(ids(result.queues.get('Jan'))).not.toContain('P10');
+  });
+
+  it('never gives a highlighted listing out twice, nor one that is sold', () => {
+    const sold = [...properties, prop('S1', { availability: 'Sold' })];
+    const result = plan({ properties: sold, interns: ['Jan', 'Bea', 'Mia'], perIntern: 2, highlighted: new Set(['P5', 'S1']) });
+    const all = [...result.queues.values()].flatMap((q) => ids(q));
+    expect(all.filter((id) => id === 'P5')).toHaveLength(1);
+    expect(all).not.toContain('S1');
+  });
+
+  it('puts them first in Add for one intern', () => {
+    const items = planForIntern({
+      properties,
+      posts: [posted('P7', '2026-11-01')],
+      assignments: [],
+      intern: 'Jan',
+      count: 4,
+      date: DATE,
+      rules: RULES,
+      highlighted: new Set(['P7', 'P2']),
+    });
+    expect(ids(items).slice(0, 2).sort()).toEqual(['P2', 'P7']);
+    expect(items).toHaveLength(4);
+  });
+});

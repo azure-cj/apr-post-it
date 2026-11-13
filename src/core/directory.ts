@@ -344,10 +344,19 @@ function readDetail(raw: unknown): PropertyDetail | null {
     // v7 (D15): a document nobody has separated, sent whole, with its risky lines.
     ...(row['unseparated'] === true ? { unseparated: true } : {}),
     ...readFlaggedLines(row['flaggedLines']),
+    ...readLastPosted(row['lastPosted']),
   };
   // Absent for an intern: the server never sent it (D1). Not hidden here — not here at all.
   const internal = row['internalText'];
   return typeof internal === 'string' ? { ...detail, internalText: internal } : detail;
+}
+
+/** v19: { date, by } with a yyyy-MM-dd date; anything else is left out. */
+function readLastPosted(raw: unknown): { lastPosted?: { readonly date: string; readonly by: string } } {
+  const row = asRecord(raw);
+  const date = row ? asText(row['date']).trim() : '';
+  if (!row || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return {};
+  return { lastPosted: { date, by: asText(row['by']).trim() } };
 }
 
 /** Whole, non-negative line numbers, in order, once each; anything else is dropped. */

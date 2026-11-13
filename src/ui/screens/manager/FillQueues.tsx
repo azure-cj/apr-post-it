@@ -18,6 +18,8 @@ export interface FillQueuesProps {
   readonly posts: readonly PostLogEntry[];
   readonly assignments: readonly Assignment[];
   readonly rules: Rules;
+  /** 1.1.6: the highlighted listings' ids: given out first, even in their cooldown. */
+  readonly highlighted?: ReadonlySet<string> | undefined;
   /** Today, yyyy-MM-dd. */
   readonly today: string;
   /** The week to start on, as its Monday: the one Assign shows. */
@@ -75,7 +77,7 @@ export function fillPeriods(
  * go. Someone with a queue running that week has it filled; anyone else gets
  * a new one. Nothing is written until Save all.
  */
-export function FillQueues({ interns, properties, posts, assignments, rules, today, week: startWeek, onSave, onSaved, onClose }: FillQueuesProps) {
+export function FillQueues({ interns, properties, posts, assignments, rules, highlighted, today, week: startWeek, onSave, onSaved, onClose }: FillQueuesProps) {
   const [perText, setPerText] = useState(String(rules.perWeek ?? rules.perIntern ?? DEFAULT_PER_WEEK));
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set(interns));
   const [week, setWeek] = useState(startWeek);
@@ -104,7 +106,7 @@ export function FillQueues({ interns, properties, posts, assignments, rules, tod
     }
     const periods = fillPeriods(who, week, assignments, today, weeks);
     const planned = who.filter((name) => periods.has(name));
-    setPlan(planQueues({ properties, posts, assignments, interns: planned, perWeek: per, week, today, rules, keepExisting: keep, periods }));
+    setPlan(planQueues({ properties, posts, assignments, interns: planned, perWeek: per, week, today, rules, keepExisting: keep, periods, highlighted }));
   };
 
   const save = async () => {

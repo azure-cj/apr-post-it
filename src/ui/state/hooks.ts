@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { ReportedPost } from '@/core/refused';
+import type { Highlight } from '@/core/highlights';
 import type { SpotCheck } from '@/core/spotchecks';
 import type { Assignment, PostLogEntry, Property, TeamMember, User } from '@/core/types';
 import { useApp } from './AppState';
@@ -69,6 +70,11 @@ export function useAssignments(options: RemoteOptions = {}): RemoteView<readonly
 /** The Spot checks tab (Admin only, v16). Read on arrival. */
 export function useSpotChecks(options: RemoteOptions = {}): RemoteView<readonly SpotCheck[]> {
   return useRemote(useApp().spotChecks, options);
+}
+
+/** The highlighted listings (everyone, v19). Read on arrival. */
+export function useHighlights(options: RemoteOptions = {}): RemoteView<readonly Highlight[]> {
+  return useRemote(useApp().highlights, options);
 }
 
 /** The Refused posts tab (Admin only, v18). Read on arrival. */

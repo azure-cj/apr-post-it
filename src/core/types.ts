@@ -119,6 +119,8 @@ export interface PropertyDetail extends Property {
   readonly live: boolean;
   readonly photos: readonly Photo[];
   readonly folder: string;
+  /** v19: anyone's latest Posted or Pending post of it, yyyy-MM-dd, and by whom. Absent: none, or an older server. */
+  readonly lastPosted?: { readonly date: string; readonly by: string } | undefined;
 }
 
 export type CheckStatus = 'pass' | 'warn' | 'fail';

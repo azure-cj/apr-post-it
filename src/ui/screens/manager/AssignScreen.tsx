@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Badge, Button, Card, Icon, Notice, Spinner } from '../../components';
+import { highlightedIds, type Highlight } from '@/core/highlights';
 import { planForIntern } from '@/core/planner';
 import { normalize } from '@/core/matcher';
 import {
@@ -45,7 +46,10 @@ import { ManagerIcon } from './ManagerIcon';
 import { DoneRow, QueueRow } from './QueueRow';
 import { LengthPicker, QueuePicker } from './QueuePicker';
 import { WeekPicker } from './WeekPicker';
+import { Highlighted } from '../intern/Highlighted';
 import './AssignScreen.css';
+
+const FROM_ASSIGN = { section: 'assign' } as const;
 
 /** What Save hands over: `tracker.saveQueue(save.week, save.assignedTo, save.items, save.when)` fits. */
 export interface QueueSave {
@@ -103,6 +107,10 @@ export interface AssignScreenProps {
   /** The library's page, when the URL keeps it (?page=). Without it, the library keeps its own. */
   readonly libraryPage?: number | undefined;
   readonly onLibraryPageChange?: ((page: number) => void) | undefined;
+  /** 1.1.6: the listings to advertise first. Fill queues and Add give them out first; step one lists them. */
+  readonly highlights?: readonly Highlight[] | undefined;
+  /** Takes one off the list (tracker.setHighlight, off). With it, step one's list offers Remove. */
+  readonly onRemoveHighlight?: ((highlight: Highlight) => Promise<unknown>) | undefined;
 }
 
 type Mode = 'library' | 'paste';
@@ -219,8 +227,11 @@ export function AssignScreen({
   onOpenLink,
   libraryPage,
   onLibraryPageChange,
+  highlights,
+  onRemoveHighlight,
 }: AssignScreenProps) {
   const [filling, setFilling] = useState(false);
+  const highlighted = useMemo(() => highlightedIds(highlights), [highlights]);
   const { cooldownDays, repostDueDays } = settings;
   const perWeek = settings.perWeek ?? settings.perIntern ?? DEFAULT_RULES.perWeek;
   const defaultWeeks = queueWeeksOf(settings.queueWeeks ?? DEFAULT_RULES.queueWeeks);
@@ -271,9 +282,9 @@ export function AssignScreen({
 
   const states = useMemo<readonly ListingState[]>(() => {
     if (!rules || intern === null) return [];
-    const input = { rules, held, intern, week, today };
+    const input = { rules, held, intern, week, today, highlighted };
     return properties.map((p) => listingState(p, input));
-  }, [rules, held, intern, week, today, properties]);
+  }, [rules, held, intern, week, today, properties, highlighted]);
   const stateByKey = useMemo(() => new Map(states.map((s) => [keyOf(s.property), s])), [states]);
 
   const byId = useMemo(() => {
@@ -446,6 +457,7 @@ export function AssignScreen({
       count: wide ? properties.length : count,
       ...(category ? { category } : {}),
       exclude: entries.map((e) => ({ propertyName: e.propertyName, propertyId: e.propertyId })),
+      highlighted,
     });
     const picked: Property[] = [];
     for (const item of items) {
@@ -860,6 +872,7 @@ export function AssignScreen({
             posts={posts}
             assignments={assignments}
             rules={{ cooldownDays, repostDueDays, perWeek, queueWeeks: defaultWeeks }}
+            highlighted={highlighted}
             today={today}
             week={week < weekOf(today) ? weekOf(today) : week}
             onSave={onSaveQueues}
@@ -871,6 +884,7 @@ export function AssignScreen({
           />
         ) : null}
         {errorNotice}
+        <Highlighted highlights={highlights ?? []} from={FROM_ASSIGN} onRemove={onRemoveHighlight} />
         {interns.length === 0 ? (
           <NoInterns />
         ) : (

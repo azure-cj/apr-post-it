@@ -87,7 +87,7 @@ describe('Copy', () => {
     expect(platform.copied).toEqual([]);
   });
 
-  it('is disabled while the listing is in a cooldown this screen can see', async () => {
+  it('stays enabled in a cooldown (1.1.6): it says the listing was posted recently', async () => {
     const platform = fakeServer({
       posts: {
         ok: true,
@@ -98,9 +98,18 @@ describe('Copy', () => {
     });
     renderApp({ platform, path: PATH });
     await settled();
-    expect(copyButton().disabled).toBe(true);
-    expect(reason()).toBe('Copy is blocked: it is in its cooldown until Thu 5 Nov 2026.');
-    expect(screen.getByText('In cooldown', { selector: '.verdict__word' })).toBeTruthy();
+    expect(copyButton().disabled).toBe(false);
+    expect(screen.getByText('Posted recently', { selector: '.verdict__word' })).toBeTruthy();
+    expect(screen.getAllByText(/You can still post it\./).length).toBeGreaterThan(0);
+  });
+
+  it("says when another agent posted it, from the listing's detail (v19)", async () => {
+    const platform = fakeServer({ property: propertyReply({ lastPosted: { date: '2026-10-28', by: 'Jan Cruz' } }) });
+    renderApp({ platform, path: PATH });
+    await settled();
+    expect(copyButton().disabled).toBe(false);
+    expect(await screen.findByText(/by Jan Cruz/)).toBeTruthy();
+    expect(screen.getByText('Posted recently', { selector: '.verdict__word' })).toBeTruthy();
   });
 
   it('copies with Alt+C when it may', async () => {
@@ -573,5 +582,45 @@ describe('the cooldown', () => {
     expect(await screen.findByText('Last posted 3 Oct, 28 days ago. Outside the 7-day cooldown.')).toBeTruthy();
     expect(screen.getByText(/Your posts only/)).toBeTruthy();
     expect(TODAY).toBe('2026-10-31');
+  });
+});
+
+describe('highlights (1.1.6)', () => {
+  const HIGHLIGHT = { propertyId: CLEAN.id, property: CLEAN.name, note: 'Owner wants it out this week', by: 'Maria Santos', at: '2026-10-30 09:00' };
+
+  it("shows an agent the admin's note on a highlighted listing, with no way to change it", async () => {
+    const platform = fakeServer({ highlights: { ok: true, highlights: [HIGHLIGHT] } });
+    renderApp({ platform, path: PATH });
+    await settled();
+    expect(await screen.findByText('Owner wants it out this week')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Highlight' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+  });
+
+  it('lets an admin highlight a listing with a note, then remove it', async () => {
+    const sent: Record<string, unknown>[] = [];
+    let list: unknown[] = [];
+    const platform = fakeServer({
+      highlights: () => ({ ok: true, highlights: list }),
+      setHighlight: (body: Readonly<Record<string, unknown>>) => {
+        sent.push({ ...body });
+        list = body['on'] ? [{ ...HIGHLIGHT, note: body['note'] }] : [];
+        return { ok: true, highlights: list };
+      },
+    });
+    renderApp({ platform, user: manager, path: PATH });
+    await settled();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Highlight' }));
+    await userEvent.type(screen.getByLabelText('Note for the agents (optional)'), 'Rush');
+    await userEvent.click(screen.getByRole('button', { name: 'Highlight' }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toMatchObject({ action: 'setHighlight', propertyId: CLEAN.id, property: CLEAN.name, on: true, note: 'Rush' });
+    expect(await screen.findByText(/Highlighted by Maria Santos/)).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(sent).toHaveLength(2));
+    expect(sent[1]).toMatchObject({ action: 'setHighlight', propertyId: CLEAN.id, on: false });
+    expect(await screen.findByRole('button', { name: 'Highlight' })).toBeTruthy();
   });
 });

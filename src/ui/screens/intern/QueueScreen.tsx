@@ -13,6 +13,7 @@ import {
   useApp,
   useAssignments,
   useDirectoryList,
+  useHighlights,
   useNotify,
   usePosts,
   useUser,
@@ -20,6 +21,7 @@ import {
 } from '../../state';
 import { shortDate } from './format';
 import { Waiting } from './shared';
+import { Highlighted } from './Highlighted';
 import { WaitingPosts } from './WaitingPosts';
 import './QueueScreen.css';
 
@@ -52,6 +54,8 @@ export function QueueScreen() {
   const queue = useAssignments({ maxAgeMs: 15_000, pollMs: 60_000 });
   const posts = usePosts({ maxAgeMs: 15_000 });
   const list = useDirectoryList();
+  // 1.1.6: what the admins want advertised first. Not loaded, or failed: nothing shown.
+  const highlights = useHighlights({ maxAgeMs: 60_000 });
   const today = app.today();
 
   // The queue running today, else the next to start.
@@ -109,6 +113,7 @@ export function QueueScreen() {
   const reload = () => {
     queue.reload();
     posts.reload();
+    highlights.reload();
   };
 
   return (
@@ -149,6 +154,8 @@ export function QueueScreen() {
           {fridayWarningWords(behind)}
         </Notice>
       ) : null}
+
+      <Highlighted highlights={highlights.data ?? []} from={FROM_QUEUE} />
 
       <WaitingPosts waiting={waiting} onChanged={reload} />
 

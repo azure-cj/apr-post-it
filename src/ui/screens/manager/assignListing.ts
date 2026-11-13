@@ -69,10 +69,12 @@ export interface StateInput {
   /** The queue's week, as its Monday. */
   readonly week: string;
   readonly today: string;
+  /** 1.1.6: highlighted listings' ids. One of these may be added in its cooldown. */
+  readonly highlighted?: ReadonlySet<string> | undefined;
 }
 
 /** One listing's state, by the rules in the order they're checked. */
-export function listingState(property: DirectoryRow, { rules, held, intern, week, today }: StateInput): ListingState {
+export function listingState(property: DirectoryRow, { rules, held, intern, week, today, highlighted }: StateInput): ListingState {
   const check: AssignCheck = rules.check(property);
   const lastPost = check.lastPost;
   const base = {
@@ -93,7 +95,7 @@ export function listingState(property: DirectoryRow, { rules, held, intern, week
   if (hold && !(mine && weekOfHold(hold) === week)) {
     return no(mine ? 'mine' : 'held', heldWords(hold, intern));
   }
-  if (check.block === 'cooldown' && lastPost) {
+  if (check.block === 'cooldown' && lastPost && !highlighted?.has(property.id)) {
     return no('cooldown', `Posted ${ago(Math.max(0, daysBetween(lastPost.date, today)))}`);
   }
   if (check.block === 'otherQueue' && check.holder) {
