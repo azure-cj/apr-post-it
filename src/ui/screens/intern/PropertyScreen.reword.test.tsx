@@ -98,6 +98,42 @@ describe('rewording with Claude', () => {
     // Many clicks: more than the default 5 seconds while the whole suite runs.
   }, 15_000);
 
+  it('works on a listing found by searching, and the post is saved to the person signed in', async () => {
+    const LINK = 'https://www.facebook.com/groups/apgmain/posts/1029384801/';
+    const platform = createFakePlatform({
+      key: 'test-key',
+      firebase: fakeFirebase(async () => ({ text: REWORD })),
+      replies: {
+        properties: PROPERTIES,
+        property: propertyReply({ internalText: OWNER }),
+        posts: { ok: true, posts: [] },
+        assignments: { ok: true, assignments: [] },
+        team: TEAM,
+        logPost: { ok: true, status: 'Posted', date: '2026-11-13', postedBy: intern.name },
+      },
+    });
+    renderApp({ platform, path: '/find' });
+
+    const box = await screen.findByRole('searchbox', { name: 'Search listings' });
+    await userEvent.type(box, 'verdant{Enter}');
+    expect(await screen.findByRole('heading', { level: 1, name: CLEAN.name })).toBeTruthy();
+    await ready();
+
+    await userEvent.click(await rewordButton());
+    await userEvent.click(await screen.findByRole('radio', { name: /^Reword/ }));
+    await userEvent.click(copyButton());
+    await waitFor(() => expect(platform.copied).toEqual([REWORD]));
+
+    await userEvent.type(await screen.findByLabelText('Post link'), LINK);
+    await userEvent.click(screen.getByRole('button', { name: 'Posted' }));
+    const logged = () => platform.posts.filter((p) => p.action === 'logPost');
+    await waitFor(() => expect(logged()).toHaveLength(1));
+    expect(logged()[0]!.body).toMatchObject({ propertyId: CLEAN.id, postLink: LINK, status: 'Posted' });
+    // Who posted it is the server's to say, from the sign-in: never sent from here.
+    expect(logged()[0]!.body).not.toHaveProperty('postedBy');
+    expect(await screen.findByText(`Saved as posted: ${CLEAN.name}.`)).toBeTruthy();
+  }, 20_000);
+
   it("won't let a reword that changes a number be chosen", async () => {
     const platform = platformWith(fakeFirebase(async () => ({ text: REWORD.replace('4.2M', '4.5M') })));
     renderApp({ platform, path: PATH });
