@@ -10,6 +10,14 @@ export interface ReleaseNotes {
 
 export const RELEASE_NOTES: readonly ReleaseNotes[] = [
   {
+    version: '1.1.6',
+    items: [
+      'A listing posted recently can be posted again. It says when it was last posted, and by whom.',
+      "Highlighted listings top My queue, with the admin's note: advertise them first.",
+      'Admins: highlight a listing on its page. Fill queues and Add give it out first, even in its cooldown.',
+    ],
+  },
+  {
     version: '1.1.5',
     items: [
       "Reword a post with Claude, beside Copy: a fresh Facebook caption with the agency's details. It runs the same checks, and you choose which one to copy.",
