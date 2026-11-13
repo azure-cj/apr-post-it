@@ -371,3 +371,29 @@ separated (D15), which isn't offered a reword until it is fixed. The reword is s
 original and gets the same pre-post checks; one whose numbers differ from the original's (a
 price, a size, a phone) can't be chosen. Copy takes the one the person chooses. The posts log
 doesn't yet record which was posted (PI-96's last part).
+
+### D30. Sharing the hub's Firebase: the account is checked on every call (Nov 13, 2026)
+
+Post-It and Alpha Listing Hub share the Firebase project `apr-listing-live`, and will keep
+sharing it: the accounts, People, the Claude budget and, later, the listings. Each app keeps its
+own repo and its own functions codebase (`post-it` here, `default` in the hub). A check of both
+servers against the shared project found three things, fixed here and in the hub together:
+
+- **The account, not only the sign-in.** `paraphrase` read the role saved in the sign-in, which
+  lasts up to an hour, so someone turned off on People could go on spending the shared Claude
+  budget until it ran out. `caller()` now asks Firebase about the account on every call, as the
+  hub's `requireCurrentRole` does: turned off, or signed in before its sign-ins were ended, is
+  `unauthenticated`; a role Post-It doesn't allow *now* is `permission-denied`. Every new
+  Post-It function uses the same check.
+- **One key, two deploys.** Both apps use the secret `CLAUDE_API_KEY`, and a function keeps the
+  version it was deployed with. After a new key, Post-It's functions are deployed again too, and
+  the old key is revoked only after both are (firebase/README.md).
+- **Each app deploys its own functions.** The hub deploys `functions:default` only. Post-It's
+  codebase may be added to the hub's `firebase.json` on a PC for the emulator, never committed
+  there, and Post-It's functions deploy only from this repo, with `--only functions:post-it`.
+
+Still shared, with no change: Claude's prices are written in both repos (`PRICES` in
+`limits.ts` here, the hub's `claude-jobs.ts`), and change together; Post-It reads and writes
+the hub's `config/claude`, `claudeUsage` and `users/{uid}.name`, which the hub won't rename
+without saying; function names are unique across both apps, so a new one is cleared with the
+hub's developer or prefixed (`posting…`).

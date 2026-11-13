@@ -1,7 +1,8 @@
+import { getAuth } from "firebase-admin/auth";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { manilaDates } from "../functions/src/limits.ts";
 import { MODEL } from "../functions/src/prompt.ts";
-import { call, db, makeAccount, refusal, resetEmulator, signIn } from "./emulator.ts";
+import { admin, call, db, makeAccount, refusal, resetEmulator, signIn } from "./emulator.ts";
 import { startFakeClaude, type FakeClaude } from "./fake-claude.ts";
 
 // Rewording a post (AID-129) on the hub's key and within the hub's limits: config/claude, read only, and usage added
@@ -44,6 +45,44 @@ describe("who may reword", () => {
     await makeAccount("someone", role);
     expect(await refusal(reword(await signIn("someone")))).toMatchObject({ code: "functions/permission-denied" });
     expect(claude.received).toHaveLength(0);
+  });
+
+  // A sign-in lasts an hour; a change on the hub's People screen counts at once (D30).
+  describe("asks Firebase about the account on every call", () => {
+    const auth = () => getAuth(admin());
+
+    it("refuses an account turned off after signing in, and records nothing", async () => {
+      await auth().updateUser(cj, { disabled: true });
+      expect(await refusal(reword())).toEqual({
+        code: "functions/unauthenticated",
+        message: "This sign-in has ended. Sign in again.",
+      });
+      expect(claude.received).toHaveLength(0);
+      expect((await monthDoc().get()).exists).toBe(false);
+      expect((await dayDoc().get()).exists).toBe(false);
+    });
+
+    it("refuses a sign-in from before the account's sign-ins were ended", async () => {
+      // Firebase keeps the end to the second: a sign-in in the same second would still count.
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      await auth().revokeRefreshTokens(cj);
+      expect(await refusal(reword())).toMatchObject({ code: "functions/unauthenticated" });
+      expect(claude.received).toHaveLength(0);
+    });
+
+    it("refuses an account whose role was taken away after signing in", async () => {
+      await auth().setCustomUserClaims(cj, {});
+      expect(await refusal(reword())).toEqual({
+        code: "functions/permission-denied",
+        message: "Rewording is for agents and admins.",
+      });
+      expect(claude.received).toHaveLength(0);
+    });
+
+    it("still rewords for an agent in good standing", async () => {
+      await expect(reword()).resolves.toEqual({ text: "A reworded post." });
+      expect(claude.received).toHaveLength(1);
+    });
   });
 
   it("refuses an empty text", async () => {

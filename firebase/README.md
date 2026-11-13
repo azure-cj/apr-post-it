@@ -35,8 +35,10 @@ anything but `127.0.0.1` or `localhost` while it runs in the emulator, so the te
 emulator never reach Anthropic's API.
 
 `npm run emulators` starts the same emulators on the hub's ports (auth 9099, functions 5001,
-Firestore 8080), for the app in development. It has only Post-It's functions; to have the hub's
-too, run the hub's emulators instead and add this folder's codebase to its `firebase.json`.
+Firestore 8080), for the app in development. It has only Post-It's functions. To have the hub's
+functions too, add this folder's codebase to the hub's `firebase.json` **on your PC only**, and
+undo it before committing in the hub's repo. Never deploy Post-It's functions from the hub's
+folder: they deploy from here, with `--only functions:post-it`.
 
 ## Deploying (the owner)
 
@@ -52,8 +54,16 @@ firebase deploy --only functions:post-it --project apr-listing-live
 `functions:post-it` names the codebase, so only Post-It's functions are deployed, and only
 Post-It's are ever deleted. The hub's (`default`) are left as they are.
 
+After a new `CLAUDE_API_KEY` is set (`firebase functions:secrets:set CLAUDE_API_KEY --project
+apr-listing-live`), deploy Post-It's functions again too, or Reword keeps the old key: a function
+gets the secret's version from when it was deployed. The hub's `npm run deploy:live` only
+deploys the hub's. Revoke the old key only after both are deployed.
+
 `paraphrase` is deployed with `invoker: "public"`, so Cloud Run lets the app's call in; the
-function itself then refuses anyone not signed in as an agent or admin. Without it, Cloud Run
+function itself then refuses anyone not signed in as an agent or admin. It asks Firebase about
+the account on every call, so an account turned off, signed out everywhere or stripped of its
+role on the hub's People screen is refused at once, not when its sign-in runs out (D30). Every
+new Post-It function should do the same. Without it, Cloud Run
 turns every call away before the function runs ("The request was not authenticated" in the
 function's log), and the app can only say it couldn't reach Claude.
 

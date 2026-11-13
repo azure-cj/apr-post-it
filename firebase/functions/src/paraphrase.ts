@@ -1,5 +1,6 @@
 import "./setup.js";
 import Anthropic from "@anthropic-ai/sdk";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { HttpsError, onCall, type CallableRequest } from "firebase-functions/https";
@@ -27,7 +28,7 @@ const db = () => getFirestore();
 // invoker "public": Cloud Run lets the call in, and caller() then holds it to a signed-in agent or admin. Without
 // it, Cloud Run turns the app away before this code runs, with no CORS headers, and the app sees "internal [0]".
 export const paraphrase = onCall({ secrets: [CLAUDE_API_KEY], timeoutSeconds: 120, invoker: "public" }, async (request) => {
-  const { uid, email } = caller(request);
+  const { uid, email } = await caller(request);
   const text = textOf(request);
 
   // The limits first: nothing is asked of Claude, or spent, past them.
@@ -60,14 +61,30 @@ export const paraphrase = onCall({ secrets: [CLAUDE_API_KEY], timeoutSeconds: 12
   return { text: reword };
 });
 
-function caller(request: CallableRequest): { uid: string; email: string } {
+/**
+ * The signed-in agent or admin making the call. Firebase is asked about the account now, not only the sign-in's copy
+ * of it: a sign-in lasts an hour, so an account turned off, signed out everywhere or stripped of its role on the hub's
+ * People screen is stopped at once, as the hub's requireCurrentRole does (D30).
+ */
+async function caller(request: CallableRequest): Promise<{ uid: string; email: string }> {
   const auth = request.auth;
   if (!auth) throw new HttpsError("unauthenticated", "Sign in to reword a post.");
-  const role = auth.token["role"];
-  if (typeof role !== "string" || !POST_IT_ROLES.includes(role)) {
+  if (!isPostItRole(auth.token["role"])) {
+    throw new HttpsError("permission-denied", "Rewording is for agents and admins.");
+  }
+  const user = await getAuth().getUser(auth.uid).catch(() => null);
+  const validSince = user?.tokensValidAfterTime ? Date.parse(user.tokensValidAfterTime) : 0;
+  if (!user || user.disabled || auth.token.auth_time * 1000 < validSince) {
+    throw new HttpsError("unauthenticated", "This sign-in has ended. Sign in again.");
+  }
+  if (!isPostItRole(user.customClaims?.["role"])) {
     throw new HttpsError("permission-denied", "Rewording is for agents and admins.");
   }
   return { uid: auth.uid, email: typeof auth.token.email === "string" ? auth.token.email : "" };
+}
+
+function isPostItRole(role: unknown): boolean {
+  return typeof role === "string" && POST_IT_ROLES.includes(role);
 }
 
 function textOf(request: CallableRequest): string {
