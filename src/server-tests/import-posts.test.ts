@@ -120,6 +120,72 @@ describe('RUN_IMPORT', () => {
   });
 });
 
+describe('the sync', () => {
+  type Synced = { added: number } | null;
+  const sync = (w: ReturnType<typeof createWorld>, name: 'START_SYNC' | 'SYNC_IMPORT') => w.project.run(name) as Synced;
+  const waiting = (w: ReturnType<typeof createWorld>) => w.project.triggers.list().map((t) => t.handler);
+  const halfHour = 30 * 60_000;
+
+  it('adds only the rows with their own Facebook link from the last two weeks, then runs every half hour', () => {
+    const { w, jan } = world();
+    // Older than two weeks: RUN_IMPORT's, not the sync's.
+    put(jan, 12, ['10/01/26', 'Lot', 'Verdant Hills Lot 9', 'APG Main', share('OLD'), '9:00 AM', 'Posted']);
+
+    expect(sync(w, 'START_SYNC')).toMatchObject({ added: 2 });
+    // Casa Amara and Lot 9: the two pending links and the row with no link wait.
+    expect(postsOf(w).map((p) => p['Title'])).toEqual(['*Casa Amara', 'Verdant Hills Lot 9']);
+    expect(waiting(w)).toEqual(['SYNC_IMPORT']);
+    expect(w.project.run('SYNC_STATUS')).toMatchObject({ on: true, last: '2026-10-28 10:00: 2 added.' });
+
+    // Jan logs a new post on the sheet, and the pending one gets its own link.
+    put(jan, 13, ['10/28/26', 'Warehouse', 'Pasig, 741 Acacia', 'APG Main', share('B2'), '9:40 AM', 'Posted']);
+    w.project.clock.advance(halfHour);
+    expect(w.project.fireTriggers()).toEqual(['SYNC_IMPORT']);
+    expect(postsOf(w).map((p) => p['Title'])).toEqual(['*Casa Amara', 'Verdant Hills Lot 9', 'Pasig, 741 Acacia']);
+    expect(postsOf(w)[2]).toMatchObject({ Date: '2026-10-28', 'Posted By': PEOPLE.jan.name, Status: 'Posted' });
+
+    // Nothing new: nothing added, and it carries on.
+    w.project.clock.advance(halfHour);
+    expect(w.project.fireTriggers()).toEqual(['SYNC_IMPORT']);
+    expect(w.posts.lastRow).toBe(4);
+    expect(waiting(w)).toEqual(['SYNC_IMPORT']);
+  });
+
+  it("doesn't add a post logged from the app as well, or a row whose title was fixed later", () => {
+    const { w, jan } = world();
+    w.logPost('jan', CASA, { postLink: share('A1') });
+    sync(w, 'START_SYNC');
+    jan.typeAt(5, 3, 'Verdant Hills Lot 9 (fixed)');
+    w.project.clock.advance(halfHour);
+    w.project.fireTriggers();
+
+    expect(postsOf(w).map((p) => p['Post Link'])).toEqual([share('A1'), 'https://www.facebook.com/groups/apgmain/posts/77/']);
+  });
+
+  it('stops with STOP_SYNC, and keeps what it added', () => {
+    const { w } = world();
+    sync(w, 'START_SYNC');
+    w.project.run('STOP_SYNC');
+
+    expect(waiting(w)).toEqual([]);
+    expect(w.project.run('SYNC_STATUS')).toMatchObject({ on: false });
+    expect(sync(w, 'SYNC_IMPORT')).toBeNull();
+    expect(w.posts.lastRow).toBe(3);
+  });
+
+  it('only reads the interns\' sheet, and says what to set before it starts', () => {
+    const { w, source } = world();
+    const before = source.tabs().map((t) => source.sheet(t).show());
+    sync(w, 'START_SYNC');
+    expect(source.tabs().map((t) => source.sheet(t).show())).toEqual(before);
+
+    const other = world();
+    other.w.project.evaluate(`(IMPORT.SOURCE_SHEET_ID = '', 0)`);
+    expect(() => sync(other.w, 'START_SYNC')).toThrow(/Set IMPORT\.SOURCE_SHEET_ID/);
+    expect(waiting(other.w)).toEqual([]);
+  });
+});
+
 describe('PREVIEW_IMPORT', () => {
   it('writes the Import preview tab only: each tab\'s credit, each row to add, each row skipped and why', () => {
     const { w } = world();

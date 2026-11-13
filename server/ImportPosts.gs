@@ -1,5 +1,5 @@
 /**
- * ImportPosts.gs: a one-off. The interns' posts from before Post-It, kept on
+ * ImportPosts.gs. The interns' posts from before Post-It, kept on
  * their own "POSTING TRACKER - INTERNS" sheet (one tab per intern), are copied
  * onto the tracker's Posts tab, so the cooldown, the link check and the records
  * carry on from them. The interns' sheet is only read: nothing on it changes.
@@ -37,6 +37,16 @@
  * from the column holding days (a tab with two "Column 1"s), a header one
  * column off its rows is lined up by its Link column, and a Status column
  * with no name is found by the Posted and Pending in it.
+ *
+ * While some interns still log on their sheet (the testing phase), the sync
+ * keeps Posts up with it: START_SYNC runs it now and then every
+ * IMPORT.SYNC_MINUTES, STOP_SYNC ends it, SYNC_STATUS says whether it is on
+ * and what its last run did. Each run reads the interns' sheet as above and
+ * adds a row only once it holds its post's own Facebook link and is dated
+ * within the last IMPORT.SYNC_DAYS: a post is matched by its link, so one
+ * whose title or time is fixed later is still added once; a row still
+ * pending, or with no link yet, waits for its link; an older row was
+ * RUN_IMPORT's. A post logged from the app as well is not added again.
  */
 
 const IMPORT = {
@@ -49,7 +59,15 @@ const IMPORT = {
   // credits wrongly: the rest are matched to the Team tab by first name.
   NAMES: {},
   PREVIEW_TAB: 'Import preview',
+  // The sync: how often it runs, and how far back it looks.
+  SYNC_MINUTES: 30,
+  SYNC_DAYS: 14,
 };
+
+// Script properties: 'on' while the sync runs; what its last run did.
+const IMPORT_SYNC_ON = 'IMPORT_SYNC';
+const IMPORT_SYNC_LAST = 'IMPORT_SYNC_LAST';
+const IMPORT_SYNC_HANDLER = 'SYNC_IMPORT';
 
 // The interns' headers, lower case, spaces single, without a trailing ":".
 // A column is found by one of these names first, then by a name containing
@@ -100,14 +118,83 @@ function RUN_IMPORT() {
   }
 }
 
+/** Starts the sync: a run now, then one every IMPORT.SYNC_MINUTES until STOP_SYNC. */
+function START_SYNC() {
+  importSource_();
+  PropertiesService.getScriptProperties().setProperty(IMPORT_SYNC_ON, 'on');
+  var result = SYNC_IMPORT();
+  Logger.log('The sync is on: every ' + IMPORT.SYNC_MINUTES + ' minutes, until STOP_SYNC.');
+  return result;
+}
+
+/** Ends the sync. What it added stays on Posts. */
+function STOP_SYNC() {
+  PropertiesService.getScriptProperties().deleteProperty(IMPORT_SYNC_ON);
+  dropSyncTriggers_();
+  Logger.log('The sync is off. Run START_SYNC to start it again.');
+}
+
+/** Whether the sync is on, and what its last run did. */
+function SYNC_STATUS() {
+  var props = PropertiesService.getScriptProperties();
+  var on = props.getProperty(IMPORT_SYNC_ON) === 'on';
+  var status = { on: on, last: props.getProperty(IMPORT_SYNC_LAST) || 'never run' };
+  Logger.log('The sync is ' + (on ? 'on, every ' + IMPORT.SYNC_MINUTES + ' minutes' : 'off') + '. Last run: ' + status.last);
+  return status;
+}
+
+/**
+ * One run of the sync, from its trigger: the interns' new posts onto Posts.
+ * The next run is scheduled first, so a run that fails doesn't end the sync.
+ */
+function SYNC_IMPORT() {
+  var props = PropertiesService.getScriptProperties();
+  dropSyncTriggers_();
+  if (props.getProperty(IMPORT_SYNC_ON) !== 'on') return null;
+  ScriptApp.newTrigger('SYNC_IMPORT').timeBased().after(IMPORT.SYNC_MINUTES * 60 * 1000).create();
+
+  var at = Utilities.formatDate(new Date(), CONFIG.TZ, 'yyyy-MM-dd HH:mm');
+  var lock = LockService.getScriptLock();
+  // Someone saving a post: this run is left to the next.
+  if (!lock.tryLock(10000)) {
+    props.setProperty(IMPORT_SYNC_LAST, at + ': skipped, someone was saving a post.');
+    return null;
+  }
+  try {
+    var plan = importPlan_({ since: isoDay_(dayNumber_(today_()) - IMPORT.SYNC_DAYS) });
+    appendImported_(plan.add);
+    props.setProperty(IMPORT_SYNC_LAST, at + ': ' + plan.add.length + ' added.');
+    logImportSummary_(plan, 'Synced');
+    return importSummary_(plan);
+  } catch (err) {
+    props.setProperty(IMPORT_SYNC_LAST, at + ': failed, ' + (err && err.message ? err.message : String(err)));
+    throw err;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function dropSyncTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === IMPORT_SYNC_HANDLER) ScriptApp.deleteTrigger(t);
+  });
+}
+
+/** The interns' sheet, opened to be read. */
+function importSource_() {
+  var id = textOf_(IMPORT.SOURCE_SHEET_ID).trim();
+  if (!id) throw new Error('Set IMPORT.SOURCE_SHEET_ID in ImportPosts.gs to the interns\' sheet\'s id first.');
+  return SpreadsheetApp.openById(id);
+}
+
 /**
  * What the import would do: { tabs, add, skip, notPosted }. `add` holds the
  * Posts rows, oldest first; `skip` the rows left out, each with its reason.
+ * For the sync, `sync.since` (yyyy-MM-dd): only rows from that day on that
+ * hold their post's own Facebook link; the rest wait, and are not counted.
  */
-function importPlan_() {
-  var id = textOf_(IMPORT.SOURCE_SHEET_ID).trim();
-  if (!id) throw new Error('Set IMPORT.SOURCE_SHEET_ID in ImportPosts.gs to the interns\' sheet\'s id first.');
-  var source = SpreadsheetApp.openById(id);
+function importPlan_(sync) {
+  var source = importSource_();
 
   var people = importPeople_();
   var listings = importListings_();
@@ -175,6 +262,8 @@ function importPlan_() {
         if (IMPORT_FACEBOOK.test(link)) mark.links++;
         continue;
       }
+      // The sync waits for a row's own link, and leaves older rows to RUN_IMPORT.
+      if (sync && (status !== 'Posted' || !IMPORT_FACEBOOK.test(link) || /pending/i.test(link) || !day || day < sync.since)) continue;
       var at = { tab: tab, row: r + 1, tabIndex: tabIndex };
       // Marked posted with no link: added, its Link empty.
       if (!link) summary.noLink++;

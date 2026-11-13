@@ -367,8 +367,8 @@ const PUBLIC = [
   'doGet', 'doPost', 'onOpen', 'ADD_PERSON', 'SETUP', 'promptAddTeamMember',
   // BuildDirectory.gs: its commands, and the trigger rebuildDirectory sets.
   'START', 'RESTART', 'CONTINUE', 'STOP', 'STATUS', 'FIND_ROOT', 'VERIFY', 'RESTART_FROM_APP',
-  // ImportPosts.gs: the one-off copy of the interns' old posts.
-  'PREVIEW_IMPORT', 'RUN_IMPORT',
+  // ImportPosts.gs: the copy of the interns' old posts, and the sync that keeps up with their sheet.
+  'PREVIEW_IMPORT', 'RUN_IMPORT', 'START_SYNC', 'STOP_SYNC', 'SYNC_STATUS', 'SYNC_IMPORT',
 ].sort();
 
 /** Top-level function declarations, file by file. */

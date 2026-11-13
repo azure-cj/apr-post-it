@@ -452,6 +452,24 @@ Nothing is added twice: a post whose link is already on Posts, or on two intern 
 added once, and RUN_IMPORT run again adds nothing. A group's "pending posts" link stands
 for many posts, so for those the day, the listing and who posted it tell them apart.
 
+### Keeping up with the interns' sheet (the sync)
+
+While some interns still log on their own sheet, the sync adds their new posts to Posts, so
+the app's records, counts per agent and cooldown include them. The interns' sheet is still
+only read, and nothing is ever removed from Posts.
+
+* Run **START_SYNC** from the editor. It runs once now, then every 30 minutes
+  (`IMPORT.SYNC_MINUTES`). Apps Script asks once for permission to run it on a timer.
+* **SYNC_STATUS** says whether it is on and what its last run did ("2026-11-13 10:00: 3 added.").
+* Run **STOP_SYNC** when everyone posts from the app. What it added stays.
+
+Each run reads every intern tab as RUN_IMPORT does, but adds a row only once it is marked
+posted (or not marked, with a link), holds that post's own Facebook link, and is dated in the
+last 14 days (`IMPORT.SYNC_DAYS`). A row still pending, or with no link yet, waits for its link;
+an older row was RUN_IMPORT's. Posts are matched by their link, so a post logged in the app as
+well, or a row whose title is fixed later, is added once. The sync records what was posted,
+so a post an intern made inside the cooldown is recorded too.
+
 The Import preview tab can be deleted afterwards, and `ImportPosts.gs` removed from the project.
 
 ## The server's version
