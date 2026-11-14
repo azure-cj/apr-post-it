@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { HIGHLIGHT_NOTE_MAX } from '@/core/highlights';
 import { Button, Card, Notice, TextInput } from '../../components';
 import { sentenceOf, useApp, useHighlights, useNotify } from '../../state';
+import { useOnboarding } from '../../onboarding';
 
 export interface HighlightControlProps {
   readonly propertyId: string;
@@ -18,6 +19,7 @@ export interface HighlightControlProps {
 export function HighlightControl({ propertyId, property, manager }: HighlightControlProps) {
   const app = useApp();
   const notify = useNotify();
+  const { complete } = useOnboarding();
   const highlights = useHighlights({ maxAgeMs: 60_000 });
   const current = (highlights.data ?? []).find((h) => h.propertyId === propertyId) ?? null;
   const [editing, setEditing] = useState(false);
@@ -42,6 +44,7 @@ export function HighlightControl({ propertyId, property, manager }: HighlightCon
     setError(null);
     try {
       await app.tracker.setHighlight({ propertyId, property, on, note: text.trim() });
+      if (on) complete('highlight');
       notify(on ? (current ? 'Note saved.' : `Highlighted: ${property}.`) : `No longer highlighted: ${property}.`, 'ok');
       setEditing(false);
     } catch (err) {
@@ -63,7 +66,7 @@ export function HighlightControl({ propertyId, property, manager }: HighlightCon
   };
 
   return (
-    <Card title="Highlight" headingLevel={2} padding="tight" className="highlight-control">
+    <Card title="Highlight" headingLevel={2} padding="tight" className="highlight-control" data-tour="listing-highlight">
       {editing ? (
         <form className="highlight-control__form" onSubmit={submit}>
           <TextInput

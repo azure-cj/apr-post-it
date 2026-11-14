@@ -1,0 +1,243 @@
+/* Tours and Help (1.1.7). Above the app, below a question (a <dialog> is in
+   the top layer). The dimming never takes clicks: the app stays usable. */
+
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+}
+
+.tour__veil {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  animation: tour-in var(--dur-enter) var(--ease-out);
+}
+
+/* The lit element: a hole in the dimming, ringed in gold. */
+.tour__spot {
+  position: fixed;
+  border-radius: var(--radius-input);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  outline: 2px solid var(--gold);
+  outline-offset: 0;
+  transition:
+    top var(--dur-move) var(--ease-out),
+    left var(--dur-move) var(--ease-out),
+    width var(--dur-move) var(--ease-out),
+    height var(--dur-move) var(--ease-out);
+}
+
+.tour__card,
+.help {
+  position: fixed;
+  z-index: 901;
+  box-sizing: border-box;
+  width: min(360px, 100vw - var(--space-12));
+  padding: var(--space-8) var(--space-10) var(--space-10);
+  border: var(--border-width, 1px) solid var(--gold-edge);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  animation: tour-in var(--dur-enter) var(--ease-out);
+}
+
+.tour__card {
+  transition:
+    top var(--dur-move) var(--ease-out),
+    left var(--dur-move) var(--ease-out);
+}
+
+.tour__head,
+.help__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.tour__head {
+  justify-content: flex-start;
+}
+
+.tour__head .tour__close {
+  margin-left: auto;
+}
+
+.tour__dots {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.tour__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  transition: width var(--dur-move) var(--ease-out), background var(--dur-move) var(--ease-out);
+}
+
+.tour__dot--past {
+  background: var(--gold-edge);
+}
+
+.tour__dot--on {
+  width: 18px;
+  background: var(--gold);
+}
+
+.tour__count {
+  margin-left: var(--space-3);
+}
+
+.tour__close {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.tour__close:hover {
+  background: var(--neutral-bg);
+  color: var(--text);
+}
+
+.tour__close:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.tour__title,
+.help__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tour__body {
+  margin: var(--space-3) 0 var(--space-8);
+  color: var(--text-label);
+  line-height: 1.5;
+}
+
+.tour__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.tour__nav {
+  display: inline-flex;
+  gap: var(--space-4);
+}
+
+/* ---- Help ---- */
+
+.help {
+  width: min(380px, 100vw - var(--space-12));
+  max-height: calc(100vh - var(--space-12));
+  overflow-y: auto;
+}
+
+.help__progress {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.help__bar {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+}
+
+.help__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gold-gradient);
+  transition: width var(--dur-move) var(--ease-out);
+}
+
+.help__tasks {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-8);
+  padding: 0;
+  list-style: none;
+}
+
+.help__task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.help__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--on-gold);
+}
+
+.help__task--done .help__mark {
+  border-color: var(--gold);
+  background: var(--gold);
+}
+
+.help__text {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.help__label {
+  color: var(--text);
+}
+
+.help__task--done .help__label {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+.help__more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.help__foot {
+  margin-top: var(--space-6);
+}
+
+@keyframes tour-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour__veil,
+  .tour__card,
+  .help {
+    animation: none;
+  }
+}

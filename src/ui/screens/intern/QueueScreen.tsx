@@ -238,7 +238,7 @@ function openable(item: Item, listLoaded: boolean): boolean {
 function NextUp({ item }: { readonly item: Item }) {
   const { assignment, property } = item;
   return (
-    <section className="next-up" aria-label="Next up">
+    <section className="next-up" aria-label="Next up" data-tour="queue-next">
       <Link className="next-up__open" to={paths.property(idOf(item))} state={FROM_QUEUE}>
         <span className="next-up__main">
           <span className="next-up__label">Next up</span>

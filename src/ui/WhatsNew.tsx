@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Platform } from '@/platform';
 import { Button } from './components';
 import { Dialog } from './screens/manager/Dialog';
-import { notesFor, SEEN_VERSION_KEY } from './releaseNotes';
+import { notesFor, noteText, SEEN_VERSION_KEY, type ShowMe } from './releaseNotes';
 import './WhatsNew.css';
 
 /**
@@ -16,12 +16,15 @@ export function WhatsNew({
   version,
   openNow,
   onClosed,
+  onShow,
 }: {
   readonly platform: Pick<Platform, 'readLocal' | 'writeLocal'>;
   readonly version: string;
   /** Asked for from the sidebar: shown whether or not it was seen. */
   readonly openNow: boolean;
   readonly onClosed: () => void;
+  /** Show me (1.1.7): closes this and points at the thing in the app. Without it, no Show me. */
+  readonly onShow?: ((show: ShowMe) => void) | undefined;
 }) {
   const notes = notesFor(version);
   const [firstTime, setFirstTime] = useState(false);
@@ -65,7 +68,25 @@ export function WhatsNew({
     >
       <ul className="whats-new">
         {notes.items.map((item) => (
-          <li key={item}>{item}</li>
+          <li key={noteText(item)}>
+            {noteText(item)}
+            {typeof item !== 'string' && onShow ? (
+              <>
+                {' '}
+                <Button
+                  variant="link"
+                  size="small"
+                  className="whats-new__show"
+                  onClick={() => {
+                    close();
+                    onShow(item.show);
+                  }}
+                >
+                  Show me
+                </Button>
+              </>
+            ) : null}
+          </li>
         ))}
       </ul>
     </Dialog>

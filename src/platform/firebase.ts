@@ -21,6 +21,7 @@ import {
   initializeAuth,
   onAuthStateChanged,
   reauthenticateWithCredential,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updatePassword,
@@ -80,6 +81,11 @@ export interface FirebaseAccess {
   /** Firebase asks for the current password again before it changes. */
   changePassword(current: string, next: string): Promise<void>;
   /**
+   * Emails a link to set a new password. Rejects with Firebase's error: `code`
+   * like "auth/invalid-email". Optional only so older test fakes still fit.
+   */
+  resetPassword?(email: string): Promise<void>;
+  /**
    * The account signed in and its sign-in token, renewed by Firebase when it
    * has run out (every hour); null when nobody is signed in. The web app asks
    * Google whose the token is.
@@ -128,6 +134,9 @@ export function createFirebase(
       if (!u) throw new Error('Not signed in.');
       await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email ?? '', current));
       await updatePassword(u, next);
+    },
+    async resetPassword(email) {
+      await sendPasswordResetEmail(auth, email.trim());
     },
     async token() {
       const u = auth.currentUser;

@@ -18,6 +18,7 @@ import {
   type FromList,
   type NavKey,
 } from '../../state';
+import { useOnboarding } from '../../onboarding';
 import { longDate } from './format';
 import './LogStep.css';
 
@@ -84,6 +85,7 @@ export const LogStep = forwardRef<HTMLInputElement, {
     return null;
   };
 
+  const { complete } = useOnboarding();
   const save = async (status: PostStatus) => {
     if (!ready || !property || saving) return;
     const chosen = account.trim();
@@ -109,12 +111,14 @@ export const LogStep = forwardRef<HTMLInputElement, {
     };
     try {
       await app.tracker.logPost(input);
+      complete('log-post');
       notify(status === 'Posted' ? `Saved as posted: ${property.name}.` : `Saved as pending: ${property.name}.`);
       moveOn();
     } catch (err) {
       if (keepsForRetry(err)) {
         // It's on Facebook already: never lost. Kept on this PC and sent when the web app answers.
         await app.outbox.keep(input, user.name, err);
+        complete('log-post');
         notify(`Kept on this PC: ${property.name}. It's saved when the connection is back.`, 'warn');
         moveOn();
         return;
@@ -137,7 +141,7 @@ export const LogStep = forwardRef<HTMLInputElement, {
   };
 
   return (
-    <section className="log-step" aria-labelledby={titleId}>
+    <section className="log-step" aria-labelledby={titleId} data-tour="listing-log">
       <h2 id={titleId} className="section-title">
         Log the post
       </h2>

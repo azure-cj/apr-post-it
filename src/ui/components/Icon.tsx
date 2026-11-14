@@ -23,7 +23,8 @@ export type IconName =
   | 'settings'
   | 'sidebar'
   | 'refresh'
-  | 'records';
+  | 'records'
+  | 'help';
 
 const paths: Record<IconName, ReactElement> = {
   search: (
@@ -112,6 +113,13 @@ const paths: Record<IconName, ReactElement> = {
     <>
       <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
       <path d="M9.5 4.5v15" />
+    </>
+  ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.6 9.4a2.5 2.5 0 0 1 4.85.85c0 1.65-2.45 2.2-2.45 3.75" />
+      <path d="M12 17h.01" />
     </>
   ),
   records: (

@@ -50,6 +50,12 @@ export interface SidebarProps {
   readonly checkingUpdates?: boolean | undefined;
   /** Opens What's new: the version becomes a button. */
   readonly onWhatsNew?: (() => void) | undefined;
+  /** Opens Help (1.1.7): the getting-started list and the tours. Without it, no button. */
+  readonly onHelp?: (() => void) | undefined;
+  /** Help is open. */
+  readonly helpOpen?: boolean | undefined;
+  /** How far along the getting-started list is, "2/4"; none once it is done. */
+  readonly helpBadge?: string | null | undefined;
 }
 
 const isModifiedClick = (e: MouseEvent) => e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey;
@@ -84,6 +90,9 @@ export function Sidebar({
   onCheckUpdates,
   checkingUpdates = false,
   onWhatsNew,
+  onHelp,
+  helpOpen = false,
+  helpBadge,
 }: SidebarProps) {
   const asideRef = useRef<HTMLElement>(null);
   const id = useId();
@@ -151,6 +160,7 @@ export function Sidebar({
               <a
                 className="sidebar__item"
                 href={item.href}
+                data-tour={`nav-${item.key}`}
                 aria-current={item.key === currentKey ? 'page' : undefined}
                 onClick={(event) => {
                   if (!onNavigate || isModifiedClick(event)) return;
@@ -180,6 +190,26 @@ export function Sidebar({
             {initials(user.name)}
           </span>
         </div>
+        {onHelp ? (
+          <button
+            type="button"
+            className="sidebar__item sidebar__action"
+            data-tour="help"
+            aria-expanded={helpOpen}
+            aria-haspopup="dialog"
+            onClick={onHelp}
+            {...tipFor(helpBadge ? `Help · getting started ${helpBadge}` : 'Help and tours')}
+          >
+            <span className="sidebar__label">Help</span>
+            <Icon name="help" className="sidebar__icon" />
+            {helpBadge ? (
+              <span className="badge badge--neutral tabular sidebar__count">
+                <span aria-hidden="true">{helpBadge}</span>
+                <span className="visually-hidden">getting started, {helpBadge.replace('/', ' of ')} done</span>
+              </span>
+            ) : null}
+          </button>
+        ) : null}
         {onSignOut ? (
           <button type="button" className="sidebar__item sidebar__action" onClick={onSignOut} {...tipFor('Sign out')}>
             <span className="sidebar__label">Sign out</span>

@@ -35,6 +35,7 @@ import { SignInScreen } from './screens/SignInScreen';
 import { OutboxBanner } from './OutboxBanner';
 import { PendingNotifier } from './PendingNotifier';
 import { WhatsNew } from './WhatsNew';
+import { OnboardingContext, useOnboarding, useOnboardingController } from './onboarding';
 import { UpdateBanner, type CheckResult } from './UpdateBanner';
 import { version as APP_VERSION } from '../../package.json';
 import { useSignInRole } from './screens/SignInScreen.role';
@@ -220,6 +221,19 @@ export function AppShell({ signInNote }: AppProps) {
   const sidebar = useSidebarState(platform);
   const toggleSidebar = sidebar.toggle;
 
+  // Tours and Help (1.1.7): a tour that moves to another screen asks first, like a link.
+  const goTo = useCallback((path: string) => requestLeave(() => navigate(path)), [requestLeave, navigate]);
+  const openWhatsNew = useCallback(() => setWhatsNewOpen(true), []);
+  const onboarding = useOnboardingController({
+    user,
+    platform,
+    pathname: location.pathname,
+    home: user ? homeFor(user) : null,
+    version: APP_VERSION,
+    go: goTo,
+    openWhatsNew,
+  });
+
   // Ctrl+B shows and hides the sidebar's words, wherever focus is, unless a
   // question is open.
   const signedIn = user !== null;
@@ -388,7 +402,7 @@ export function AppShell({ signInNote }: AppProps) {
   const settled = session.status === 'signed-in' || session.status === 'signed-out' || session.status === 'account';
 
   return (
-    <>
+    <OnboardingContext.Provider value={onboarding.api}>
       <a className="skip-link" href="#main" onClick={skipToContent}>
         Skip to content
       </a>
@@ -412,6 +426,9 @@ export function AppShell({ signInNote }: AppProps) {
             onCheckUpdates={() => void checkUpdates()}
             checkingUpdates={checkingUpdates}
             onWhatsNew={() => setWhatsNewOpen(true)}
+            onHelp={onboarding.api.openHelp}
+            helpOpen={onboarding.api.helpOpen}
+            helpBadge={onboarding.api.badge}
           />
         ) : null}
 
@@ -421,7 +438,13 @@ export function AppShell({ signInNote }: AppProps) {
           {user ? <OutboxBanner who={user.name} /> : null}
           {user ? <PendingNotifier who={user.name} /> : null}
           {user ? (
-            <WhatsNew platform={platform} version={APP_VERSION} openNow={whatsNewOpen} onClosed={() => setWhatsNewOpen(false)} />
+            <WhatsNew
+              platform={platform}
+              version={APP_VERSION}
+              openNow={whatsNewOpen}
+              onClosed={() => setWhatsNewOpen(false)}
+              onShow={(show) => (show === 'help' ? onboarding.api.openHelp() : onboarding.api.start(show))}
+            />
           ) : null}
 
           <main id="main" ref={mainRef} className="shell__main" tabIndex={-1} aria-busy={!settled || undefined}>
@@ -436,6 +459,8 @@ export function AppShell({ signInNote }: AppProps) {
                 onSubmit={(email, password) => void accountStep((signal) => signInAccount(email, password, signal))}
                 busy={signInBusy}
                 error={signInError ?? session.error}
+                initialEmail={app.lastEmail}
+                onForgotPassword={app.resetPassword}
               />
             ) : (
               <Routes>
@@ -532,7 +557,9 @@ export function AppShell({ signInNote }: AppProps) {
           }}
         />
       ) : null}
-    </>
+
+      {onboarding.ui}
+    </OnboardingContext.Provider>
   );
 }
 
@@ -891,9 +918,14 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
   };
 
   const { tracker, directory, platform } = app;
+  const { complete } = useOnboarding();
   const onSave = useCallback(
-    (save: QueueSave) => tracker.saveQueue(save.week, save.assignedTo, save.items, save.when),
-    [tracker],
+    async (save: QueueSave) => {
+      const saved = await tracker.saveQueue(save.week, save.assignedTo, save.items, save.when);
+      if (save.items.length > 0) complete('save-queue');
+      return saved;
+    },
+    [tracker, complete],
   );
   const notify = useNotify();
   const highlights = useHighlights({ maxAgeMs: 60_000 });
@@ -915,7 +947,11 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
       loading={rows.loading}
       error={rows.error}
       search={directory.search}
-      onSaveQueues={(monday, queues) => tracker.saveQueues(monday, queues)}
+      onSaveQueues={async (monday, queues) => {
+        const saved = await tracker.saveQueues(monday, queues);
+        complete('save-queue');
+        return saved;
+      }}
       onQueuesSaved={(note) => {
         rows.assignments.reload();
         notify(note, 'ok');
@@ -988,6 +1024,7 @@ export function internsPath(week: string, today: string): string {
 function InternsRoute() {
   const app = useApp();
   const navigate = useNavigate();
+  const { complete } = useOnboarding();
   const [params, setParams] = useSearchParams();
   const today = app.today();
   // The week shown: ?week= (any day of it), else the work week now under way.
@@ -1026,6 +1063,7 @@ function InternsRoute() {
       onSpotCheck={async (post, result) => {
         try {
           await app.tracker.saveSpotCheck(post, result);
+          complete('spot-check');
           notify(result === 'Verified' ? 'Saved: Verified.' : `Saved: ${result}.`, result === 'Verified' ? 'ok' : 'warn');
         } catch (err) {
           notify(sentenceOf(err), 'danger');

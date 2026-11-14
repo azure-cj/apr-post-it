@@ -22,6 +22,29 @@
   line-height: var(--lh-heading);
 }
 
+/* Why sign in, under the title. */
+.sign-in__lead {
+  margin-top: var(--space-4);
+  color: var(--text-muted);
+}
+
+/* The email, and "Not you?" close under it. */
+.sign-in__email {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.sign-in__switch {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.sign-in__forgot {
+  justify-self: start;
+  align-self: center;
+}
+
 .sign-in__form {
   display: grid;
   gap: var(--space-10);

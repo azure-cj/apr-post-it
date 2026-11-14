@@ -5,10 +5,28 @@
  */
 export interface ReleaseNotes {
   readonly version: string;
-  readonly items: readonly string[];
+  readonly items: readonly NoteItem[];
 }
 
+/** Where an item's Show me goes: a tour, or Help with the getting-started list. */
+export type ShowMe = 'welcome-agent' | 'welcome-admin' | 'listing' | 'welcome' | 'help';
+
+/** An item, with a Show me button when it can point at the thing in the app (1.1.7). */
+export type NoteItem = string | { readonly text: string; readonly show: ShowMe };
+
+export const noteText = (item: NoteItem): string => (typeof item === 'string' ? item : item.text);
+
 export const RELEASE_NOTES: readonly ReleaseNotes[] = [
+  // Not released yet: shown once the app's version is 1.1.7.
+  {
+    version: '1.1.7',
+    items: [
+      { text: 'New here? A short tour shows you around, pointing at the real buttons. Skip it any time.', show: 'welcome' },
+      { text: 'Help in the sidebar: a getting-started list that ticks itself off as you go, and the tours again.', show: 'help' },
+      { text: 'The first time you open a listing, a tour shows Copy, Reword, the photos and Log the post.', show: 'listing' },
+      'Sign in remembers your email, and Forgot password sends you a reset link.',
+    ],
+  },
   {
     version: '1.1.6',
     items: [

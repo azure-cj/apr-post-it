@@ -7,7 +7,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { fridayWarning, fridayWarningWords, type WeekProgress } from '@/core/summary';
 import { version } from '../../package.json';
-import { notesFor, SEEN_VERSION_KEY } from './releaseNotes';
+import { notesFor, noteText, SEEN_VERSION_KEY } from './releaseNotes';
 import { fakeServer, renderApp } from './state/testing';
 
 // The week of Mon 2 Nov 2026.
@@ -57,7 +57,7 @@ describe("What's new", () => {
     renderApp({ platform, path: '/find' });
 
     const dialog = await screen.findByRole('dialog', { name: `What's new in ${version}` });
-    expect(within(dialog).getByText(notesFor(version)!.items[0]!)).toBeTruthy();
+    expect(within(dialog).getByText(noteText(notesFor(version)!.items[0]!))).toBeTruthy();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Got it' }));
     expect(screen.queryByRole('dialog', { name: `What's new in ${version}` })).toBeNull();
     expect(await platform.readLocal(SEEN_VERSION_KEY)).toBe(version);

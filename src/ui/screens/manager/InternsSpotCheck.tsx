@@ -42,7 +42,7 @@ export function SpotCheckSection({ items, onCheck, onOpenLink }: SpotCheckSectio
   };
 
   return (
-    <section className="spot-check" aria-labelledby={titleId}>
+    <section className="spot-check" aria-labelledby={titleId} data-tour="interns-spot">
       <h3 id={titleId} className="intern-panel__label">
         Spot check{items.length > 0 ? <span className="spot-check__count tabular"> · {spotWords(tally)}</span> : null}
       </h3>

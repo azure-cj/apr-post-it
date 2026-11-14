@@ -87,6 +87,14 @@ export interface AppState extends Omit<Services, 'openProperty' | 'forget'> {
    * didn't answer (session `resume-failed`). Rejects with a sentence.
    */
   signInAccount(email: string, password: string, signal?: AbortSignal): Promise<User | null>;
+  /** Firebase: the email last signed in with on this PC, to fill in; null when none. */
+  readonly lastEmail: string | null;
+  /**
+   * Firebase: emails a link to set a new password. Resolves when sent, and
+   * also when the email has no account, so nobody learns which emails do.
+   * Rejects with a sentence.
+   */
+  resetPassword(email: string): Promise<void>;
   /** True when sign-in goes by Firebase account; false where there is no Firebase (tests, the browser). */
   readonly usesAccounts: boolean;
   /**
@@ -113,6 +121,9 @@ export const DIRECTORY_REFRESH_MS = 15 * 60 * 1000;
 /** How often posts kept on this PC are sent again while their person is signed in. */
 export const OUTBOX_RETRY_MS = 5 * 60 * 1000;
 
+/** Where the email last signed in with is kept (readLocal / writeLocal). Kept on sign-out: it only fills in a field. */
+export const LAST_EMAIL_KEY = 'postit.lastEmail';
+
 export interface AppStateProviderProps {
   readonly platform: Platform;
   /** Start signed in as this person without asking the server. For tests. */
@@ -138,6 +149,7 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
   // Firebase, once the platform has said whether there is one (null: sign in by key alone).
   const firebaseRef = useRef<FirebaseAccess | null>(null);
   const [usesAccounts, setUsesAccounts] = useState(false);
+  const [lastEmail, setLastEmail] = useState<string | null>(null);
 
   // One set of services per platform: the directory and the tracker's shared
   // reads live as long as the window does. Signed in by account, each call
@@ -256,6 +268,12 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
         }
         applySettings(parseSettings(kept));
       }
+      // Before the sign-in screen can show, so the email is there when it does.
+      try {
+        setLastEmail((await platform.readLocal(LAST_EMAIL_KEY))?.trim() || null);
+      } catch {
+        // Not kept: the field starts empty.
+      }
       // No Firebase where the platform has none, or can't load it: sign in by key, as before.
       firebaseRef.current = await platform.firebase().catch(() => null);
       setUsesAccounts(firebaseRef.current !== null);
@@ -344,6 +362,10 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
         signal?.throwIfAborted();
         throw new UserFacingError("Couldn't sign you in. Try again.");
       }
+      // The email and password were right: fill the email in next time.
+      const typed = email.trim();
+      setLastEmail(typed);
+      await platform.writeLocal(LAST_EMAIL_KEY, typed).catch(() => {});
       services.forget();
       try {
         return await continueWith(fb, true);
@@ -353,8 +375,21 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
         throw err;
       }
     },
-    [services, continueWith],
+    [platform, services, continueWith],
   );
+
+  const resetPassword = useCallback(async (email: string): Promise<void> => {
+    const fb = firebaseRef.current;
+    if (!fb?.resetPassword) throw new UserFacingError("Couldn't send the link. Try again.");
+    try {
+      await fb.resetPassword(email.trim());
+    } catch (err) {
+      const code = typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : '';
+      // Said the same as a sent link: never whether the email has an account.
+      if (code === 'auth/user-not-found') return;
+      throw new UserFacingError(resetSentence(code), err);
+    }
+  }, []);
 
   const signOut = useCallback(async () => {
     const fb = firebaseRef.current;
@@ -411,6 +446,8 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
       user,
       signIn,
       signInAccount,
+      lastEmail,
+      resetPassword,
       usesAccounts,
       retrySignIn,
       showSignIn,
@@ -428,6 +465,8 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
     user,
     signIn,
     signInAccount,
+    lastEmail,
+    resetPassword,
     usesAccounts,
     retrySignIn,
     showSignIn,
@@ -441,6 +480,21 @@ export function AppStateProvider({ platform, initialUser, initialSettings, now =
       <Toasts>{children}</Toasts>
     </AppStateContext.Provider>
   );
+}
+
+/** Why a reset link wasn't sent, from Firebase's error code. */
+function resetSentence(code: string): string {
+  switch (code) {
+    case 'auth/invalid-email':
+    case 'auth/missing-email':
+      return "That email doesn't look right.";
+    case 'auth/too-many-requests':
+      return 'Too many tries. Wait a minute, then try again.';
+    case 'auth/network-request-failed':
+      return "Couldn't reach the sign-in server. Check your connection, then try again.";
+    default:
+      return "Couldn't send the link. Try again.";
+  }
 }
 
 /** The account Firebase has once it has read the sign-in it keeps: null when none. */

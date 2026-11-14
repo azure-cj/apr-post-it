@@ -22,6 +22,10 @@ describe('which Firebase project', () => {
   it('is none in the fake platform unless a test gives one', async () => {
     expect(await createFakePlatform().firebase()).toBeNull();
   });
+
+  it('can send a reset link in the real one', () => {
+    expect(typeof createFirebase(EMULATOR, [inMemoryPersistence]).resetPassword).toBe('function');
+  });
 });
 
 // Against the emulator on this PC, with the hub's test accounts: in the hub's firebase/ folder run
@@ -49,5 +53,11 @@ describe.runIf(process.env['FIREBASE_EMULATOR'] === '1')('on the emulator', () =
 
   it('refuses a wrong password', async () => {
     await expect(firebase().signIn('agent@test', 'wrong-password')).rejects.toMatchObject({ code: 'auth/wrong-password' });
+  });
+
+  it('sends a reset link to an account, and refuses an email that is not one', async () => {
+    const f = firebase();
+    await expect(f.resetPassword!(' agent@test ')).resolves.toBeUndefined();
+    await expect(f.resetPassword!('not-an-email')).rejects.toMatchObject({ code: 'auth/invalid-email' });
   });
 });

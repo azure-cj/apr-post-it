@@ -83,13 +83,23 @@ export const TEAM = {
 export function fakeServer(
   replies: Readonly<Record<string, FakeReply>> = {},
   key: string | null = 'test-key',
-  { hasWindowControls = false, update }: { readonly hasWindowControls?: boolean; readonly update?: { readonly version: string } } = {},
+  {
+    hasWindowControls = false,
+    update,
+    onboarding = false,
+  }: {
+    readonly hasWindowControls?: boolean;
+    readonly update?: { readonly version: string };
+    /** Tours start by themselves, as for someone new. Off by default, so a tour never covers a screen under test. */
+    readonly onboarding?: boolean;
+  } = {},
 ): FakePlatform {
   return createFakePlatform({
     key,
     hasFileSystem: true,
     hasWindowControls,
     ...(update ? { update } : {}),
+    ...(onboarding ? {} : { local: SEEN_TOURS }),
     replies: {
       properties: PROPERTIES,
       property: propertyReply(),
@@ -101,6 +111,14 @@ export function fakeServer(
     },
   });
 }
+
+/** The test people have all been here before: no tour starts by itself. */
+const SEEN_TOURS: Readonly<Record<string, string>> = Object.fromEntries(
+  [intern, internAnyAccount, manager, admin].map((u) => [
+    `onboarding:${u.name.toLowerCase()}`,
+    JSON.stringify({ tours: {}, tasks: {}, autoOff: true, listHidden: false }),
+  ]),
+);
 
 export interface RenderAppOptions {
   readonly platform: FakePlatform;

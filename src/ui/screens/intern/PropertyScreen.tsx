@@ -30,6 +30,7 @@ import {
   useUser,
   type NavKey,
 } from '../../state';
+import { useOnboarding } from '../../onboarding';
 import {
   count,
   dayMonth,
@@ -103,6 +104,12 @@ function PropertyPage({ id }: { readonly id: string }) {
   const notify = useNotify();
   const manager = canManage(user);
   const section = sectionOf(location.state);
+  const { complete } = useOnboarding();
+
+  // Getting started: a listing opened.
+  useEffect(() => {
+    if (id) complete('open-listing');
+  }, [id, complete]);
 
   useDirectoryList(); // re-render when the list arrives, for the name below
   const summary = app.directory.get(id);
@@ -226,6 +233,7 @@ function PropertyPage({ id }: { readonly id: string }) {
       // The public text, or its checked reword, and nothing else: never the internal section, never a flagged line.
       await app.platform.copyText(chosenText);
       setCopiedAt(manilaTime(app.now()));
+      complete('copy-text');
       notify(usingReword ? 'Copied the reword. Paste it into Facebook.' : 'Copied. Paste it into Facebook.');
     } catch (err) {
       setCopyError(sentenceOf(err));
@@ -400,7 +408,7 @@ function PropertyPage({ id }: { readonly id: string }) {
       <div className="two-pane">
         <div className="two-pane__main">
           {/* ---- the public text: the one bounded box ---- */}
-          <section className={`post-text${canCopy ? ' post-text--ready' : ''}`} aria-labelledby={textTitleId}>
+          <section className={`post-text${canCopy ? ' post-text--ready' : ''}`} aria-labelledby={textTitleId} data-tour="listing-text">
             <div className="post-text__head">
               <div className="post-text__heading">
                 <h2 id={textTitleId} className="section-title">
@@ -411,6 +419,7 @@ function PropertyPage({ id }: { readonly id: string }) {
               {mayReword ? (
                 <Button
                   className="post-text__reword"
+                  data-tour="listing-reword"
                   busy={reword.status === 'asking'}
                   onClick={() => void askReword()}
                 >
@@ -421,6 +430,7 @@ function PropertyPage({ id }: { readonly id: string }) {
                 ref={copyRef}
                 variant={copiedAt ? 'ghost' : 'primary'}
                 className="post-text__copy"
+                data-tour="listing-copy"
                 disabled={!canCopy}
                 busy={copying}
                 aria-describedby={unseparated ? `${reasonId} ${checkId}` : reasonId}
@@ -578,7 +588,7 @@ function PropertyPage({ id }: { readonly id: string }) {
           {id && name ? <HighlightControl propertyId={id} property={name} manager={manager} /> : null}
 
           {/* ---- photos ---- */}
-          <section className="photos" aria-labelledby={photosTitleId}>
+          <section className="photos" aria-labelledby={photosTitleId} data-tour="listing-photos">
             <div className="photos__head">
               <h2 id={photosTitleId} className="section-title">
                 Photos{photos.length > 0 ? <span className="photos__count tabular"> {photos.length}</span> : null}

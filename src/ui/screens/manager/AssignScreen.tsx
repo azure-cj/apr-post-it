@@ -859,7 +859,7 @@ export function AssignScreen({
           <div className="assign__header-end">
             <WeekPicker week={week} today={today} onChange={onWeekChange} />
             {onSaveQueues ? (
-              <Button icon={<Icon name="assign" size={18} />} onClick={() => setFilling(true)} disabled={waiting}>
+              <Button icon={<Icon name="assign" size={18} />} onClick={() => setFilling(true)} disabled={waiting} data-tour="assign-fill">
                 Fill queues
               </Button>
             ) : null}

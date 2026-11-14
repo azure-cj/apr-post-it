@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import { screen, waitFor, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { act, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NO_ROLE } from '@/core/account';
 import { createFakePlatform, type FakePlatform } from '@/platform/fake';
 import type { FirebaseAccess, FirebaseAccount, FirebaseRole } from '@/platform/firebase';
+import { AccountSignInScreen, RESET_SENT } from './screens/AccountSignIn';
+import { AppStateProvider, LAST_EMAIL_KEY, useApp } from './state/AppState';
 import { defaultAppSettings, serializeSettings, SETTINGS_KEY } from './state/settings';
 import { EXEC, PROPERTIES, TEAM, renderApp } from './state/testing';
 
@@ -24,14 +27,24 @@ const PEOPLE: Record<string, Person> = {
 };
 
 /** Firebase as the app sees it, with the people above, and `signedIn` already signed in. */
-function fakeFirebase(signedIn: string | null = null): FirebaseAccess & { readonly current: () => string | null } {
+function fakeFirebase(
+  signedIn: string | null = null,
+): FirebaseAccess & { readonly current: () => string | null; readonly resets: string[] } {
   let current = signedIn;
+  const resets: string[] = [];
   const listeners = new Set<(a: FirebaseAccount | null) => void>();
   const account = (): FirebaseAccount | null => (current ? { uid: PEOPLE[current]!.uid, email: current, name: current } : null);
   const tell = () => listeners.forEach((l) => l(account()));
   return {
     target: 'emulator',
     current: () => current,
+    resets,
+    async resetPassword(email) {
+      if (!email.includes('@')) throw Object.assign(new Error('bad'), { code: 'auth/invalid-email' });
+      if (email === 'offline@apg.test') throw Object.assign(new Error('bad'), { code: 'auth/network-request-failed' });
+      if (!PEOPLE[email]) throw Object.assign(new Error('bad'), { code: 'auth/user-not-found' });
+      resets.push(email);
+    },
     watch(changed) {
       listeners.add(changed);
       queueMicrotask(() => changed(account()));
@@ -61,11 +74,11 @@ function fakeFirebase(signedIn: string | null = null): FirebaseAccess & { readon
 
 const PING_CJ = { ok: true, name: 'CJ Aureo', role: 'Intern', fbAccounts: ['Cyrus', 'Kevs'] };
 
-function platformWith(firebase: FirebaseAccess, ping: unknown = PING_CJ): FakePlatform {
+function platformWith(firebase: FirebaseAccess, ping: unknown = PING_CJ, kept: Record<string, string> = {}): FakePlatform {
   return createFakePlatform({
     key: 'an-old-key',
     // The web app link this PC kept: the tests build none in, the app does.
-    local: { [SETTINGS_KEY]: serializeSettings({ ...defaultAppSettings, scriptUrl: EXEC }) },
+    local: { [SETTINGS_KEY]: serializeSettings({ ...defaultAppSettings, scriptUrl: EXEC }), ...kept },
     firebase,
     replies: {
       ping: ping as Record<string, unknown>,
@@ -158,5 +171,136 @@ describe('signing in with an account', () => {
     expect(firebase.current()).toBeNull();
     await signInWith('cj@aureo.com', 'right-password');
     await waitFor(() => expect(screen.getByText('CJ Aureo')).toBeTruthy());
+  });
+});
+
+describe('the sign-in screen', () => {
+  it('says why to sign in, under the title', () => {
+    render(<AccountSignInScreen onSubmit={() => {}} busy={false} />);
+    expect(screen.getByText('Use your Alpha Listing Hub account. Your queue, listings and posts are waiting.')).toBeTruthy();
+  });
+
+  it('starts empty, on the email, when no email was kept', () => {
+    render(<AccountSignInScreen onSubmit={() => {}} busy={false} initialEmail={null} />);
+    const email = screen.getByLabelText('Email') as HTMLInputElement;
+    expect(email.value).toBe('');
+    expect(document.activeElement).toBe(email);
+    expect(screen.queryByRole('button', { name: 'Use another email' })).toBeNull();
+  });
+
+  it('fills in the kept email and goes straight to the password', async () => {
+    const onSubmit = vi.fn();
+    render(<AccountSignInScreen onSubmit={onSubmit} busy={false} initialEmail="cj@aureo.com" />);
+    expect((screen.getByLabelText('Email') as HTMLInputElement).value).toBe('cj@aureo.com');
+    expect(document.activeElement).toBe(screen.getByLabelText('Password'));
+
+    await userEvent.keyboard('right-password{Enter}');
+    expect(onSubmit).toHaveBeenCalledWith('cj@aureo.com', 'right-password');
+  });
+
+  it('"Use another email" empties the email and puts you in it', async () => {
+    render(<AccountSignInScreen onSubmit={() => {}} busy={false} initialEmail="cj@aureo.com" />);
+    expect(screen.getByText(/Not you\?/)).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Use another email' }));
+    const email = screen.getByLabelText('Email') as HTMLInputElement;
+    expect(email.value).toBe('');
+    expect(document.activeElement).toBe(email);
+    expect(screen.queryByRole('button', { name: 'Use another email' })).toBeNull();
+  });
+
+  it('has no "Forgot password?" without a way to send the link', () => {
+    render(<AccountSignInScreen onSubmit={() => {}} busy={false} />);
+    expect(screen.queryByRole('button', { name: 'Forgot password?' })).toBeNull();
+  });
+
+  it('asks for the email first before sending a reset link', async () => {
+    const onForgotPassword = vi.fn(async () => {});
+    render(<AccountSignInScreen onSubmit={() => {}} busy={false} onForgotPassword={onForgotPassword} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+    expect(screen.getByText('Type your email first.')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByLabelText('Email'));
+    expect(onForgotPassword).not.toHaveBeenCalled();
+  });
+
+  it('sends one reset link to the typed email and says to check the inbox', async () => {
+    let send: () => void = () => {};
+    const onForgotPassword = vi.fn(() => new Promise<void>((resolve) => (send = resolve)));
+    render(<AccountSignInScreen onSubmit={() => {}} busy={false} onForgotPassword={onForgotPassword} />);
+    await userEvent.type(screen.getByLabelText('Email'), ' cj@aureo.com ');
+    await userEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+    // A second click while it sends does nothing.
+    await userEvent.click(screen.getByRole('button', { name: 'Sending link…' }));
+    expect(onForgotPassword).toHaveBeenCalledTimes(1);
+    expect(onForgotPassword).toHaveBeenCalledWith('cj@aureo.com');
+
+    send();
+    expect(await screen.findByText(RESET_SENT)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Forgot password?' })).toBeTruthy();
+  });
+
+  it("says why when the link couldn't be sent", async () => {
+    const onForgotPassword = vi.fn(async () => {
+      throw new Error("That email doesn't look right.");
+    });
+    render(<AccountSignInScreen onSubmit={() => {}} busy={false} onForgotPassword={onForgotPassword} />);
+    await userEvent.type(screen.getByLabelText('Email'), 'cj');
+    await userEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+    expect(await screen.findByText("That email doesn't look right.")).toBeTruthy();
+    expect(screen.queryByText(RESET_SENT)).toBeNull();
+  });
+});
+
+describe('the email kept on this PC, and reset links', () => {
+  const appWith = (platform: FakePlatform) =>
+    renderHook(() => useApp(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <AppStateProvider platform={platform} now={() => 0}>
+          {children}
+        </AppStateProvider>
+      ),
+    });
+
+  it('keeps the email once a sign-in works, and not after a wrong password', async () => {
+    const platform = platformWith(fakeFirebase());
+    renderApp({ platform, user: null });
+    await signInWith('cj@aureo.com', 'nope');
+    expect(await screen.findByText('Wrong email or password.')).toBeTruthy();
+    expect(await platform.readLocal(LAST_EMAIL_KEY)).toBeNull();
+
+    const password = screen.getByLabelText('Password');
+    await userEvent.clear(password);
+    await userEvent.type(password, 'right-password');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText('CJ Aureo')).toBeTruthy();
+    expect(await platform.readLocal(LAST_EMAIL_KEY)).toBe('cj@aureo.com');
+  });
+
+  it('reads the kept email on launch, and keeps it on sign-out', async () => {
+    const { result } = appWith(platformWith(fakeFirebase('cj@aureo.com'), PING_CJ, { [LAST_EMAIL_KEY]: 'cj@aureo.com' }));
+    await waitFor(() => expect(result.current.session.status).toBe('signed-in'));
+    expect(result.current.lastEmail).toBe('cj@aureo.com');
+    await act(() => result.current.signOut());
+    await waitFor(() => expect(result.current.session.status).toBe('account'));
+    expect(result.current.lastEmail).toBe('cj@aureo.com');
+  });
+
+  it('sends a reset link, and says the same when the email has no account', async () => {
+    const firebase = fakeFirebase();
+    const { result } = appWith(platformWith(firebase));
+    await waitFor(() => expect(result.current.usesAccounts).toBe(true));
+
+    await expect(result.current.resetPassword(' cj@aureo.com ')).resolves.toBeUndefined();
+    expect(firebase.resets).toEqual(['cj@aureo.com']);
+    await expect(result.current.resetPassword('nobody@apg.test')).resolves.toBeUndefined();
+    expect(firebase.resets).toEqual(['cj@aureo.com']);
+  });
+
+  it('says why a reset link was not sent', async () => {
+    const { result } = appWith(platformWith(fakeFirebase()));
+    await waitFor(() => expect(result.current.usesAccounts).toBe(true));
+    await expect(result.current.resetPassword('cj')).rejects.toThrow("That email doesn't look right.");
+    await expect(result.current.resetPassword('offline@apg.test')).rejects.toThrow(
+      "Couldn't reach the sign-in server. Check your connection, then try again.",
+    );
   });
 });
