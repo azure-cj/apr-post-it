@@ -169,6 +169,39 @@ describe('the sync', () => {
     expect(postsOf(w).map((p) => p['Post Link'])).toEqual([share('A1'), 'https://www.facebook.com/groups/apgmain/posts/77/']);
   });
 
+  it("doesn't keep the app waiting while it reads the interns' sheet, and still adds a post once", () => {
+    /**
+     * The sync runs. At the k-th point between two of its Sheets operations,
+     * Jan logs Casa Amara from the app, with the link that is on his tab.
+     */
+    function race(k: number) {
+      const { w } = world();
+      let points = 0;
+      let lastRead = 0;
+      let saved: { ok?: unknown; error?: unknown } | undefined;
+      w.project.interleave((what, depth) => {
+        if (depth !== 1) return;
+        points++;
+        // The last of the interns' tabs read: "after Jan!A1:G11 getMergedRanges".
+        if (what.startsWith('after ') && what.endsWith(' getMergedRanges')) lastRead = points;
+        if (points === k) saved = w.logPost('jan', CASA, { postLink: share('A1') });
+      });
+      sync(w, 'START_SYNC');
+      w.project.interleave(null);
+      const links = postsOf(w).map((p) => p['Post Link']);
+      return { points, lastRead, saved, a1: links.filter((l) => l === share('A1')).length };
+    }
+
+    const { points, lastRead } = race(0);
+    expect(lastRead).toBeGreaterThan(5);
+    for (let k = 1; k <= points; k++) {
+      const { saved, a1 } = race(k);
+      // While the interns' sheet is read, the app's save goes through at once.
+      if (k <= lastRead) expect(saved?.ok, `save at point ${k}`).toBe(true);
+      expect(a1, `save at point ${k}`).toBe(1);
+    }
+  });
+
   it('stops with STOP_SYNC, and keeps what it added', () => {
     const { w } = world();
     sync(w, 'START_SYNC');

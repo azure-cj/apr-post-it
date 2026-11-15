@@ -47,6 +47,11 @@
  * whose title or time is fixed later is still added once; a row still
  * pending, or with no link yet, waits for its link; an older row was
  * RUN_IMPORT's. A post logged from the app as well is not added again.
+ *
+ * Reading the interns' sheet takes minutes, so it is done without the script
+ * lock: the app's saves wait on that lock, and would be turned away "busy".
+ * The lock is held only to read Posts again and add the rows, so a post
+ * logged from the app meanwhile is still not added twice.
  */
 
 const IMPORT = {
@@ -105,17 +110,10 @@ function PREVIEW_IMPORT() {
 
 /** Adds the interns' posts to the Posts tab, oldest first. A post already there is left out. */
 function RUN_IMPORT() {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) throw new Error('Someone is saving a post. Run RUN_IMPORT again in a minute.');
-  try {
-    // Planned under the lock, so a post logged meanwhile is not added twice.
-    var plan = importPlan_();
-    appendImported_(plan.add);
-    logImportSummary_(plan, 'Imported');
-    return importSummary_(plan);
-  } finally {
-    lock.releaseLock();
-  }
+  var plan = importPlan_();
+  if (!addPlanned_(plan, 30000)) throw new Error('Someone is saving a post. Run RUN_IMPORT again in a minute.');
+  logImportSummary_(plan, 'Imported');
+  return importSummary_(plan);
 }
 
 /** Starts the sync: a run now, then one every IMPORT.SYNC_MINUTES until STOP_SYNC. */
@@ -154,21 +152,48 @@ function SYNC_IMPORT() {
   ScriptApp.newTrigger('SYNC_IMPORT').timeBased().after(IMPORT.SYNC_MINUTES * 60 * 1000).create();
 
   var at = Utilities.formatDate(new Date(), CONFIG.TZ, 'yyyy-MM-dd HH:mm');
-  var lock = LockService.getScriptLock();
-  // Someone saving a post: this run is left to the next.
-  if (!lock.tryLock(10000)) {
-    props.setProperty(IMPORT_SYNC_LAST, at + ': skipped, someone was saving a post.');
-    return null;
-  }
   try {
     var plan = importPlan_({ since: isoDay_(dayNumber_(today_()) - IMPORT.SYNC_DAYS) });
-    appendImported_(plan.add);
+    // Saves kept the lock all that while: this run is left to the next.
+    if (!addPlanned_(plan, 30000)) {
+      props.setProperty(IMPORT_SYNC_LAST, at + ': skipped, someone was saving a post.');
+      return null;
+    }
     props.setProperty(IMPORT_SYNC_LAST, at + ': ' + plan.add.length + ' added.');
     logImportSummary_(plan, 'Synced');
     return importSummary_(plan);
   } catch (err) {
     props.setProperty(IMPORT_SYNC_LAST, at + ': failed, ' + (err && err.message ? err.message : String(err)));
     throw err;
+  }
+}
+
+/**
+ * Adds a plan's rows to Posts, holding the script lock only for that. Posts is
+ * read again first: a post logged from the app while the plan was made (or
+ * added by another run) moves to the skipped rows. False, with nothing
+ * written, when the lock didn't come within `waitMs`.
+ */
+function addPlanned_(plan, waitMs) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(waitMs)) return false;
+  try {
+    var onPosts = {};
+    readRows_(CONFIG.POSTS_TAB, POST_FIELDS).forEach(function (p) { onPosts[importKey_(p)] = true; });
+    var reason = 'already on ' + CONFIG.POSTS_TAB;
+    plan.add = plan.add.filter(function (a) {
+      if (!onPosts[importKey_(a.post)]) return true;
+      plan.skip.push({ at: a.at, reason: reason, title: a.post.title, link: a.post.postLink, day: a.post.date });
+      plan.tabs.forEach(function (t) {
+        if (t.tab !== a.at.tab) return;
+        t.add--;
+        t.skip++;
+        t.why[reason] = (t.why[reason] || 0) + 1;
+      });
+      return false;
+    });
+    appendImported_(plan.add);
+    return true;
   } finally {
     lock.releaseLock();
   }
