@@ -177,11 +177,11 @@ the reset."
 * **The reset** happens after Friday: **Saturday and Sunday belong to the next week**. A date
   maps to its week as `weekOf_` (Code.gs) and `weekOf` (the app's `src/core/week.ts`) map it:
   Monday to Friday to that Monday, Saturday and Sunday to the next Monday.
-* **One queue per intern per week.** An Assignments row's `Date` holds the week key. Rows
+* **One queue at a time.** An Assignments row's `Date` holds the queue's start, and its `Due` the deadline (rows written before v14 hold the week key, with no `Due`). Rows
   written before v6 hold a day; they are read as the week that day is in, so the past still
   shows correctly, and nothing in the sheet has to be rewritten.
-* **Saving** a week's queue replaces that intern's rows of that week: every row whose Date
-  is in it, the week key or an older day alike. The new rows are written with the week key.
+* **Saving** a week's queue replaces that intern's open rows of that week (`Not Shared`, or the older `To post`): every such row whose Date
+  is in it, the week key or an older day alike. The new rows take the queue's start as Date and, when the save sends a period, its deadline as Due. A `Posted` or `Pending` row is never dropped, reopened or renamed: it stays in its row with its own name, folder id and status, and when the save sends a period for a queue with items its Date and Due move to the queue's. An item that names a started row is not written again.
 * **Missed.** When a week is over (Manila's today is past its Friday), the rows still
   `Not Shared` are **Missed**. Missed is shown in the app's reports and on the intern's
   monitor; it is never written as a status, and a Missed row holds nothing (below). A late
@@ -200,8 +200,8 @@ id when both have one, otherwise by name as the app normalises it.
 `saveQueue` and `saveQueues` check every item under the lock, before anything is written. An
 item is refused when an open row in a week not over holds it for a different intern, or for
 the same intern in another week. The rows the save replaces (the named interns' rows of that
-week) hold nothing, so re-saving a week's queue still works, and an item taken out of a queue
-is free at once. The same listing sent in two of `saveQueues`' queues is held by the first. A
+week) hold nothing, so re-saving a week's queue still works, and an open item taken out of a queue
+is free at once; a started item stays in its row. The same listing sent in two of `saveQueues`' queues is held by the first. A
 refusal writes nothing and replies, `date` being the holding row's Date as a day and `week`
 its week:
 

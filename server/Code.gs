@@ -2091,6 +2091,7 @@ function placeQueues_(week, queues, shared) {
       q.start = when.start;
       q.due = when.due;
       q.writeDue = true;
+      q.sent = true;
       return;
     }
     // An app before v14: its rows' own dates kept, or written as before (a week key, no Due).
@@ -2182,8 +2183,9 @@ function saveQueue_(req, me) {
   if (when.refusal) return when.refusal;
   var items = req.items || [];
   if (typeof items === 'string') items = JSON.parse(items);
+  var person = activePerson_(req.assignedTo);
   var queue = {
-    assignedTo: String(req.assignedTo),
+    assignedTo: person ? person.name : String(req.assignedTo),
     items: (Array.isArray(items) ? items : []).map(function (it) {
       it = it || {};
       return {
@@ -2358,41 +2360,83 @@ function heldMessage_(held) {
 }
 
 /**
- * Replaces each queue's Assignments rows with its items, and leaves everyone
+ * Replaces each queue's open Assignments rows with its items, and leaves everyone
  * else's alone. A queue (placed by placeQueues_: assignedTo, key, start, due)
  * is its person's rows whose Date is in its week: the week key, its start, or
- * a day written before v6. The new rows' Date is its start and Due its
- * deadline; the Due column is added when the tab has none. The caller holds
- * the lock. Returns the number of rows written.
+ * a day written before v6. A new row's Date is the queue's start and its Due the
+ * deadline; the Due column is added when the tab has none.
+ *
+ * A started row (Posted or Pending) is never dropped, reopened or renamed. It
+ * stays in its row, with its own name, folder id and status. When the save sends
+ * a period for a queue with items, its Date and Due move to the queue's. An item
+ * that names a started row is not written again, and a started row that no item
+ * names is kept the same way. The caller holds the lock. Returns the number of
+ * items sent.
  */
 function replaceQueues_(queues) {
-  if (queues.some(function (q) { return q.writeDue && q.items.length > 0; })) ensureAssignColumn_('due');
+  if (queues.some(function (q) { return q.writeDue; })) ensureAssignColumn_('due');
   var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
   var values = sh.getDataRange().getValues();
   var col = columnsIn_(values[0], ASSIGN_FIELDS, sh.getName());
+  if (col.due === -1 && queues.some(function (q) { return q.writeDue; })) throw new Error('The Assignments tab has no Due column.');
   var tz = zoneOf_(sh);
-  var named = {};
-  queues.forEach(function (q) { named[q.assignedTo + '|' + q.key] = true; });
+  var queueOf = {};   // 'assignedTo|key' -> { queue, started: [{ at, fields }], open: [sheet rows] }
+  queues.forEach(function (q) { queueOf[q.assignedTo + '|' + q.key] = { queue: q, started: [], open: [] }; });
 
-  for (var r = values.length - 1; r >= 1; r--) {
+  // The rows as they are before any change: a row's number is its place in the sheet now.
+  for (var r = 1; r < values.length; r++) {
     var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
-    if (Object.prototype.hasOwnProperty.call(named, a.assignedTo + '|' + weekOf_(sheetDay_(a.date)))) sh.deleteRow(r + 1);
+    var id = a.assignedTo + '|' + weekOf_(sheetDay_(a.date));
+    if (!Object.prototype.hasOwnProperty.call(queueOf, id)) continue;
+    if (queueStatus_(a.status) === NOT_SHARED) queueOf[id].open.push(r + 1);
+    else queueOf[id].started.push({ at: r + 1, fields: a });
   }
+
+  // The items to write: each one that no started row of its queue already holds.
   var saved = 0;
+  var news = [];
   queues.forEach(function (q) {
+    var here = queueOf[q.assignedTo + '|' + q.key];
     q.items.forEach(function (it) {
-      appendRow_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS, {
-        date:       q.start,
-        due:        q.writeDue ? q.due : '',
-        assignedTo: q.assignedTo,
-        property:   it.property,
-        status:     queueStatus_(it.status),
-        propertyId: it.propertyId || idOf_(it.property),
-      });
       saved++;
+      var held = here.started.some(function (s) { return namesRow_(it, s.fields); });
+      if (!held) news.push({ q: q, it: it, propertyId: it.propertyId || idOf_(it.property) });
+    });
+    // A started row takes the queue's period only when the request sends one and the queue has items.
+    // Without items it takes no days (overlapOf_); without a sent period it stays as it is.
+    if (q.sent && q.writeDue && q.items.length) {
+      here.started.forEach(function (s) {
+        setText_(sh.getRange(s.at, col.date + 1), q.start);
+        setText_(sh.getRange(s.at, col.due + 1), q.due);
+      });
+    }
+  });
+
+  // Open rows of the named weeks go, bottom up so the rows above keep their numbers.
+  var doomed = [];
+  queues.forEach(function (q) {
+    queueOf[q.assignedTo + '|' + q.key].open.forEach(function (at) {
+      if (doomed.indexOf(at) === -1) doomed.push(at);
+    });
+  });
+  doomed.sort(function (x, y) { return y - x; }).forEach(function (at) { sh.deleteRow(at); });
+
+  news.forEach(function (n) {
+    appendRow_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS, {
+      date: n.q.start,
+      due: n.q.writeDue ? n.q.due : '',
+      assignedTo: n.q.assignedTo,
+      property: n.it.property,
+      status: queueStatus_(n.it.status),
+      propertyId: n.propertyId,
     });
   });
   return saved;
+}
+
+/** Whether a queue item is the listing of this row: by folder id when both have one, else by name. */
+function namesRow_(it, row) {
+  return sameProperty_(row.propertyId, row.property, it.propertyId, normalizeName_(it.property) || null);
 }
 
 /** Set one queue item's status directly (the client's UpdateAssignmentAsync). */

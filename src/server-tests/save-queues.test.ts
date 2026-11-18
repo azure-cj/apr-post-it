@@ -152,3 +152,109 @@ describe('saveQueues', () => {
     expect(w.assignments.show().slice(1)).toEqual([[DAY, 'Jan Dela Cruz', '1201', 'Not Shared', TOWER.id]]);
   });
 });
+
+describe('a started row (Posted, Pending) survives a save', () => {
+  it.each([['Posted'], ['Pending']])('a %s listing the queue leaves out is kept in its row, not dropped', (status) => {
+    const w = createWorld();
+    w.assignments.writeText([DAY, 'Jan Dela Cruz', CASA.name, status, CASA.id], [DAY, 'Jan Dela Cruz', 'Old item', 'To post', '']);
+
+    expect(w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Jan Dela Cruz', items: [{ propertyName: TOWER.name }] }] })).toEqual({ ok: true, saved: 1 });
+    expect(w.assignments.show().slice(1)).toEqual([
+      [DAY, 'Jan Dela Cruz', CASA.name, status, CASA.id],
+      [DAY, 'Jan Dela Cruz', TOWER.name, 'Not Shared', TOWER.id],
+    ]);
+  });
+
+  it('a started row takes the period of its queue', () => {
+    const w = createWorld();
+    w.assignments.writeText([DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]);
+
+    expect(w.call('maria', 'saveQueue', { week: DAY, start: '2026-03-10', due: '2026-03-13', assignedTo: 'Jan Dela Cruz', items: [{ property: TOWER.name }] })).toEqual({ ok: true, saved: 1 });
+    expect(w.assignments.show().slice(1)).toEqual([
+      ['2026-03-10', 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id, '2026-03-13'],
+      ['2026-03-10', 'Jan Dela Cruz', TOWER.name, 'Not Shared', TOWER.id, '2026-03-13'],
+    ]);
+  });
+
+  it.each([['Posted'], ['Pending']])('a save that sends a %s listing as Not Shared does not reopen it', (status) => {
+    const w = createWorld();
+    w.assignments.writeText([DAY, 'Jan Dela Cruz', CASA.name, status, CASA.id]);
+
+    expect(w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Jan Dela Cruz', items: [{ propertyName: CASA.name, propertyId: CASA.id, status: 'Not Shared' }] }] })).toEqual({ ok: true, saved: 1 });
+    expect(w.assignments.show().slice(1)).toEqual([[DAY, 'Jan Dela Cruz', CASA.name, status, CASA.id]]);
+  });
+
+  it('emptying a queue keeps its started row', () => {
+    const w = createWorld();
+    w.assignments.writeText([DAY, 'Jan Dela Cruz', 'Old item', 'To post', ''], [DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]);
+
+    expect(w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Jan Dela Cruz', items: [] }] })).toEqual({ ok: true, saved: 0 });
+    expect(w.assignments.show().slice(1)).toEqual([[DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]]);
+  });
+
+  it('a started row keeps its own name and folder id when the save sends only a name', () => {
+    const w = createWorld();
+    w.assignments.writeText([DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]);
+
+    expect(w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Jan Dela Cruz', items: [{ propertyName: 'Casa Amara.' }] }] })).toEqual({ ok: true, saved: 1 });
+    expect(w.assignments.show().slice(1)).toEqual([[DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]]);
+  });
+
+  it('two items for one started row write one row', () => {
+    const w = createWorld();
+    w.assignments.writeText([DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]);
+
+    const items = [{ propertyName: CASA.name, propertyId: CASA.id, status: 'Posted' }, { propertyName: CASA.name, propertyId: CASA.id }];
+    expect(w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Jan Dela Cruz', items }] })).toEqual({ ok: true, saved: 2 });
+    expect(w.assignments.show().slice(1)).toEqual([[DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]]);
+  });
+
+  it('a save with no period leaves a started row as it is', () => {
+    const w = createWorld();
+    w.assignments.writeText([DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]);
+
+    expect(w.call('maria', 'saveQueue', { date: DAY, assignedTo: 'Jan Dela Cruz', items: [{ property: TOWER.name }] })).toEqual({ ok: true, saved: 1 });
+    expect(w.assignments.show().slice(1)).toEqual([
+      [DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id],
+      [DAY, 'Jan Dela Cruz', TOWER.name, 'Not Shared', TOWER.id],
+    ]);
+  });
+
+  it('an emptied queue sent with a period does not move its started row onto it', () => {
+    const w = createWorld();
+    w.assignments.typeAt(1, 6, 'Due');
+    w.assignments.writeText(
+      [DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id, '2026-03-13'],
+      ['2026-03-16', 'Jan Dela Cruz', LOT_9.name, 'Not Shared', LOT_9.id, '2026-03-20'],
+    );
+
+    expect(w.call('maria', 'saveQueue', { week: DAY, start: DAY, due: '2026-03-20', assignedTo: 'Jan Dela Cruz', items: [] })).toEqual({ ok: true, saved: 0 });
+    expect(w.assignments.show().slice(1)).toEqual([
+      [DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id, '2026-03-13'],
+      ['2026-03-16', 'Jan Dela Cruz', LOT_9.name, 'Not Shared', LOT_9.id, '2026-03-20'],
+    ]);
+  });
+
+  it('a save with no period leaves a started row alone, even when its queue rows carry a Due', () => {
+    const w = createWorld();
+    w.assignments.typeAt(1, 6, 'Due');
+    w.assignments.writeText(
+      [DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id, '2026-03-13'],
+      [DAY, 'Jan Dela Cruz', 'Old item', 'To post', '', '2026-03-20'],
+    );
+
+    expect(w.call('maria', 'saveQueue', { date: DAY, assignedTo: 'Jan Dela Cruz', items: [{ property: TOWER.name }] })).toEqual({ ok: true, saved: 1 });
+    expect(w.assignments.show().slice(1)).toEqual([
+      [DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id, '2026-03-13'],
+      [DAY, 'Jan Dela Cruz', TOWER.name, 'Not Shared', TOWER.id, '2026-03-20'],
+    ]);
+  });
+
+  it('the intern is matched as the Team spells the name, so a started row is kept', () => {
+    const w = createWorld();
+    w.assignments.writeText([DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]);
+
+    expect(w.call('maria', 'saveQueue', { date: DAY, assignedTo: 'jan dela cruz', items: [{ property: CASA.name, propertyId: CASA.id }] })).toEqual({ ok: true, saved: 1 });
+    expect(w.assignments.show().slice(1)).toEqual([[DAY, 'Jan Dela Cruz', CASA.name, 'Posted', CASA.id]]);
+  });
+});
