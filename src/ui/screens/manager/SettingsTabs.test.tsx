@@ -3,6 +3,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EXPECTED_SERVER_VERSION } from '@/config';
+import { version } from '../../../../package.json';
 import { admin, fakeServer, intern, renderApp } from '../../state/testing';
 import { SettingsListings } from './SettingsListings';
 
@@ -302,7 +303,7 @@ describe('Settings → App', () => {
   it("shows this app's version", () => {
     renderApp({ platform: fakeServer(), user: admin, path: '/settings?tab=app' });
     const about = screen.getByRole('region', { name: 'About' });
-    expect(within(about).getByText('Version').nextElementSibling?.textContent).toBe('1.1.6');
+    expect(within(about).getByText('Version').nextElementSibling?.textContent).toBe(version);
   });
 });
 
