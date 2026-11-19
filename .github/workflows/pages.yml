@@ -17,16 +17,31 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
-  publish:
+  # A release runs on its tag, and the github-pages environment publishes only
+  # from main, so a release asks for a run of this workflow on main instead.
+  ask-for-main:
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Run this workflow on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "${{ github.repository }}" --ref main
+
+  publish:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

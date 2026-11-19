@@ -328,7 +328,7 @@ footer p { margin: 6px 0; }
   function date(iso) {
     return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
   }
-  function version(r) { return String(r.tag_name || r.name || '').replace(/^v/i, ''); }
+  function version(r) { return String(r.tag_name || r.name || '').replace(/^v\.?/i, ''); }
 
   var chevron = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 
