@@ -144,7 +144,14 @@
 }
 .startup__line[data-tone="busy"] .startup__mark {
   color: var(--gold);
-  font-size: 0.8em;
+  align-self: center;
+  display: inline-flex;
+  justify-content: center;
+}
+/* Turning, so a wait reads as work going on rather than stuck. */
+.startup__spinner {
+  width: 0.95em;
+  height: 0.95em;
 }
 .startup__line[data-tone="neutral"] .startup__mark {
   color: var(--neutral-strong);

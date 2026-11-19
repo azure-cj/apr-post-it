@@ -1,10 +1,11 @@
 import { forwardRef } from 'react';
 import type { MapPoint } from './geo';
+import { Spinner } from '../components';
 import { StartupMap } from './StartupMap';
 import { count, type StartupStat } from './words';
 import './Startup.css';
 
-/** ok ✓, busy ● (still going), fail ✗, neutral ● (a state, not a step). */
+/** ok ✓, busy (a turning spinner: still going), fail ✗, neutral ● (a state, not a step). */
 export type LineTone = 'ok' | 'busy' | 'fail' | 'neutral';
 
 export interface StartupLine {
@@ -28,7 +29,7 @@ export interface StartupScreenProps {
   readonly onSkip: () => void;
 }
 
-const MARKS: Record<LineTone, string> = { ok: '✓', busy: '●', fail: '✗', neutral: '●' };
+const MARKS: Record<Exclude<LineTone, 'busy'>, string> = { ok: '✓', fail: '✗', neutral: '●' };
 
 /**
  * The startup screen: the brand, what is happening, and every listing on a
@@ -67,7 +68,7 @@ export const StartupScreen = forwardRef<HTMLDivElement, StartupScreenProps>(func
             {lines.map((line) => (
               <li key={line.key} className="startup__line" data-tone={line.tone}>
                 <span className="startup__mark" aria-hidden="true">
-                  {MARKS[line.tone]}
+                  {line.tone === 'busy' ? <Spinner size="small" className="startup__spinner" /> : MARKS[line.tone]}
                 </span>
                 {line.text}
               </li>
