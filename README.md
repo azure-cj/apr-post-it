@@ -27,6 +27,15 @@ Built with Tauri 2, React and TypeScript (D10). Who can do what: `docs/ROLES.md`
 From a terminal in this folder: `npm test` runs the tests, `npm run tauri dev` runs the app, and
 `npm run dev` runs it in a browser for development, against the real web app.
 
+## The download page
+
+Interns install the app from **<https://azure-cj.github.io/apr-post-it/>**: one download
+button for the latest installer, how to install it, and what's new. It lives in `site/`, and
+`.github/workflows/pages.yml` publishes it again on its own whenever a release is
+published, edited or deleted. It shows only the **What's new** part of the release notes;
+other sections ("Before updating", "Install") stay on GitHub. Once, on GitHub: Settings →
+Pages → Source: **GitHub Actions**.
+
 ## Set up the server (once)
 
 Full details, and what each action does: `server/README.md`.

@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Download APG Post-It</title>
+<meta name="description" content="Download APG Post-It for Windows: post property listings to Facebook.">
+<link rel="icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* The app's own tokens (src/theme/tokens.css), trimmed to what this page uses.
+   Dark first; light follows Windows. Gold only for the brand word, the one
+   download button, and focus. No shadows. Nothing under 14px. */
+:root {
+  color-scheme: dark;
+  --bg: #121212;
+  --surface: #1a1a1a;
+  --card-bg: linear-gradient(180deg, #1e1e1e 0%, #1a1a1a 100%);
+  --card-edge: #333333;
+  --inset: rgba(0, 0, 0, 0.3);
+  --text: #e0e0e0;
+  --text-label: #cccccc;
+  --text-muted: #b0b0b0;
+  --border-soft: #2e2e2e;
+  --border: #444444;
+  --button-edge: #4d4d4d;
+  --row-hover: rgba(255, 255, 255, 0.03);
+  --neutral-bg: rgba(255, 255, 255, 0.06);
+  --gold: #e0b84a;
+  --on-gold: #121212;
+  --gold-gradient: linear-gradient(135deg, #f6dc8a 0%, #e0b84a 45%, #b98a26 100%);
+  --info-text: #a9cdef;
+  --info-bg: rgba(111, 168, 220, 0.12);
+  --warn-text: #f5b77a;
+  --warn-bg: rgba(245, 160, 80, 0.12);
+  --step-bg: #222222;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #fafafa;
+    --surface: #f5f5f5;
+    --card-bg: #ffffff;
+    --card-edge: #e0e0e0;
+    --inset: rgba(0, 0, 0, 0.04);
+    --text: #121212;
+    --text-label: #2e2e2e;
+    --text-muted: #4a4a4a;
+    --border-soft: #ebebeb;
+    --border: #e0e0e0;
+    --button-edge: #c8c8c8;
+    --row-hover: rgba(0, 0, 0, 0.03);
+    --neutral-bg: rgba(0, 0, 0, 0.05);
+    --gold: #806210;
+    --info-text: #1c5596;
+    --info-bg: rgba(38, 104, 179, 0.08);
+    --warn-text: #a34b05;
+    --warn-bg: rgba(163, 75, 5, 0.08);
+    --step-bg: #f0f0f0;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
+h1, h2, h3, .btn, .label { font-family: Montserrat, "Segoe UI", sans-serif; letter-spacing: 0; }
+a { color: var(--info-text); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 6px; }
+::selection { background: #e0b84a; color: #121212; }
+
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+
+header.top { padding: 40px 0 8px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand img { width: 56px; height: 56px; border-radius: 12px; }
+.brand-name { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.2; }
+.brand-name span { color: var(--gold); }
+.brand-sub { margin: 2px 0 0; color: var(--text-muted); font-size: 16px; }
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-edge);
+  border-radius: 14px;
+  padding: 24px;
+  margin: 20px 0;
+}
+h2 { margin: 0 0 14px; font-size: 20px; font-weight: 700; line-height: 1.3; }
+h3 { margin: 0; font-size: 16px; font-weight: 600; }
+
+/* ---- download ---- */
+.hero { padding: 28px 24px; }
+.hero h2 { font-size: 24px; margin-bottom: 6px; }
+.hero p.lede { margin: 0 0 22px; color: var(--text-muted); }
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  min-height: 52px; padding: 0 26px;
+  border-radius: 10px; border: 0;
+  font-size: 17px; font-weight: 700;
+  text-decoration: none; cursor: pointer;
+  transition: transform 160ms var(--ease), opacity 160ms var(--ease);
+}
+.btn-primary { background: var(--gold-gradient); color: var(--on-gold); }
+.btn-primary:hover { opacity: 0.92; }
+.btn-primary:active { transform: scale(0.98); }
+.btn svg { width: 20px; height: 20px; flex: none; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 16px 0 0; color: var(--text-muted); font-size: 15px; }
+.meta b { color: var(--text-label); font-weight: 600; }
+.req { margin: 14px 0 0; color: var(--text-muted); font-size: 15px; }
+
+/* ---- steps ---- */
+ol.steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 0 0 20px 50px;
+}
+ol.steps > li:last-child { padding-bottom: 0; }
+ol.steps > li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: -2px;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--step-bg); border: 1px solid var(--border);
+  font: 700 15px/1 Montserrat, sans-serif; color: var(--text-label);
+}
+ol.steps p { margin: 4px 0 0; color: var(--text-muted); }
+.note {
+  margin: 12px 0 0; padding: 12px 14px; border-radius: 10px;
+  background: var(--warn-bg); color: var(--text);
+  font-size: 15px;
+}
+.note strong { color: var(--warn-text); font-weight: 600; }
+kbd {
+  font: 600 14px/1 "Segoe UI", sans-serif;
+  padding: 2px 7px; border-radius: 5px;
+  background: var(--neutral-bg); border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.callout {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 16px; border-radius: 12px; background: var(--info-bg);
+}
+.callout svg { width: 22px; height: 22px; flex: none; color: var(--info-text); margin-top: 1px; }
+.callout p { margin: 2px 0 0; color: var(--text-muted); }
+
+/* ---- release notes ---- */
+.notes { color: var(--text); }
+.notes ul { margin: 0; padding-left: 22px; }
+.notes li { margin: 0 0 8px; }
+.notes li:last-child { margin-bottom: 0; }
+.notes p { margin: 0 0 10px; }
+.notes h4 { margin: 14px 0 8px; font: 600 15px/1.4 Montserrat, sans-serif; color: var(--text-label); }
+.notes h4:first-child { margin-top: 0; }
+.version-tag { color: var(--text-muted); font-weight: 500; font-size: 16px; }
+
+details.old { border-top: 1px solid var(--border-soft); }
+details.old:first-of-type { border-top: 0; }
+details.old summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 4px; border-radius: 8px;
+}
+details.old summary::-webkit-details-marker { display: none; }
+details.old summary:hover { background: var(--row-hover); }
+details.old summary .when { color: var(--text-muted); font-size: 15px; white-space: nowrap; }
+details.old summary .chev { width: 18px; height: 18px; color: var(--text-muted); transition: transform 160ms var(--ease); flex: none; }
+details.old[open] summary .chev { transform: rotate(180deg); }
+details.old .body { padding: 0 4px 18px; }
+details.old .dl { display: inline-block; margin-top: 12px; font-size: 15px; }
+
+.muted { color: var(--text-muted); }
+.skeleton { color: var(--text-muted); }
+
+footer { padding: 8px 0 48px; color: var(--text-muted); font-size: 15px; }
+footer p { margin: 6px 0; }
+
+@media (max-width: 520px) {
+  header.top { padding-top: 28px; }
+  .card, .hero { padding: 20px 18px; }
+  .btn { width: 100%; justify-content: center; }
+  .brand-name { font-size: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <img src="icon.png" alt="" width="56" height="56">
+      <div>
+        <h1 class="brand-name"><span>APG</span> Post-It</h1>
+        <p class="brand-sub">Post property listings to Facebook</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card hero" aria-labelledby="dl-title">
+      <h2 id="dl-title">Get the app</h2>
+      <p class="lede">One installer, no admin rights needed. It takes under a minute.</p>
+      <a id="download" class="btn btn-primary" href="https://github.com/azure-cj/apr-post-it/releases/latest">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        <span id="download-label">Download for Windows</span>
+      </a>
+      <p class="meta" id="meta" aria-live="polite"><span class="skeleton">Finding the latest version…</span></p>
+      <p class="req">For Windows 10 and 11 (64-bit).</p>
+    </section>
+
+    <section class="card" aria-labelledby="install-title">
+      <h2 id="install-title">Install it</h2>
+      <ol class="steps">
+        <li>
+          <h3>Download the installer</h3>
+          <p>Click <b>Download for Windows</b> above. If your browser asks, choose <b>Keep</b>.</p>
+        </li>
+        <li>
+          <h3>Open it from your Downloads</h3>
+          <p>Double-click <b id="file-name">APG-Post-It_…_x64-setup.exe</b>. It installs for you only and opens when it's done.</p>
+          <p class="note"><strong>If Windows says "Windows protected your PC"</strong>, click <kbd>More info</kbd>, then <kbd>Run anyway</kbd>. Windows shows this for apps it hasn't seen many times before.</p>
+        </li>
+        <li>
+          <h3>Sign in</h3>
+          <p>Use the same email and password as Alpha Listing Hub. Don't have an account yet? Ask your admin.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="card" aria-label="Updates">
+      <div class="callout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+        <div>
+          <h3>Already have it?</h3>
+          <p>You don't need this page to update. When a new version is out, the app shows <b>Restart and update</b>. You can also click <b>Check for updates</b> in the sidebar.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="new-title">
+      <h2 id="new-title">What's new <span class="version-tag" id="new-version"></span></h2>
+      <div class="notes" id="whats-new"><p class="skeleton">Loading…</p></div>
+    </section>
+
+    <section class="card" aria-labelledby="old-title" id="older-card" hidden>
+      <h2 id="old-title">Earlier versions</h2>
+      <div id="older"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>To remove the app: Windows <b>Settings</b> → <b>Apps</b> → <b>Installed apps</b> → APG Post-It → <b>Uninstall</b>.</p>
+    <p>Every release is also on <a href="https://github.com/azure-cj/apr-post-it/releases">GitHub</a>. © Alpha Premier Group</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var REPO = 'azure-cj/apr-post-it';
+  var ALL = 'https://github.com/' + REPO + '/releases';
+
+  // releases.json is written when the page is published (see
+  // .github/workflows/pages.yml), so visitors never hit GitHub's rate limit.
+  // Opened any other way, the page asks GitHub directly.
+  function load() {
+    return fetch('releases.json', { cache: 'no-cache' })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .catch(function () {
+        return fetch('https://api.github.com/repos/' + REPO + '/releases?per_page=30')
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+      });
+  }
+
+  function installer(release) {
+    var assets = release.assets || [];
+    for (var i = 0; i < assets.length; i++) {
+      if (/-setup\.exe$/i.test(assets[i].name)) return assets[i];
+    }
+    return null;
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function inline(s) {
+    return esc(s)
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+
+  // A small reader for the release notes: bullets and paragraphs. Keeps only
+  // what's new: the "What's new" title goes (the section has one), and so do
+  // other sections ("Before updating", "Install": notes for whoever deploys
+  // the server) and the update and install hints, which this page covers.
+  function notesHtml(body) {
+    var lines = String(body || '').replace(/\r/g, '').split('\n');
+    var out = [], list = false, skip = false;
+    function close() { if (list) { out.push('</ul>'); list = false; } }
+    lines.forEach(function (raw) {
+      var line = raw.trim();
+      if (!line) { close(); return; }
+      if (/^(#+\s*)?what'?s new\b/i.test(line)) { close(); skip = false; return; }
+      if (/^#+\s/.test(line)) { close(); skip = true; return; }
+      if (skip) return;
+      if (/^(already (installed|on)|new install)/i.test(line)) return;
+      var li = line.match(/^[-*]\s+(.+)$/);
+      if (li) { if (!list) { out.push('<ul>'); list = true; } out.push('<li>' + inline(li[1]) + '</li>'); }
+      else { close(); out.push('<p>' + inline(line) + '</p>'); }
+    });
+    close();
+    return out.join('') || '<p class="muted">No notes for this version.</p>';
+  }
+
+  function size(bytes) { return (bytes / 1048576).toFixed(1) + ' MB'; }
+  function date(iso) {
+    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  function version(r) { return String(r.tag_name || r.name || '').replace(/^v/i, ''); }
+
+  var chevron = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+
+  function render(releases) {
+    var list = releases.filter(function (r) { return !r.draft && !r.prerelease && installer(r); });
+    if (!list.length) throw new Error('no releases');
+    list.sort(function (a, b) { return new Date(b.published_at) - new Date(a.published_at); });
+
+    var latest = list[0], exe = installer(latest), v = version(latest);
+    var btn = document.getElementById('download');
+    btn.href = exe.browser_download_url;
+    document.getElementById('meta').innerHTML =
+      '<span>Version <b>' + esc(v) + '</b></span>' +
+      '<span>' + size(exe.size) + '</span>' +
+      '<span>Released ' + esc(date(latest.published_at)) + '</span>';
+    document.getElementById('file-name').textContent = exe.name;
+    document.getElementById('new-version').textContent = 'in ' + v;
+    document.getElementById('whats-new').innerHTML = notesHtml(latest.body);
+
+    var older = list.slice(1);
+    if (older.length) {
+      document.getElementById('older').innerHTML = older.map(function (r) {
+        var a = installer(r);
+        return '<details class="old"><summary><h3>Version ' + esc(version(r)) + '</h3>' +
+          '<span style="display:flex;align-items:center;gap:10px"><span class="when">' + esc(date(r.published_at)) + '</span>' + chevron + '</span></summary>' +
+          '<div class="body"><div class="notes">' + notesHtml(r.body) + '</div>' +
+          '<a class="dl" href="' + esc(a.browser_download_url) + '">Download ' + esc(version(r)) + ' (' + size(a.size) + ')</a></div></details>';
+      }).join('');
+      document.getElementById('older-card').hidden = false;
+    }
+  }
+
+  function fail() {
+    document.getElementById('meta').innerHTML =
+      '<span>The button opens the latest release on GitHub. Download the file that ends in <b>-setup.exe</b>.</span>';
+    document.getElementById('whats-new').innerHTML =
+      '<p class="muted">Couldn\'t load the notes here. See them on <a href="' + ALL + '/latest">GitHub</a>.</p>';
+  }
+
+  load().then(render).catch(fail);
+})();
+</script>
+</body>
+</html>

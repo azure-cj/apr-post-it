@@ -1,0 +1,48 @@
+# The download page for interns: site/ published to GitHub Pages, with the releases
+# written beside it as releases.json, so the page always shows the latest installer.
+# It republishes when a release is published, edited or deleted, when site/ changes,
+# and from the Actions tab (Run workflow).
+#
+# Once, in the repo on GitHub: Settings → Pages → Source: GitHub Actions.
+
+name: Download page
+
+on:
+  release:
+    types: [published, edited, deleted]
+  push:
+    branches: [main]
+    paths: ['site/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write releases.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${{ github.repository }}/releases?per_page=30" > site/releases.json
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
