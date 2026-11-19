@@ -932,12 +932,40 @@ export function docsToFix(health: DocHealth): number {
 
 /** The team's active interns, by name: whose queues can be built. */
 export function activeInterns(team: readonly Pick<TeamMember, 'name' | 'role' | 'active'>[]): string[] {
+  return activeWith(team, 'Intern');
+}
+
+/** The team's active admins, by name: they may be given a queue too (D31). */
+export function activeAdmins(team: readonly Pick<TeamMember, 'name' | 'role' | 'active'>[]): string[] {
+  return activeWith(team, 'Admin');
+}
+
+/** The team's active people with this role, by name, each once (any case), in name order. */
+function activeWith(team: readonly Pick<TeamMember, 'name' | 'role' | 'active'>[], role: Role): string[] {
   const names: string[] = [];
   for (const member of team) {
-    if (member.role !== 'Intern' || member.active === false || !member.name.trim()) continue;
+    if (member.role !== role || member.active === false || !member.name.trim()) continue;
     if (!names.some((n) => samePerson(n, member.name))) names.push(member.name);
   }
   return names.sort((a, b) => byName.compare(a, b));
+}
+
+/**
+ * Who is on the weekly monitor (Agents): every active intern, then each active
+ * admin with a queue running that week (D31), so an admin who never posts isn't
+ * listed as having none. A name on both lists is an intern's row.
+ */
+export function monitorNames(
+  team: readonly Pick<TeamMember, 'name' | 'role' | 'active'>[],
+  week: string,
+  assignments: readonly Assignment[],
+  today: string,
+): { readonly names: readonly string[]; readonly admins: ReadonlySet<string> } {
+  const interns = activeInterns(team);
+  const admins = activeAdmins(team).filter(
+    (name) => !interns.some((n) => samePerson(n, name)) && weekProgress(name, week, assignments, [], today).target > 0,
+  );
+  return { names: [...interns, ...admins], admins: new Set(admins) };
 }
 
 /** One intern's day at a glance: their week's queue progress and posts still waiting for approval. */

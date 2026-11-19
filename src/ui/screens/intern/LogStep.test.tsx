@@ -6,7 +6,7 @@
  */
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { CLEAN, fakeServer, intern, internAnyAccount, propertyReply, renderApp, TODAY } from '../../state/testing';
+import { CLEAN, fakeServer, intern, internAnyAccount, manager, propertyReply, renderApp, TODAY } from '../../state/testing';
 
 const PATH = `/property/${CLEAN.id}`;
 const LINK = 'https://www.facebook.com/groups/apgmain/posts/1029384801/';
@@ -123,6 +123,57 @@ describe('the log step', () => {
     expect(screen.getByRole('link', { name: 'My queue' })).toBeTruthy();
     // A clean form for it.
     expect((await linkField()).value).toBe('');
+  });
+
+  it('opens the next listing on any day of the queue, not only its first: its rows carry its start (v14)', async () => {
+    // Two weeks from Monday 26 Oct, due Friday 6 Nov, as the server writes them; today is Saturday 31 Oct.
+    const running = { ok: true, assignments: QUEUE.assignments.map((a) => ({ ...a, date: '2026-10-26', due: '2026-11-06' })) };
+    const platform = fakeServer({
+      assignments: running,
+      property: anyProperty,
+      logPost: { ok: true, status: 'Posted', date: TODAY, postedBy: intern.name },
+    });
+    renderApp({ platform, path: PATH, state: { section: 'queue' } });
+    await screen.findByRole('heading', { level: 1, name: CLEAN.name });
+    await waitFor(() => expect(platform.posts.some((p) => p.action === 'assignments')).toBe(true));
+
+    await userEvent.type(await linkField(), LINK);
+    await userEvent.click(posted());
+    expect(await screen.findByRole('heading', { level: 1, name: 'Kapitolyo Ground Floor Retail, Pasig' })).toBeTruthy();
+  });
+
+  it("opens the next listing of an admin's own queue too, when they came from it (D31)", async () => {
+    const theirs = { ok: true, assignments: QUEUE.assignments.map((a) => ({ ...a, assignedTo: manager.name })) };
+    const platform = fakeServer({
+      assignments: theirs,
+      property: anyProperty,
+      logPost: { ok: true, status: 'Posted', date: TODAY, postedBy: manager.name },
+    });
+    renderApp({ platform, user: manager, path: PATH, state: { section: 'queue' } });
+    await screen.findByRole('heading', { level: 1, name: CLEAN.name });
+    await waitFor(() => expect(platform.posts.some((p) => p.action === 'assignments')).toBe(true));
+
+    await userEvent.type(await screen.findByLabelText('FB account'), 'APG Main');
+    await userEvent.type(await linkField(), LINK);
+    await userEvent.click(posted());
+    expect(await screen.findByRole('heading', { level: 1, name: 'Kapitolyo Ground Floor Retail, Pasig' })).toBeTruthy();
+  });
+
+  it('takes an admin who came from Find back to Find, not into their queue', async () => {
+    const theirs = { ok: true, assignments: QUEUE.assignments.map((a) => ({ ...a, assignedTo: manager.name })) };
+    const platform = fakeServer({
+      assignments: theirs,
+      property: anyProperty,
+      logPost: { ok: true, status: 'Posted', date: TODAY, postedBy: manager.name },
+    });
+    renderApp({ platform, user: manager, path: PATH, state: { section: 'find' } });
+    await screen.findByRole('heading', { level: 1, name: CLEAN.name });
+    await waitFor(() => expect(platform.posts.some((p) => p.action === 'assignments')).toBe(true));
+
+    await userEvent.type(await screen.findByLabelText('FB account'), 'APG Main');
+    await userEvent.type(await linkField(), LINK);
+    await userEvent.click(posted());
+    expect(await screen.findByRole('heading', { level: 1, name: 'Find' })).toBeTruthy();
   });
 
   it('goes back to the queue when nothing is left in it', async () => {

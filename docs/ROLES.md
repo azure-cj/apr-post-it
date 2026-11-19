@@ -8,7 +8,8 @@ Script web app; only the enforcement point moves.
 Two roles (D14).
 
 **Admin** — the person who assigns the postings. Builds the queues, sees everyone, fixes
-mistakes, and owns the setup: folders, rules, team, keys.
+mistakes, and owns the setup: folders, rules, team, keys. An admin may also be given a queue,
+by another admin or by themselves, and posts it as an intern does (D31).
 **Intern** — everyone else. Posts. Sees their own queue and their own tracker rows, nobody
 else's.
 
@@ -21,17 +22,19 @@ blank included, is `Intern`.
 | Search properties, view public text, photos | ✔ | ✔ |
 | Copy public posting text | ✔ | ✔ |
 | **See the internal section** (commission, terms) | ✔ read only (D16) | ✔ |
-| My Queue | own only | – |
-| Log a post | as self | on behalf of an intern |
+| My Queue | own only | own, while they have one or a post waiting (D31) |
+| Log a post | as self | as self; on behalf of anyone active (server only) |
 | Add the live link to a Pending post | own only | any |
 | **Post inside the 7-day cooldown** | **✘ refused** | ✘ refused |
 | Edit or void a logged row | ✘ | ✔ |
-| Assign, reorder, remove queue items | ✘ | ✔ |
+| Assign, reorder, remove queue items | ✘ | ✔ (to interns and admins, D31) |
 | Tracker: posted, pending, due for repost, never posted | own numbers | everyone |
 | Doc health sweep | ✘ | ✔ |
 | Settings: folders, cooldown, team, keys | ✘ | ✔ |
 
-In the app an Admin gets Tracker, Assign, Interns, Find and Settings; an Intern gets My queue and Find.
+In the app an Admin gets Tracker, Assign, Agents, Records, Find and Settings, and My queue (before
+Find) while they have a queue running or coming, or a post of their own waiting for approval,
+and while they are on it (D31); an Intern gets My queue and Find.
 
 ## The two that are boundaries, not preferences
 
@@ -78,4 +81,5 @@ there is no chicken-and-egg at setup. It stops working the moment a real row exi
 1. ~~Admin separate from Manager, or folded in?~~ Folded in: two roles, Admin and Intern (D14).
 2. **May an admin override a cooldown?** If yes it needs a required reason and gets logged.
    Currently nobody can.
-3. **May an admin also post, with a queue of their own?**
+3. ~~May an admin also post, with a queue of their own?~~ Yes: any admin may be given a queue,
+   and works it from My queue (D31).

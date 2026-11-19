@@ -14,7 +14,7 @@ import {
 } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { BUILT_IN_SCRIPT_URL } from '@/config';
-import { activeInterns, addDays, isDate, peopleIn, samePerson } from '@/core/summary';
+import { activeAdmins, activeInterns, addDays, isDate, peopleIn, samePerson, waitingPosts } from '@/core/summary';
 import { periodFromQuery, periodQuery } from '@/core/records';
 import { currentQueue, rowsOf } from '@/core/queues';
 import { weekOf } from '@/core/week';
@@ -83,15 +83,19 @@ interface NavDef {
 
 /**
  * The destinations a role gets, in order (docs/ROLES.md). Hiding a screen is
- * convenience only: the server enforces what each key may do.
+ * convenience only: the server enforces what each key may do. An admin given
+ * a queue (D31) also gets My queue, before Find, while it runs or is coming,
+ * or while a post of theirs waits for approval, and while they are on it:
+ * `ownQueue`.
  */
-export function navFor(user: User): readonly NavDef[] {
+export function navFor(user: User, ownQueue = false): readonly NavDef[] {
   if (canManage(user)) {
     return [
       { key: 'tracker', label: 'Tracker', path: paths.tracker, icon: 'tracker' },
       { key: 'assign', label: 'Assign', path: paths.assign, icon: 'assign' },
       { key: 'interns', label: 'Agents', path: paths.interns, icon: 'interns' },
       { key: 'records', label: 'Records', path: paths.records, icon: 'records' },
+      ...(ownQueue ? [{ key: 'queue', label: 'My queue', path: paths.queue, icon: 'inbox' } as const] : []),
       { key: 'find', label: 'Find', path: paths.find, icon: 'search' },
       { key: 'settings', label: 'Settings', path: paths.settings, icon: 'settings' },
     ];
@@ -186,7 +190,8 @@ export function AppShell({ signInNote }: AppProps) {
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const lastPath = useRef(location.pathname);
-  const queueCount = useQueueCount(user);
+  const ownQueue = useOwnQueue(user);
+  const queueCount = ownQueue?.left ?? 0;
 
   // ---- leaving Assign with unsaved changes asks first -------------------------
   const [assignDirty, setAssignDirty] = useState(false);
@@ -374,7 +379,10 @@ export function AppShell({ signInNote }: AppProps) {
     navigate(paths.signIn, { replace: true });
   }, [signOut, navigate]);
 
-  const nav = user ? navFor(user) : [];
+  const currentKey = navKeyFor(location.pathname, location.state);
+  // An admin's My queue stays while they are on it (or a listing opened from it): approving
+  // their last waiting post mustn't take it from under them. It goes when they leave.
+  const nav = user ? navFor(user, ownQueue !== null || currentKey === 'queue') : [];
   const sidebarNav: SidebarProps['nav'] = nav.map((item) => ({
     key: item.key,
     label: item.label,
@@ -411,7 +419,7 @@ export function AppShell({ signInNote }: AppProps) {
         {user ? (
           <Sidebar
             nav={sidebarNav}
-            currentKey={navKeyFor(location.pathname, location.state)}
+            currentKey={currentKey}
             user={{ name: user.name, role: user.role }}
             onNavigate={(key) => {
               const target = nav.find((n) => n.key === key);
@@ -644,27 +652,35 @@ function useSidebarState(platform: Platform) {
 }
 
 /**
- * How much of an intern's queue is left this week, for the count beside My queue.
- * Read on sign-in and every two minutes; the queue screen reads it more often
- * while it is up, and every save reads it again.
+ * Your queue now, for My queue in the nav: how much of it is left (the count
+ * beside it), or null when there is nothing for you there. An intern always
+ * has My queue; an admin has it while they have a queue running or coming, or
+ * a post of their own still waiting for approval, which only My queue marks
+ * approved (D31). Read on sign-in and every two minutes, unless a screen read
+ * it in the last minute; the queue screen reads it more often while it is up,
+ * and every save reads it again. The posts are PendingNotifier's.
  */
-function useQueueCount(user: User | null): number {
+function useOwnQueue(user: User | null): { readonly left: number } | null {
   const app = useApp();
   const { assignments } = app;
   const snapshot = useStore(assignments.store);
-  const intern = user !== null && !canManage(user);
+  const logged = useStore(app.posts.store);
+  const signedIn = user !== null;
 
   useEffect(() => {
-    if (!intern) return undefined;
+    if (!signedIn) return undefined;
     void assignments.refresh(60_000);
-    const timer = setInterval(() => void assignments.refresh(), 120_000);
+    const timer = setInterval(() => void assignments.refresh(60_000), 120_000);
     return () => clearInterval(timer);
-  }, [intern, assignments]);
+  }, [signedIn, assignments]);
 
-  if (!intern || !snapshot.data) return 0;
+  if (!user) return null;
   // Their queue now: the one running, else the next to start.
-  const queue = currentQueue(user.name, snapshot.data, app.today());
-  return queue ? rowsOf(user.name, queue.key, snapshot.data).filter((a) => a.status !== 'Posted').length : 0;
+  const queue = snapshot.data ? currentQueue(user.name, snapshot.data, app.today()) : undefined;
+  if (queue && snapshot.data) return { left: rowsOf(user.name, queue.key, snapshot.data).filter((a) => a.status !== 'Posted').length };
+  // None, but a post still waiting for approval: My queue is where it is marked approved.
+  const waiting = logged.data ? waitingPosts(logged.data, user.name, app.today()).length : 0;
+  return waiting > 0 ? { left: 0 } : null;
 }
 
 /** A wait before anything can be shown, said in words. */
@@ -867,19 +883,29 @@ function useManagerRows() {
   };
 }
 
+const NO_NAMES: readonly string[] = [];
+
 /**
- * Whose queues can be built: the team's active interns. Until the team has
- * been read (or when it can't be), everyone the tracker mentions, less the
- * person signed in.
+ * Whose queues can be built: the team's active interns and, since D31, its
+ * active admins, the person signed in included. Until the team has been read
+ * (or when it can't be), everyone the tracker mentions, less the person signed
+ * in, as interns, and `known` is false: admins may be among them.
  */
-function useInterns(rows: ReturnType<typeof useManagerRows>, me: User): readonly string[] {
+function useAssignable(
+  rows: ReturnType<typeof useManagerRows>,
+  me: User,
+): { readonly interns: readonly string[]; readonly admins: readonly string[]; readonly known: boolean } {
   const { posts, assignments } = rows;
   const team = useTeam({ maxAgeMs: 300_000 });
   return useMemo(
     () =>
       team.data
-        ? activeInterns(team.data)
-        : peopleIn(assignments.data ?? [], posts.data ?? []).filter((name) => !samePerson(name, me.name)),
+        ? { interns: activeInterns(team.data), admins: activeAdmins(team.data), known: true }
+        : {
+            interns: peopleIn(assignments.data ?? [], posts.data ?? []).filter((name) => !samePerson(name, me.name)),
+            admins: NO_NAMES,
+            known: false,
+          },
     [team.data, assignments.data, posts.data, me.name],
   );
 }
@@ -889,7 +915,7 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
   const me = useUser();
   const [params, setParams] = useSearchParams();
   const rows = useManagerRows();
-  const interns = useInterns(rows, me);
+  const { interns, admins, known } = useAssignable(rows, me);
   const today = app.today();
 
   // ?week= (any day of it reads as its Monday); an older link's ?date= too. Missing: this
@@ -933,6 +959,9 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
   return (
     <AssignScreen
       interns={interns}
+      admins={admins}
+      me={me.name}
+      teamKnown={known}
       intern={intern}
       week={week}
       today={today}

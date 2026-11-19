@@ -227,6 +227,87 @@ describe('addLink (bug 5)', () => {
     expect(w.call('maria', 'addLink', { property: CASA.name, postLink: LINK })).toEqual({ ok: true, row: 2 });
   });
 
+  it("completes an admin's own post, not someone else's newer one of the listing (D31)", async () => {
+    const w = createWorld();
+    w.assignments.type(['2026-03-09', 'Maria Santos', 'Casa Amara', 'Not Shared', CASA.id], ['2026-03-09', 'Jan Dela Cruz', 'Casa Amara', 'Not Shared', CASA.id]);
+    w.logPost('maria', CASA, { status: 'Pending' });   // posts/1, row 2
+    w.logPost('jan', CASA, { status: 'Pending' });     // posts/2, row 3
+    const app = w.app('maria');
+    const mine = (await app.tracker.posts()).find((p) => p.postedBy === 'Maria Santos')!;
+
+    // Approved: the link it was logged with.
+    await expect(app.tracker.addLink(mine, mine.postLink)).resolves.toMatchObject({ status: 'Posted' });
+    expect(w.posts.row(2)[4]).toBe('Posted');
+    expect([w.posts.row(3)[4], w.posts.row(3)[6]]).toEqual(['Pending', 'https://www.facebook.com/groups/apg/posts/2/']);
+    expect([w.assignments.row(2)[3], w.assignments.row(3)[3]]).toEqual(['Posted', 'Pending']);
+  });
+
+  it("gives an admin's old linkless post the new link, and refuses someone else's link for it (D31)", () => {
+    const w = createWorld();
+    w.posts.type(
+      ['2026-03-05', 'Casa Amara', 'Group post', '9:15', 'Pending', 'APG Main', '', 'Maria Santos', CASA.id],
+      // Jan's of the same listing, with its link: not hers to complete.
+      ['2026-03-06', 'Casa Amara', 'Group post', '9:15', 'Pending', 'APG Main', LINK, 'Jan Dela Cruz', CASA.id],
+    );
+    const mine = { property: CASA.name, propertyId: CASA.id, postedBy: 'Maria Santos' };
+
+    expect(w.call('maria', 'addLink', { ...mine, postLink: LINK })).toMatchObject({ ok: false, error: 'link-taken' });
+    expect(w.posts.row(3)[4]).toBe('Pending');
+    expect(w.call('maria', 'addLink', { ...mine, postLink: 'https://www.facebook.com/groups/apg/posts/9/' })).toEqual({ ok: true, row: 2 });
+    expect([w.posts.row(3)[4], w.posts.row(3)[6]]).toEqual(['Pending', LINK]);
+  });
+
+  it('completes the Pending row that has the link, not a newer one of the same listing', () => {
+    const w = createWorld();
+    w.logPost('jan', CASA, { status: 'Pending' });   // posts/1, row 2
+    w.logPost('jan', CASA, { status: 'Pending' });   // posts/2, row 3
+
+    expect(w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: LINK })).toEqual({ ok: true, row: 2 });
+    expect(w.posts.row(2)[4]).toBe('Posted');
+    expect([w.posts.row(3)[4], w.posts.row(3)[6]]).toEqual(['Pending', 'https://www.facebook.com/groups/apg/posts/2/']);
+  });
+
+  it('knows the post by any copy of its link', () => {
+    const w = createWorld();
+    w.logPost('jan', CASA, { status: 'Pending' });   // posts/1, row 2
+    w.logPost('jan', CASA, { status: 'Pending' });   // posts/2, row 3
+    const copy = 'https://m.facebook.com/groups/apg/permalink/1/?mibextid=abc';
+
+    expect(w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: copy })).toEqual({ ok: true, row: 2 });
+    expect([w.posts.row(3)[4], w.posts.row(3)[6]]).toEqual(['Pending', 'https://www.facebook.com/groups/apg/posts/2/']);
+  });
+
+  it('refuses a second Approved once the first was saved, rather than put its link on another post', () => {
+    const w = createWorld();
+    w.logPost('jan', CASA, { status: 'Pending' });   // posts/1, row 2
+    w.logPost('jan', CASA, { status: 'Pending' });   // posts/2, row 3
+    const approve = { property: CASA.name, propertyId: CASA.id, postLink: LINK };
+
+    expect(w.call('jan', 'addLink', approve)).toEqual({ ok: true, row: 2 });
+    // Its answer lost, Approved again: the post is in already.
+    expect(w.call('jan', 'addLink', approve)).toMatchObject({ ok: false, error: 'link-taken' });
+    expect([w.posts.row(3)[4], w.posts.row(3)[6]]).toEqual(['Pending', 'https://www.facebook.com/groups/apg/posts/2/']);
+  });
+
+  it('moves the item of the queue the post was made in, not a later queue\'s', () => {
+    const w = createWorld();
+    w.assignments.type(
+      ['2026-03-02', 'Jan Dela Cruz', 'Casa Amara', 'Pending', CASA.id],   // last week's queue
+      ['2026-03-09', 'Jan Dela Cruz', 'Casa Amara', 'Pending', CASA.id],   // this week's
+    );
+    w.posts.type(
+      ['2026-03-03', 'Casa Amara', 'Group post', '9:15', 'Pending', 'APG Main', LINK, 'Jan Dela Cruz', CASA.id],
+      ['2026-03-09', 'Casa Amara', 'Group post', '9:15', 'Pending', 'APG Main', 'https://www.facebook.com/groups/apg/posts/2/', 'Jan Dela Cruz', CASA.id],
+    );
+
+    expect(w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: LINK })).toEqual({ ok: true, row: 2 });
+    expect(w.assignments.show().slice(1).map((r) => r[3])).toEqual(['Posted', 'Pending']);
+    expect(
+      w.call('jan', 'addLink', { property: CASA.name, propertyId: CASA.id, postLink: 'https://www.facebook.com/groups/apg/posts/2/' }),
+    ).toEqual({ ok: true, row: 3 });
+    expect(w.assignments.show().slice(1).map((r) => r[3])).toEqual(['Posted', 'Posted']);
+  });
+
   it('completes the lowest Pending row, and finds none once it is done', () => {
     const w = createWorld();
     w.logPost('jan', TOWER, { status: 'Pending' });
@@ -236,6 +317,35 @@ describe('addLink (bug 5)', () => {
       ok: false,
       error: 'notfound',
     });
+  });
+});
+
+describe('the queue item a post moves', () => {
+  // The harness's clock: Monday 2026-03-09, so this week's queue is the 9th's.
+  const item = (week: string, status: string) => [week, 'Jan Dela Cruz', 'Casa Amara', status, CASA.id];
+
+  it("moves this queue's item, not a later queue's saved below it", () => {
+    const w = createWorld();
+    w.assignments.type(item('2026-03-09', 'Not Shared'), item('2026-03-16', 'Not Shared'));
+
+    w.logPost('jan', CASA, { status: 'Pending' });
+    expect(w.assignments.show().slice(1).map((r) => r[3])).toEqual(['Pending', 'Not Shared']);
+  });
+
+  it("moves no other queue's item when this queue's is already Posted", () => {
+    const w = createWorld();
+    w.assignments.type(item('2026-03-09', 'Posted'), item('2026-03-16', 'Not Shared'));
+
+    w.logPost('jan', CASA, { status: 'Posted' });
+    expect(w.assignments.show().slice(1).map((r) => r[3])).toEqual(['Posted', 'Not Shared']);
+  });
+
+  it('moves the lowest open item, as before, when the day is in none of their queues', () => {
+    const w = createWorld();
+    w.assignments.type(item('2026-03-02', 'Not Shared'), item('2026-03-16', 'Not Shared'));
+
+    w.logPost('jan', CASA, { status: 'Pending' });
+    expect(w.assignments.show().slice(1).map((r) => r[3])).toEqual(['Not Shared', 'Pending']);
   });
 });
 

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Button, Notice, TextInput } from '../../components';
 import { DEFAULT_PER_WEEK, planQueues, type Plan, type SkipReason } from '@/core/planner';
-import { firstName, plural, type DirectoryRow, type Rules } from '@/core/summary';
+import { firstName, plural, samePerson, type DirectoryRow, type Rules } from '@/core/summary';
 import { chooseQueue, periodLabel, queueWeeksOf, withWeeks, type QueuePeriod } from '@/core/queues';
 import { shortDate } from '@/core/summary';
 import type { QueueInput } from '@/core/tracker';
@@ -12,8 +12,12 @@ import { Dialog } from './Dialog';
 import './FillQueues.css';
 
 export interface FillQueuesProps {
-  /** The active interns, exactly as the Team tab spells them. All are ticked to start. */
+  /** The active interns, exactly as the Team tab spells them. All are ticked to start, unless `tickAgents` is false. */
   readonly interns: readonly string[];
+  /** D31: the active admins, who may be given a queue too. Listed after the agents, and none ticked to start. */
+  readonly admins?: readonly string[] | undefined;
+  /** False: none of `interns` ticked to start either, as when the team hasn't been read and they may be admins (D31). */
+  readonly tickAgents?: boolean | undefined;
   readonly properties: readonly DirectoryRow[];
   readonly posts: readonly PostLogEntry[];
   readonly assignments: readonly Assignment[];
@@ -31,11 +35,13 @@ export interface FillQueuesProps {
   readonly onClose: () => void;
 }
 
+const NO_ADMINS: readonly string[] = [];
+
 export const SKIP_WORDS: Record<SkipReason, string> = {
   sold: 'Sold or not available',
   noSeparator: 'No separator',
   noDocument: 'No document',
-  held: 'Held by another agent',
+  held: 'Held by someone else',
   cooldown: 'In cooldown',
 };
 
@@ -77,9 +83,27 @@ export function fillPeriods(
  * go. Someone with a queue running that week has it filled; anyone else gets
  * a new one. Nothing is written until Save all.
  */
-export function FillQueues({ interns, properties, posts, assignments, rules, highlighted, today, week: startWeek, onSave, onSaved, onClose }: FillQueuesProps) {
+export function FillQueues({
+  interns,
+  admins: allAdmins = NO_ADMINS,
+  tickAgents = true,
+  properties,
+  posts,
+  assignments,
+  rules,
+  highlighted,
+  today,
+  week: startWeek,
+  onSave,
+  onSaved,
+  onClose,
+}: FillQueuesProps) {
   const [perText, setPerText] = useState(String(rules.perWeek ?? rules.perIntern ?? DEFAULT_PER_WEEK));
-  const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set(interns));
+  // An admin who is also listed as an agent is ticked with the agents.
+  const admins = useMemo(() => allAdmins.filter((name) => !interns.some((n) => samePerson(n, name))), [allAdmins, interns]);
+  // Who is ticked follows the lists until a box is changed: the team may arrive after the dialog opens (D31).
+  const [picked, setPicked] = useState<ReadonlySet<string> | null>(null);
+  const chosen = useMemo<ReadonlySet<string>>(() => picked ?? new Set(tickAgents ? interns : []), [picked, tickAgents, interns]);
   const [week, setWeek] = useState(startWeek);
   const [weeks, setWeeks] = useState(() => queueWeeksOf(rules.queueWeeks ?? DEFAULT_RULES.queueWeeks));
   const [keep, setKeep] = useState(true);
@@ -90,7 +114,8 @@ export function FillQueues({ interns, properties, posts, assignments, rules, hig
 
   const per = Number(perText);
   const perOk = Number.isInteger(per) && per >= 1 && per <= 200;
-  const who = useMemo(() => interns.filter((n) => chosen.has(n)), [interns, chosen]);
+  const who = useMemo(() => [...interns, ...admins].filter((n) => chosen.has(n)), [interns, admins, chosen]);
+  const ticked = (names: readonly string[]) => names.filter((n) => chosen.has(n)).length;
 
   // Any change makes the preview stale: it is shown again on Preview.
   const changed = <T,>(set: (v: T) => void) => (v: T) => {
@@ -127,7 +152,7 @@ export function FillQueues({ interns, properties, posts, assignments, rules, hig
   };
 
   const toggle = (name: string) =>
-    changed<ReadonlySet<string>>(setChosen)(
+    changed<ReadonlySet<string>>(setPicked)(
       chosen.has(name) ? new Set([...chosen].filter((n) => n !== name)) : new Set([...chosen, name]),
     );
 
@@ -185,7 +210,7 @@ export function FillQueues({ interns, properties, posts, assignments, rules, hig
 
       <fieldset className="fill__who" disabled={saving}>
         <legend className="fill__label">
-          Interns <span className="fill__count tabular">{who.length} of {interns.length}</span>
+          Agents <span className="fill__count tabular">{ticked(interns)} of {interns.length}</span>
         </legend>
         {interns.length === 0 ? (
           <p className="fill__muted">No active agents.</p>
@@ -201,10 +226,26 @@ export function FillQueues({ interns, properties, posts, assignments, rules, hig
         )}
       </fieldset>
 
+      {admins.length > 0 ? (
+        <fieldset className="fill__who" disabled={saving}>
+          <legend className="fill__label">
+            Admins <span className="fill__count tabular">{ticked(admins)} of {admins.length}</span>
+          </legend>
+          <div className="fill__interns">
+            {admins.map((name) => (
+              <label key={name} className="fill__check">
+                <input type="checkbox" checked={chosen.has(name)} onChange={() => toggle(name)} />
+                {name}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+
       {plan ? <PlanPreview plan={plan} per={per} total={total} /> : null}
       {plan && plan.queues.size < who.length ? (
         <Notice tone="warn" live>
-          {plural(who.length - plan.queues.size, 'agent has', 'agents have')} no room for a queue that week.
+          {plural(who.length - plan.queues.size, 'person has', 'people have')} no room for a queue that week.
         </Notice>
       ) : null}
 

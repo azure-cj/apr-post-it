@@ -308,7 +308,9 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   A row opens that intern's week in a side pane (the row gets the gold selected wash and
   mark): the bar and pace, Open in Assign and FB profile, the last 4 weeks as small bars,
   then Not shared / Pending / Posted (with Open) / Missed, ten a page (compact pages).
-  Escape or Close shuts it. Revoked people sit in a folded "Revoked" card below. The
+  Escape or Close shuts it. Revoked people sit in a folded "Revoked" card below. An admin
+  with a queue that week is a row too, with a muted "Admin" after the name, and counts in
+  the tiles (D31). The
   Tracker's This week card shows the same week as "12 / 40" and the pace, and links here
   with "See all". The intern's My queue heads the week: "This week · 12 of 40", a
   bar, "Due Fri 6 Nov" (an amber "Due today" on Friday), and from Saturday next week's
@@ -327,10 +329,14 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   the Rules and the web app link.
 - **Assign** is two steps, a week at a time (`?week=` its Monday; this week, or the coming
   one from Saturday). The header holds the week picker (‹ "2–6 Nov" ›, This week, Next
-  week). With no `?intern=`, a grid of cards, one per active intern and nothing else: the
+  week). With no `?intern=`, a grid of cards, one per active intern: the
   name, one pace pill (Behind warn, Not started and Missed danger, No queue neutral, On
   track info, Done ok) and "12 / 40" beside a posted-green, pending-amber bar; Behind
-  first. With one, the header says the name and "Due Fri 6 Nov" ("Ended …" for a week that
+  first. With admins on the team (D31), the grid is headed Agents ("No agents yet. Add them
+  in Settings → Team." when there are none) and the admins' cards follow under Admins, the
+  same cards, yours with a muted "You" after the name (below it, rather than cut the
+  name, on a narrow card). With one,
+  the header says the name, under an "Everyone" back button, and "Due Fri 6 Nov" ("Ended …" for a week that
   is over), then two panes. Left, Listings: the categories as one row of chips that
   scrolls sideways (its end fades), a search and a Filter menu (Fresh, Due for repost,
   Show unavailable, with a count while any is on); "− Add 40 +" (perWeek, stepped by 5)
@@ -340,7 +346,8 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   is one read-only card: "32 posted · 8 missed", Copy missed to next week (they arrive
   tinted, with Undo, unsaved), then Missed, Pending, Posted. Quick fill's rows are tinted
   info until saved or undone. **Fill queues** in step one's header opens a wide dialog:
-  per week, the week, keep existing queues, the active interns as ticks, then Preview
+  per week, the week, keep existing queues, the active interns as ticks (then the admins,
+  unticked, D31; nobody ticked until the team is read), then Preview
   (one line per intern with a green fill bar against "per week", opening to the list;
   how many short; the skipped reasons) and Save all, the dialog's one gold button.
 - **Find** (`/find`, both roles) is the listing browser: "Find" and a small "Updated 10:42 ·
@@ -371,7 +378,8 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   the day (‹ › Today) and Refresh on one line; four tiles (Posted today, Pending, Interns
   behind, Docs to fix, the last a link to Documents); Today's posts (time, listing,
   intern, status, Open; 8 at most, then "See all in Records") beside This week (each
-  intern's "12 / 40" bar and pace, "See all" to Interns); then Documents, full width:
+  intern's "12 / 40" bar and pace, and each admin's with a queue that week, a muted "Admin"
+  after the name, D31; "See all" to Interns); then Documents, full width:
   `docHealth` grouped by issue as folded rows ("No separator · 36"), each listing with
   Open doc (Google Docs, from DocId) or Open folder, under one line on Rebuild; "All
   documents OK" when there is nothing to fix.
@@ -424,7 +432,8 @@ only, not in the production build) shows each in every variant with the product'
 The shell (`src/ui/App.tsx`) holds the routes: Sign in, Find, Property, Log a post, My
 queue, Assign, Tracker, Interns, Records, Settings. Nav by role, per `docs/ROLES.md`: an
 intern gets My queue and Find; an admin Tracker, Assign, Interns, Records, Find and
-Settings (D14).
+Settings (D14), and My queue before Find while they have a queue running or coming, or a
+post of their own waiting for approval, and while they are on it (D31).
 
 Sign-in asks only for the key when a web app link is built into the build
 (`src/config.ts`); with none built in it asks for the link too. The

@@ -66,6 +66,16 @@ export interface QueueSave {
 export interface AssignScreenProps {
   /** Whose queues can be built: the team's interns, in the order to show them. */
   readonly interns: readonly string[];
+  /** D31: the team's active admins, who may be given a queue too: after the agents, and unticked in Fill queues. */
+  readonly admins?: readonly string[] | undefined;
+  /** Who is signed in: their own card says You. */
+  readonly me?: string | undefined;
+  /**
+   * The lists come from the team (the default). False while it hasn't been read:
+   * `interns` is then everyone the tracker mentions, admins among them, so Fill
+   * queues ticks no one (D31).
+   */
+  readonly teamKnown?: boolean | undefined;
   /** Whose queue is shown, or null: then the screen asks whose. */
   readonly intern: string | null;
   /**
@@ -158,6 +168,8 @@ interface HeldRefusal {
 
 const COULD_NOT_SAVE = "Couldn't save the queue. Check your connection, then save again.";
 
+const NO_ADMINS: readonly string[] = [];
+
 /** The draft's own copy after a save, until the rows are read again. */
 interface Saved {
   readonly for: string;
@@ -208,6 +220,9 @@ const RANK: Record<Group, number> = { pending: 0, open: 1, posted: 2 };
  */
 export function AssignScreen({
   interns,
+  admins = NO_ADMINS,
+  me,
+  teamKnown = true,
   intern,
   week,
   today,
@@ -769,8 +784,8 @@ export function AssignScreen({
         const n = marks.size || refusals.length;
         setProblems([
           n === 1
-            ? 'One listing is held by another agent. Remove it, then save again.'
-            : `${n} listings are held by other agents. Remove them, then save again.`,
+            ? 'One listing is held by someone else. Remove it, then save again.'
+            : `${n} listings are held by others. Remove them, then save again.`,
         ]);
       } else {
         setProblems([e instanceof UserFacingError ? e.message : COULD_NOT_SAVE]);
@@ -868,6 +883,8 @@ export function AssignScreen({
         {filling && onSaveQueues ? (
           <FillQueues
             interns={interns}
+            admins={admins}
+            tickAgents={teamKnown}
             properties={properties}
             posts={posts}
             assignments={assignments}
@@ -885,11 +902,13 @@ export function AssignScreen({
         ) : null}
         {errorNotice}
         <Highlighted highlights={highlights ?? []} from={FROM_ASSIGN} onRemove={onRemoveHighlight} />
-        {interns.length === 0 ? (
+        {interns.length === 0 && admins.length === 0 ? (
           <NoInterns />
         ) : (
           <AssignPicker
             interns={interns}
+            admins={admins}
+            me={me}
             week={week}
             assignments={assignments}
             posts={posts}
@@ -931,7 +950,7 @@ export function AssignScreen({
           icon={<ManagerIcon name="chevronLeft" size={18} />}
           onClick={() => requestIntern('')}
         >
-          All agents
+          Everyone
         </Button>
         <h1 className="page-header__title" tabIndex={-1}>
           {intern}

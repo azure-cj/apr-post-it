@@ -259,6 +259,8 @@ export function createTracker(deps: TrackerDeps): Tracker {
       property: post.title,
       propertyId: post.propertyId.trim() ? post.propertyId : undefined,
       postLink,
+      // Whose post: an admin with a queue completes their own, not someone else's of the listing (D31).
+      postedBy: post.postedBy.trim() || undefined,
     });
     return { ...post, status: 'Posted', postLink };
   }

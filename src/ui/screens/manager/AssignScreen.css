@@ -491,6 +491,21 @@
   padding: var(--space-6) 0;
 }
 
+/* Agents, then admins (D31): each group under a small heading, as Fill queues labels its fields. */
+.assign-pick__group {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.assign-pick__heading {
+  margin: 0;
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+  font-weight: var(--weight-label);
+}
+
 /* A whole intern, one target: the name and its one word, then the week's bar. */
 .assign-pick__card {
   position: relative;
@@ -541,6 +556,15 @@
   min-width: 0;
 }
 
+/* The name, and You on your own card: You drops below rather than cut the name. */
+.assign-pick__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-4);
+  min-width: 0;
+}
+
 .assign-pick__name {
   overflow: hidden;
   color: var(--text);
@@ -550,6 +574,13 @@
   font-weight: var(--weight-heading);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.assign-pick__you {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
 }
 
 .assign-pick__pill {

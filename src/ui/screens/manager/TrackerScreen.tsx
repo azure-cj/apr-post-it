@@ -2,11 +2,11 @@ import { useId, useMemo, useState } from 'react';
 import { Button, Card, Icon, Notice, PAGE_SIZE, Pagination, Pill, Spinner, usePaged } from '../../components';
 import { clockTime } from '@/core/records';
 import {
-  activeInterns,
   DOC_ISSUES,
   docHealth,
   docLink,
   docsToFix,
+  monitorNames,
   newestFirst,
   peopleIn,
   shortDate,
@@ -36,7 +36,7 @@ export interface TrackerScreenProps {
   readonly assignments: readonly Assignment[];
   /** Every listing in the directory, with its Issues text (and DocId) when the list carries them. */
   readonly properties: readonly DirectoryRow[];
-  /** The team, so an intern with no queue still shows. Without it, only people with a queue do. */
+  /** The team, so an intern with no queue still shows, and an admin only with one (D31). Without it, only people with a queue do. */
   readonly team?: readonly TeamMember[] | undefined;
   /** Show another day. */
   readonly onDateChange: (date: string) => void;
@@ -61,6 +61,8 @@ export interface TrackerScreenProps {
   readonly settingsHref?: string | undefined;
   readonly onOpenSettings?: (() => void) | undefined;
 }
+
+const NO_ADMINS: ReadonlySet<string> = new Set();
 
 /** How many of the day's posts show before "See all in Records". */
 export const POSTS_LIMIT = 8;
@@ -109,15 +111,13 @@ export function TrackerScreen({
 
   // The week of the day shown; on a weekend, the one that just ended.
   const week = monitorWeek(date);
+  // The agents, and each admin with a queue that week (D31), as on Agents.
+  const shown = useMemo(() => (team ? monitorNames(team, week, assignments, today) : null), [team, week, assignments, today]);
   const pace = useMemo(() => {
-    const names = team
-      ? activeInterns(team)
-      : peopleIn(
-          rowsInWeek(assignments, week, today),
-          [],
-        );
+    const names = shown ? shown.names : peopleIn(rowsInWeek(assignments, week, today), []);
     return teamWeek(names, week, assignments, posts, today);
-  }, [team, week, assignments, posts, today]);
+  }, [shown, week, assignments, posts, today]);
+  const admins = shown?.admins ?? NO_ADMINS;
   const behind = pace.filter(isBehind).length;
 
   const isToday = date === today;
@@ -226,8 +226,11 @@ export function TrackerScreen({
                       <WeekBar
                         progress={row}
                         label={
-                          <span className="intern-row__name" title={row.name}>
-                            {row.name}
+                          <span className="intern-row__who">
+                            <span className="intern-row__name" title={row.name}>
+                              {row.name}
+                            </span>
+                            {admins.has(row.name) ? <span className="intern-row__role">Admin</span> : null}
                           </span>
                         }
                       />

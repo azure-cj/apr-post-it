@@ -7,7 +7,7 @@ import { admin, fakeServer, intern, manager, renderApp, TODAY } from './state/te
 // must not depend on the real link in src/config.ts.
 vi.mock('@/config', () => ({ BUILT_IN_SCRIPT_URL: '' }));
 
-/** The team the web app sends, out of order, with an admin and a revoked intern who must not be listed. */
+/** The team the web app sends, out of order: an admin (listed in Assign as an admin, D31) and a revoked intern, listed nowhere. */
 const TEAM = {
   ok: true,
   team: [
@@ -71,6 +71,85 @@ describe('the sidebar', () => {
     expect(screen.queryByRole('link', { name: 'Agents' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeTruthy();
     expect(platform.posts.map((p) => p.action)).not.toContain('team');
+  });
+
+  it('gives an admin with a queue My queue, before Find, with what is left of it (D31)', async () => {
+    const theirs = {
+      ok: true,
+      assignments: [
+        ...ASSIGNMENTS.assignments,
+        row(admin.name, 'Seaside Residences 2BR, Pasay', 'Not Shared'),
+        row(admin.name, 'BGC Uptown Office 18F, 240 sqm', 'Posted'),
+      ],
+    };
+    renderApp({ platform: server({ assignments: theirs }), user: admin, path: '/tracker' });
+    await waitFor(() => expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'My queue', 'Find', 'Settings']));
+    const link = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: /My queue/ });
+    expect(link.textContent).toContain('1 left in your queue this week');
+
+    await userEvent.click(link);
+    expect(await screen.findByRole('heading', { level: 1, name: 'My queue' })).toBeTruthy();
+    // Their own queue, none of the agents'.
+    expect(await screen.findByText('Seaside Residences 2BR, Pasay')).toBeTruthy();
+    expect(screen.queryByText('Valenzuela Warehouse 1,200 sqm')).toBeNull();
+  });
+
+  it('keeps My queue for an admin whose queue is over while a post of theirs waits, and while they mark it approved (D31)', async () => {
+    let approved = false;
+    const waiting = {
+      date: '2026-10-29',
+      time: '10:00',
+      type: 'Lot',
+      title: 'Seaside Residences 2BR, Pasay',
+      fbAccount: 'APG Main',
+      postLink: 'https://www.facebook.com/groups/apg/posts/7/',
+      postedBy: admin.name,
+      propertyId: '',
+    };
+    // Their queue of 19–23 Oct is over: nothing of it counts now.
+    const over = { ok: true, assignments: [...ASSIGNMENTS.assignments, row(admin.name, 'BGC Uptown Office 18F, 240 sqm', 'Posted', '2026-10-19')] };
+    const platform = server({
+      assignments: over,
+      posts: () => ({ ok: true, posts: [{ ...waiting, status: approved ? 'Posted' : 'Pending' }] }),
+      addLink: () => {
+        approved = true;
+        return { ok: true, row: 2 };
+      },
+    });
+    renderApp({ platform, user: admin, path: '/tracker' });
+    await waitFor(() => expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'My queue', 'Find', 'Settings']));
+    const link = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: /My queue/ });
+    expect(link.textContent).not.toContain('left in your queue');
+
+    await userEvent.click(link);
+    expect(await screen.findByText('1 post waiting for approval')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Approved: Seaside Residences 2BR, Pasay' }));
+    await waitFor(() => expect(screen.queryByText('1 post waiting for approval')).toBeNull());
+
+    // Nothing waits now, but they are on it: it stays, marked, until they leave.
+    expect(navNames()).toContain('My queue');
+    expect(screen.getByRole('link', { name: /My queue/ }).getAttribute('aria-current')).toBe('page');
+    await userEvent.click(screen.getByRole('link', { name: 'Find' }));
+    await waitFor(() => expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'Find', 'Settings']));
+  });
+
+  it("feeds the team's admins to Assign's picker too, after the agents, and marks yours (D31)", async () => {
+    const team = { ok: true, team: [...TEAM.team, { name: admin.name, role: 'Admin', email: '', fbAccounts: '', active: true }] };
+    renderApp({ platform: server({ team }), user: admin, path: '/assign' });
+    const admins = await screen.findByRole('list', { name: 'Admins' });
+    // After the agents.
+    expect(screen.getByRole('list', { name: 'Agents' }).compareDocumentPosition(admins) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const cards = within(admins).getAllByRole('button');
+    expect(cards.map((b) => b.querySelector('.assign-pick__name')?.textContent).sort()).toEqual([admin.name, manager.name].sort());
+    expect(cards.find((b) => b.textContent?.includes(admin.name))?.querySelector('.assign-pick__you')?.textContent).toBe('You');
+    expect(cards.find((b) => b.textContent?.includes(manager.name))?.querySelector('.assign-pick__you')).toBeNull();
+    expect(within(screen.getByRole('list', { name: 'Agents' })).queryByText(manager.name)).toBeNull();
+
+    // An admin's queue opens as an agent's does.
+    await userEvent.click(cards.find((b) => b.textContent?.includes(manager.name))!);
+    expect(await screen.findByRole('heading', { level: 1, name: manager.name })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Everyone' }));
+    expect(await screen.findByRole('list', { name: 'Admins' })).toBeTruthy();
   });
 
   it("feeds the team to Assign's intern picker", async () => {

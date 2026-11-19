@@ -4,7 +4,7 @@ import { postLinkProblem } from '@/core/links';
 import { normalize } from '@/core/matcher';
 import { currentQueue, rowsOf, type QueuePeriod } from '@/core/queues';
 import { fridayWarning, fridayWarningWords, isDate, queueProgress, samePerson, waitingPosts } from '@/core/summary';
-import { queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry, type Property } from '@/core/types';
+import { canManage, queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry, type Property } from '@/core/types';
 import { Button, CategoryDot, EmptyState, Notice, PAGE_SIZE, Pagination, Pill, TextInput, categoryKind, categoryLabel, usePaged } from '../../components';
 import {
   manilaTime,
@@ -259,6 +259,8 @@ function Row({ item, listLoaded, onChanged }: { readonly item: Item; readonly li
   const { assignment, property, post, status } = item;
   const canOpen = openable(item, listLoaded);
   const name = property?.name ?? assignment.propertyName;
+  // An admin's own queue (D31): they are the one who fixes it.
+  const manager = canManage(useUser());
 
   return (
     <li className={`queue-item queue-item--${status === 'Not Shared' ? 'to-post' : status.toLowerCase()}${canOpen ? ' queue-item--link' : ''}`}>
@@ -273,7 +275,9 @@ function Row({ item, listLoaded, onChanged }: { readonly item: Item; readonly li
         {property ? (
           <Category property={property} />
         ) : listLoaded ? (
-          <span className="meta">Not in the property list. Tell your admin.</span>
+          <span className="meta">
+            {manager ? 'Not in the property list. Run Rebuild in Settings, or take it off in Assign.' : 'Not in the property list. Tell your admin.'}
+          </span>
         ) : null}
       </div>
       <div className="queue-item__end">

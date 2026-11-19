@@ -168,6 +168,23 @@ describe('TrackerScreen', () => {
     expect(screen.getByRole('region', { name: '26–30 Oct' })).toBeTruthy();
   });
 
+  it('lists an admin with a queue that week too, marked Admin, as Agents does (D31)', () => {
+    const assignments = [...ASSIGNMENTS, ...queued('Maria Santos', 3)];
+    renderTracker({ assignments });
+    const card = screen.getByRole('region', { name: 'This week' });
+    const rows = Array.from(card.querySelectorAll('.intern-row')).map((r) => r.textContent);
+    expect(rows).toEqual(['MSMaria SantosAdmin0 / 3Not started', 'JDJan Dela Cruz1 / 10Behind', 'MRMika Reyes6 / 10On track']);
+    expect(card.querySelectorAll('.intern-row__role')).toHaveLength(1);
+    expect(stat('Agents behind')).toBe('2 of 3');
+
+    // A week without her queue: the agents only.
+    cleanup();
+    renderTracker({ assignments, date: '2026-10-28' });
+    const before = screen.getByRole('region', { name: '26–30 Oct' });
+    expect(within(before).queryByText('Maria Santos')).toBeNull();
+    expect(before.querySelectorAll('.intern-row')).toHaveLength(2);
+  });
+
   it('groups the documents to fix by issue, with counts, and opens each doc or folder', async () => {
     const { onOpenLink, onOpenSettings } = renderTracker();
     const card = screen.getByRole('region', { name: 'Documents' });

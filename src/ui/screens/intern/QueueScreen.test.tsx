@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import type { User } from '@/core/types';
 import type { FakePlatform } from '@/platform/fake';
 import { AppShell, routerFuture } from '../../App';
 import { AppStateProvider } from '../../state/AppState';
-import { EXEC, fakeServer, intern, renderApp } from '../../state/testing';
+import { EXEC, fakeServer, intern, manager, renderApp } from '../../state/testing';
 
 /** 10:00 in Manila on a given day. */
 const at = (day: string) => Date.parse(`${day}T02:00:00Z`);
@@ -14,10 +15,10 @@ const FRIDAY = at('2026-11-06');
 /** The week of Mon 2 Nov: its key, as the Assignments tab writes it. */
 const WEEK = '2026-11-02';
 
-/** The window at /queue, signed in as Jan, on a given day. renderApp's day is Saturday 31 Oct. */
-function renderOn(now: number, platform: FakePlatform, path = '/queue') {
+/** The window at /queue, signed in as Jan (or `user`), on a given day. renderApp's day is Saturday 31 Oct. */
+function renderOn(now: number, platform: FakePlatform, path = '/queue', user: User = intern) {
   return render(
-    <AppStateProvider platform={platform} initialUser={intern} initialSettings={{ scriptUrl: EXEC }} now={() => now}>
+    <AppStateProvider platform={platform} initialUser={user} initialSettings={{ scriptUrl: EXEC }} now={() => now}>
       <MemoryRouter initialEntries={[path]} future={routerFuture}>
         <AppShell />
       </MemoryRouter>
@@ -161,6 +162,23 @@ describe('My queue', () => {
     expect(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: /My queue/ }).textContent).toContain(
       '3 left in your queue this week',
     );
+  });
+
+  it('says what to do about a listing gone from the list: tell the admin, or, an admin, fix it (D31)', async () => {
+    const gone = (who: string) => ({
+      ok: true,
+      assignments: [
+        item('Verdant Hills Lot 12, Tagaytay', '1VerdantHillsLot12', 'Not Shared', WEEK, who),
+        item('Gone Listing, Nowhere', '1Gone', 'Not Shared', WEEK, who),
+      ],
+    });
+    renderOn(THURSDAY, fakeServer({ assignments: gone(intern.name) }));
+    expect(await screen.findByText('Not in the property list. Tell your admin.')).toBeTruthy();
+
+    cleanup();
+    renderOn(THURSDAY, fakeServer({ assignments: gone(manager.name) }), '/queue', manager);
+    expect(await screen.findByText('Not in the property list. Run Rebuild in Settings, or take it off in Assign.')).toBeTruthy();
+    expect(screen.queryByText(/Tell your admin/)).toBeNull();
   });
 
   it('opens any row in one click', async () => {

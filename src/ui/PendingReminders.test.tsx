@@ -49,7 +49,8 @@ describe('My queue', () => {
 
     await userEvent.click(within(card as HTMLElement).getByRole('button', { name: 'Approved: Old Lot, Silang' }));
     await waitFor(() => expect(platform.posts.some((p) => p.action === 'addLink')).toBe(true));
-    expect(platform.posts.find((p) => p.action === 'addLink')!.body).toMatchObject({ postLink: OLD.postLink });
+    // Whose post it is too: an admin with a queue completes their own (D31).
+    expect(platform.posts.find((p) => p.action === 'addLink')!.body).toMatchObject({ postLink: OLD.postLink, postedBy: intern.name });
   });
 
   it('shows nothing when nothing is waiting', async () => {

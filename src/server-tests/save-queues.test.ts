@@ -47,6 +47,37 @@ describe('saveQueues', () => {
     expect(w.assignments.lastRow).toBe(1);
   });
 
+  it('gives a queue to an admin too, as the Team tab spells the name, beside an intern\'s (D31)', () => {
+    const w = createWorld();
+
+    const reply = w.call('maria', 'saveQueues', {
+      date: DAY,
+      queues: [
+        { assignedTo: 'Jan Dela Cruz', items: [{ propertyName: CASA.name }] },
+        { assignedTo: 'rico bautista', items: [{ propertyName: LOT_9.name }] },
+        // The admin saving it may give one to themselves.
+        { assignedTo: 'Maria Santos', items: [{ propertyName: TOWER.name }] },
+      ],
+    });
+
+    expect(reply).toEqual({ ok: true, saved: 3 });
+    expect(w.assignments.show().slice(1)).toEqual([
+      [DAY, 'Jan Dela Cruz', 'Casa Amara', 'Not Shared', CASA.id],
+      [DAY, 'Rico Bautista', 'Verdant Hills Lot 9', 'Not Shared', LOT_9.id],
+      [DAY, 'Maria Santos', TOWER.name, 'Not Shared', TOWER.id],
+    ]);
+  });
+
+  it('refuses a queue for an admin who is turned off, naming them', () => {
+    const w = createWorld();
+    w.team.type(['Old Admin', '', 'Admin', 'key-old-admin', '', 'FALSE']);
+
+    const reply = w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Old Admin', items: [] }] });
+
+    expect(reply).toEqual({ ok: false, error: 'bad-intern', message: 'Old Admin is not active on the team.' });
+    expect(w.assignments.lastRow).toBe(1);
+  });
+
   it('reaches the intern\'s own queue', () => {
     const w = createWorld();
     w.call('maria', 'saveQueues', { date: DAY, queues: [{ assignedTo: 'Jan Dela Cruz', items: [{ propertyName: CASA.name }] }] });
@@ -62,7 +93,6 @@ describe('saveQueues', () => {
     it.each([
       ['someone not on the Team tab', { assignedTo: 'Nobody', items: [] }, 'bad-intern'],
       ['a revoked intern', { assignedTo: 'Former Intern', items: [] }, 'bad-intern'],
-      ['an admin', { assignedTo: 'Rico Bautista', items: [] }, 'bad-intern'],
       ['no name', { items: [] }, 'bad-intern'],
       ['an item with no property', { assignedTo: 'Ana Reyes', items: [{ propertyId: CASA.id }] }, 'bad-queues'],
       ['the same intern twice', { assignedTo: 'jan dela cruz', items: [] }, 'bad-queues'],

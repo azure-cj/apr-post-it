@@ -169,6 +169,37 @@ describe('the Interns screen: the week', () => {
     expect(stat('Behind')).toBe('1 of 4');
   });
 
+  it('lists an admin with a queue that week, marked Admin, and not in a week without one (D31)', async () => {
+    const assignments = { ok: true, assignments: [...ASSIGNMENTS.assignments, ...queue(manager.name, 3)] };
+    renderAt(THURSDAY, { platform: server({ assignments }) });
+    const maria = await rowOf(manager.name);
+    expect(maria.querySelector('.week-table__role')?.textContent).toBe('Admin');
+    expect(maria.querySelector('.week-bar__count')!.textContent).toBe('0 / 3');
+    expect(within(maria).getByText('Not started')).toBeTruthy();
+    // Counted with the agents; an agent's row says no role.
+    expect(stat('Behind')).toBe('3 of 5');
+    expect((await rowOf(intern.name)).querySelector('.week-table__role')).toBeNull();
+
+    // Last week Maria had no queue: not listed.
+    await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('Missed 2')).toBeTruthy());
+    expect(screen.getByRole('table').textContent).not.toContain(manager.name);
+  });
+
+  it("closes an admin's week with their row, and doesn't open it again by itself on the way back (D31)", async () => {
+    const assignments = { ok: true, assignments: [...ASSIGNMENTS.assignments, ...queue(manager.name, 3)] };
+    renderAt(THURSDAY, { platform: server({ assignments }) });
+    await userEvent.click(within(await rowOf(manager.name)).getByRole('button', { name: new RegExp(manager.name) }));
+    expect(screen.getByRole('complementary', { name: manager.name })).toBeTruthy();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: manager.name })).toBeNull());
+    await userEvent.click(screen.getByRole('button', { name: 'This week' }));
+    await rowOf(manager.name);
+    expect(screen.queryByRole('complementary', { name: manager.name })).toBeNull();
+    expect(document.activeElement?.closest('[role="complementary"], aside')).toBeNull();
+  });
+
   it('follows the week picker', async () => {
     renderAt(THURSDAY, { platform: server() });
     await rowOf('Bea Lim');

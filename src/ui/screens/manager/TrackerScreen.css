@@ -214,6 +214,21 @@
 }
 
 /* One line: a long name gives way to the count, never wraps under it. */
+.intern-row__who {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* An admin with a queue that week (D31). */
+.intern-row__role {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
 .intern-row .week-bar__top .intern-row__name {
   overflow: hidden;
   white-space: nowrap;

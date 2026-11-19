@@ -248,7 +248,8 @@ the account alone decides: Code.gs reads its name and role from Google's account
 `role` claim: agent is Intern, admin or owner is Admin; anything else is refused). A Team row with
 the same email still lends its name and FB accounts, so Posted By and the history keep matching,
 but its Role no longer counts. Listings, posts and queues stay in the sheets. Not changed: a
-queue is still given only to an active Intern on the Team tab.
+queue is still given only to an active Intern on the Team tab. (Amended by D31: an active
+Admin may be given one too.)
 
 ### D20. Never lose a log: kept on this PC, sent again, never twice (Nov 4, 2026)
 
@@ -397,3 +398,35 @@ Still shared, with no change: Claude's prices are written in both repos (`PRICES
 the hub's `config/claude`, `claudeUsage` and `users/{uid}.name`, which the hub won't rename
 without saying; function names are unique across both apps, so a new one is cleared with the
 hub's developer or prefixed (`posting…`).
+
+### D31. An admin may be given a queue (Nov 19, 2026)
+
+Amends D19 (a queue only for an active Intern). The owner's decision, closing `ROLES.md`'s third
+open question. An admin may be given a queue of postings, by another admin or by themselves,
+and works it as an agent does. Nothing about
+the queue changes: the same deadline, the same held-listing rule, Missed on the same day, and
+the same posts and checks. The role still decides only what a person may *see and change*; who
+may *be given postings* is now everyone active on the team.
+
+- **Server.** `saveQueues` takes an active Admin as it takes an active Intern; anyone else, or
+  someone turned off, is still `bad-intern` (the code is kept for older apps). `saveQueue`
+  never checked the role. `logPost` already credits an admin's own post to them, and their
+  row of the queue follows it. `addLink` (Approved, or a pending post's link) takes the
+  row that already has the link, else the newest of the person the app names (`postedBy`),
+  so an admin completes their own post, not someone else's of the same listing; a link
+  already on any other row is refused, so a second Approved can't move it onto another
+  post. Both move the queue item of the queue the post was made in, not a later one's.
+- **Assign.** After the agents' cards, a group of the admins' cards, the signed-in admin's
+  marked You. Fill queues lists the admins after the agents, none ticked, so filling the
+  week's queues gives an admin nothing unless someone ticks them. Until the team is read,
+  its list is everyone the tracker mentions, admins perhaps among them, so nobody is ticked
+  until the team arrives.
+- **My queue.** An admin's sidebar gets My queue, before Find, with its count, while they
+  have a queue running or coming, or a post of their own waiting for approval (only My queue
+  marks it approved), and while they are on it: an admin who never posts sees no empty
+  screen. It is the agent's screen, reading the admin's own rows; after a post made from it,
+  it moves on to their next listing.
+- **Agents.** An admin with a queue in the week shown is a row of the monitor and of the
+  Tracker's week, marked Admin, with the same pace, warnings and spot checks; an admin
+  without one isn't listed. Records lists an admin as anyone else: once they post in the
+  period or a queue of theirs falls due in it (no 0 row for a quiet one).

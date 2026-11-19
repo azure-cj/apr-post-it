@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button, Card, EmptyState, Notice, Pill, Spinner } from '../../components';
 import {
-  activeInterns,
   fridayWarning,
   fridayWarningWords,
   lastPostBy,
+  monitorNames,
   samePerson,
   teamWeek,
   waitedFor,
@@ -90,9 +90,11 @@ export function InternsScreen({
   const panelHeading = useRef<HTMLHeadingElement>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
 
+  // The agents, and each admin with a queue that week (D31), who is marked Admin.
+  const shown = useMemo(() => (team ? monitorNames(team, week, assignments, today) : null), [team, week, assignments, today]);
   const rows = useMemo<readonly TeamWeekRow[]>(
-    () => (team ? teamWeek(activeInterns(team), week, assignments, posts, today) : []),
-    [team, week, assignments, posts, today],
+    () => (shown ? teamWeek(shown.names, week, assignments, posts, today) : []),
+    [shown, week, assignments, posts, today],
   );
   // Warnings before each queue's deadline: from its third working day, who is behind and by how much, most left first.
   const behindForFriday = useMemo(
@@ -128,6 +130,12 @@ export function InternsScreen({
   useEffect(() => {
     if (openRow) panelHeading.current?.focus({ preventScroll: true });
   }, [openRow?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A row gone from the week shown (an admin with no queue in it, D31) closes its
+  // panel, so it doesn't come back by itself, taking focus, on the way back.
+  useEffect(() => {
+    if (open !== null && shown !== null && !openRow) setOpen(null);
+  }, [open, shown, openRow]);
 
   const close = () => {
     setOpen(null);
@@ -221,6 +229,7 @@ export function InternsScreen({
               ) : (
                 <WeekTable
                   rows={rows}
+                  admins={shown?.admins ?? NO_ADMINS}
                   week={week}
                   today={today}
                   posts={posts}
@@ -261,8 +270,12 @@ export function InternsScreen({
 
 // ------------------------------------------------------------------ the week's table
 
+const NO_ADMINS: ReadonlySet<string> = new Set();
+
 interface WeekTableProps {
   readonly rows: readonly TeamWeekRow[];
+  /** The rows that are an admin's queue (D31), by name as the rows have it: marked Admin. */
+  readonly admins: ReadonlySet<string>;
   readonly week: string;
   readonly today: string;
   readonly posts: readonly PostLogEntry[];
@@ -273,7 +286,7 @@ interface WeekTableProps {
   readonly onOpen: (name: string, button: HTMLButtonElement) => void;
 }
 
-function WeekTable({ rows, week, today, posts, spots, open, onOpen }: WeekTableProps) {
+function WeekTable({ rows, admins, week, today, posts, spots, open, onOpen }: WeekTableProps) {
   const days = weekDays(week);
   return (
     <div className="week-table__wrap">
@@ -320,6 +333,7 @@ function WeekTable({ rows, week, today, posts, spots, open, onOpen }: WeekTableP
                       {initials(row.name)}
                     </span>
                     <span className="week-table__name">{row.name}</span>
+                    {admins.has(row.name) ? <span className="week-table__role">Admin</span> : null}
                   </button>
                 </th>
                 <td>

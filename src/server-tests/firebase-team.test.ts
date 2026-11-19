@@ -71,11 +71,14 @@ describe('the team, from Firebase', () => {
     expect(w.project.post({ action: 'ping', idToken: 'token-cj' })).toMatchObject({ name: 'CJ', role: 'Intern', fbAccounts: ['Cyrus', 'Kevs'] });
   });
 
-  it('gives queues only to an active intern on Firebase, not to one only on the sheet', () => {
+  it('gives queues only to an active agent or admin on Firebase, not to one only on the sheet', () => {
     const { w } = world();
     const date = '2026-03-09';
     const ok = w.project.post({ action: 'saveQueues', idToken: 'token-boss', date, queues: [{ assignedTo: 'CJ', items: [] }] });
     expect(ok).toMatchObject({ ok: true });
+    // An admin (or owner) may be given a queue too (D31).
+    const admin = w.project.post({ action: 'saveQueues', idToken: 'token-boss', date, queues: [{ assignedTo: 'APG Admin', items: [] }] });
+    expect(admin).toMatchObject({ ok: true });
     const sheetOnly = w.project.post({ action: 'saveQueues', idToken: 'token-boss', date, queues: [{ assignedTo: 'Sheet Only', items: [] }] });
     expect(sheetOnly).toMatchObject({ ok: false, error: 'bad-intern' });
     const off = w.project.post({ action: 'saveQueues', idToken: 'token-boss', date, queues: [{ assignedTo: 'Off Agent', items: [] }] });

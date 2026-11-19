@@ -465,6 +465,7 @@ describe('completing a pending post', () => {
       property: 'Casa Amara',
       propertyId: '1AbC',
       postLink: 'https://www.facebook.com/groups/x/posts/2/',
+      postedBy: pending.postedBy,
       action: 'addLink',
       key: 'testkey',
     });

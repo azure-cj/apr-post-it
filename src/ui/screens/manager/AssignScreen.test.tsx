@@ -172,6 +172,22 @@ describe('Assign, step one: the interns this week', () => {
     expect(cardOrder(rows).map(cardStatus)).toEqual(['behind', 'not-started', 'missed', 'no-queue', 'on-track', 'done']);
   });
 
+  it('with no agents, still says so, above the admins (D31)', () => {
+    render(<Harness intern={null} interns={[]} admins={['Ana Reyes']} me="Ana Reyes" />);
+    const agents = screen.getByRole('heading', { level: 2, name: 'Agents' });
+    expect(agents.nextElementSibling?.textContent).toBe('No agents yet. Add them in Settings → Team.');
+    const admins = screen.getByRole('list', { name: 'Admins' });
+    expect(agents.compareDocumentPosition(admins) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const cards = within(admins).getAllByRole('button');
+    expect(cards.map((c) => c.querySelector('.assign-pick__name')?.textContent)).toEqual(['Ana Reyes']);
+    expect(cards[0]?.querySelector('.assign-pick__you')?.textContent).toBe('You');
+
+    // Nobody at all: the empty state.
+    cleanup();
+    render(<Harness intern={null} interns={[]} />);
+    expect(screen.getByText('No agents yet')).toBeTruthy();
+  });
+
   it('shows the cards for another week', async () => {
     render(<Harness intern={null} />);
     await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
@@ -235,7 +251,7 @@ describe('Assign, the week picker and the link', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Queue before' }));
     expect(week(path())).toBe(WEEK);
 
-    await userEvent.click(screen.getByRole('button', { name: 'All agents' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Everyone' }));
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Assign');
     expect(path()).not.toContain('intern=');
     expect(week(path())).toBe(WEEK);
@@ -530,7 +546,7 @@ describe('Assign, saving', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add Meycauayan Warehouse B' }));
     await userEvent.click(screen.getByRole('button', { name: /^Save queue/ }));
 
-    await screen.findByText('One listing is held by another agent. Remove it, then save again.');
+    await screen.findByText('One listing is held by someone else. Remove it, then save again.');
     const refused = document.querySelector('.queue-row--refused')!;
     expect(refused.textContent).toContain('Casa Amara House & Lot');
     expect(refused.textContent).toContain('With Bea, 26–30 Oct');
@@ -612,7 +628,7 @@ describe('Assign, kept from before', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Remove Sta. Rosa Lot 22' }));
     expect(queueNames()).toEqual(['Verdant Hills Lot 12']);
 
-    const back = screen.getByRole('button', { name: 'All agents' });
+    const back = screen.getByRole('button', { name: 'Everyone' });
     await userEvent.click(back);
     expect(onInternChange).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toContain('Unsaved changes');

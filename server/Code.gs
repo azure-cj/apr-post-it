@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-18.1';
+const SERVER_VERSION = '2026-11-19.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -96,6 +96,7 @@ const ROLES = ['Intern', 'Admin'];
 
 // What each role may call. Admin may call anything.
 // Two roles. The Admin assigns the postings and sees everything; an Intern posts.
+// An admin may be given a queue too, and posts it as an intern does (D31).
 // A Team row that still says "Manager" (the old middle role) counts as Admin.
 const PERMISSIONS = {
   Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink', 'setStatus', 'highlights'],
@@ -1373,7 +1374,8 @@ function logPost_(req, me) {
       propertyId: req.propertyId,
       fbGroup:    group,
     });
-    setAssignmentStatus_(req.propertyId, req.property, postedBy, status);
+    // The item of the queue it was made in, not a later queue's.
+    setAssignmentStatus_(req.propertyId, req.property, postedBy, status, date);
     // The row as written. The app shows these, never its own clock or user.
     // The time goes back as HH:mm, the app's format.
     return { ok: true, status: status, date: date, time: time, type: type, postedBy: postedBy };
@@ -1520,7 +1522,15 @@ function setPostGroup_(sh, row, link) {
   setText_(sh.getRange(row, col.fbGroup + 1), group);
 }
 
-/** Turn a Pending row into Posted once the live link exists. */
+/**
+ * Turn a Pending row into Posted once the live link exists. Of the listing's
+ * Pending rows the caller may complete, the one that already has this link
+ * (Approved sends the link the post was logged with), else the newest (an
+ * old row logged without one). An intern completes only their own; an admin
+ * anyone's (bug 5). Since D31 an admin works a queue too, so the app sends
+ * whose post it is (postedBy) and an admin completes only that person's;
+ * without it (an older app), anyone's, by the same rule.
+ */
 function addLink_(req, me) {
   requireAll_(req, ['postLink']);
   if (!req.propertyId && !req.property) throw new Error('missing: property');
@@ -1529,7 +1539,7 @@ function addLink_(req, me) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, error: 'busy' };
   try {
-    // The link already on the tracker (v14): this pending row's own is fine; anyone else's post, or another listing's, is not.
+    // The link already on the tracker (v14): fine only on the row it completes.
     var earlier = postWithLink_(req.postLink);
     var sh = sheetFor_(CONFIG.POSTS_TAB, POST_FIELDS);
     var values = sh.getDataRange().getValues();
@@ -1541,23 +1551,41 @@ function addLink_(req, me) {
     var name = req.property || nameOf_(req.propertyId);
     var id = req.propertyId || idOf_(name);
     var key = normalizeName_(name) || null;   // a blank name finds no row by name
+    var owner = me.role === 'Intern' ? '' : textOf_(req.postedBy).trim();   // D31: whose post an admin means
+    var link = String(req.postLink).trim();
+    var linkKey = postKey_(link);
 
+    var found = -1;
+    var matched = false;   // found already has the link
     for (var r = values.length - 1; r >= 1; r--) {
       var p = fieldsOf_(values[r], POST_FIELDS, col, tz);
       if (!sameProperty_(p.propertyId, p.title, id, key)) continue;
       if (postStatus_(p.status) !== 'Pending') continue;
       if (me.role === 'Intern' && p.postedBy !== me.name) continue;  // not yours
-      if (earlier && (earlier.postedBy !== p.postedBy || !sameProperty_(earlier.propertyId, earlier.title, id, key))) {
-        return linkTaken_(earlier);
+      if (owner && textOf_(p.postedBy).trim() !== owner) continue;    // not the post asked for
+      if (found === -1) found = r;                                    // the newest
+      var theirs = textOf_(p.postLink).trim();
+      if (theirs && (theirs === link || (linkKey !== null && postKey_(theirs) === linkKey))) {
+        found = r;                                                    // this very post (Approved)
+        matched = true;
+        break;
       }
-
-      setText_(sh.getRange(r + 1, col.status + 1), 'Posted');
-      setText_(sh.getRange(r + 1, col.postLink + 1), String(req.postLink).trim());
-      setPostGroup_(sh, r + 1, req.postLink);
-      setAssignmentStatus_(id, name, p.postedBy, 'Posted');
-      return { ok: true, row: r + 1 };
     }
-    return { ok: false, error: 'notfound', message: 'No pending post for that property.' };
+    if (found === -1) return { ok: false, error: 'notfound', message: 'No pending post for that property.' };
+
+    var post = fieldsOf_(values[found], POST_FIELDS, col, tz);
+    // A link on any other row is never copied, the caller's own included: a
+    // second Approved, after the first was saved but its answer lost, must not
+    // put this post's link on another of their posts.
+    if (earlier && (!matched || earlier.postedBy !== post.postedBy || !sameProperty_(earlier.propertyId, earlier.title, id, key))) {
+      return linkTaken_(earlier);
+    }
+    setText_(sh.getRange(found + 1, col.status + 1), 'Posted');
+    setText_(sh.getRange(found + 1, col.postLink + 1), link);
+    setPostGroup_(sh, found + 1, req.postLink);
+    // The item of the queue this post was made in, not a later queue's.
+    setAssignmentStatus_(id, name, post.postedBy, 'Posted', post.date);
+    return { ok: true, row: found + 1 };
   } finally {
     lock.releaseLock();
   }
@@ -2206,9 +2234,10 @@ function saveQueue_(req, me) {
 }
 
 /**
- * Several interns' queues for one week, all or none: everything is checked
+ * Several people's queues for one week, all or none: everything is checked
  * before anything is written, and the writing is done under one hold of the
  * lock, so nobody sees half a week's plan or saves into the middle of it.
+ * Each queue is for an active intern or an active admin (D31).
  */
 function saveQueues_(req, me) {
   var shared = requestPeriod_(req);
@@ -2226,9 +2255,10 @@ function saveQueues_(req, me) {
   for (var q = 0; q < queues.length; q++) {
     var queue = queues[q] || {};
     var person = activePerson_(queue.assignedTo);
-    if (!person || person.role !== 'Intern') {
+    // An intern or, since D31, an admin: anyone active on the team.
+    if (!person || ROLES.indexOf(person.role) === -1) {
       return { ok: false, error: 'bad-intern',
-               message: textOf_(queue.assignedTo).trim() + ' is not an active intern on the Team tab.' };
+               message: (textOf_(queue.assignedTo).trim() || 'A queue with no name') + ' is not active on the team.' };
     }
     if (seen[person.name]) {
       return { ok: false, error: 'bad-queues', message: person.name + ' has two queues for the week of ' + weekLabel_(week) + '. Send one.' };
@@ -2503,26 +2533,39 @@ function markPostPosted_(propertyId, propertyName, postedBy) {
 
 /**
  * Moves the person's open queue item for the property to `status`: the lowest
- * such row, and never one already Posted. Returns its row number, or 0 when
- * there is none.
+ * such row, and never one already Posted. With `day`, a post's date, the item
+ * of the queue that day falls in, as the app counts a post toward the queue
+ * it was made in; when that item is already Posted (the listing posted twice
+ * in one queue), none, so a post never moves another queue's item. A day in
+ * no queue of theirs: the lowest, as before. Returns its row number, or 0
+ * when there is none.
  */
-function setAssignmentStatus_(propertyId, propertyName, assignedTo, status) {
+function setAssignmentStatus_(propertyId, propertyName, assignedTo, status, day) {
   var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
   var values = sh.getDataRange().getValues();
   if (values.length < 2) return 0;
   var col = columnsIn_(values[0], ASSIGN_FIELDS, sh.getName());
   var tz = zoneOf_(sh);
   var key = normalizeName_(propertyName) || null;   // a blank name finds no row by name
+  var when = day ? sheetDay_(day) : '';
 
+  var lowest = 0, inQueue = 0, queued = false;
   for (var r = values.length - 1; r >= 1; r--) {
     var a = fieldsOf_(values[r], ASSIGN_FIELDS, col, tz);
     if (!sameProperty_(a.propertyId, a.property, propertyId, key)) continue;
     if (a.assignedTo !== textOf_(assignedTo)) continue;
-    if (queueStatus_(a.status) === 'Posted') continue;
-    setText_(sh.getRange(r + 1, col.status + 1), status);
-    return r + 1;
+    var open = queueStatus_(a.status) !== 'Posted';
+    var period = when ? rowPeriod_(a) : null;
+    if (period && period.start <= when && when <= period.due) {
+      queued = true;
+      if (open && !inQueue) inQueue = r;
+    }
+    if (open && !lowest) lowest = r;
   }
-  return 0;
+  var row = queued ? inQueue : lowest;
+  if (!row) return 0;
+  setText_(sh.getRange(row + 1, col.status + 1), status);
+  return row + 1;
 }
 
 // ---------------------------------------------------------------- sheets

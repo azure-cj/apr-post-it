@@ -4,7 +4,8 @@ import { BackendError } from '@/core/backend';
 import { postLinkProblem } from '@/core/links';
 import { keepsForRetry } from '@/core/outbox';
 import { normalize } from '@/core/matcher';
-import { canManage, type Assignment, type PostStatus, type Property } from '@/core/types';
+import { currentQueue, rowsOf } from '@/core/queues';
+import { canManage, queueStatus, type Assignment, type PostStatus, type Property } from '@/core/types';
 import { Button, Notice, TextInput } from '../../components';
 import {
   paths,
@@ -69,16 +70,23 @@ export const LogStep = forwardRef<HTMLInputElement, {
   const linkProblem = link ? postLinkProblem(link) : null;
   const ready = !blocked && property !== null && link !== '' && linkProblem === null;
 
-  /** The next listing to post in today's queue, other than this one. */
+  /**
+   * The next listing to post in your queue now (the one running, else the next
+   * to start: what My queue shows), other than this one, in the admin's order.
+   * Its rows are dated by the queue's start, not by today (v14). An admin's own
+   * queue too (D31), when they came from it.
+   */
   const nextUp = (): { id: string } | null => {
-    if (!property || canManage(user)) return null;
-    const today = app.today();
+    if (!property || (canManage(user) && section !== 'queue')) return null;
+    const rows = queue.data ?? [];
+    const period = currentQueue(user.name, rows, app.today());
+    if (!period) return null;
     const here = normalize(property.name);
     const byName = new Map((list ?? []).map((p) => [normalize(p.name), p]));
     const isThis = (a: Assignment) =>
       a.propertyId && property.id ? a.propertyId === property.id : normalize(a.propertyName) === here;
-    for (const a of queue.data ?? []) {
-      if (a.date !== today || a.assignedTo !== user.name || a.status !== 'Not Shared' || isThis(a)) continue;
+    for (const a of rowsOf(user.name, period.key, rows)) {
+      if (queueStatus(a.status) !== 'Not Shared' || isThis(a)) continue;
       const id = a.propertyId || byName.get(normalize(a.propertyName))?.id;
       if (id) return { id };
     }

@@ -288,6 +288,13 @@
   font-weight: var(--weight-heading);
 }
 
+/* An admin's queue on the monitor (D31): as Settings → Team marks the role. */
+.week-table__role {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
 .week-table__last {
   white-space: nowrap;
 }

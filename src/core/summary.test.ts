@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { lastPostedOn } from './cooldown';
 import {
+  activeAdmins,
   activeInterns,
   addDays,
   ago,
@@ -17,6 +18,7 @@ import {
   lastPostOf,
   longDate,
   matchPasted,
+  monitorNames,
   moveEntry,
   newestFirst,
   pastedLines,
@@ -666,6 +668,30 @@ describe('the team, for the Interns screen', () => {
   it('lists the active interns once each, by name', () => {
     expect(activeInterns(team)).toEqual([BEA, JAN, MIKA]);
     expect(activeInterns([])).toEqual([]);
+  });
+
+  it('lists the active admins once each, by name: they may be given a queue too (D31)', () => {
+    const admins: readonly TeamMember[] = [
+      ...team,
+      { name: 'Rico Bautista', role: 'Admin' },
+      { name: 'maria santos', role: 'Admin' },
+      { name: 'Old Admin', role: 'Admin', active: false },
+      { name: '  ', role: 'Admin' },
+    ];
+    expect(activeAdmins(admins)).toEqual(['Maria Santos', 'Rico Bautista']);
+    expect(activeAdmins([])).toEqual([]);
+  });
+
+  it('puts an admin on the weekly monitor only in a week they have a queue, after the interns (D31)', () => {
+    const withAdmins: readonly TeamMember[] = [...team, { name: 'Rico Bautista', role: 'Admin' }];
+    const assignments = [...queue(JAN, TODAY, ['A', 'Not Shared']), ...queue('maria santos', TODAY, ['B', 'Not Shared'])];
+    const now = monitorNames(withAdmins, '2026-10-26', assignments, TODAY);
+    expect(now.names).toEqual([BEA, JAN, MIKA, 'Maria Santos']);
+    expect([...now.admins]).toEqual(['Maria Santos']);
+    // The week after: nobody's queue, so no admin.
+    const later = monitorNames(withAdmins, NEXT_WEEK, assignments, TODAY);
+    expect(later.names).toEqual([BEA, JAN, MIKA]);
+    expect(later.admins.size).toBe(0);
   });
 
   it("counts each intern's queue on the day and their posts waiting for approval", () => {
