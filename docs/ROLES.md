@@ -25,7 +25,7 @@ blank included, is `Intern`.
 | My Queue | own only | own, while they have one or a post waiting (D31) |
 | Log a post | as self | as self; on behalf of anyone active (server only) |
 | Add the live link to a Pending post | own only | any |
-| **Post inside the 7-day cooldown** | **✘ refused** | ✘ refused |
+| Post inside the 7-day cooldown | ✔, warned "Posted recently" (v19) | ✔, warned (v19) |
 | Edit or void a logged row | ✘ | ✔ |
 | Assign, reorder, remove queue items | ✘ | ✔ (to interns and admins, D31) |
 | Tracker: posted, pending, due for repost, never posted | own numbers | everyone |
@@ -45,8 +45,9 @@ Everything above is a guard rail except these, which hold even against a tampere
 1. **The internal section is never copied.** The split happens server-side, and
    `internalText` is a field of its own, never part of `publicText`. An intern reads it
    behind a toggle; Copy never takes it (D16).
-2. **The cooldown is checked under a lock before the row is appended.** Two interns saving
-   the same property in the same second cannot both get through.
+2. **A post's link is checked under a lock before the row is appended.** The same Facebook
+   post can't be logged twice, nor under a second name (D22). Until v19 this was the
+   cooldown; it now warns and refuses nothing.
 
 Everything else — which buttons are greyed out, which screens appear — is UI convenience.
 
@@ -70,8 +71,9 @@ Consequences worth knowing:
   the internal text of separated documents.
 * **A leaked admin key is a real problem**, the same as a shared password. Keep admin
   keys off shared machines.
-* **`Posted By` comes from the key**, not from the request, so a post cannot be logged
-  against someone else's name.
+* **`Posted By` comes from the key**, not from the request, so an intern cannot log a post
+  against someone else's name. An admin may, for anyone active, from one of that person's
+  own FB accounts.
 * **FB accounts are per person.** Jan's log screen offers only the accounts listed in his
   row, and the server rejects anything else.
 
@@ -81,7 +83,7 @@ there is no chicken-and-egg at setup. It stops working the moment a real row exi
 ## Open decisions
 
 1. ~~Admin separate from Manager, or folded in?~~ Folded in: two roles, Admin and Intern (D14).
-2. **May an admin override a cooldown?** If yes it needs a required reason and gets logged.
-   Currently nobody can.
+2. ~~May an admin override a cooldown?~~ Nobody needs to: since v19 the cooldown warns and
+   refuses nothing, for an intern or an admin.
 3. ~~May an admin also post, with a queue of their own?~~ Yes: any admin may be given a queue,
    and works it from My queue (D31).

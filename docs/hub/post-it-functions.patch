@@ -9,11 +9,11 @@ Subject: [PATCH] Post-It's functions: posts, weekly queues, rules and FB
  firebase/firestore.indexes.json             |  19 +-
  firebase/functions/src/index.ts             |   1 +
  firebase/functions/src/people.ts            |   6 +-
- firebase/functions/src/posting/functions.ts | 449 ++++++++++++++++++++
+ firebase/functions/src/posting/functions.ts | 453 ++++++++++++++++++++
  firebase/functions/src/posting/profiles.ts  |  15 +
  firebase/functions/src/posting/rules.ts     | 140 ++++++
- firebase/tests/posting.test.ts              | 249 +++++++++++
- 8 files changed, 926 insertions(+), 2 deletions(-)
+ firebase/tests/posting.test.ts              | 252 +++++++++++
+ 8 files changed, 933 insertions(+), 2 deletions(-)
  create mode 100644 docs/plans/POST-IT-FUNCTIONS.md
  create mode 100644 firebase/functions/src/posting/functions.ts
  create mode 100644 firebase/functions/src/posting/profiles.ts
@@ -22,7 +22,7 @@ Subject: [PATCH] Post-It's functions: posts, weekly queues, rules and FB
 
 diff --git a/docs/plans/POST-IT-FUNCTIONS.md b/docs/plans/POST-IT-FUNCTIONS.md
 new file mode 100644
-index 0000000..f7ff946
+index 0000000..f827ca5
 --- /dev/null
 +++ b/docs/plans/POST-IT-FUNCTIONS.md
 @@ -0,0 +1,49 @@
@@ -59,7 +59,7 @@ index 0000000..f7ff946
 +| `logPost` `{ folderId, title, type?, fbAccount, link, status, postedBy? }` | people | Refuses `link-required`, `bad-link`, `bad-status`, `forbidden` (not one of the poster's FB accounts), `cooldown` (with `lastPosted`, `nextAllowed`). A manager may log for an active person with `postedBy` (uid). Moves the poster's open queue item for the listing to the post's status |
 +| `addLink` `{ postId, link }` | people | A Pending post made Posted, with its live link. An agent's own only |
 +| `setStatus` `{ assignmentId, status }` | people | A queue item moved. Posted also makes the assignee's newest Pending post of it Posted. An agent's own only |
-+| `saveQueues` `{ week, queues: [{ assignedTo, items: [{ folderId, name, status? }] }] }` | managers | Replaces those agents' items of that week, all or nothing. Refuses `bad-week`, `bad-queues`, `bad-agent`, and `held` (with `held: [{ folderId, name, heldBy, heldByName, week }]`) |
++| `saveQueues` `{ week, queues: [{ assignedTo, items: [{ folderId, name, status? }] }] }` | managers | Replaces those people's items of that week, all or nothing. A queue is for an active agent, admin or owner. Refuses `bad-week`, `bad-queues`, `bad-agent` (anyone else, or turned off), and `held` (with `held: [{ folderId, name, heldBy, heldByName, week }]`) |
 +| `setRules` `{ cooldownDays?, repostDueDays?, perWeek? }` | managers | Only what's sent changes. `bad-rules` (with `field`) |
 +| `setFbProfiles` `{ uid, fbProfiles }` | managers | An owner anyone's, an admin an agent's, and anyone their own. `bad-accounts`, `bad-profile-link` |
 +
@@ -151,10 +151,10 @@ index 5954f53..1c7fea7 100644
    people.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
 diff --git a/firebase/functions/src/posting/functions.ts b/firebase/functions/src/posting/functions.ts
 new file mode 100644
-index 0000000..d667aa5
+index 0000000..4b18b67
 --- /dev/null
 +++ b/firebase/functions/src/posting/functions.ts
-@@ -0,0 +1,449 @@
+@@ -0,0 +1,453 @@
 +import "../setup.js";
 +import { FieldValue, getFirestore, type DocumentReference, type Query, type Transaction } from "firebase-admin/firestore";
 +import { HttpsError, onCall, type CallableRequest } from "firebase-functions/https";
@@ -457,9 +457,10 @@ index 0000000..d667aa5
 +}
 +
 +/**
-+ * Several agents' queues for one week, all or none: each named agent's items of that week are replaced, and nobody
-+ * else's are touched. Refused when a listing is held: an open (Not Shared) item of a week that isn't over holds its
-+ * listing for its agent until it's posted, or the week ends. Re-saving the same agent's week releases their own items.
++ * Several people's queues for one week, all or none: each named person's items of that week are replaced, and nobody
++ * else's are touched. A queue is for an active agent, admin or owner: an admin may be given postings too. Refused when
++ * a listing is held: an open (Not Shared) item of a week that isn't over holds its listing for its person until it's
++ * posted, or the week ends. Re-saving the same person's week releases their own items.
 + */
 +export const saveQueues = onCall(async (request) => {
 +  await requireCurrentRole(request, MANAGERS);
@@ -474,7 +475,10 @@ index 0000000..d667aa5
 +      const q = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
 +      const uid = typeof q["assignedTo"] === "string" ? q["assignedTo"] : "";
 +      const person = uid ? await personOf(uid, tx) : null;
-+      if (!person || !person.active || person.role !== "agent") throw refuse("invalid-argument", "bad-agent", `${person?.name || "That person"} isn't an active agent.`);
++      // An agent, or an admin or owner given postings too: anyone active on the team.
++      if (!person || !person.active || !person.role || !PEOPLE.includes(person.role)) {
++        throw refuse("invalid-argument", "bad-agent", `${person?.name || "That person"} isn't active on the team.`);
++      }
 +      if (queues.some((other) => other.person.uid === uid)) {
 +        throw refuse("invalid-argument", "bad-queues", `${person.name} has two queues for the week of ${weekLabel(week)}. Send one.`);
 +      }
@@ -773,10 +777,10 @@ index 0000000..6188989
 +export type PostStatus = (typeof POST_STATUSES)[number];
 diff --git a/firebase/tests/posting.test.ts b/firebase/tests/posting.test.ts
 new file mode 100644
-index 0000000..74c5437
+index 0000000..46bc424
 --- /dev/null
 +++ b/firebase/tests/posting.test.ts
-@@ -0,0 +1,249 @@
+@@ -0,0 +1,252 @@
 +import { getFirestore } from "firebase-admin/firestore";
 +import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 +import { manilaDay, weekOf, addDays } from "../functions/src/posting/rules.ts";
@@ -962,10 +966,13 @@ index 0000000..74c5437
 +    expect(await (await as("admin")).call("saveQueues", data).catch((e: unknown) => e)).toMatchObject({ details: { error } });
 +  });
 +
-+  it("gives queues to agents only", async () => {
-+    expect(await (await as("admin")).call("saveQueues", { week: WEEK, queues: [queue("admin", "F1")] }).catch((e: unknown) => e)).toMatchObject({
-+      details: { error: "bad-agent" },
-+    });
++  it("gives queues to active agents, admins and owners only", async () => {
++    const app = await as("admin");
++    await expect(app.call("saveQueues", { week: WEEK, queues: [queue("admin", "F1"), queue("owner", "F2")] })).resolves.toEqual({ saved: 2 });
++    await getFirestore(admin()).collection("users").doc(uids["ana"]).update({ active: false });
++    for (const who of ["scanner", "nobody", "ana"]) {
++      expect(await app.call("saveQueues", { week: WEEK, queues: [queue(who, "F3")] }).catch((e: unknown) => e)).toMatchObject({ details: { error: "bad-agent" } });
++    }
 +  });
 +
 +  it("moves the queue item when its listing is logged, which releases it", async () => {

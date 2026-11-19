@@ -980,6 +980,7 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
       admins={admins}
       me={me.name}
       teamKnown={known}
+      managedInHub={app.usesAccounts}
       intern={intern}
       week={week}
       today={today}
@@ -1091,6 +1092,7 @@ function InternsRoute() {
       week={week}
       today={today}
       team={team.data}
+      managedInHub={app.usesAccounts}
       posts={posts.data ?? []}
       assignments={assignments.data ?? []}
       onWeekChange={(next) => setParams(next === opening ? {} : { week: next }, { replace: true })}
