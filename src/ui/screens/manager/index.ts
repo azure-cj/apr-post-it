@@ -7,7 +7,14 @@ export { AssignScreen, type AssignScreenProps, type QueueSave } from './AssignSc
 export { RESULT_LIMIT } from './AssignLibrary';
 export { DayPicker, type DayPickerProps, type QuickDay } from './DayPicker';
 export { InternsScreen, lastPostWords, monitorWeek, type InternsScreenProps } from './InternsScreen';
-export { SETTINGS_TABS, SettingsScreen, settingsTab, type SettingsScreenProps, type SettingsTab } from './SettingsScreen';
+export {
+  AgentSettingsScreen,
+  SETTINGS_TABS,
+  SettingsScreen,
+  settingsTab,
+  type SettingsScreenProps,
+  type SettingsTab,
+} from './SettingsScreen';
 export { LIST_LIMIT, TrackerScreen, type TrackerScreenProps } from './TrackerScreen';
 export { RecordsScreen, postsCsv, type RecordsScreenProps } from './RecordsScreen';
 export { FillQueues, type FillQueuesProps } from './FillQueues';

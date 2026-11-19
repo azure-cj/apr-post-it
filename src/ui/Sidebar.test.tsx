@@ -67,7 +67,7 @@ describe('the sidebar', () => {
     const platform = server();
     renderApp({ platform, user: intern, path: '/queue' });
     await screen.findByRole('heading', { level: 1, name: 'My queue' });
-    expect(navNames()).toEqual(['My queue', 'Find']);
+    expect(navNames()).toEqual(['My queue', 'Find', 'Settings']);
     expect(screen.queryByRole('link', { name: 'Agents' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeTruthy();
     expect(platform.posts.map((p) => p.action)).not.toContain('team');

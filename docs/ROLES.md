@@ -31,10 +31,12 @@ blank included, is `Intern`.
 | Tracker: posted, pending, due for repost, never posted | own numbers | everyone |
 | Doc health sweep | ✘ | ✔ |
 | Settings: folders, cooldown, team, keys | ✘ | ✔ |
+| Settings: theme, reminders, About | ✔ (D32) | ✔ |
 
 In the app an Admin gets Tracker, Assign, Agents, Records, Find and Settings, and My queue (before
 Find) while they have a queue running or coming, or a post of their own waiting for approval,
-and while they are on it (D31); an Intern gets My queue and Find.
+and while they are on it (D31); an Intern gets My queue, Find and Settings, where only
+Appearance, Reminders and About are theirs, with no tabs (D32).
 
 ## The two that are boundaries, not preferences
 

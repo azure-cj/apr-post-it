@@ -434,3 +434,19 @@ may *be given postings* is now everyone active on the team.
   Tracker's week, marked Admin, with the same pace, warnings and spot checks; an admin
   without one isn't listed. Records lists an admin as anyone else: once they post in the
   period or a queue of theirs falls due in it (no 0 row for a quiet one).
+
+### D32. Settings for agents; no web app card (Nov 19, 2026)
+
+Amends D14, where Settings was an admin's. The owner's decision. Settings → App loses its Web
+app card, for everyone: the link built into the app (shown read-only, with Copy) and the check
+of the web app's version, with the steps to deploy. Agents get Settings in their sidebar, after
+Find: the App tab's cards alone, Appearance, Reminders and About, with no tabs. An admin's
+Settings keeps its four tabs.
+
+- **Nothing new is read.** An agent's Settings asks the server for nothing an admin's tabs do
+  (the team, the rules, the directory). The theme and the reminder days are kept on the PC, as
+  an admin's are; About shows the app's version and the web app's, as last pinged.
+- **A web app that is behind** is said only on the startup screen: to an admin, "deploy a New
+  version in Apps Script", as Settings used to say; to an agent, "tell your admin".
+- **Errors that pointed at Settings** for the web app link or the key now say to sign in with
+  them, or to check the link.

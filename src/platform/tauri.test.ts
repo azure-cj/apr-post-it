@@ -140,19 +140,19 @@ describe('post', () => {
     expect((error as Error).message).toContain('"Anyone"');
   });
 
-  it('says the Settings link is wrong when it is not Google', async () => {
+  it('says the web app link is wrong when it is not Google', async () => {
     const link = 'https://example.com/exec';
     ipc(web(() => ({ fails: `url not allowed on the configured scope: ${link}` })));
     await expect(createTauriPlatform().post(link, {})).rejects.toThrow(
-      /talks only to Google, and the web app link in Settings points to example\.com/,
+      /talks only to Google, and the web app link points to example\.com/,
     );
   });
 
-  it('says the Settings link must be https', async () => {
+  it('says the web app link must be https', async () => {
     const link = 'http://script.google.com/macros/s/AKfy/exec';
     ipc(web(() => ({ fails: `url not allowed on the configured scope: ${link}` })));
     await expect(createTauriPlatform().post(link, {})).rejects.toThrow(
-      'The web app link in Settings must start with https://script.google.com/.',
+      'The web app link must start with https://script.google.com/.',
     );
   });
 

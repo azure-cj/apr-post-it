@@ -40,7 +40,18 @@ import { UpdateBanner, type CheckResult } from './UpdateBanner';
 import { version as APP_VERSION } from '../../package.json';
 import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
-import { AssignScreen, InternsScreen, monitorWeek, RecordsScreen, SettingsScreen, settingsTab, TrackerScreen, type QueueSave } from './screens/manager';
+import {
+  AgentSettingsScreen,
+  AssignScreen,
+  InternsScreen,
+  monitorWeek,
+  RecordsScreen,
+  SettingsScreen,
+  settingsTab,
+  TrackerScreen,
+  type QueueSave,
+  type SettingsScreenProps,
+} from './screens/manager';
 import { useTheme } from './state/theme';
 import { Launch } from './startup/Launch';
 import type { Platform } from '@/platform';
@@ -86,7 +97,7 @@ interface NavDef {
  * convenience only: the server enforces what each key may do. An admin given
  * a queue (D31) also gets My queue, before Find, while it runs or is coming,
  * or while a post of theirs waits for approval, and while they are on it:
- * `ownQueue`.
+ * `ownQueue`. An agent's Settings is the App tab's cards alone (D32).
  */
 export function navFor(user: User, ownQueue = false): readonly NavDef[] {
   if (canManage(user)) {
@@ -103,6 +114,7 @@ export function navFor(user: User, ownQueue = false): readonly NavDef[] {
   return [
     { key: 'queue', label: 'My queue', path: paths.queue, icon: 'inbox' },
     { key: 'find', label: 'Find', path: paths.find, icon: 'search' },
+    { key: 'settings', label: 'Settings', path: paths.settings, icon: 'settings' },
   ];
 }
 
@@ -504,7 +516,7 @@ export function AppShell({ signInNote }: AppProps) {
                 <Route path={paths.tracker} element={guard(<TrackerRoute />, canManage)} />
                 <Route path={paths.interns} element={guard(<InternsRoute />, canManage)} />
                 <Route path={paths.records} element={guard(<RecordsRoute />, canManage)} />
-                <Route path={paths.settings} element={guard(<SettingsRoute />, isAdmin)} />
+                <Route path={paths.settings} element={guard(<SettingsRoute />)} />
                 {KitScreen ? (
                   <Route
                     path="/kit"
@@ -1165,7 +1177,33 @@ function RecordsRoute() {
   );
 }
 
+/**
+ * Settings: an admin's four tabs; an agent's, the App tab's cards alone (D32),
+ * so nothing it reads is an admin's (the team, the rules).
+ */
 function SettingsRoute() {
+  return isAdmin(useUser()) ? <AdminSettingsRoute /> : <AgentSettingsRoute />;
+}
+
+function AgentSettingsRoute() {
+  return <AgentSettingsScreen app={useAppCards()} />;
+}
+
+/** The App tab's cards, the same for everyone: the theme, the reminders, and the versions. */
+function useAppCards(): SettingsScreenProps['app'] {
+  const app = useApp();
+  const server = useStore(app.server);
+  const theme = useTheme();
+  return {
+    serverVersion: server.version || undefined,
+    theme: theme.choice,
+    onThemeChange: theme.setChoice,
+    reminderDays: app.settings.pendingReminderDays,
+    onReminderDaysChange: (days) => void app.saveSettings({ pendingReminderDays: days }).catch(() => {}),
+  };
+}
+
+function AdminSettingsRoute() {
   const app = useApp();
   const notify = useNotify();
   const navigate = useNavigate();
@@ -1174,7 +1212,7 @@ function SettingsRoute() {
   const team = useTeam({ maxAgeMs: 60_000 });
   const posts = usePosts({ maxAgeMs: 120_000 });
   const server = useStore(app.server);
-  const theme = useTheme();
+  const appCards = useAppCards();
   const me = useUser();
   // The version and rules as the server says them now, not as at sign-in.
   // Once on arrival: keyed on refreshServer (stable for the window), never on
@@ -1233,17 +1271,7 @@ function SettingsRoute() {
         onOpenLink: open,
       }}
       rules={{ rules, onSave: server.rules ? (next) => tracker.setRules(next) : undefined }}
-      app={{
-        scriptUrl: app.settings.scriptUrl,
-        builtInLink: BUILT_IN_SCRIPT_URL !== '',
-        onCopy: copy,
-        versionStatus: server.known ? server.versionStatus : undefined,
-        serverVersion: server.version || undefined,
-        theme: theme.choice,
-        onThemeChange: theme.setChoice,
-        reminderDays: app.settings.pendingReminderDays,
-        onReminderDaysChange: (days) => void app.saveSettings({ pendingReminderDays: days }).catch(() => {}),
-      }}
+      app={appCards}
     />
   );
 }

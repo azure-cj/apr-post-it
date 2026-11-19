@@ -160,7 +160,7 @@ export function Launch({ children, minMs = MIN_MS, maxMs = MAX_MS }: LaunchProps
       lines.push({
         key: 'server',
         tone: 'fail',
-        text: isAdmin(user) ? 'Web app is behind: update it in Settings → App' : 'Web app is behind: tell your admin',
+        text: isAdmin(user) ? 'Web app is behind: deploy a New version in Apps Script' : 'Web app is behind: tell your admin',
       });
     }
   }

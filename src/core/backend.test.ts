@@ -68,7 +68,7 @@ describe('before any request', () => {
     const { post, sent } = scripted({ ok: true });
     const error = await failure(createBackend({ post, getConfig: () => ({ url: '', key: '' }) }).call('posts'), 'not-configured');
 
-    expect(error.message).toContain('Settings');
+    expect(error.message).toContain('Sign in');
     expect(sent).toHaveLength(0);
   });
 
@@ -78,9 +78,9 @@ describe('before any request', () => {
     const noUrl = await failure(createBackend({ post, getConfig: () => ({ url: null, key: 'k' }) }).call('ping'));
     const neither = await failure(createBackend({ post, getConfig: () => ({}) }).call('ping'));
 
-    expect(noKey.message).toBe('Post-It does not have your key yet. Add the key your admin gave you in Settings.');
-    expect(noUrl.message).toBe('Post-It does not have the web app link yet. Add it in Settings.');
-    expect(neither.message).toBe('Post-It is not connected yet. Add the web app link and your key in Settings.');
+    expect(noKey.message).toBe('Post-It does not have your key yet. Sign in with the key your admin gave you.');
+    expect(noUrl.message).toBe('Post-It does not have the web app link yet. Sign in with it and your key.');
+    expect(neither.message).toBe('Post-It is not connected yet. Sign in with the web app link and your key.');
     expect(sent).toHaveLength(0);
   });
 
@@ -105,7 +105,7 @@ describe('before any request', () => {
     expect(sent).toHaveLength(0);
   });
 
-  it('reads the link and key on every call, so a change in Settings applies at once', async () => {
+  it('reads the link and key on every call, so a new sign-in applies at once', async () => {
     const { post, sent } = scripted({ ok: true });
     let key = 'first';
     const backend = createBackend({ post, getConfig: async () => ({ url: ` ${EXEC} `, key }) });
@@ -464,7 +464,7 @@ describe('a reply', () => {
     const { post } = scripted('Service unavailable, try later');
     const error = await failure(backendOver(post).call('posts'), 'unexpected');
 
-    expect(error.message).toBe('Google sent something Post-It does not understand. Check the web app link in Settings.');
+    expect(error.message).toBe('Google sent something Post-It does not understand. Check the web app link.');
     expect(error.cause).toBeInstanceOf(SyntaxError);
   });
 
@@ -542,11 +542,11 @@ describe('a trip that fails', () => {
   });
 
   it.each([
-    [404, 'Google could not find the web app (error 404). Check the web app link in Settings.'],
+    [404, 'Google could not find the web app (error 404). Check the web app link.'],
     [403, 'Google would not let Post-It in (error 403). Ask your admin to check the web app is deployed with access set to "Anyone".'],
     [503, 'Google is having trouble right now (error 503). Try again in a minute.'],
     [429, 'Google is having trouble right now (error 429). Try again in a minute.'],
-    [400, 'Google answered with error 400. Check the web app link in Settings.'],
+    [400, 'Google answered with error 400. Check the web app link.'],
   ])('with HTTP %i gives a sentence, not a code', async (status, message) => {
     const { post } = scripted(Object.assign(new Error(`HTTP ${status}`), { status }));
     const error = await failure(backendOver(post).call('posts'), 'http');

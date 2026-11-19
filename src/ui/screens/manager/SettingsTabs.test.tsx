@@ -3,6 +3,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EXPECTED_SERVER_VERSION } from '@/config';
+import type { User } from '@/core/types';
 import { version } from '../../../../package.json';
 import { admin, fakeServer, intern, renderApp } from '../../state/testing';
 import { SettingsListings } from './SettingsListings';
@@ -23,6 +24,8 @@ const ping = (version: string, rules: object | null = RULES) => ({
   version,
   ...(rules ? { rules } : {}),
 });
+/** A ping that says who `user` is, so signing in as an agent stays an agent. */
+const pingAs = (user: User, version: string) => ({ ...ping(version), name: user.name, role: user.role });
 const actionsOf = (platform: ReturnType<typeof fakeServer>) => platform.posts.map((p) => p.action);
 const tab = (name: string) => screen.getByRole('tab', { name });
 
@@ -36,8 +39,7 @@ describe('Settings tabs', () => {
 
     await userEvent.click(tab('App'));
     expect(tab('App').getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByRole('tabpanel', { name: 'App' })).toBeTruthy();
-    expect(screen.getByLabelText('Web app link')).toBeTruthy();
+    expect(within(screen.getByRole('tabpanel', { name: 'App' })).getByRole('region', { name: 'About' })).toBeTruthy();
   });
 
   it('opens the tab the URL names, and falls back to Team for one it does not know', () => {
@@ -64,11 +66,29 @@ describe('Settings tabs', () => {
     expect(tab('App').getAttribute('aria-selected')).toBe('true');
   });
 
-  it("can't be reached by an intern", () => {
-    renderApp({ platform: fakeServer(), user: intern, path: '/settings?tab=rules' });
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('My queue');
+  it("gives an agent the App tab's cards alone, with no tabs, whatever the URL names (D32)", async () => {
+    const platform = fakeServer({ ping: pingAs(intern, EXPECTED_SERVER_VERSION) });
+    renderApp({ platform, user: intern, path: '/settings?tab=rules' });
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Settings');
+    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('aria-current')).toBe('page');
     expect(screen.queryByRole('tablist')).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Settings' })).toBeNull();
+    const main = within(screen.getByRole('main'));
+    expect(main.getAllByRole('region').map((r) => r.querySelector('.card__title')?.textContent)).toEqual([
+      'Appearance',
+      'Reminders',
+      'About',
+    ]);
+    // The ping lands: About has the web app's version, and nothing an admin's tabs read was asked for.
+    expect(await main.findByText(EXPECTED_SERVER_VERSION)).toBeTruthy();
+    for (const adminOnly of ['team', 'directoryStatus', 'indexCheck']) expect(actionsOf(platform)).not.toContain(adminOnly);
+  });
+
+  it('lets an agent switch the theme', async () => {
+    setChoice.mockClear();
+    renderApp({ platform: fakeServer(), user: intern, path: '/settings' });
+    const theme = screen.getByRole('group', { name: 'Theme' });
+    await userEvent.click(within(theme).getByRole('radio', { name: 'Light' }));
+    expect(setChoice).toHaveBeenCalledWith('light');
   });
 });
 
@@ -276,18 +296,17 @@ describe('Settings → Rules', () => {
 });
 
 describe('Settings → App', () => {
-  it('says the web app is up to date', async () => {
-    renderApp({ platform: fakeServer({ ping: ping(EXPECTED_SERVER_VERSION) }), user: admin, path: '/settings?tab=app' });
-    expect(await screen.findByText('Up to date')).toBeTruthy();
-    expect(screen.queryByText('How to deploy')).toBeNull();
-  });
-
-  it('says the web app is behind, with the steps folded', async () => {
-    renderApp({ platform: fakeServer({ ping: ping('2020-01-01.1') }), user: admin, path: '/settings?tab=app' });
-    expect(await screen.findByText('Behind: deploy a New version in Apps Script')).toBeTruthy();
-    const how = screen.getByText('How to deploy').closest('details')!;
-    expect(how.open).toBe(false);
-    expect(within(how).getAllByRole('listitem')).toHaveLength(4);
+  it('has no web app card, for an admin or an agent, even when the web app is behind (D32)', async () => {
+    for (const user of [admin, intern]) {
+      const { unmount } = renderApp({ platform: fakeServer({ ping: pingAs(user, '2020-01-01.1') }), user, path: '/settings?tab=app' });
+      const about = screen.getByRole('region', { name: 'About' });
+      // About still says the web app's version, once the ping lands.
+      expect(await within(about).findByText('2020-01-01.1')).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Web app' })).toBeNull();
+      expect(screen.queryByLabelText('Web app link')).toBeNull();
+      expect(screen.queryByText(/Up to date|Behind|How to deploy/)).toBeNull();
+      unmount();
+    }
   });
 
   it('switches the theme through setChoice', async () => {

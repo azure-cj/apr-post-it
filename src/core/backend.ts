@@ -73,7 +73,7 @@ export interface BackendDeps {
    * read as an HTTP failure. Platform.post fits.
    */
   readonly post: (url: string, body: unknown) => Promise<unknown>;
-  /** Read before every call, so a link or key changed in Settings applies at once. */
+  /** Read before every call, so a link or key from a new sign-in applies at once. */
   readonly getConfig: () => BackendConfig | Promise<BackendConfig>;
   /** Stop waiting after this long. Default 60 s: a cold start plus Code.gs's 20 s lock wait. */
   readonly timeoutMs?: number;
@@ -364,7 +364,7 @@ export function createBackend(deps: BackendDeps): Backend {
         'not-configured',
         action,
         'Post-It could not read its web app link and key on this computer. ' +
-          'Restart Post-It, and enter them again in Settings if that does not help.',
+          'Restart Post-It, and sign in again if that does not help.',
         { cause: err },
       );
     }
@@ -386,19 +386,19 @@ export function createBackend(deps: BackendDeps): Backend {
     const { url, key, idToken } = await readConfig(action);
     if (!url && !key && !idToken) {
       throw new BackendError('not-configured', action,
-        'Post-It is not connected yet. Add the web app link and your key in Settings.');
+        'Post-It is not connected yet. Sign in with the web app link and your key.');
     }
     if (!url) {
       throw new BackendError('not-configured', action,
-        'Post-It does not have the web app link yet. Add it in Settings.');
+        'Post-It does not have the web app link yet. Sign in with it and your key.');
     }
     if (!key && !idToken) {
       throw new BackendError('not-configured', action,
-        'Post-It does not have your key yet. Add the key your admin gave you in Settings.');
+        'Post-It does not have your key yet. Sign in with the key your admin gave you.');
     }
     if (!isAddress(url)) {
       throw new BackendError('bad-url', action,
-        'The web app link in Settings is not a complete web address. ' +
+        'The web app link is not a complete web address. ' +
           'Copy the whole /exec link again, starting with https://.');
     }
     return { url, key, idToken };
@@ -622,14 +622,14 @@ function failedTrip(err: unknown, action: Action): UserFacingError {
       message = `Google redirected Post-It and it did not follow (error ${status}). ` +
         'This is a bug in Post-It: tell your admin.';
     } else if (status === 404) {
-      message = 'Google could not find the web app (error 404). Check the web app link in Settings.';
+      message = 'Google could not find the web app (error 404). Check the web app link.';
     } else if (status === 401 || status === 403) {
       message = `Google would not let Post-It in (error ${status}). ` +
         'Ask your admin to check the web app is deployed with access set to "Anyone".';
     } else if (status === 429 || status >= 500) {
       message = `Google is having trouble right now (error ${status}). Try again in a minute.`;
     } else {
-      message = `Google answered with error ${status}. Check the web app link in Settings.`;
+      message = `Google answered with error ${status}. Check the web app link.`;
     }
     return new BackendError('http', action, message, { cause: err });
   }
@@ -672,7 +672,7 @@ function empty(action: Action): BackendError {
 
 function unexpected(action: Action, cause?: unknown): BackendError {
   return new BackendError('unexpected', action,
-    'Google sent something Post-It does not understand. Check the web app link in Settings.', { cause });
+    'Google sent something Post-It does not understand. Check the web app link.', { cause });
 }
 
 /** A fetch Response, by shape: a JSON reply can never carry a function. */

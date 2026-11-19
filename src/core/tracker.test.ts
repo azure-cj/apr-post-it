@@ -129,7 +129,7 @@ describe('a refusal', () => {
     const { post, sent } = scripted({ ok: true, posts: [] });
     const error = await refusal(trackerOver(post, '', '').posts());
 
-    expect(error.message).toContain('Settings');
+    expect(error.message).toContain('Sign in');
     expect(sent).toHaveLength(0);
   });
 

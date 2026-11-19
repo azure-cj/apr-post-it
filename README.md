@@ -56,8 +56,7 @@ Full details, and what each action does: `server/README.md`.
    `PASTED_SCRIPT_URL` in **`src/config.ts`**, or put `VITE_SCRIPT_URL=<the /exec link>` in
    a **`.env.local`** file beside `package.json` (it wins over the file, and git ignores
    it). Then run `build.cmd`. The link is not a secret; the keys are.
-7. Everyone signs in by pasting **only their key**. Settings shows the built-in link,
-   read-only.
+7. Everyone signs in by pasting **only their key**. No screen shows the link (D32).
 
 To change the script later, keep the same link: Deploy, **Manage deployments**, edit the
 existing deployment and choose **New version**. A new deployment gets a new link, and every

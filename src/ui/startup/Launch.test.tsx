@@ -261,11 +261,12 @@ describe('the startup screen', () => {
 });
 
 describe('what it says when something goes wrong', () => {
-  it('says an older web app is behind, to an admin with where to fix it, and goes on', async () => {
+  it('says an older web app is behind, to an admin with how to fix it, and goes on', async () => {
     launch({ replies: { ping: { ...PING_ADMIN, version: '2020-01-01.1' } } });
     await wait(0);
-    expect(lines()).toContain('Web app is behind: update it in Settings → App');
-    expect(screen.getByText('Web app is behind: update it in Settings → App').closest('li')?.dataset['tone']).toBe('fail');
+    // Settings has no web app card to send them to (D32).
+    expect(lines()).toContain('Web app is behind: deploy a New version in Apps Script');
+    expect(screen.getByText('Web app is behind: deploy a New version in Apps Script').closest('li')?.dataset['tone']).toBe('fail');
     await wait(MIN_MS + FADE_MS);
     expect(startup()).toBeNull();
   });

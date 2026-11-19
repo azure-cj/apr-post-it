@@ -328,16 +328,16 @@ function scopeRefusal(refused: string, requested: string): string {
   const isTheLinkItself = !from || !to || (to.origin === from.origin && to.pathname === from.pathname);
   if (isTheLinkItself) {
     if (to && to.protocol !== 'https:') {
-      return 'The web app link in Settings must start with https://script.google.com/.';
+      return 'The web app link must start with https://script.google.com/.';
     }
     return (
-      `Post-It talks only to Google, and the web app link in Settings points to ${to?.hostname || refused}. ` +
+      `Post-It talks only to Google, and the web app link points to ${to?.hostname || refused}. ` +
       'Use the link Apps Script gives when the web app is deployed (https://script.google.com/…/exec).'
     );
   }
   return (
     `Google sent Post-It on to ${to.hostname}, which Post-It does not talk to. ` +
-    'Check the web app link in Settings.'
+    'Check the web app link.'
   );
 }
 

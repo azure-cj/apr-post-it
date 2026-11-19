@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { createFakePlatform, type FakePlatformOptions } from '@/platform/fake';
@@ -92,16 +92,15 @@ describe('with a link built into this version', () => {
     expect(parseSettings(null).scriptUrl).toBe(BUILT_IN);
   });
 
-  it('shows the link read-only in Settings, marked as built in, with Copy', async () => {
-    const platform = fakeServer();
-    renderApp({ platform, user: admin, path: '/settings?tab=app' });
-    const link = screen.getByLabelText('Web app link') as HTMLInputElement;
-    // The test signs in with another link; the built-in one wins.
-    expect(link.value).toBe(BUILT_IN);
-    expect(link.readOnly).toBe(true);
-    expect(screen.getAllByText(/Built into this version of the app/).length).toBeGreaterThan(0);
-    await userEvent.click(screen.getByRole('button', { name: 'Copy the web app link' }));
-    await waitFor(() => expect(platform.copied).toEqual([BUILT_IN]));
+  it('shows the link nowhere in Settings, to an admin or an agent (D32)', () => {
+    for (const user of [admin, intern]) {
+      const { unmount } = renderApp({ platform: fakeServer(), user, path: '/settings?tab=app' });
+      expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeTruthy();
+      expect(screen.queryByLabelText('Web app link')).toBeNull();
+      expect(screen.queryByDisplayValue(BUILT_IN)).toBeNull();
+      expect(screen.queryByText(/Built into this version of the app/)).toBeNull();
+      unmount();
+    }
   });
 });
 
@@ -115,10 +114,10 @@ describe('with no link built in', () => {
     expect(platform.posts[0]).toMatchObject({ url: EXEC, action: 'ping' });
   });
 
-  it('keeps a saved link, and Settings does not call it built in', () => {
+  it('keeps a saved link, which Settings does not show either (D32)', () => {
     expect(parseSettings(JSON.stringify({ scriptUrl: OLD })).scriptUrl).toBe(OLD);
     renderApp({ platform: fakeServer(), user: admin, path: '/settings?tab=app' });
-    expect((screen.getByLabelText('Web app link') as HTMLInputElement).value).toBe(EXEC);
-    expect(screen.queryByText(/Built into this version of the app/)).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeTruthy();
+    expect(screen.queryByDisplayValue(EXEC)).toBeNull();
   });
 });

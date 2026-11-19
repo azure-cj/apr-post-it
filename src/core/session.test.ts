@@ -122,7 +122,7 @@ describe('signing in', () => {
     const error = await refusal(signIn(backendOver(post, '')));
 
     expect(error.message).toContain('key');
-    expect(error.message).toContain('Settings');
+    expect(error.message).toContain('Sign in');
     expect(sent).toHaveLength(0);
   });
 

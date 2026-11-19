@@ -1,4 +1,4 @@
-import { Button, Card, Pill, TextInput } from '../../components';
+import { Card } from '../../components';
 import { version as PACKAGE_VERSION } from '../../../../package.json';
 import { Segmented } from './Segmented';
 
@@ -6,16 +6,12 @@ import { Segmented } from './Segmented';
 const BUILT: string = typeof __BUILD_DATE__ === 'string' ? __BUILD_DATE__ : '';
 
 export type ThemeChoice = 'dark' | 'light' | 'system';
-export type VersionStatus = 'current' | 'behind' | 'unknown';
 
+/**
+ * The App tab, the same for everyone: an admin's fourth tab, and all of an
+ * agent's Settings (D32). It has no web app card: nobody sees the link.
+ */
 export interface SettingsAppProps {
-  /** The web app's /exec link. */
-  readonly scriptUrl: string;
-  /** The link is built into this version of the app (src/config.ts), so nobody types it. */
-  readonly builtInLink?: boolean | undefined;
-  readonly onCopy?: ((text: string) => void) | undefined;
-  /** The web app's version against the one this app expects. */
-  readonly versionStatus?: VersionStatus | undefined;
   /** The web app's version, as `ping` said it. */
   readonly serverVersion?: string | undefined;
   readonly theme?: ThemeChoice | undefined;
@@ -50,10 +46,6 @@ function dayWords(date: string): string {
 }
 
 export function SettingsApp({
-  scriptUrl,
-  builtInLink = false,
-  onCopy,
-  versionStatus,
   serverVersion,
   theme = 'dark',
   onThemeChange,
@@ -62,30 +54,8 @@ export function SettingsApp({
   reminderDays = 2,
   onReminderDaysChange,
 }: SettingsAppProps) {
-  const url = scriptUrl.trim();
   return (
     <div className="settings__column">
-      <Card title="Web app">
-        <div className="app-web">
-          <TextInput
-            label="Web app link"
-            value={url}
-            placeholder="Not set"
-            readOnly
-            spellCheck={false}
-            end={
-              onCopy && url ? (
-                <Button variant="quiet" size="small" onClick={() => onCopy(url)} aria-label="Copy the web app link">
-                  Copy
-                </Button>
-              ) : undefined
-            }
-            hint={builtInLink ? 'Built into this version of the app.' : undefined}
-          />
-          {versionStatus ? <ServerVersion status={versionStatus} version={serverVersion} /> : null}
-        </div>
-      </Card>
-
       {onThemeChange ? (
         <Card title="Appearance">
           <Segmented
@@ -129,38 +99,6 @@ export function SettingsApp({
           ) : null}
         </dl>
       </Card>
-    </div>
-  );
-}
-
-function ServerVersion({ status, version }: { readonly status: VersionStatus; readonly version?: string | undefined }) {
-  return (
-    <div className="app-version">
-      <div className="app-version__line" role="status">
-        <span className="app-version__label">Web app version</span>
-        {status === 'current' ? (
-          <Pill tone="ok" dot>
-            Up to date
-          </Pill>
-        ) : status === 'behind' ? (
-          <Pill tone="warn" dot>
-            Behind: deploy a New version in Apps Script
-          </Pill>
-        ) : (
-          <Pill tone="neutral">{version ? 'Unknown' : 'Not reported'}</Pill>
-        )}
-      </div>
-      {status === 'behind' ? (
-        <details className="app-version__how">
-          <summary>How to deploy</summary>
-          <ol>
-            <li>In Apps Script, open Deploy → Manage deployments.</li>
-            <li>Click the pencil on the web app.</li>
-            <li>Under Version, pick New version.</li>
-            <li>Click Deploy. The link stays the same.</li>
-          </ol>
-        </details>
-      ) : null}
     </div>
   );
 }

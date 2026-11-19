@@ -91,6 +91,15 @@ describe('the Windows reminder', () => {
     await userEvent.click(within(reminders).getByRole('radio', { name: 'Off' }));
     await waitFor(async () => expect(JSON.parse((await platform.readLocal('postit.settings'))!)).toMatchObject({ pendingReminderDays: 0 }));
   });
+
+  it("is set in an agent's Settings too (D32)", async () => {
+    const platform = fakeServer();
+    renderApp({ platform, path: '/settings' });
+
+    const reminders = await screen.findByRole('group', { name: 'Remind me after' });
+    await userEvent.click(within(reminders).getByRole('radio', { name: '7 days' }));
+    await waitFor(async () => expect(JSON.parse((await platform.readLocal('postit.settings'))!)).toMatchObject({ pendingReminderDays: 7 }));
+  });
 });
 
 describe('the Interns screen', () => {

@@ -1,4 +1,5 @@
-/* Settings: four tabs. Team is full width; the other tabs are one column of cards. */
+/* Settings: an admin's four tabs, Team full width and the others one column of cards;
+   an agent's, the App column alone (D32). */
 
 .settings__header {
   gap: var(--space-8);
@@ -814,57 +815,6 @@ summary.check__row:focus-visible {
 }
 
 /* ---- app ------------------------------------------------------------------- */
-
-.app-web {
-  display: grid;
-  gap: var(--space-10);
-}
-
-.app-version {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.app-version__line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-6);
-}
-
-.app-version__label {
-  color: var(--text-label);
-  font-family: var(--heading-font);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-  font-weight: var(--weight-label);
-}
-
-.app-version__how summary {
-  width: fit-content;
-  border-radius: var(--radius-sm);
-  color: var(--info-text);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-  cursor: pointer;
-}
-
-.app-version__how summary:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--space-1);
-}
-
-.app-version__how ol {
-  display: grid;
-  gap: var(--space-2);
-  margin: var(--space-4) 0 0;
-  padding: var(--space-6) var(--space-8) var(--space-6) calc(var(--space-8) + 1.25em);
-  border-radius: var(--radius-row);
-  background: var(--inset);
-  color: var(--text-label);
-  font-size: var(--text-meta);
-  line-height: var(--lh-meta);
-}
 
 .app-theme {
   max-width: 420px;

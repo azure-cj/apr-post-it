@@ -31,8 +31,8 @@ export interface SettingsScreenProps {
 
 /**
  * The admin's page, in four tabs: Team (people, keys), Listings (the
- * Directory build and the listings check), Rules, and App (the web app, the
- * theme, the version).
+ * Directory build and the listings check), Rules, and App (the theme, the
+ * reminders, the version). An agent's is AgentSettingsScreen.
  */
 export function SettingsScreen({ tab, onTabChange, team, listings, rules, app }: SettingsScreenProps) {
   const base = useId();
@@ -106,6 +106,27 @@ export function SettingsScreen({ tab, onTabChange, team, listings, rules, app }:
         ) : (
           <SettingsApp {...app} />
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * An agent's Settings (D32): the App tab's cards alone, Appearance, Reminders
+ * and About, with no tabs, as it would be their only one.
+ */
+export function AgentSettingsScreen({ app }: { readonly app: SettingsAppProps }) {
+  return (
+    <div className="page settings">
+      <header className="page-header settings__header">
+        <div className="settings__title-row">
+          <h1 className="page-header__title" tabIndex={-1}>
+            Settings
+          </h1>
+        </div>
+      </header>
+      <div className="settings__panel">
+        <SettingsApp {...app} />
       </div>
     </div>
   );

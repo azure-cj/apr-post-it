@@ -143,8 +143,8 @@ export function createServices(
   /** Firebase, when sign-in goes by account: its token is sent instead of a key. Null: by key. */
   getFirebase: () => FirebaseAccess | null = () => null,
 ): Services {
-  // The link and the credential are read before every call, so a link changed
-  // in Settings applies at once and neither lives in React state.
+  // The link and the credential are read before every call, so a new sign-in's
+  // apply at once and neither lives in React state.
   const inner = createBackend({
     post: p.post,
     getConfig: async () => {

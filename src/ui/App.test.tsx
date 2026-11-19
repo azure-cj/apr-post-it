@@ -58,7 +58,7 @@ describe('signing in', () => {
     await signIn('9b2c-41fe');
 
     expect(await screen.findByRole('heading', { level: 1, name: 'My queue' })).toBeTruthy();
-    expect(navNames()).toEqual(['My queue', 'Find']);
+    expect(navNames()).toEqual(['My queue', 'Find', 'Settings']);
     expect(screen.getByText('Jan Dela Cruz')).toBeTruthy();
     expect(platform.posts[0]!.body).toMatchObject({ action: 'ping', key: '9b2c-41fe' });
     expect(await platform.readKey()).toBe('9b2c-41fe');
@@ -210,14 +210,17 @@ describe('the shell', () => {
     }
   });
 
-  it("keeps an intern out of the admin's screens, and lets an admin into Settings", async () => {
-    for (const path of ['/assign', '/tracker', '/interns', '/settings']) {
+  it("keeps an intern out of the admin's screens, and lets everyone into Settings (D32)", async () => {
+    for (const path of ['/assign', '/tracker', '/interns', '/records']) {
       const { unmount } = renderApp({ platform: fakeServer(), user: intern, path });
       expect(heading()).toBe('My queue');
       unmount();
     }
-    renderApp({ platform: fakeServer(), user: manager, path: '/settings' });
-    expect(heading()).toBe('Settings');
+    for (const user of [intern, manager]) {
+      const { unmount } = renderApp({ platform: fakeServer(), user, path: '/settings' });
+      expect(heading()).toBe('Settings');
+      unmount();
+    }
   });
 
   it('moves between screens from the nav, names the window, and starts at the heading', async () => {
@@ -264,7 +267,7 @@ describe("the manager's screens", () => {
     expect(await screen.findByRole('cell', { name: intern.name })).toBeTruthy();
   });
 
-  it.each(['/tracker', '/assign', '/interns', '/settings'])('send an intern who asks for %s back to their queue', (path) => {
+  it.each(['/tracker', '/assign', '/interns', '/records'])('send an intern who asks for %s back to their queue', (path) => {
     renderApp({ platform: fakeServer(), user: intern, path });
     expect(heading()).toBe('My queue');
   });
