@@ -415,7 +415,9 @@ may *be given postings* is now everyone active on the team.
   row that already has the link, else the newest of the person the app names (`postedBy`),
   so an admin completes their own post, not someone else's of the same listing; a link
   already on any other row is refused, so a second Approved can't move it onto another
-  post. Both move the queue item of the queue the post was made in, not a later one's.
+  post. Both move the item of the queue the post's day falls in (`addLink`: the completed
+  row's Date), none when it's already Posted; a day none of their items of the listing
+  covers moves the lowest open one, as before, which may be a later queue's.
 - **Assign.** After the agents' cards, a group of the admins' cards, the signed-in admin's
   marked You. Fill queues lists the admins after the agents, none ticked, so filling the
   week's queues gives an admin nothing unless someone ticks them. Until the team is read,

@@ -1374,7 +1374,7 @@ function logPost_(req, me) {
       propertyId: req.propertyId,
       fbGroup:    group,
     });
-    // The item of the queue it was made in, not a later queue's.
+    // The item of the queue its day falls in, else the lowest open one.
     setAssignmentStatus_(req.propertyId, req.property, postedBy, status, date);
     // The row as written. The app shows these, never its own clock or user.
     // The time goes back as HH:mm, the app's format.
@@ -1583,7 +1583,7 @@ function addLink_(req, me) {
     setText_(sh.getRange(found + 1, col.status + 1), 'Posted');
     setText_(sh.getRange(found + 1, col.postLink + 1), link);
     setPostGroup_(sh, found + 1, req.postLink);
-    // The item of the queue this post was made in, not a later queue's.
+    // As logPost_ does, by the row's Date: the item of the queue it falls in, else the lowest open one.
     setAssignmentStatus_(id, name, post.postedBy, 'Posted', post.date);
     return { ok: true, row: found + 1 };
   } finally {
@@ -2534,11 +2534,11 @@ function markPostPosted_(propertyId, propertyName, postedBy) {
 /**
  * Moves the person's open queue item for the property to `status`: the lowest
  * such row, and never one already Posted. With `day`, a post's date, the item
- * of the queue that day falls in, as the app counts a post toward the queue
- * it was made in; when that item is already Posted (the listing posted twice
- * in one queue), none, so a post never moves another queue's item. A day in
- * no queue of theirs: the lowest, as before. Returns its row number, or 0
- * when there is none.
+ * whose queue that day falls in, as the app counts a post toward the queue it
+ * was made in; when that item is already Posted (the listing posted twice in
+ * one queue), none, rather than another queue's. A day that none of their
+ * items of this listing covers: the lowest open one, as before, which may be
+ * a later queue's. Returns its row number, or 0 when there is none.
  */
 function setAssignmentStatus_(propertyId, propertyName, assignedTo, status, day) {
   var sh = sheetFor_(CONFIG.ASSIGNMENTS_TAB, ASSIGN_FIELDS);
