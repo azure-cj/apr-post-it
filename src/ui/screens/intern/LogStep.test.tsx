@@ -6,7 +6,7 @@
  */
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { CLEAN, fakeServer, intern, internAnyAccount, manager, propertyReply, renderApp, TODAY } from '../../state/testing';
+import { CLEAN, fakeServer, intern, internAnyAccount, manager, PROPERTIES, propertyReply, renderApp, TODAY } from '../../state/testing';
 
 const PATH = `/property/${CLEAN.id}`;
 const LINK = 'https://www.facebook.com/groups/apgmain/posts/1029384801/';
@@ -140,6 +140,109 @@ describe('the log step', () => {
     await userEvent.type(await linkField(), LINK);
     await userEvent.click(posted());
     expect(await screen.findByRole('heading', { level: 1, name: 'Kapitolyo Ground Floor Retail, Pasig' })).toBeTruthy();
+  });
+
+  it("skips a listing gone from the property list, as My queue's Next up does", async () => {
+    const row = (property: string, propertyId: string) => ({
+      date: '2026-10-26',
+      due: '2026-11-06',
+      assignedTo: intern.name,
+      property,
+      propertyId,
+      status: 'To post',
+    });
+    const assignments = {
+      ok: true,
+      assignments: [row(CLEAN.name, CLEAN.id), row('Gone Listing, Nowhere', '1Gone'), row('Kapitolyo Ground Floor Retail, Pasig', '1Kapitolyo')],
+    };
+    const platform = fakeServer({ assignments, property: anyProperty, logPost: { ok: true, status: 'Posted', date: TODAY, postedBy: intern.name } });
+    renderApp({ platform, path: PATH, state: { section: 'queue' } });
+    await screen.findByRole('heading', { level: 1, name: CLEAN.name });
+    await waitFor(() => expect(['assignments', 'properties'].every((a) => platform.posts.some((p) => p.action === a))).toBe(true));
+
+    await userEvent.type(await linkField(), LINK);
+    await userEvent.click(posted());
+    expect(await screen.findByRole('heading', { level: 1, name: 'Kapitolyo Ground Floor Retail, Pasig' })).toBeTruthy();
+  });
+
+  it('skips a listing you already posted while the queue runs, as My queue does', async () => {
+    // CLEAN, Seaside, Kapitolyo, none marked; but Seaside was posted on Tuesday, and its row wasn't told.
+    const assignments = { ok: true, assignments: QUEUE.assignments.map((a) => ({ ...a, date: '2026-10-26', due: '2026-11-06', status: 'To post' })) };
+    const seaside = {
+      date: '2026-10-27',
+      time: '10:00',
+      type: 'Condo',
+      title: 'Seaside Residences 2BR, Pasay',
+      status: 'Posted',
+      fbAccount: 'APG Main',
+      postLink: 'https://www.facebook.com/groups/apg/posts/5/',
+      postedBy: intern.name,
+      propertyId: '1Seaside',
+    };
+    const platform = fakeServer({
+      assignments,
+      posts: { ok: true, posts: [seaside] },
+      property: anyProperty,
+      logPost: { ok: true, status: 'Posted', date: TODAY, postedBy: intern.name },
+    });
+    renderApp({ platform, path: PATH, state: { section: 'queue' } });
+    await screen.findByRole('heading', { level: 1, name: CLEAN.name });
+    await waitFor(() => expect(['assignments', 'posts', 'properties'].every((a) => platform.posts.some((p) => p.action === a))).toBe(true));
+
+    await userEvent.type(await linkField(), LINK);
+    await userEvent.click(posted());
+    expect(await screen.findByRole('heading', { level: 1, name: 'Kapitolyo Ground Floor Retail, Pasig' })).toBeTruthy();
+  });
+
+  it.each([
+    ['no id', ''],
+    ['a blank id', ' '],
+    ['an id typed with a space', '1TowerSale '],
+  ])("doesn't open the row this save completes, when another listing has its name: a row with %s", async (_, cell) => {
+    // One name in two folders, for sale and for lease; the queue's row names it, its id cell as the server trims it.
+    const NAME = 'Verdant Tower, Makati';
+    const tower = (id: string, listingType: string) => ({
+      id,
+      name: NAME,
+      category: 'CONDO / HOUSE AND LOT',
+      listingType,
+      subCategory: 'Condo',
+      photoCount: 2,
+      hasIssues: false,
+    });
+    const properties = { ok: true, properties: [...PROPERTIES.properties, tower('1TowerSale', 'FOR SALE'), tower('1TowerLease', 'FOR LEASE/ FOR RENT')] };
+    const row = (property: string, propertyId: string) => ({ date: '2026-10-26', due: '2026-11-06', assignedTo: intern.name, property, propertyId, status: 'To post' });
+    const platform = fakeServer({
+      properties,
+      assignments: { ok: true, assignments: [row(NAME, cell), row('Kapitolyo Ground Floor Retail, Pasig', '1Kapitolyo')] },
+      property: (body) => (String(body['id']).startsWith('1Tower') ? propertyReply({ id: body['id'], name: NAME }) : anyProperty(body)),
+      logPost: { ok: true, status: 'Posted', date: TODAY, postedBy: intern.name },
+    });
+    renderApp({ platform, path: '/property/1TowerSale' });
+    await screen.findByRole('heading', { level: 1, name: NAME });
+    await waitFor(() => expect(['assignments', 'posts', 'properties'].every((a) => platform.posts.some((p) => p.action === a))).toBe(true));
+
+    await userEvent.type(await linkField(), LINK);
+    await userEvent.click(posted());
+    // The server moves that row for this post: the lease folder's page would be a listing just done.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Kapitolyo Ground Floor Retail, Pasig' })).toBeTruthy();
+  });
+
+  it("doesn't reopen the listing just posted when its row's id is an old one, found by its name", async () => {
+    const row = (property: string, propertyId: string) => ({ date: '2026-10-26', due: '2026-11-06', assignedTo: intern.name, property, propertyId, status: 'To post' });
+    const platform = fakeServer({
+      assignments: { ok: true, assignments: [row('Kapitolyo Ground Floor Retail, Pasig', '1KapitolyoOld'), row(CLEAN.name, CLEAN.id)] },
+      property: anyProperty,
+      logPost: { ok: true, status: 'Posted', date: TODAY, postedBy: intern.name },
+    });
+    // As My queue opens that row: by the listing its name finds.
+    renderApp({ platform, path: '/property/1Kapitolyo', state: { section: 'queue' } });
+    await screen.findByRole('heading', { level: 1, name: 'Kapitolyo Ground Floor Retail, Pasig' });
+    await waitFor(() => expect(['assignments', 'posts', 'properties'].every((a) => platform.posts.some((p) => p.action === a))).toBe(true));
+
+    await userEvent.type(await linkField(), LINK);
+    await userEvent.click(posted());
+    expect(await screen.findByRole('heading', { level: 1, name: CLEAN.name })).toBeTruthy();
   });
 
   it("opens the next listing of an admin's own queue too, when they came from it (D31)", async () => {

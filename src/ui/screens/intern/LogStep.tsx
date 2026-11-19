@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { BackendError } from '@/core/backend';
 import { postLinkProblem } from '@/core/links';
 import { keepsForRetry } from '@/core/outbox';
-import { normalize } from '@/core/matcher';
-import { currentQueue, rowsOf } from '@/core/queues';
-import { canManage, queueStatus, type Assignment, type PostStatus, type Property } from '@/core/types';
+import { currentQueue } from '@/core/queues';
+import { canManage, type PostStatus, type Property } from '@/core/types';
 import { Button, Notice, TextInput } from '../../components';
 import {
   paths,
@@ -21,6 +20,7 @@ import {
 } from '../../state';
 import { useOnboarding } from '../../onboarding';
 import { longDate } from './format';
+import { idOf, isRowFor, nextToPost, propertyFinder, queueItems, type QueueItem } from './queueItems';
 import './LogStep.css';
 
 const FROM_QUEUE: FromList = { section: 'queue' };
@@ -71,26 +71,24 @@ export const LogStep = forwardRef<HTMLInputElement, {
   const ready = !blocked && property !== null && link !== '' && linkProblem === null;
 
   /**
-   * The next listing to post in your queue now (the one running, else the next
-   * to start: what My queue shows), other than this one, in the admin's order.
-   * Its rows are dated by the queue's start, not by today (v14). An admin's own
-   * queue too (D31), when they came from it.
+   * The next listing to post, as My queue's Next up picks it: in your queue now
+   * (the one running, else the next to start; its rows carry its start, v14),
+   * not posted yet by its row or by your posts while it runs, still in the
+   * property list, in the admin's order, and not this one nor a row this post
+   * completes. An admin's own queue too (D31), when they came from it.
    */
   const nextUp = (): { id: string } | null => {
     if (!property || (canManage(user) && section !== 'queue')) return null;
     const rows = queue.data ?? [];
     const period = currentQueue(user.name, rows, app.today());
     if (!period) return null;
-    const here = normalize(property.name);
-    const byName = new Map((list ?? []).map((p) => [normalize(p.name), p]));
-    const isThis = (a: Assignment) =>
-      a.propertyId && property.id ? a.propertyId === property.id : normalize(a.propertyName) === here;
-    for (const a of rowsOf(user.name, period.key, rows)) {
-      if (queueStatus(a.status) !== 'Not Shared' || isThis(a)) continue;
-      const id = a.propertyId || byName.get(normalize(a.propertyName))?.id;
-      if (id) return { id };
-    }
-    return null;
+    const items = queueItems(user.name, period, rows, posts.data ?? [], propertyFinder(app.directory, list));
+    // This listing: a row this post completes (as the server and My queue match them), or
+    // one that opens it (a row whose id the list no longer has, found by its name).
+    const isThis = ({ assignment, property: found }: QueueItem) =>
+      isRowFor(assignment, property.id, property.name) || found?.id === property.id;
+    const next = nextToPost(items.filter((i) => !isThis(i)), list !== null);
+    return next ? { id: idOf(next) } : null;
   };
 
   const { complete } = useOnboarding();

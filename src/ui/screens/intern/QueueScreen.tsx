@@ -1,10 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { postLinkProblem } from '@/core/links';
-import { normalize } from '@/core/matcher';
-import { currentQueue, rowsOf, type QueuePeriod } from '@/core/queues';
-import { fridayWarning, fridayWarningWords, isDate, queueProgress, samePerson, waitingPosts } from '@/core/summary';
-import { canManage, queueStatus, type Assignment, type AssignmentStatus, type PostLogEntry, type Property } from '@/core/types';
+import { currentQueue, type QueuePeriod } from '@/core/queues';
+import { fridayWarning, fridayWarningWords, queueProgress, waitingPosts } from '@/core/summary';
+import { canManage, type AssignmentStatus, type Property } from '@/core/types';
 import { Button, CategoryDot, EmptyState, Notice, PAGE_SIZE, Pagination, Pill, TextInput, categoryKind, categoryLabel, usePaged } from '../../components';
 import {
   manilaTime,
@@ -22,20 +21,11 @@ import {
 import { shortDate } from './format';
 import { Waiting } from './shared';
 import { Highlighted } from './Highlighted';
+import { idOf, nextToPost, openable, propertyFinder, queueItems, type QueueItem } from './queueItems';
 import { WaitingPosts } from './WaitingPosts';
 import './QueueScreen.css';
 
 const FROM_QUEUE: FromList = { section: 'queue' };
-
-interface Item {
-  readonly assignment: Assignment;
-  /** The listing in the directory, when it is still there. */
-  readonly property: Property | undefined;
-  /** Your post of it this week: the pending one, or the live one. */
-  readonly post: PostLogEntry | undefined;
-  /** Where it is: its own status, or your post's when the queue's row lags. */
-  readonly status: AssignmentStatus;
-}
 
 // The interns' own word for a slot not posted yet, in sentence case.
 const STATUS_WORD: Record<AssignmentStatus, string> = { 'Not Shared': 'Not shared', Pending: 'Pending', Posted: 'Posted' };
@@ -62,32 +52,12 @@ export function QueueScreen() {
   const period = useMemo(() => currentQueue(user.name, queue.data ?? [], today), [user.name, queue.data, today]);
   const upcoming = period !== undefined && today < period.start;
 
-  const items = useMemo((): readonly Item[] => {
-    if (!period) return [];
-    const mine = rowsOf(user.name, period.key, queue.data ?? []);
-    // Your posts while it runs.
-    const thisWeek = (posts.data ?? []).filter(
-      (p) => isDate(p.date) && p.date >= period.start && p.date <= period.due && samePerson(p.postedBy, user.name),
-    );
-    // A queue item names its listing by folder id, and by name when an older row has no id.
-    const byName = new Map((list ?? []).map((p) => [normalize(p.name), p]));
-    const rows = mine.map((assignment): Item => {
-      const property =
-        (assignment.propertyId ? app.directory.get(assignment.propertyId) : undefined) ??
-        byName.get(normalize(assignment.propertyName));
-      const own = queueStatus(assignment.status);
-      const post = latestPostOf(thisWeek, assignment, own);
-      // Posted on Facebook, and the queue's row not yet told: count it as the tracker does.
-      const status = own === 'Not Shared' && post ? post.status : own;
-      return { assignment, property, post, status };
-    });
-    // Pending first (one click once approved), then what is left, then what is done: each in the admin's order.
-    const rank = { Pending: 0, 'Not Shared': 1, Posted: 2 } as const;
-    return rows
-      .map((row, index) => ({ row, index }))
-      .sort((a, b) => rank[a.row.status] - rank[b.row.status] || a.index - b.index)
-      .map(({ row }) => row);
-  }, [queue.data, posts.data, list, period, user.name, app.directory]);
+  // A queue item names its listing by folder id, and by name when an older row has no id.
+  const items = useMemo(
+    (): readonly QueueItem[] =>
+      period ? queueItems(user.name, period, queue.data ?? [], posts.data ?? [], propertyFinder(app.directory, list)) : [],
+    [queue.data, posts.data, list, period, user.name, app.directory],
+  );
 
   const progress = useMemo(
     () => queueProgress(user.name, period, queue.data ?? [], posts.data ?? [], today),
@@ -105,7 +75,7 @@ export function QueueScreen() {
   const toPost = items.filter((i) => i.status === 'Not Shared');
   const pending = items.filter((i) => i.status === 'Pending');
   const posted = items.filter((i) => i.status === 'Posted');
-  const next = toPost.find((i) => openable(i, list !== null));
+  const next = nextToPost(items, list !== null);
   const rest = items.filter((i) => i !== next);
   // A week can hold forty: ten a page. The page stays put as items move between groups.
   const paged = usePaged(rest);
@@ -224,18 +194,8 @@ export function QueueScreen() {
   );
 }
 
-/** The listing's folder id, when it can be opened. */
-function idOf(item: Item): string {
-  return item.property?.id ?? item.assignment.propertyId;
-}
-
-/** Opened by its folder id; until the list arrives, the queue's own id stands in. */
-function openable(item: Item, listLoaded: boolean): boolean {
-  return idOf(item) !== '' && !(listLoaded && !item.property);
-}
-
 /** The next one to post: the whole card opens it, and it carries the screen's one gold button. */
-function NextUp({ item }: { readonly item: Item }) {
+function NextUp({ item }: { readonly item: QueueItem }) {
   const { assignment, property } = item;
   return (
     <section className="next-up" aria-label="Next up" data-tour="queue-next">
@@ -255,7 +215,7 @@ function NextUp({ item }: { readonly item: Item }) {
 }
 
 /** One queue item: name, category, status. The name's link covers the row, so one click opens it. */
-function Row({ item, listLoaded, onChanged }: { readonly item: Item; readonly listLoaded: boolean; readonly onChanged: () => void }) {
+function Row({ item, listLoaded, onChanged }: { readonly item: QueueItem; readonly listLoaded: boolean; readonly onChanged: () => void }) {
   const { assignment, property, post, status } = item;
   const canOpen = openable(item, listLoaded);
   const name = property?.name ?? assignment.propertyName;
@@ -304,7 +264,7 @@ function Category({ property }: { readonly property: Property }) {
  * Approved by the group admin: one click marks it posted, since its link was
  * logged with it. An old pending row logged without a link asks for it first.
  */
-function PendingActions({ item, onChanged }: { readonly item: Item; readonly onChanged: () => void }) {
+function PendingActions({ item, onChanged }: { readonly item: QueueItem; readonly onChanged: () => void }) {
   const app = useApp();
   const notify = useNotify();
   const [busy, setBusy] = useState(false);
@@ -400,21 +360,6 @@ function ViewPost({ link }: { readonly link: string }) {
       View post
     </Button>
   );
-}
-
-/** Your post of this queue item this week: by folder id where both have one, else by name. The latest wins. */
-function latestPostOf(posts: readonly PostLogEntry[], assignment: Assignment, status: AssignmentStatus): PostLogEntry | undefined {
-  const key = normalize(assignment.propertyName);
-  const wanted = status === 'Pending' ? ['Pending'] : status === 'Posted' ? ['Posted'] : ['Posted', 'Pending'];
-  let found: PostLogEntry | undefined;
-  for (const post of posts) {
-    const same =
-      assignment.propertyId !== '' && post.propertyId !== ''
-        ? post.propertyId === assignment.propertyId
-        : normalize(post.title) === key;
-    if (same && wanted.includes(post.status)) found = post;
-  }
-  return found;
 }
 
 interface WeekHeaderProps {
