@@ -333,7 +333,8 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   name, one pace pill (Behind warn, Not started and Missed danger, No queue neutral, On
   track info, Done ok) and "12 / 40" beside a posted-green, pending-amber bar; Behind
   first. With admins on the team (D31), the grid is headed Agents ("No agents yet. Add them
-  in Settings → Team." when there are none) and the admins' cards follow under Admins, the
+  in Settings → Team." when there are none; signed in by account, "… on Alpha Listing Hub's
+  People screen.") and the admins' cards follow under Admins, the
   same cards, yours with a muted "You" after the name (below it, rather than cut the
   name, on a narrow card). With one,
   the header says the name, under an "Everyone" back button, and "Due Fri 6 Nov" ("Ended …" for a week that

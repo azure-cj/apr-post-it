@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Button, Card, EmptyState, Notice, Pill, Spinner } from '../../components';
+import { Button, Card, Notice, Pill, Spinner } from '../../components';
 import {
   fridayWarning,
   fridayWarningWords,
@@ -17,6 +17,7 @@ import type { ReportedPost } from '@/core/refused';
 import { spotSample, type SpotCheck, type SpotItem, type SpotResult } from '@/core/spotchecks';
 import { isWeekOver, weekDays } from '@/core/week';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
+import { NoInterns } from './AssignPicker';
 import { cleanProfiles, profilesOf as memberProfiles } from './FbAccountsField';
 import { DAY_LETTERS, isBehind, lastPostWords, PacePill, WeekBar, WeekDays } from './InternsParts';
 import { InternPanel } from './InternsPanel';
@@ -61,6 +62,8 @@ export interface InternsScreenProps {
   readonly refused?: readonly ReportedPost[] | null | undefined;
   /** Marks a refused post handled. Rejects when it couldn't be saved, having said why. */
   readonly onHandleRefused?: ((post: ReportedPost) => Promise<void>) | undefined;
+  /** The team is Alpha Listing Hub's people (v13): with no agents, it says to add them there. */
+  readonly managedInHub?: boolean | undefined;
 }
 
 /**
@@ -85,6 +88,7 @@ export function InternsScreen({
   onSpotCheck,
   refused,
   onHandleRefused,
+  managedInHub = false,
 }: InternsScreenProps) {
   const [open, setOpen] = useState<string | null>(null);
   const panelHeading = useRef<HTMLHeadingElement>(null);
@@ -194,9 +198,7 @@ export function InternsScreen({
           <span>Reading the team…</span>
         </div>
       ) : team === null ? null : nobody ? (
-        <Card>
-          <EmptyState title="No agents yet">Add them in Settings → Team.</EmptyState>
-        </Card>
+        <NoInterns managedInHub={managedInHub} />
       ) : (
         <>
           <dl className="tracker-stats interns__stats">

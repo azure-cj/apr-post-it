@@ -76,6 +76,8 @@ export interface AssignScreenProps {
    * queues ticks no one (D31).
    */
   readonly teamKnown?: boolean | undefined;
+  /** The team is Alpha Listing Hub's people (v13): with no agents, step one says to add them there. */
+  readonly managedInHub?: boolean | undefined;
   /** Whose queue is shown, or null: then the screen asks whose. */
   readonly intern: string | null;
   /**
@@ -223,6 +225,7 @@ export function AssignScreen({
   admins = NO_ADMINS,
   me,
   teamKnown = true,
+  managedInHub = false,
   intern,
   week,
   today,
@@ -903,12 +906,13 @@ export function AssignScreen({
         {errorNotice}
         <Highlighted highlights={highlights ?? []} from={FROM_ASSIGN} onRemove={onRemoveHighlight} />
         {interns.length === 0 && admins.length === 0 ? (
-          <NoInterns />
+          <NoInterns managedInHub={managedInHub} />
         ) : (
           <AssignPicker
             interns={interns}
             admins={admins}
             me={me}
+            managedInHub={managedInHub}
             week={week}
             assignments={assignments}
             posts={posts}

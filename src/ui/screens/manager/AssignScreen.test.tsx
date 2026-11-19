@@ -186,6 +186,19 @@ describe('Assign, step one: the interns this week', () => {
     cleanup();
     render(<Harness intern={null} interns={[]} />);
     expect(screen.getByText('No agents yet')).toBeTruthy();
+    expect(screen.getByText('Add them in Settings → Team.')).toBeTruthy();
+  });
+
+  it("signed in by account, says to add agents on Alpha Listing Hub's People screen", () => {
+    render(<Harness intern={null} interns={[]} admins={['Ana Reyes']} managedInHub />);
+    const agents = screen.getByRole('heading', { level: 2, name: 'Agents' });
+    expect(agents.nextElementSibling?.textContent).toBe("No agents yet. Add them on Alpha Listing Hub's People screen.");
+
+    cleanup();
+    render(<Harness intern={null} interns={[]} managedInHub />);
+    expect(screen.getByText('No agents yet')).toBeTruthy();
+    expect(screen.getByText("Add them on Alpha Listing Hub's People screen.")).toBeTruthy();
+    expect(screen.queryByText(/Settings → Team/)).toBeNull();
   });
 
   it('shows the cards for another week', async () => {

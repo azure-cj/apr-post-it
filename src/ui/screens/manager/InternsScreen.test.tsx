@@ -7,6 +7,7 @@ import type { FakePlatform } from '@/platform/fake';
 import { AppShell, routerFuture } from '../../App';
 import { AppStateProvider } from '../../state/AppState';
 import { admin, EXEC, fakeServer, intern, manager, renderApp } from '../../state/testing';
+import { InternsScreen } from './InternsScreen';
 
 // No web app link built in: these tests sign in with the two-field form and
 // must not depend on the real link in src/config.ts.
@@ -434,6 +435,13 @@ describe('the Interns screen', () => {
     expect(await screen.findByRole('heading', { name: 'No agents yet' })).toBeTruthy();
     expect(screen.getByText('Add them in Settings → Team.')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it("signed in by account, says to add them on Alpha Listing Hub's People screen", () => {
+    render(<InternsScreen week={WEEK} today="2026-11-05" team={[]} posts={[]} assignments={[]} onWeekChange={() => undefined} managedInHub />);
+    expect(screen.getByRole('heading', { name: 'No agents yet' })).toBeTruthy();
+    expect(screen.getByText("Add them on Alpha Listing Hub's People screen.")).toBeTruthy();
+    expect(screen.queryByText(/Settings → Team/)).toBeNull();
   });
 
   it('says it is reading the team until it arrives', async () => {

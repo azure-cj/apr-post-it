@@ -14,6 +14,8 @@ export interface AssignPickerProps {
   readonly admins?: readonly string[] | undefined;
   /** Who is signed in: their own card says You. */
   readonly me?: string | undefined;
+  /** The team is Alpha Listing Hub's people (v13): with no agents, it says to add them there. */
+  readonly managedInHub?: boolean | undefined;
   /** The week shown, as its Monday. */
   readonly week: string;
   readonly assignments: readonly Assignment[];
@@ -59,7 +61,7 @@ export function cardOrder(rows: readonly TeamWeekRow[]): TeamWeekRow[] {
  * Step one: whose queue. A card per agent: their name, the week's progress, one
  * word. With admins (D31), a second group of the same cards after the agents'.
  */
-export function AssignPicker({ interns, admins = NONE, me, week, assignments, posts, today, onPick }: AssignPickerProps) {
+export function AssignPicker({ interns, admins = NONE, me, managedInHub = false, week, assignments, posts, today, onPick }: AssignPickerProps) {
   const [query, setQuery] = useState('');
   const agentRows = useMemo(
     () => cardOrder(teamWeek(interns, week, assignments, posts, today)),
@@ -100,7 +102,7 @@ export function AssignPicker({ interns, admins = NONE, me, week, assignments, po
       ) : grouped ? (
         <>
           {agentRows.length === 0 ? (
-            <Group title="Agents" empty="No agents yet. Add them in Settings → Team." />
+            <Group title="Agents" empty={`No agents yet. ${addThem(managedInHub)}`} />
           ) : agentsShown.length > 0 ? (
             <Group title="Agents">{agentsShown.map(card)}</Group>
           ) : null}
@@ -178,11 +180,16 @@ function InternCard({ row, you, onPick }: { readonly row: TeamWeekRow; readonly 
   );
 }
 
-/** Nobody to pick yet. */
-export function NoInterns() {
+/** Where agents are added: Settings → Team, or, signed in by account, the hub's People screen (v13). */
+function addThem(managedInHub: boolean): string {
+  return managedInHub ? "Add them on Alpha Listing Hub's People screen." : 'Add them in Settings → Team.';
+}
+
+/** No agents yet: Assign's first step, and the Agents screen. */
+export function NoInterns({ managedInHub = false }: { readonly managedInHub?: boolean | undefined }) {
   return (
     <Card>
-      <EmptyState title="No agents yet">Add them in Settings → Team.</EmptyState>
+      <EmptyState title="No agents yet">{addThem(managedInHub)}</EmptyState>
     </Card>
   );
 }
