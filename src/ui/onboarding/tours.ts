@@ -14,6 +14,7 @@ export interface TourStep {
   /** The `data-tour` name of the element to point at. None: the step sits in the middle. */
   readonly target?: string;
   readonly title: string;
+  /** `{steps}`: how many steps this person's tour has. */
   readonly body: string;
   /** Left out when its element isn't on screen (an empty queue has no Next up). */
   readonly optional?: boolean;
@@ -35,7 +36,7 @@ const WELCOME_AGENT: Tour = {
   steps: [
     {
       title: 'Welcome to Post-It',
-      body: 'Post your listings on Facebook in a few clicks, and the tracker fills itself in. A quick look around: 5 steps.',
+      body: 'Post your listings on Facebook in a few clicks, and the tracker fills itself in. A quick look around: {steps} steps.',
     },
     {
       target: 'nav-queue',
@@ -66,7 +67,7 @@ const WELCOME_ADMIN: Tour = {
   steps: [
     {
       title: 'Welcome to Post-It',
-      body: 'Keep the team posting the right listings, and see what was posted without chasing anyone. A quick look around: 7 steps.',
+      body: 'Keep the team posting the right listings, and see what was posted without chasing anyone. A quick look around: {steps} steps.',
     },
     {
       target: 'nav-tracker',
@@ -87,6 +88,12 @@ const WELCOME_ADMIN: Tour = {
       target: 'nav-records',
       title: 'Records: report on it',
       body: 'Posts by week or month, by agent and by type.',
+    },
+    {
+      target: 'nav-queue',
+      title: 'My queue: what to post',
+      body: 'Here while you have listings to post, or a post waiting for approval. Post before the due date, so none go to someone else.',
+      optional: true,
     },
     {
       target: 'nav-settings',
@@ -148,11 +155,16 @@ export function welcomeTourFor(user: User): TourId {
   return canManage(user) ? 'welcome-admin' : 'welcome-agent';
 }
 
-/** The tour, with the steps this person gets. */
-export function tourFor(id: TourId, user: User): Tour {
+/**
+ * The tour, with the steps this person gets: My queue's only while it is in
+ * their sidebar (`myQueue`), which an admin's is only while they have a queue
+ * or a post waiting for approval (D31). The welcome counts these.
+ */
+export function tourFor(id: TourId, user: User, myQueue = true): Tour {
   const tour = id === 'listing' ? LISTING : id === 'welcome-admin' ? WELCOME_ADMIN : WELCOME_AGENT;
   const admin = canManage(user);
-  return { ...tour, steps: tour.steps.filter((s) => admin || !s.adminOnly) };
+  const steps = tour.steps.filter((s) => (admin || !s.adminOnly) && (myQueue || s.target !== 'nav-queue'));
+  return { ...tour, steps: steps.map((s) => ({ ...s, body: s.body.replace('{steps}', String(steps.length)) })) };
 }
 
 // ---------------------------------------------------------------- getting started

@@ -7,15 +7,24 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { version } from '../../../package.json';
 import { SEEN_VERSION_KEY } from '../releaseNotes';
-import { fakeServer, intern, manager, renderApp } from '../state/testing';
+import { fakeServer, intern, manager, renderApp, TODAY } from '../state/testing';
 import { WhatsNew } from '../WhatsNew';
 import { placeCard } from './place';
 import { EMPTY_RECORD, recordKey, withTask, withTour } from './record';
 
 const LONG = { timeout: 4000 };
-const fresh = () => fakeServer({}, 'test-key', { onboarding: true });
+const fresh = (replies = {}) => fakeServer(replies, 'test-key', { onboarding: true });
 const recordOf = async (platform: ReturnType<typeof fakeServer>, name: string) =>
   JSON.parse((await platform.readLocal(recordKey(name))) ?? 'null') as typeof EMPTY_RECORD | null;
+
+/** The admin's tour from Tracker to Records. */
+const ADMIN_SCREENS = ['Tracker: the week at a glance', 'Assign: give out the listings', 'Agents: check the work', 'Records: report on it'];
+/** Next, on each of these steps in turn. */
+const walk = async (titles: readonly string[]) => {
+  for (const title of titles) {
+    await userEvent.click(within(await screen.findByRole('dialog', { name: title })).getByRole('button', { name: 'Next' }));
+  }
+};
 
 describe('placeCard', () => {
   const view = { width: 1280, height: 800 };
@@ -65,6 +74,7 @@ describe('the welcome tour', () => {
 
     const card = await screen.findByRole('dialog', { name: 'Welcome to Post-It' }, LONG);
     expect(within(card).getByText('1 of 5')).toBeTruthy();
+    expect(within(card).getByText(/A quick look around: 5 steps\./)).toBeTruthy();
     expect(within(card).getByRole('button', { name: 'Close the tour' })).toBeTruthy();
     expect(within(card).getByRole('button', { name: 'Skip tour' })).toBeTruthy();
 
@@ -128,12 +138,52 @@ describe('the welcome tour', () => {
     expect(screen.queryByTestId('tour')).toBeNull();
   });
 
-  it("an admin's tour walks the admin screens", async () => {
+  it("an admin's tour walks the admin screens, without My queue when they have none (D31)", async () => {
     renderApp({ platform: fresh(), user: manager, path: '/tracker' });
     const card = await screen.findByRole('dialog', { name: 'Welcome to Post-It' }, LONG);
     expect(within(card).getByText('1 of 7')).toBeTruthy();
+    expect(within(card).getByText(/A quick look around: 7 steps\./)).toBeTruthy();
     await userEvent.click(within(card).getByRole('button', { name: 'Show me around' }));
-    expect(await screen.findByRole('dialog', { name: 'Tracker: the week at a glance' })).toBeTruthy();
+    await walk(ADMIN_SCREENS);
+    expect(within(await screen.findByRole('dialog', { name: 'Settings: the rules' })).getByText('6 of 7')).toBeTruthy();
+  });
+
+  it('shows an admin given a queue My queue too, after Records (D31)', async () => {
+    const theirs = {
+      ok: true,
+      assignments: [{ date: TODAY, assignedTo: manager.name, property: 'Seaside Residences 2BR, Pasay', status: 'Not Shared', propertyId: '' }],
+    };
+    renderApp({ platform: fresh({ assignments: theirs }), user: manager, path: '/tracker' });
+    const card = await screen.findByRole('dialog', { name: 'Welcome to Post-It' }, LONG);
+    expect(within(card).getByText('1 of 8')).toBeTruthy();
+    expect(within(card).getByText(/A quick look around: 8 steps\./)).toBeTruthy();
+    await userEvent.click(within(card).getByRole('button', { name: 'Show me around' }));
+    await walk(ADMIN_SCREENS);
+    const step = await screen.findByRole('dialog', { name: 'My queue: what to post' });
+    expect(within(step).getByText('6 of 8')).toBeTruthy();
+    // Said for both reasons it can be there: listings, or a post waiting.
+    expect(within(step).getByText(/listings to post, or a post waiting for approval/)).toBeTruthy();
+    await walk(['My queue: what to post']);
+    expect(within(await screen.findByRole('dialog', { name: 'Settings: the rules' })).getByText('7 of 8')).toBeTruthy();
+  });
+
+  it("waits for an admin's own queue to be read, so My queue isn't left out (D31)", async () => {
+    const theirs = {
+      ok: true,
+      assignments: [{ date: TODAY, assignedTo: manager.name, property: 'Seaside Residences 2BR, Pasay', status: 'Not Shared', propertyId: '' }],
+    };
+    let arrive = () => {};
+    const read = new Promise<void>((resolve) => {
+      arrive = resolve;
+    });
+    renderApp({ platform: fresh({ assignments: async () => (await read, theirs) }), user: manager, path: '/tracker' });
+    // Longer than a tour takes to start by itself.
+    await new Promise((r) => setTimeout(r, 1200));
+    expect(screen.queryByTestId('tour')).toBeNull();
+
+    arrive();
+    const card = await screen.findByRole('dialog', { name: 'Welcome to Post-It' }, LONG);
+    expect(within(card).getByText('1 of 8')).toBeTruthy();
   });
 });
 

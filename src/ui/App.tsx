@@ -192,6 +192,10 @@ export function AppShell({ signInNote }: AppProps) {
   const lastPath = useRef(location.pathname);
   const ownQueue = useOwnQueue(user);
   const queueCount = ownQueue?.left ?? 0;
+  const currentKey = navKeyFor(location.pathname, location.state);
+  // An admin's My queue stays while they are on it (or a listing opened from it): approving
+  // their last waiting post mustn't take it from under them. It goes when they leave.
+  const nav = user ? navFor(user, Boolean(ownQueue) || currentKey === 'queue') : [];
 
   // ---- leaving Assign with unsaved changes asks first -------------------------
   const [assignDirty, setAssignDirty] = useState(false);
@@ -234,6 +238,8 @@ export function AppShell({ signInNote }: AppProps) {
     platform,
     pathname: location.pathname,
     home: user ? homeFor(user) : null,
+    // Not known yet: an admin's queue still being read.
+    myQueue: nav.some((item) => item.key === 'queue') ? true : ownQueue === undefined ? null : false,
     version: APP_VERSION,
     go: goTo,
     openWhatsNew,
@@ -379,10 +385,6 @@ export function AppShell({ signInNote }: AppProps) {
     navigate(paths.signIn, { replace: true });
   }, [signOut, navigate]);
 
-  const currentKey = navKeyFor(location.pathname, location.state);
-  // An admin's My queue stays while they are on it (or a listing opened from it): approving
-  // their last waiting post mustn't take it from under them. It goes when they leave.
-  const nav = user ? navFor(user, ownQueue !== null || currentKey === 'queue') : [];
   const sidebarNav: SidebarProps['nav'] = nav.map((item) => ({
     key: item.key,
     label: item.label,
@@ -653,14 +655,15 @@ function useSidebarState(platform: Platform) {
 
 /**
  * Your queue now, for My queue in the nav: how much of it is left (the count
- * beside it), or null when there is nothing for you there. An intern always
+ * beside it), or null when there is nothing for you there, or undefined while
+ * that isn't known: your queue or your posts not read yet. An intern always
  * has My queue; an admin has it while they have a queue running or coming, or
  * a post of their own still waiting for approval, which only My queue marks
  * approved (D31). Read on sign-in and every two minutes, unless a screen read
  * it in the last minute; the queue screen reads it more often while it is up,
  * and every save reads it again. The posts are PendingNotifier's.
  */
-function useOwnQueue(user: User | null): { readonly left: number } | null {
+function useOwnQueue(user: User | null): { readonly left: number } | null | undefined {
   const app = useApp();
   const { assignments } = app;
   const snapshot = useStore(assignments.store);
@@ -680,7 +683,10 @@ function useOwnQueue(user: User | null): { readonly left: number } | null {
   if (queue && snapshot.data) return { left: rowsOf(user.name, queue.key, snapshot.data).filter((a) => a.status !== 'Posted').length };
   // None, but a post still waiting for approval: My queue is where it is marked approved.
   const waiting = logged.data ? waitingPosts(logged.data, user.name, app.today()).length : 0;
-  return waiting > 0 ? { left: 0 } : null;
+  if (waiting > 0) return { left: 0 };
+  // Nothing, once both are read (or failed to be): until then, a read may still bring one.
+  const read = (r: { readonly data: unknown; readonly error: string | null }) => r.data !== null || r.error !== null;
+  return read(snapshot) && read(logged) ? null : undefined;
 }
 
 /** A wait before anything can be shown, said in words. */

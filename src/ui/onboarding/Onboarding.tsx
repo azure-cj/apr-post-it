@@ -49,6 +49,7 @@ export function useOnboardingController({
   platform,
   pathname,
   home,
+  myQueue,
   version,
   go,
   openWhatsNew,
@@ -58,6 +59,11 @@ export function useOnboardingController({
   readonly pathname: string;
   /** Where this person lands after signing in: the welcome tour starts there. */
   readonly home: string | null;
+  /**
+   * My queue is in their sidebar: an admin's tour points at it only then (D31).
+   * Null until an admin's own queue is read: their welcome tour waits for it.
+   */
+  readonly myQueue: boolean | null;
   readonly version: string;
   /** Moves to another screen, asking first when Assign has unsaved changes. */
   readonly go: (path: string) => void;
@@ -121,14 +127,15 @@ export function useOnboardingController({
   const start = useCallback(
     (id: TourId | Tour) => {
       if (!user) return;
-      const tour = typeof id === 'string' ? tourFor(id, user) : id;
+      // Not known yet (Help, before the read lands): kept, and passed over if My queue isn't there when it comes.
+      const tour = typeof id === 'string' ? tourFor(id, user, myQueue !== false) : id;
       setHelpOpen(false);
       setFresh(false);
       const route = tour.steps[0]?.route;
       if (route && route !== pathname) go(route);
       setActive(tour);
     },
-    [user, pathname, go],
+    [user, myQueue, pathname, go],
   );
 
   const complete = useCallback(
@@ -165,10 +172,11 @@ export function useOnboardingController({
   // waits until nothing else is on top.
   const want: TourId | null = useMemo(() => {
     if (!user || !record || active || updateLaunch === null) return null;
-    if (fresh && !updateLaunch && pathname === home) return welcomeTourFor(user);
+    // An admin's waits for their own queue to be read: it decides whether My queue is a step.
+    if (fresh && !updateLaunch && pathname === home) return myQueue === null ? null : welcomeTourFor(user);
     if (!fresh && !record.autoOff && !record.tours.listing && pathname.startsWith('/property/')) return 'listing';
     return null;
-  }, [user, record, active, updateLaunch, fresh, pathname, home]);
+  }, [user, record, active, updateLaunch, fresh, pathname, home, myQueue]);
 
   useEffect(() => {
     if (!want) return undefined;
