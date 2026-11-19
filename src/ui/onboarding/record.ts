@@ -13,9 +13,18 @@ export interface OnboardingRecord {
   readonly autoOff: boolean;
   /** The getting-started list, put away. */
   readonly listHidden: boolean;
+  /**
+   * The welcome tour is still to show: set when the person is new here, and
+   * cleared only once they finish or close it, so closing the app before it
+   * appeared doesn't lose it. Records from before (1.1.7) don't have it.
+   */
+  readonly welcomeDue: boolean;
 }
 
-export const EMPTY_RECORD: OnboardingRecord = { tours: {}, tasks: {}, autoOff: false, listHidden: false };
+export const EMPTY_RECORD: OnboardingRecord = { tours: {}, tasks: {}, autoOff: false, listHidden: false, welcomeDue: false };
+
+/** The record of someone new here: the welcome tour is due. */
+export const NEW_RECORD: OnboardingRecord = { ...EMPTY_RECORD, welcomeDue: true };
 
 export function recordKey(name: string): string {
   return `onboarding:${name.trim().toLowerCase()}`;
@@ -33,6 +42,7 @@ export async function readRecord(platform: Pick<Platform, 'readLocal'>, name: st
       tasks: raw.tasks && typeof raw.tasks === 'object' ? raw.tasks : {},
       autoOff: raw.autoOff === true,
       listHidden: raw.listHidden === true,
+      welcomeDue: raw.welcomeDue === true,
     };
   } catch {
     return { ...EMPTY_RECORD };
@@ -44,10 +54,11 @@ export function writeRecord(platform: Pick<Platform, 'writeLocal'>, name: string
 }
 
 export function withTour(record: OnboardingRecord, id: TourId, how: 'done' | 'skipped'): OnboardingRecord {
-  const tasks = id.startsWith('welcome') && how === 'done' ? { ...record.tasks, tour: true as const } : record.tasks;
+  const welcome = id.startsWith('welcome');
+  const tasks = welcome && how === 'done' ? { ...record.tasks, tour: true as const } : record.tasks;
   // Closing the welcome tour says "let me be": no more tours by themselves.
-  const autoOff = record.autoOff || (id.startsWith('welcome') && how === 'skipped');
-  return { ...record, tours: { ...record.tours, [id]: how }, tasks, autoOff };
+  const autoOff = record.autoOff || (welcome && how === 'skipped');
+  return { ...record, tours: { ...record.tours, [id]: how }, tasks, autoOff, welcomeDue: record.welcomeDue && !welcome };
 }
 
 export function withTask(record: OnboardingRecord, id: TaskId): OnboardingRecord {

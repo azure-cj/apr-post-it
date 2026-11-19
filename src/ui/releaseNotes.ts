@@ -21,9 +21,12 @@ export const RELEASE_NOTES: readonly ReleaseNotes[] = [
   {
     version: '1.1.7',
     items: [
-      { text: 'New here? A short tour shows you around, pointing at the real buttons. Skip it any time.', show: 'welcome' },
+      { text: 'New here? A short tour opens right after your first sign-in and shows you where to start. Skip it any time.', show: 'welcome' },
       { text: 'Help in the sidebar: a getting-started list that ticks itself off as you go, and the tours again.', show: 'help' },
-      { text: 'The first time you open a listing, a tour shows Copy, Reword, the photos and Log the post.', show: 'listing' },
+      {
+        text: 'The first time you open a listing, a tour walks you through one post: copy the caption, download the photos, post it, and log its link.',
+        show: 'listing',
+      },
       'Sign in remembers your email, and Forgot password sends you a reset link.',
       'Agents: Settings in your sidebar, for the theme and your reminders.',
       'Admins: give a queue to another admin, or to yourself. It shows as My queue in your sidebar.',

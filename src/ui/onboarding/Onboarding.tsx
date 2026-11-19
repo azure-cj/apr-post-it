@@ -3,13 +3,14 @@ import type { User } from '@/core/types';
 import type { Platform } from '@/platform';
 import { notesFor, SEEN_VERSION_KEY } from '../releaseNotes';
 import { HelpPanel } from './HelpPanel';
-import { EMPTY_RECORD, readRecord, withTask, withTour, writeRecord, type OnboardingRecord } from './record';
+import { NEW_RECORD, readRecord, withTask, withTour, writeRecord, type OnboardingRecord } from './record';
 import { TourOverlay } from './TourOverlay';
 import { hintTour, tasksFor, tourFor, welcomeTourFor, type TaskId, type Tour, type TourId } from './tours';
 
 /**
- * Onboarding (1.1.7): the welcome tour once after a person's first sign-in on
- * this PC, the listing tour the first time they open a listing, and Help in
+ * Onboarding (1.1.7): the welcome tour once, opening by itself right after a
+ * person's first sign-in on this PC (and on the next sign-in if it never got
+ * to show), the listing tour the first time they open a listing, and Help in
  * the sidebar, with the getting-started list and every tour again. The
  * screens tick the list off with `useOnboarding().complete(...)`.
  */
@@ -70,7 +71,7 @@ export function useOnboardingController({
   readonly openWhatsNew?: (() => void) | undefined;
 }): { readonly api: OnboardingApi; readonly ui: ReactNode } {
   const [record, setRecord] = useState<OnboardingRecord | null>(null);
-  // No record yet: this person's first sign-in here since tours came.
+  // No record until now: this person's first sign-in here since tours came.
   const [fresh, setFresh] = useState(false);
   const [active, setActive] = useState<Tour | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -112,7 +113,7 @@ export function useOnboardingController({
     let live = true;
     void readRecord(platform, name).then((found) => {
       if (!live) return;
-      let next = found ?? { ...EMPTY_RECORD };
+      let next = found ?? NEW_RECORD;
       for (const task of pending.current.splice(0)) next = withTask(next, task);
       recordRef.current = next;
       setRecord(next);
@@ -130,7 +131,6 @@ export function useOnboardingController({
       // Not known yet (Help, before the read lands): kept, and passed over if My queue isn't there when it comes.
       const tour = typeof id === 'string' ? tourFor(id, user, myQueue !== false) : id;
       setHelpOpen(false);
-      setFresh(false);
       const route = tour.steps[0]?.route;
       if (route && route !== pathname) go(route);
       setActive(tour);
@@ -167,14 +167,18 @@ export function useOnboardingController({
     if (active?.scope && !active.scope(pathname)) end('skipped');
   }, [active, pathname, end]);
 
-  // Tours that start by themselves: the welcome tour on the home screen after
-  // a first sign-in, then the listing tour on the first listing opened. Each
-  // waits until nothing else is on top.
+  // Tours that start by themselves: the welcome tour on the home screen while
+  // it is due, then the listing tour on the first listing opened. Each waits
+  // until nothing else is on top: the startup screen, What's new, a question.
   const want: TourId | null = useMemo(() => {
     if (!user || !record || active || updateLaunch === null) return null;
-    // An admin's waits for their own queue to be read: it decides whether My queue is a step.
-    if (fresh && !updateLaunch && pathname === home) return myQueue === null ? null : welcomeTourFor(user);
-    if (!fresh && !record.autoOff && !record.tours.listing && pathname.startsWith('/property/')) return 'listing';
+    if (record.welcomeDue) {
+      // Someone who used the app before tours came: What's new offers the tour instead.
+      if (fresh && updateLaunch) return null;
+      // An admin's waits for their own queue to be read: it decides whether My queue is a step.
+      return pathname === home && myQueue !== null ? welcomeTourFor(user) : null;
+    }
+    if (!record.autoOff && !record.tours.listing && pathname.startsWith('/property/')) return 'listing';
     return null;
   }, [user, record, active, updateLaunch, fresh, pathname, home, myQueue]);
 
@@ -187,10 +191,14 @@ export function useOnboardingController({
     return () => window.clearTimeout(timer);
   }, [want, start]);
 
-  // An update's first launch: the person is no longer new, so the welcome tour won't start by itself later.
+  // No record on an update's first launch: they used the app before tours came,
+  // so they aren't new, and the welcome tour won't start by itself later.
   useEffect(() => {
-    if (fresh && updateLaunch) setFresh(false);
-  }, [fresh, updateLaunch]);
+    if (!fresh || !updateLaunch) return;
+    setFresh(false);
+    const current = recordRef.current;
+    if (current?.welcomeDue) save({ ...current, welcomeDue: false });
+  }, [fresh, updateLaunch, save]);
 
   const tasks = useMemo(() => (user ? tasksFor(user) : []), [user]);
   const doneCount = record ? tasks.filter((t) => record.tasks[t.id]).length : 0;
@@ -223,7 +231,7 @@ export function useOnboardingController({
           done={(task) => record.tasks[task.id] === true}
           listHidden={record.listHidden}
           onListPage={pathname.startsWith('/property/')}
-          onShow={(task) => (task.hint ? start(hintTour(task.hint)) : start(welcomeTourFor(user)))}
+          onShow={(task) => start(hintTour(task.hint))}
           onTour={() => start(welcomeTourFor(user))}
           onListingTour={() => start('listing')}
           onWhatsNew={

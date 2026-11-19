@@ -427,7 +427,7 @@ may *be given postings* is now everyone active on the team.
   have a queue running or coming, or a post of their own waiting for approval (only My queue
   marks it approved), and while they are on it: an admin who never posts sees no empty
   screen. It is the agent's screen, reading the admin's own rows; after a post made from it,
-  it moves on to their next listing. The admin's welcome tour points at it, after Records,
+  it moves on to their next listing. The admin's welcome tour points at it, after Agents,
   only while it is in their sidebar, and its count of steps says so; on a first sign-in it
   starts once their queue is read.
 - **Agents.** An admin with a queue in the week shown is a row of the monitor and of the
