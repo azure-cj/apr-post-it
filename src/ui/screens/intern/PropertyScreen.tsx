@@ -432,6 +432,7 @@ function PropertyPage({ id }: { readonly id: string }) {
                 className="post-text__copy"
                 data-tour="listing-copy"
                 disabled={!canCopy}
+                nudge={copiedAt === null}
                 busy={copying}
                 aria-describedby={unseparated ? `${reasonId} ${checkId}` : reasonId}
                 aria-keyshortcuts="Alt+C"
@@ -600,6 +601,7 @@ function PropertyPage({ id }: { readonly id: string }) {
                     size="small"
                     busy={saving}
                     disabled={detail === null || photos.length === 0}
+                    nudge={copiedAt !== null && !savedFolder}
                     aria-keyshortcuts="Alt+P"
                     onClick={() => setPicking(true)}
                   >

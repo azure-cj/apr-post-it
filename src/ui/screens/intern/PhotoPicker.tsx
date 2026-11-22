@@ -64,7 +64,7 @@ export function PhotoPicker({ property, photos, onDownload, onClose, onCopy }: P
       actions={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button ref={downloadRef} variant="primary" disabled={chosen.length === 0} onClick={() => onDownload(chosen)}>
+          <Button ref={downloadRef} variant="primary" disabled={chosen.length === 0} nudge onClick={() => onDownload(chosen)}>
             {chosen.length === 0 ? 'Download' : `Download ${count(chosen.length, 'photo', 'photos')}`}
           </Button>
         </>

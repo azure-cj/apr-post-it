@@ -25,6 +25,11 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly icon?: ReactNode;
   /** Fill the container's width. */
   readonly block?: boolean | undefined;
+  /**
+   * The next step: a gold glow that pulses a few times, then stays, so the eye
+   * finds it. Not shown while disabled or busy. One per screen at most.
+   */
+  readonly nudge?: boolean | undefined;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -34,6 +39,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     busy = false,
     icon,
     block = false,
+    nudge = false,
     type = 'button',
     className,
     children,
@@ -48,6 +54,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     variant !== 'link' && size === 'small' ? 'button--small' : null,
     block ? 'button--block' : null,
     busy ? 'button--busy' : null,
+    nudge && !busy && !rest.disabled ? 'button--nudge' : null,
     className,
   ]
     .filter(Boolean)

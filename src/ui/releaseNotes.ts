@@ -27,6 +27,7 @@ export const RELEASE_NOTES: readonly ReleaseNotes[] = [
         text: 'The first time you open a listing, a tour walks you through one post: copy the caption, download the photos, post it, and log its link.',
         show: 'listing',
       },
+      'The next step glows: Copy, then Download photos, then Posted, so you always know what to press.',
       'Sign in remembers your email, and Forgot password sends you a reset link.',
       'Agents: Settings in your sidebar, for the theme and your reminders.',
       'Admins: give a queue to another admin, or to yourself. It shows as My queue in your sidebar.',

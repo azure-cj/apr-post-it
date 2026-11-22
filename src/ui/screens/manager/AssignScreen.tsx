@@ -1259,7 +1259,7 @@ export function AssignScreen({
               <Button variant="quiet" disabled={!dirty || saving} onClick={undo}>
                 Undo changes
               </Button>
-              <Button variant="primary" busy={saving} disabled={!dirty || rules === null || loading} onClick={() => void save()}>
+              <Button variant="primary" busy={saving} disabled={!dirty || rules === null || loading} nudge={dirty} onClick={() => void save()}>
                 {saving ? 'Saving…' : `Save queue (${entries.length})`}
               </Button>
             </div>

@@ -225,7 +225,7 @@ export const LogStep = forwardRef<HTMLInputElement, {
         </fieldset>
 
         <div className="log-step__actions">
-          <Button type="submit" variant={primary ? 'primary' : 'ghost'} disabled={!ready} busy={saving === 'Posted'}>
+          <Button type="submit" variant={primary ? 'primary' : 'ghost'} disabled={!ready} nudge={ready} busy={saving === 'Posted'}>
             {saving === 'Posted' ? 'Saving…' : 'Posted'}
           </Button>
           <Button disabled={!ready} busy={saving === 'Pending'} onClick={() => void save('Pending')}>

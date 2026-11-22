@@ -173,7 +173,7 @@ export function FillQueues({
           <Button onClick={preview} disabled={saving || who.length === 0}>
             Preview
           </Button>
-          <Button variant="primary" busy={saving} disabled={!plan || total === 0} onClick={() => void save()}>
+          <Button variant="primary" busy={saving} disabled={!plan || total === 0} nudge onClick={() => void save()}>
             {saving ? 'Saving…' : 'Save all'}
           </Button>
         </>

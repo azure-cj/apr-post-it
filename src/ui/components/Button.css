@@ -140,3 +140,24 @@
 .button--link:disabled {
   text-decoration-color: var(--border-strong);
 }
+
+/* ---- the next step ------------------------------------------------------ */
+
+/* A gold ring that pulses three times, then stays as a soft glow. With
+   animation effects off, just the glow. */
+.button--nudge {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 35%, transparent);
+  animation: button-nudge 1.4s var(--ease-out) 3;
+}
+
+@keyframes button-nudge {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 70%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--gold) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 35%, transparent);
+  }
+}

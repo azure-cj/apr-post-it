@@ -207,7 +207,7 @@ function RulesForm({ saved, onSave }: { readonly saved: RuleValues; readonly onS
           >
             Reset
           </Button>
-          <Button type="submit" variant="primary" busy={busy} disabled={!dirty && !busy}>
+          <Button type="submit" variant="primary" busy={busy} disabled={!dirty && !busy} nudge={dirty}>
             {busy ? 'Saving…' : 'Save'}
           </Button>
         </div>
