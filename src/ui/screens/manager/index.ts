@@ -16,5 +16,5 @@ export {
   type SettingsTab,
 } from './SettingsScreen';
 export { LIST_LIMIT, TrackerScreen, type TrackerScreenProps } from './TrackerScreen';
-export { RecordsScreen, postsCsv, type RecordsScreenProps } from './RecordsScreen';
+export { RecordsScreen, type RecordsScreenProps } from './RecordsScreen';
 export { FillQueues, type FillQueuesProps } from './FillQueues';

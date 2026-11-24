@@ -386,14 +386,16 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   1 … 4 5 6 … 148 Next ›), never "Show more": Find, the Assign library (its page in `?page=`),
   Who posted?, the Interns panel's groups, Tracker's document groups, Settings' Team and
   listing check lists, Records' By intern and My queue. Ten or fewer show whole, with no bar.
-- **Records** (`/records`, Admin; nav between Interns and Find) is an overview: the
-  period (‹ › This week, Last week, This month, Last 30 days, Custom) and Export CSV in
+- **Records** (`/records`, Admin; nav between Agents and Find) is an overview: the
+  period (‹ › This week, Last week, This month, Last 30 days, Custom) and Copy summary in
   the header; five tiles against the period before; Posts per day as hand-built CSS bars
   (posted green, pending amber, never gold; hover or focus shows a bar's numbers, nothing
-  more) beside By intern / By category tabs. An intern's name opens Interns on the
-  period's week; category rows are read only. There is no list of posts: Export hands
-  over every post of the period (a file in a browser, the clipboard on the desktop), and
-  Interns' "Who posted?" answers inquiries.
+  more) beside By agent / By category tabs. By agent is a table: the name, Posts as a
+  green bar on the table's one scale with its number, Pending, Missed, Done; a row with
+  no posts and no queue recedes. An agent's name opens Agents on the period's week;
+  category rows are read only. There is no list of posts and no file: Copy summary puts
+  the period on the clipboard in words (the totals, then a line per agent), to paste into
+  a chat or an email, and Agents' "Who posted?" answers inquiries.
 - **Tracker** (`/tracker`, Admin) is a one-minute read with no descriptions: "Tracker",
   the day (‹ › Today) and Refresh on one line; four tiles (Posted today, Pending, Interns
   behind, Docs to fix, the last a link to Documents); Today's posts (time, listing,

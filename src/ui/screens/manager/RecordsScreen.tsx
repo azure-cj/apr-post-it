@@ -12,17 +12,15 @@ import {
   mondayOf,
   periodLabel,
   periodTotals,
-  postsCsv,
   queueWeeks,
-  searchPosts,
-  sortPosts,
+  recordsSummary,
   spanLabel,
   type Change,
   type ChartBucket,
   type Period,
   type Span,
 } from '@/core/records';
-import { addDays, plural, shortDate } from '@/core/summary';
+import { addDays, shortDate } from '@/core/summary';
 import type { Assignment, PostLogEntry } from '@/core/types';
 import { RecordsBreakdown, type BreakdownTab } from './RecordsBreakdown';
 import { ChartLegend, RecordsChart } from './RecordsChart';
@@ -50,8 +48,8 @@ export interface RecordsScreenProps {
   readonly internsHref?: ((week: string) => string) | undefined;
   /** Follows that link through the app's router. */
   readonly onOpenIntern?: ((name: string, week: string) => void) | undefined;
-  /** Hands over the period's posts as CSV, with a file name for it. */
-  readonly onExport?: ((csv: string, fileName: string) => void) | undefined;
+  /** Hands over the period as plain text, to paste into a chat or an email. Without it, no Copy summary. */
+  readonly onCopySummary?: ((text: string) => void) | undefined;
 }
 
 const NO_ASSIGNMENTS: readonly Assignment[] = [];
@@ -59,8 +57,8 @@ const NO_NAMES: readonly string[] = [];
 
 /**
  * The record book: a period's numbers against the one before, posts per day,
- * and the same by intern and by category. An intern opens their week on
- * Interns. Export hands the period's posts over as the sheet's CSV.
+ * and the same by agent and by category. An agent opens their week on
+ * Agents. Copy summary hands the period over in words, to paste where it is asked for.
  */
 export function RecordsScreen({
   posts,
@@ -73,7 +71,7 @@ export function RecordsScreen({
   error,
   internsHref,
   onOpenIntern,
-  onExport,
+  onCopySummary,
 }: RecordsScreenProps) {
   const [tab, setTab] = useState<BreakdownTab>('intern');
   const chartTitle = useId();
@@ -103,9 +101,6 @@ export function RecordsScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, assignments, period, span, today, interns]);
 
-  // Every post of the period, newest first: what Export hands over.
-  const periodPosts = useMemo(() => sortPosts(searchPosts(posts, { from: span.from, to: span.to, query: '' }), 'date', 'desc'), [posts, span]);
-
   // An intern's row opens Interns on the period's latest week that has begun.
   const internWeek = mondayOf(period.to < today ? period.to : today < period.from ? period.from : today);
 
@@ -126,15 +121,23 @@ export function RecordsScreen({
           Records
         </h1>
         <RecordsPeriod period={period} today={today} onChange={onPeriodChange} />
-        {onExport ? (
+        {onCopySummary ? (
           <Button
             size="small"
             className="records__export"
-            disabled={periodPosts.length === 0}
-            title={`The period's ${plural(periodPosts.length, 'post', 'posts')}, in the posting tracker's columns`}
-            onClick={() => onExport(postsCsv(periodPosts), `posts ${period.from} to ${period.to}.csv`)}
+            disabled={elapsed === null}
+            onClick={() =>
+              onCopySummary(
+                recordsSummary({
+                  label: elapsed ? spanLabel(elapsed.from, elapsed.to) : periodLabel(period),
+                  totals: now,
+                  missed,
+                  interns: report.interns,
+                }),
+              )
+            }
           >
-            Export CSV
+            Copy summary
           </Button>
         ) : null}
       </header>
@@ -277,5 +280,3 @@ function Tile({ label, value, detail, change, versus, goodWhen = 'up', note }: T
   );
 }
 
-/** The CSV is the interns' own sheet's columns and formats (core/records.ts). */
-export { postsCsv };

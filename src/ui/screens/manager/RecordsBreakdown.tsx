@@ -92,17 +92,17 @@ function InternTable({
   readonly href?: ((name: string) => string) | undefined;
   readonly onOpen?: ((name: string) => void) | undefined;
 }) {
-  // A long team pages ten at a time; the sparklines keep one scale across every page.
+  // A long team pages ten at a time; the bars keep one scale across every page.
   const paged = usePaged(rows);
   if (rows.length === 0) return <p className="breakdown__quiet">No posts</p>;
-  const peak = Math.max(1, ...rows.flatMap((r) => r.trend));
+  const most = Math.max(1, ...rows.map((r) => r.posts));
   return (
     <>
       <table className="breakdown-table">
         <thead>
           <tr>
             <th scope="col">Agent</th>
-            <th scope="col" className="breakdown-table__num">
+            <th scope="col" className="breakdown-table__posts">
               Posts
             </th>
             <th scope="col" className="breakdown-table__num breakdown-table__pending">
@@ -115,15 +115,12 @@ function InternTable({
               <span aria-hidden="true">Done</span>
               <span className="visually-hidden">Weekly queues done</span>
             </th>
-            <th scope="col" className="breakdown-table__trend">
-              <span className="visually-hidden">Trend</span>
-            </th>
           </tr>
         </thead>
         <tbody ref={paged.topRef}>
           {paged.items.map((r) => {
             return (
-              <tr key={r.name} className={`breakdown-row${href ? ' breakdown-row--link' : ''}`}>
+              <tr key={r.name} className={`breakdown-row${href ? ' breakdown-row--link' : ''}${r.posts === 0 && r.target === 0 ? ' breakdown-row--idle' : ''}`}>
                 <th scope="row">
                   {href ? (
                     <RouteLink href={href(r.name)} onNavigate={onOpen ? () => onOpen(r.name) : undefined} className="breakdown-row__pick">
@@ -133,16 +130,20 @@ function InternTable({
                     <span className="breakdown-row__name">{r.name}</span>
                   )}
                 </th>
-                <td className={`breakdown-table__num tabular${r.posts === 0 ? ' breakdown-table__zero' : ''}`}>{r.posts}</td>
+                <td className="breakdown-table__posts">
+                  <span className="breakdown-posts">
+                    <span className="breakdown-posts__track" aria-hidden="true">
+                      <span className="breakdown-posts__fill" style={{ width: `${(r.posts / most) * 100}%` }} />
+                    </span>
+                    <span className={`breakdown-posts__count tabular${r.posts === 0 ? ' breakdown-table__zero' : ''}`}>{r.posts}</span>
+                  </span>
+                </td>
                 <td className={`breakdown-table__num tabular${r.pending === 0 ? ' breakdown-table__zero' : ''}`}>{r.pending}</td>
                 <td className={`breakdown-table__num tabular${r.missed === 0 ? ' breakdown-table__zero' : ' breakdown-table__missed'}`}>
                   {r.missed}
                 </td>
                 <td className="breakdown-table__num tabular" title={r.target ? `${r.done} of ${r.target}` : 'No queue'}>
                   {percent(r.completion)}
-                </td>
-                <td className="breakdown-table__trend">
-                  <Sparkline values={r.trend} peak={peak} />
                 </td>
               </tr>
             );
@@ -151,24 +152,6 @@ function InternTable({
       </table>
       <Pagination {...paged.pagination} className="breakdown__pages" />
     </>
-  );
-}
-
-/** A tiny line of posts per bar of the chart, on the table's shared scale. */
-function Sparkline({ values, peak }: { readonly values: readonly number[]; readonly peak: number }) {
-  if (values.length < 2) return null;
-  const w = 64;
-  const h = 22;
-  const pad = 3;
-  const x = (i: number) => pad + (i * (w - pad * 2)) / (values.length - 1);
-  const y = (v: number) => h - pad - (v / peak) * (h - pad * 2);
-  const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  const last = values.length - 1;
-  return (
-    <svg className="sparkline" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" focusable="false">
-      <polyline points={points} fill="none" />
-      <circle cx={x(last)} cy={y(values[last]!)} r="2.5" />
-    </svg>
   );
 }
 

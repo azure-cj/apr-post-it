@@ -8,7 +8,8 @@ import type { Assignment, PostLogEntry } from '@/core/types';
 import { AppShell, routerFuture } from '../../App';
 import { AppStateProvider } from '../../state/AppState';
 import { admin, EXEC, fakeServer, intern, NOW, renderApp } from '../../state/testing';
-import { postsCsv, RecordsScreen, type RecordsScreenProps } from './RecordsScreen';
+import { postsCsv } from '@/core/records';
+import { RecordsScreen, type RecordsScreenProps } from './RecordsScreen';
 
 /** Wed 4 Nov 2026: the week of 2–6 Nov, three weekdays in. */
 const WED = '2026-11-04';
@@ -223,31 +224,17 @@ describe('RecordsScreen', () => {
     expect(screen.getByRole('link', { name: 'Jan Dela Cruz' }).getAttribute('href')).toBe('#/interns?week=2026-10-26');
   });
 
-  it('exports every post of the period as the owner’s sheet: its columns in its order, its date and time', async () => {
-    const onExport = vi.fn();
-    render(<Harness onExport={onExport} start={presetPeriod('last-week', WED)} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
-    const [csv, name] = onExport.mock.calls[0]!;
-    expect(name).toBe('posts 2026-10-26 to 2026-11-01.csv');
-    expect((csv as string).split('\r\n')).toEqual([
-      'Date,Property type,Property title,FB account name,Link,Time posted,Share posting,Posted by',
-      '10/30/26,Commercial Space,Friday listing,APG Main,https://www.facebook.com/groups/x/posts/F1100/,11:00 AM,Posted,Jan Dela Cruz',
-      '10/27/26,Commercial Space,Old listing D,APG Main,https://www.facebook.com/groups/x/posts/D1100/,11:00 AM,Posted,Mika Reyes',
-      '10/27/26,Commercial Space,Old listing A,APG Main,https://www.facebook.com/groups/x/posts/A1000/,10:00 AM,Posted,Jan Dela Cruz',
-      '',
-    ]);
-
-    // This week: all six, whatever bar is hovered.
-    await userEvent.click(screen.getByRole('button', { name: 'This week' }));
-    await userEvent.hover(screen.getByRole('img', { name: /^Tue 3 Nov/ }));
-    await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
-    expect((onExport.mock.calls[1]![0] as string).split('\r\n')).toHaveLength(8);
-    expect(onExport.mock.calls[1]![1]).toBe('posts 2026-11-02 to 2026-11-08.csv');
-
-    // A period with no posts has nothing to export.
-    await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Week before' }));
-    expect(screen.getByRole('button', { name: 'Export CSV' }).hasAttribute('disabled')).toBe(true);
+  it('copies the period as a summary in words: the totals, then each agent', async () => {
+    const onCopySummary = vi.fn();
+    render(<Harness onCopySummary={onCopySummary} start={presetPeriod('last-week', WED)} />);
+    expect(screen.queryByRole('button', { name: 'Export CSV' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Copy summary' }));
+    const lines = (onCopySummary.mock.calls[0]![0] as string).split('\n');
+    expect(lines[0]).toBe('APG Post-It, 26 Oct – 1 Nov');
+    expect(lines[1]).toBe('3 posts: 3 posted, 0 pending');
+    expect(lines).toContain('By agent');
+    expect(lines.some((l) => l.startsWith('Jan Dela Cruz: 2 posts'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('Mika Reyes: 1 post'))).toBe(true);
   });
 
   it('writes the interns’ date and time formats in the CSV, and defuses formulas', () => {
@@ -316,14 +303,14 @@ describe('the Records route', () => {
     await waitFor(() => expect(posts()).toBe('4'));
   });
 
-  it('is in an admin’s nav, between Interns and Find, and copies the CSV on the desktop', async () => {
+  it('is in an admin’s nav, between Interns and Find, and copies the summary', async () => {
     const platform = renderRecords('/records?period=30d&to=2026-10-31');
     expect(await screen.findByRole('link', { name: 'Records' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Records' }).getAttribute('aria-current')).toBe('page');
     await waitFor(() => expect(posts()).toBe('3'));
-    await userEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
-    await waitFor(() => expect(platform.copied[0]).toMatch(/^Date,Property type,Property title,FB account name,Link,Time posted,Share posting,Posted by\r\n/));
-    expect(await screen.findByText('CSV copied. Paste it into a spreadsheet.')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Copy summary' }));
+    await waitFor(() => expect(platform.copied[0]).toMatch(/^APG Post-It, /));
+    expect(await screen.findByText('Summary copied. Paste it where you need it.')).toBeTruthy();
   });
 
   it('opens Interns on the period’s week from an intern’s row', async () => {

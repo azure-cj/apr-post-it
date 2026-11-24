@@ -1160,20 +1160,10 @@ function RecordsRoute() {
       onOpenIntern={(_name, week) => navigate(internsPath(week, today))}
       loading={posts.data === null}
       error={posts.error ?? assignments.error}
-      onExport={(csv, fileName) => {
-        // A browser downloads it; the desktop app has no save dialog, so it goes to the clipboard.
-        if (!platform.hasFileSystem) {
-          const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = fileName;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 0);
-          return;
-        }
-        platform.copyText(csv).then(
-          () => notify('CSV copied. Paste it into a spreadsheet.', 'ok'),
-          () => notify("Couldn't copy the CSV. Try again.", 'warn'),
+      onCopySummary={(text) => {
+        platform.copyText(text).then(
+          () => notify('Summary copied. Paste it where you need it.', 'ok'),
+          () => notify("Couldn't copy the summary. Try again.", 'warn'),
         );
       }}
     />

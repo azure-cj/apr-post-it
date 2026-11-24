@@ -91,10 +91,6 @@
   width: 4.3rem;
 }
 
-.breakdown-table thead th.breakdown-table__trend {
-  width: 72px;
-}
-
 .breakdown-table thead th {
   position: sticky;
   top: 0;
@@ -150,15 +146,6 @@
   font-weight: var(--weight-heading);
 }
 
-.breakdown-table .breakdown-table__trend {
-  padding-inline-end: var(--space-2);
-  text-align: end;
-}
-
-.breakdown-table__trend .sparkline {
-  margin-inline-start: auto;
-}
-
 /* The name links to the intern's week; its link covers the row, as on Interns. */
 .breakdown-row {
   position: relative;
@@ -207,22 +194,6 @@
   font-weight: var(--weight-heading);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.sparkline {
-  display: block;
-  overflow: visible;
-}
-
-.sparkline polyline {
-  stroke: var(--neutral-strong);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.sparkline circle {
-  fill: var(--text-label);
 }
 
 /* ---- by category ---------------------------------------------------------------- */
@@ -289,4 +260,45 @@
   margin-top: var(--space-4);
   padding-top: var(--space-4);
   border-top: var(--border-width) solid var(--border-soft);
+}
+
+/* Posts as a bar on the table's one scale, then the number: who posted most reads at a glance. */
+.breakdown-table thead th.breakdown-table__posts {
+  width: 38%;
+}
+
+.breakdown-posts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.6rem;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.breakdown-posts__track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--neutral-bg);
+}
+
+.breakdown-posts__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ok-strong);
+}
+
+.breakdown-posts__count {
+  color: var(--text);
+  text-align: end;
+}
+
+.breakdown-posts__count.breakdown-table__zero {
+  color: var(--text-muted);
+}
+
+/* Nothing posted and no queue in the period: the row recedes. */
+.breakdown-row--idle .breakdown-row__name {
+  color: var(--text-muted);
+  font-weight: 400;
 }

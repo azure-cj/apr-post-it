@@ -862,3 +862,48 @@ export function sortPosts(posts: readonly PostLogEntry[], key: PostSortKey, dire
     })
     .map(({ post }) => post);
 }
+
+// ------------------------------------------------------------------ the period, in words
+
+/** What the summary is written from: the numbers the Records screen already shows. */
+export interface SummaryInput {
+  /** The days counted, in words: "2–4 Nov". */
+  readonly label: string;
+  readonly totals: PeriodTotals;
+  readonly missed: MissedInPeriod;
+  readonly interns: readonly InternRow[];
+}
+
+const postsWord = (n: number): string => (n === 1 ? '1 post' : `${n} posts`);
+
+/**
+ * The period as plain text, to paste into a chat or an email: the totals,
+ * then a line for each agent who posted or had a queue, most posts first.
+ * Missed is said only once a week of the period has ended.
+ */
+export function recordsSummary({ label, totals, missed, interns }: SummaryInput): string {
+  const lines = [
+    `APG Post-It, ${label}`,
+    `${postsWord(totals.posts)}: ${totals.posted} posted, ${totals.pending} pending`,
+    `Active agents: ${totals.interns}`,
+  ];
+  if (missed.weeksOver > 0) lines.push(`Missed: ${missed.total}`);
+  if (totals.busiest) lines.push(`Busiest day: ${shortDay(totals.busiest.date)}, ${totals.busiest.count}`);
+  const rows = interns.filter((r) => r.posts > 0 || r.target > 0);
+  if (rows.length > 0) {
+    lines.push('', 'By agent');
+    for (const r of rows) {
+      const parts = [postsWord(r.posts)];
+      if (r.pending > 0) parts.push(`${r.pending} pending`);
+      if (r.missed > 0) parts.push(`${r.missed} missed`);
+      if (r.completion !== null) parts.push(`${Math.round(r.completion * 100)}% of queue done`);
+      lines.push(`${r.name}: ${parts.join(', ')}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/** "Tue 3 Nov". */
+function shortDay(date: string): string {
+  return spanLabel(date, date);
+}
