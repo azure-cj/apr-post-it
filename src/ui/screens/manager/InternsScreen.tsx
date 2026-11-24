@@ -14,15 +14,14 @@ import {
   type TeamWeekRow,
 } from '@/core/summary';
 import type { ReportedPost } from '@/core/refused';
-import { spotSample, type SpotCheck, type SpotItem, type SpotResult } from '@/core/spotchecks';
+import { spotSample, spotTally, spotWords, type SpotCheck, type SpotItem, type SpotResult } from '@/core/spotchecks';
 import { isWeekOver, weekDays } from '@/core/week';
 import { initials, type Assignment, type PostLogEntry } from '@/core/types';
 import { NoInterns } from './AssignPicker';
 import { cleanProfiles, profilesOf as memberProfiles } from './FbAccountsField';
-import { DAY_LETTERS, isBehind, lastPostWords, PacePill, WeekBar, WeekDays } from './InternsParts';
+import { activityOf, ActivityCell, isBehind, lastPostWords, PacePill, WeekBar } from './InternsParts';
 import { InternPanel } from './InternsPanel';
 import { RefusedPosts } from './InternsRefused';
-import { SpotCell } from './InternsSpotCheck';
 import { WhoPosted } from './InternsWhoPosted';
 import { Stat } from './Stat';
 import { WeekPicker } from './WeekPicker';
@@ -67,9 +66,11 @@ export interface InternsScreenProps {
 }
 
 /**
- * The weekly monitor: who has posted what this week and who is behind, worst
- * first, with "Who posted?" on top for inquiries. A row opens that intern's
- * week beside the list. Revoked people are kept apart, folded away.
+ * The weekly monitor, pared to what an admin looks for: is each agent posting,
+ * how far through their queue they are, and whether that is on pace, worst
+ * first. Everything else about an agent (the days, what waits for approval,
+ * the spot checks, their queue) is in the panel a row opens. "Who posted?"
+ * follows, for inquiries. Revoked people are kept apart, folded away.
  */
 export function InternsScreen({
   week,
@@ -96,10 +97,12 @@ export function InternsScreen({
 
   // The agents, and each admin with a queue that week (D31), who is marked Admin.
   const shown = useMemo(() => (team ? monitorNames(team, week, assignments, today) : null), [team, week, assignments, today]);
-  const rows = useMemo<readonly TeamWeekRow[]>(
-    () => (shown ? teamWeek(shown.names, week, assignments, posts, today) : []),
-    [shown, week, assignments, posts, today],
-  );
+  const rows = useMemo<readonly TeamWeekRow[]>(() => {
+    if (!shown) return [];
+    // Worst first, as teamWeek orders them; then those with no queue that week, who have nothing to be behind on.
+    const all = teamWeek(shown.names, week, assignments, posts, today);
+    return [...all.filter((r) => r.target > 0), ...all.filter((r) => r.target === 0)];
+  }, [shown, week, assignments, posts, today]);
   // Warnings before each queue's deadline: from its third working day, who is behind and by how much, most left first.
   const behindForFriday = useMemo(
     () =>
@@ -153,6 +156,28 @@ export function InternsScreen({
   const sum = (pick: (r: TeamWeekRow) => number) => rows.reduce((n, r) => n + pick(r), 0);
   const target = sum((r) => r.target);
   const behind = rows.filter(isBehind).length;
+  // Today is in the week shown: the table can say who is posting. Another week says when each last posted.
+  const live = weekDays(week).includes(today);
+  const dayIndex = weekDays(week).indexOf(today);
+  const lastOf = useMemo(() => new Map(rows.map((r) => [r.name, lastPostBy(posts, r.name)])), [rows, posts]);
+  const activeToday = live ? rows.filter((r) => lastOf.get(r.name)?.date === today).length : 0;
+
+  // The exceptions, by name: a failed spot check, or a post waiting two days or more for approval.
+  // Nobody has one: the table has no column for them.
+  const flags = useMemo(() => {
+    const map = new Map<string, Flags>();
+    for (const r of rows) {
+      const failed = spots ? spotTally(spots.get(r.name) ?? []) : null;
+      const waitingNow = waitingPosts(posts, r.name, today);
+      const oldest = waitingNow[0];
+      const flag: Flags = {
+        checks: failed && failed.failed > 0 ? spotWords(failed) : null,
+        waiting: oldest && oldest.days >= WAITING_OLD_DAYS ? `${waitingNow.length} waiting · oldest ${waitedFor(oldest.days)}` : null,
+      };
+      if (flag.checks || flag.waiting) map.set(r.name, flag);
+    }
+    return map;
+  }, [rows, spots, posts, today]);
 
   return (
     <div className="page interns">
@@ -190,8 +215,6 @@ export function InternsScreen({
 
       {refused && onHandleRefused ? <RefusedPosts refused={refused} onHandle={onHandleRefused} onOpenLink={onOpenLink} /> : null}
 
-      <WhoPosted posts={posts} today={today} onOpenLink={onOpenLink} />
-
       {waiting ? (
         <div className="interns__waiting">
           <Spinner label="Reading the team" />
@@ -202,9 +225,12 @@ export function InternsScreen({
       ) : (
         <>
           <dl className="tracker-stats interns__stats">
-            <Stat label="Posted" value={sum((r) => r.posted)} of={target} />
-            <Stat label="Pending" value={sum((r) => r.pending)} />
-            <Stat label={over ? 'Missed' : 'Left'} value={sum((r) => (over ? r.missed : r.notShared))} />
+            {live ? (
+              <Stat label="Active today" value={activeToday} of={rows.length} />
+            ) : (
+              <Stat label={over ? 'Missed' : 'Left'} value={sum((r) => (over ? r.missed : r.notShared))} />
+            )}
+            <Stat label="Posted" value={sum((r) => r.posted + r.pending)} of={target} />
             <Stat label="Behind" value={behind} of={rows.length} />
           </dl>
 
@@ -232,10 +258,12 @@ export function InternsScreen({
                 <WeekTable
                   rows={rows}
                   admins={shown?.admins ?? NO_ADMINS}
-                  week={week}
                   today={today}
-                  posts={posts}
-                  spots={spots}
+                  live={live}
+                  dayIndex={dayIndex}
+                  now={updatedAt}
+                  lastOf={lastOf}
+                  flags={flags}
                   open={openRow?.name ?? null}
                   onOpen={(name, button) => {
                     opener.current = button;
@@ -266,6 +294,8 @@ export function InternsScreen({
           {revoked.length > 0 ? <Revoked people={revoked} /> : null}
         </>
       )}
+
+      <WhoPosted posts={posts} today={today} onOpenLink={onOpenLink} />
     </div>
   );
 }
@@ -274,54 +304,54 @@ export function InternsScreen({
 
 const NO_ADMINS: ReadonlySet<string> = new Set();
 
+/** A post waiting this many days for a group admin's approval is worth a look. */
+const WAITING_OLD_DAYS = 2;
+
+/** What about an agent needs a look, in words; null: nothing. */
+interface Flags {
+  readonly checks: string | null;
+  readonly waiting: string | null;
+}
+
 interface WeekTableProps {
   readonly rows: readonly TeamWeekRow[];
   /** The rows that are an admin's queue (D31), by name as the rows have it: marked Admin. */
   readonly admins: ReadonlySet<string>;
-  readonly week: string;
   readonly today: string;
-  readonly posts: readonly PostLogEntry[];
-  /** Each agent's spot check this week; null: no Checks column. */
-  readonly spots: ReadonlyMap<string, readonly SpotItem[]> | null;
+  /** Today is in the week shown: the second column says who is posting. Else it says when each last posted. */
+  readonly live: boolean;
+  /** Today's place in the week, 0 to 4; -1 when it isn't in it. */
+  readonly dayIndex: number;
+  /** When the rows were read, "10:42": what "posting now" is measured against. */
+  readonly now: string | null | undefined;
+  /** Each agent's last post, by name. */
+  readonly lastOf: ReadonlyMap<string, PostLogEntry | undefined>;
+  /** The agents with something that needs a look. Empty: no column. */
+  readonly flags: ReadonlyMap<string, Flags>;
   /** Whose week is open beside the table. */
   readonly open: string | null;
   readonly onOpen: (name: string, button: HTMLButtonElement) => void;
 }
 
-function WeekTable({ rows, admins, week, today, posts, spots, open, onOpen }: WeekTableProps) {
-  const days = weekDays(week);
+/** Four things a row: who, are they posting, how far through the queue, and the pace. A row opens the rest. */
+function WeekTable({ rows, admins, today, live, dayIndex, now, lastOf, flags, open, onOpen }: WeekTableProps) {
   return (
     <div className="week-table__wrap">
       <table className="week-table">
         <thead>
           <tr>
             <th scope="col">Agent</th>
-            <th scope="col">Progress</th>
-            <th scope="col">
-              <span className="visually-hidden">Mon to Fri</span>
-              <span className="week-table__days" aria-hidden="true">
-                {DAY_LETTERS.map((letter, i) => (
-                  <span key={days[i]} className={days[i] === today ? 'week-table__today' : undefined}>
-                    {letter}
-                  </span>
-                ))}
-              </span>
-            </th>
+            <th scope="col">{live ? 'Activity' : 'Last post'}</th>
+            <th scope="col">Queue</th>
             <th scope="col">Pace</th>
-            <th scope="col">Waiting</th>
-            {spots ? <th scope="col">Checks</th> : null}
-            <th scope="col" className="week-table__last">
-              Last post
-            </th>
+            {flags.size > 0 ? <th scope="col">Needs a look</th> : null}
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
-            const last = lastPostBy(posts, row.name);
-            // Their posts waiting for the group admin's approval, oldest first (Pending reminders).
-            const waiting = waitingPosts(posts, row.name, today);
-            const oldest = waiting[0];
+            const last = lastOf.get(row.name);
             const selected = open !== null && samePerson(open, row.name);
+            const flag = flags.get(row.name);
             return (
               <tr key={row.name} className={selected ? 'week-table__row week-table__row--open' : 'week-table__row'}>
                 <th scope="row">
@@ -339,29 +369,30 @@ function WeekTable({ rows, admins, week, today, posts, spots, open, onOpen }: We
                   </button>
                 </th>
                 <td>
-                  <WeekBar progress={row} />
+                  {live ? (
+                    <ActivityCell activity={activityOf(row, last, today, now)} last={last} postedToday={row.byDay[dayIndex] ?? 0} today={today} />
+                  ) : last ? (
+                    <span className="tabular">{lastPostWords(last, today)}</span>
+                  ) : (
+                    <span className="interns__quiet">Never</span>
+                  )}
                 </td>
-                <td>
-                  <WeekDays byDay={row.byDay} week={week} today={today} target={row.target} />
+                <td className="week-table__queue">
+                  <WeekBar progress={row} />
                 </td>
                 <td>
                   <PacePill progress={row} />
                 </td>
-                <td className="tabular">
-                  {oldest ? (
-                    <span className={oldest.days >= 2 ? 'interns__pending-age interns__pending-age--old' : 'interns__pending-age'}>
-                      {waiting.length} · oldest {waitedFor(oldest.days)}
-                    </span>
-                  ) : (
-                    <span className="interns__quiet">None</span>
-                  )}
-                </td>
-                {spots ? (
+                {flags.size > 0 ? (
                   <td>
-                    <SpotCell items={spots.get(row.name) ?? []} />
+                    {flag ? (
+                      <span className="week-table__flags">
+                        {flag.checks ? <Pill tone="danger">{flag.checks}</Pill> : null}
+                        {flag.waiting ? <span className="week-table__flag tabular">{flag.waiting}</span> : null}
+                      </span>
+                    ) : null}
                   </td>
                 ) : null}
-                <td className="week-table__last tabular">{last ? lastPostWords(last, today) : <span className="interns__quiet">Never</span>}</td>
               </tr>
             );
           })}

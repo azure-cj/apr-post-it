@@ -1,11 +1,11 @@
 import { forwardRef, useId, useMemo, type KeyboardEvent } from 'react';
 import { Button, Icon, PAGE_SIZE, Pagination, usePaged } from '../../components';
-import { isDate, lastPostOf, samePerson, shortDate, weekProgress, type TeamWeekRow } from '@/core/summary';
+import { isDate, lastPostBy, lastPostOf, samePerson, shortDate, waitedFor, waitingPosts, weekProgress, type TeamWeekRow } from '@/core/summary';
 import { isQueueOver, queueInWeek, rowsOf } from '@/core/queues';
 import { addWeeks, weekLabel, weekOf } from '@/core/week';
 import { initials, queueStatus, type Assignment, type FbProfile, type PostLogEntry } from '@/core/types';
 import type { SpotItem, SpotResult } from '@/core/spotchecks';
-import { PacePill, WeekBar } from './InternsParts';
+import { lastPostWords, PacePill, WeekBar, WeekDays } from './InternsParts';
 import { SpotCheckSection } from './InternsSpotCheck';
 
 /** How many weeks before the one shown the history covers. */
@@ -64,6 +64,11 @@ export const InternPanel = forwardRef<HTMLHeadingElement, InternPanelProps>(func
     [row.name, week, assignments, posts, today],
   );
 
+  // What the table leaves out: the days, the last post, and what waits for a group admin's approval.
+  const last = useMemo(() => lastPostBy(posts, row.name), [posts, row.name]);
+  const waiting = useMemo(() => waitingPosts(posts, row.name, today), [posts, row.name, today]);
+  const oldest = waiting[0];
+
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Escape' || event.defaultPrevented) return;
     event.preventDefault();
@@ -88,6 +93,25 @@ export const InternPanel = forwardRef<HTMLHeadingElement, InternPanelProps>(func
         <WeekBar progress={row} />
         <PacePill progress={row} />
       </div>
+
+      <dl className="intern-panel__facts">
+        <div>
+          <dt>Mon to Fri</dt>
+          <dd>
+            <WeekDays byDay={row.byDay} week={week} today={today} target={row.target} />
+          </dd>
+        </div>
+        <div>
+          <dt>Last post</dt>
+          <dd className="tabular">{last ? lastPostWords(last, today) : 'Never'}</dd>
+        </div>
+        <div>
+          <dt>Waiting for approval</dt>
+          <dd className={`tabular${oldest && oldest.days >= 2 ? ' intern-panel__fact--old' : ''}`}>
+            {oldest ? `${waiting.length} · oldest ${waitedFor(oldest.days)}` : 'None'}
+          </dd>
+        </div>
+      </dl>
 
       {onOpenQueue || (profiles.length > 0 && onOpenLink) ? (
         <div className="intern-panel__actions">

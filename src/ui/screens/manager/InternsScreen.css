@@ -188,17 +188,19 @@
   white-space: nowrap;
 }
 
-/* The letters sit over the five bars below them. */
-.week-table__days {
-  display: grid;
-  grid-template-columns: repeat(5, 14px);
-  gap: var(--space-2);
-  text-align: center;
+/* Needs a look: only the exceptions, and the column only while there is one. */
+.week-table__flags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
 }
 
-.week-table__today {
-  color: var(--text);
-  font-weight: var(--weight-heading);
+.week-table__flag {
+  color: var(--warn-text);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+  white-space: nowrap;
 }
 
 .week-table tbody th,
@@ -295,13 +297,10 @@
   line-height: var(--lh-caption);
 }
 
-.week-table__last {
-  white-space: nowrap;
-}
-
-/* With the panel open, Last post makes room for it. */
-.interns__body--panel .week-table__last {
-  display: none;
+/* The queue's bar has room to read, and no more. */
+.week-table__queue {
+  width: 34%;
+  min-width: 160px;
 }
 
 /* ---- the open intern's week ------------------------------------------------- */
@@ -367,6 +366,31 @@
 
 .intern-panel__week .week-bar {
   flex: 1;
+}
+
+/* What the table leaves out, as three short facts on one line. */
+.intern-panel__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6) var(--space-12);
+  margin: 0;
+}
+
+.intern-panel__facts dt {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.intern-panel__facts dd {
+  margin: var(--space-1) 0 0;
+  color: var(--text);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+.intern-panel__fact--old {
+  color: var(--warn-text);
 }
 
 .intern-panel__actions {
@@ -567,14 +591,6 @@
   line-height: var(--lh-meta);
 }
 
-/* Waiting: posts Pending approval, oldest first; two days and more stands out. */
-.interns__pending-age {
-  white-space: nowrap;
-}
-
-.interns__pending-age--old {
-  color: var(--warn-text);
-}
 
 /* Behind for Friday: from Wednesday, who is behind and by how much. */
 .interns__friday-list {

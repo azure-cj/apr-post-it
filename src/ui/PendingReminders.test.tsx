@@ -107,6 +107,6 @@ describe('the Interns screen', () => {
     const platform = fakeServer({ posts: POSTS });
     renderApp({ platform, user: manager, path: '/interns' });
     const row = (await screen.findByRole('button', { name: new RegExp(intern.name) })).closest('tr')!;
-    expect(within(row).getByText('2 · oldest 5 days')).toBeTruthy();
+    expect(within(row).getByText('2 waiting · oldest 5 days')).toBeTruthy();
   });
 });

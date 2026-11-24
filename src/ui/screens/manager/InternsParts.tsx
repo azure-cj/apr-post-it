@@ -81,7 +81,6 @@ export function WeekBar({
 }
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
-export const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F'] as const;
 
 /**
  * Posts on Monday to Friday as five small bars, scaled so a day's share of
@@ -137,4 +136,76 @@ export function lastPostWords(post: Pick<PostLogEntry, 'date' | 'time'>, today: 
 export function monitorWeek(today: string): string {
   const week = weekOf(today);
   return weekdaysElapsed(week, today) === 0 ? addWeeks(week, -1) : week;
+}
+
+// ------------------------------------------------------------------ activity (are they posting?)
+
+/** Whether someone is posting, as far as the rows read say. */
+export type Activity = 'posting' | 'today' | 'quiet' | 'idle';
+
+/** A post this recent, against the time the rows were read, is "posting now". */
+export const POSTING_NOW_MINUTES = 30;
+
+const minutesOf = (time: string | null | undefined): number | null => {
+  const m = /^(\d{1,2}):(\d{2})/.exec((time ?? '').trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+
+/**
+ * Posting now: their last post is today, within POSTING_NOW_MINUTES of `now`
+ * (the time the rows were read, "10:42"). Active today: a post today. Not
+ * posting: listings left in their queue and none posted today. Idle: nothing
+ * left to post.
+ */
+export function activityOf(
+  progress: Pick<WeekProgress, 'target' | 'notShared'>,
+  last: Pick<PostLogEntry, 'date' | 'time'> | undefined,
+  today: string,
+  now?: string | null,
+): Activity {
+  if (last && last.date === today) {
+    const at = minutesOf(last.time);
+    const clock = minutesOf(now);
+    if (at !== null && clock !== null && clock - at <= POSTING_NOW_MINUTES && clock - at >= -5) return 'posting';
+    return 'today';
+  }
+  return progress.target > 0 && progress.notShared > 0 ? 'quiet' : 'idle';
+}
+
+const ACTIVITY: Record<Activity, { readonly tone: Tone; readonly word: string }> = {
+  posting: { tone: 'ok', word: 'Posting now' },
+  today: { tone: 'ok', word: 'Active today' },
+  quiet: { tone: 'warn', word: 'Not posting' },
+  idle: { tone: 'neutral', word: 'Nothing to post' },
+};
+
+/**
+ * One word on its tone, and under it the one fact behind it: "3 today · last
+ * 09:41", "Last post Tue 3 Nov, 11:02", "Never posted".
+ */
+export function ActivityCell({
+  activity,
+  last,
+  postedToday,
+  today,
+}: {
+  readonly activity: Activity;
+  readonly last: Pick<PostLogEntry, 'date' | 'time'> | undefined;
+  readonly postedToday: number;
+  readonly today: string;
+}) {
+  const { tone, word } = ACTIVITY[activity];
+  const fact = !last
+    ? 'Never posted'
+    : last.date === today
+      ? `${postedToday} today${last.time ? ` · last ${last.time}` : ''}`
+      : `Last post ${lastPostWords(last, today)}`;
+  return (
+    <span className="activity">
+      <Pill tone={tone} dot className="activity__pill">
+        {word}
+      </Pill>
+      <span className="activity__fact tabular">{fact}</span>
+    </span>
+  );
 }

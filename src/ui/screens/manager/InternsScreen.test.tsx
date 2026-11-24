@@ -122,16 +122,16 @@ describe('the Interns screen: the week', () => {
     const jan = await rowOf(intern.name);
     expect(jan.querySelector('.week-bar__count')!.textContent).toBe('3 / 10');
     expect(within(jan).getByText('Behind')).toBeTruthy();
-    expect(jan.textContent).toContain('Tue 3 Nov, 11:02');
+    // Four columns, and the one for exceptions: Jan's pending post has waited two days.
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Agent', 'Activity', 'Queue', 'Pace', 'Needs a look']);
+    expect(within(jan).getByText('Not posting')).toBeTruthy();
+    expect(jan.textContent).toContain('Last post Tue 3 Nov, 11:02');
+    expect(jan.textContent).toContain('1 waiting · oldest 2 days');
     expect((jan.querySelector('.week-bar__posted') as HTMLElement).style.width).toBe('20%');
     expect((jan.querySelector('.week-bar__pending') as HTMLElement).style.width).toBe('10%');
 
-    // Mon–Fri: 2, 1, 0, then today (Thursday, ringed) 0, and Friday still to come.
-    const days = Array.from(jan.querySelectorAll('.week-days__day'));
-    expect(days.map((d) => d.getAttribute('data-count'))).toEqual(['2', '1', '0', '0', '0']);
-    expect(days[3]!.classList.contains('week-days__day--today')).toBe(true);
-    expect(days[4]!.classList.contains('week-days__day--later')).toBe(true);
-    expect(jan.textContent).toContain('Posts: Mon 2, Tue 1, Wed 0, Thu 0');
+    // The days are not in the table any more: they are in the panel a row opens.
+    expect(jan.querySelectorAll('.week-days__day')).toHaveLength(0);
 
     expect(within(await rowOf('Bea Lim')).getByText('Not started')).toBeTruthy();
     expect(within(await rowOf('Mika Reyes')).getByText('On track')).toBeTruthy();
@@ -142,11 +142,21 @@ describe('the Interns screen: the week', () => {
     expect(table.textContent).not.toContain(manager.name);
     expect(table.textContent).not.toContain('Paolo Reyes');
 
-    // The week in four numbers.
-    expect(stat('Posted')).toBe('8 of 22');
-    expect(stat('Pending')).toBe('1');
-    expect(stat('Left')).toBe('13');
+    // The week in three numbers: who posted today, how much is out (posted and pending), who is behind.
+    expect(stat('Active today')).toBe('1 of 4');
+    expect(stat('Posted')).toBe('9 of 22');
     expect(stat('Behind')).toBe('2 of 4');
+
+    // Mon–Fri, the last post and what waits are in Jan's panel: 2, 1, 0, today (Thursday, ringed) 0, Friday to come.
+    await userEvent.click(within(jan).getByRole('button', { name: new RegExp(intern.name) }));
+    const panel = screen.getByRole('complementary', { name: intern.name });
+    const days = Array.from(panel.querySelectorAll('.intern-panel__facts .week-days__day'));
+    expect(days.map((d) => d.getAttribute('data-count'))).toEqual(['2', '1', '0', '0', '0']);
+    expect(days[3]!.classList.contains('week-days__day--today')).toBe(true);
+    expect(days[4]!.classList.contains('week-days__day--later')).toBe(true);
+    expect(panel.textContent).toContain('Posts: Mon 2, Tue 1, Wed 0, Thu 0');
+    expect(panel.querySelector('.intern-panel__facts')!.textContent).toContain('Tue 3 Nov, 11:02');
+    expect(panel.querySelector('.intern-panel__facts')!.textContent).toContain('1 · oldest 2 days');
 
     // Thursday: those behind are named for Friday, with what is left and how many a day.
     const friday = screen.getByText('2 agents behind schedule').closest('.notice')!;
@@ -164,8 +174,8 @@ describe('the Interns screen: the week', () => {
     expect(names()[0]).toBe('Mika Reyes');
     expect(within(await rowOf(intern.name)).getByText('Done')).toBeTruthy();
     expect(within(await rowOf('Bea Lim')).getByText('No queue')).toBeTruthy();
-    // No day is still to come.
-    expect(mika.querySelectorAll('.week-days__day--later')).toHaveLength(0);
+    // Another week than today's: the second column says when each last posted.
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent).slice(0, 4)).toEqual(['Agent', 'Last post', 'Queue', 'Pace']);
     expect(stat('Missed')).toBe('2');
     expect(stat('Behind')).toBe('1 of 4');
   });
@@ -489,18 +499,18 @@ describe('the Agents screen: spot checks (v16)', () => {
     checkedBy: by,
     checkedAt: '2026-11-05T09:00:00+08:00',
   });
-  const checksCell = (row: HTMLElement) => row.querySelectorAll('td')[4]!.textContent;
+  const flagsCell = (row: HTMLElement) => row.querySelectorAll('td')[3]!.textContent;
 
-  it('shows each agent’s checks in the table, a failure standing out', async () => {
+  it('shows only a failed check in the table, standing out; the rest is in the panel', async () => {
     renderAt(THURSDAY, { platform: server({ spotChecks: { ok: true, checks: [check(JAN_KAPITOLYO, 'Not found')] } }) });
-    expect(await screen.findByRole('columnheader', { name: 'Checks' })).toBeTruthy();
+    expect(await screen.findByRole('columnheader', { name: 'Needs a look' })).toBeTruthy();
 
     const jan = await rowOf(intern.name);
     expect(within(jan).getByText('1 failed').classList.contains('pill--danger')).toBe(true);
-    // Carlo's two posts are both picked; Mika posted four, so three are; Bea posted none.
-    expect(checksCell(await rowOf('Carlo Mendoza'))).toBe('0 of 2 checked');
-    expect(checksCell(await rowOf('Mika Reyes'))).toBe('0 of 3 checked');
-    expect(checksCell(await rowOf('Bea Lim'))).toBe('–');
+    // Nothing failed for the others: their cells say nothing.
+    expect(flagsCell(await rowOf('Carlo Mendoza'))).toBe('');
+    expect(flagsCell(await rowOf('Mika Reyes'))).toBe('');
+    expect(flagsCell(await rowOf('Bea Lim'))).toBe('');
   });
 
   it("lists the agent's picked posts in their panel, and saves what was found", async () => {

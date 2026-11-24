@@ -296,18 +296,28 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   team grows. Collapsed it is a 64px icon rail with tooltips; Ctrl+B toggles it; the
   choice is remembered, and windows under 1000px start collapsed. Width animates only on
   a toggle.
-- **The Interns screen** (`/interns`, Admin only) is the weekly monitor. The header holds
-  the heading, the week picker (‹ "2–6 Nov" ›, This week, Next week) and Refresh; on a
-  weekend it opens on the week that just ended. Then "Who posted?", the screen's one big
-  search: a listing name or a pasted Facebook link shows every matching post right below
-  (listing, intern, when, FB account, status, Open), and Escape clears it. Four tiles
-  (Posted of the target, Pending, Left or Missed, Behind of the interns). One table, worst
-  first: initials and name, "12 / 40" over a green and amber bar, Mon–Fri as five small
-  bars (today ringed in neutral grey, days to come dashed), the pace as a pill (Not
-  started and Missed danger, Behind warn, On track neutral, Done ok), and the last post.
-  A row opens that intern's week in a side pane (the row gets the gold selected wash and
-  mark): the bar and pace, Open in Assign and FB profile, the last 4 weeks as small bars,
+- **The Agents screen** (`/interns`, Admin only) is the weekly monitor, pared to what an
+  admin looks for: is each agent posting, and are they on pace. The header holds the
+  heading, the week picker (‹ "2–6 Nov" ›, This week, Next week) and Refresh; on a
+  weekend it opens on the week that just ended. Three tiles: Active today of the agents
+  (Left or Missed on another week than today's), Posted of the target (posted and
+  pending), Behind of the agents. One table of four columns, worst first, those with no
+  queue last: initials and name; Activity, one pill over one fact ("Posting now" and
+  "Active today" ok over "3 today · last 09:41"; "Not posting" warn, with listings left
+  and no post today, over "Last post Tue 3 Nov, 11:02"; "Nothing to post" neutral) —
+  "Posting now" is a post within 30 minutes of when the rows were read, and on another
+  week the column is Last post; Queue, "12 / 40" over a green and amber bar; Pace as a
+  pill (Not started and Missed danger, Behind warn, On track neutral, Done ok). A fifth
+  column, Needs a look, exists only while someone has an exception: a failed spot check
+  (danger pill) or a post waiting two days or more for approval (warn text).
+  A row opens that agent's week in a side pane (the row gets the gold selected wash and
+  mark): the bar and pace; three facts the table leaves out (Mon to Fri as five small
+  bars, today ringed, days to come dashed; Last post; Waiting for approval); Open in
+  Assign and FB profile; the spot check; the last 4 weeks as small bars;
   then Not shared / Pending / Posted (with Open) / Missed, ten a page (compact pages).
+  "Who posted?" follows the table: a listing name or a pasted Facebook link shows every
+  matching post right below (listing, agent, when, FB account, status, Open), and Escape
+  clears it.
   Escape or Close shuts it. Revoked people sit in a folded "Revoked" card below. An admin
   with a queue that week is a row too, with a muted "Admin" after the name, and counts in
   the tiles (D31). The

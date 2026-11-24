@@ -1,17 +1,8 @@
 import { useId, useState } from 'react';
-import { Button, Pill } from '../../components';
+import { Button } from '../../components';
 import { SPOT_RESULTS, spotTally, spotWords, type SpotItem, type SpotResult } from '@/core/spotchecks';
 import { shortDate } from '@/core/summary';
 import type { PostLogEntry } from '@/core/types';
-
-/** The Checks cell of the week's table: a failure stands out. */
-export function SpotCell({ items }: { readonly items: readonly SpotItem[] }) {
-  const tally = spotTally(items);
-  const words = spotWords(tally);
-  if (tally.failed > 0) return <Pill tone="danger">{words}</Pill>;
-  if (tally.total > 0 && tally.checked === tally.total) return <Pill tone="ok">{words}</Pill>;
-  return <span className="interns__quiet">{tally.total === 0 ? '–' : words}</span>;
-}
 
 export interface SpotCheckSectionProps {
   /** The agent's posts picked for this week, with their checks. */
