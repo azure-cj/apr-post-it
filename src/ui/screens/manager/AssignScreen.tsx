@@ -32,6 +32,7 @@ import {
   periodLabel,
   queuesOf,
   queueWeeksOf,
+  unfinishedQueues,
   weeksLabel,
   withWeeks,
 } from '@/core/queues';
@@ -100,6 +101,8 @@ export interface AssignScreenProps {
   readonly onInternChange: (intern: string | null) => void;
   /** Show another week or queue (a week key, its Monday). Only called once unsaved changes are saved or discarded. */
   readonly onWeekChange: (week: string) => void;
+  /** Show one person's queue for a week in one step (the reminder's Review). Default: the week, then the person. */
+  readonly onOpenQueue?: ((intern: string, week: string) => void) | undefined;
   /** Save the queue. Resolve once saved; reject with a UserFacingError to have its sentence shown. */
   readonly onSave: (save: QueueSave) => Promise<unknown>;
   /** Told when the draft gains or loses unsaved changes, so the shell can guard leaving the screen. */
@@ -235,6 +238,7 @@ export function AssignScreen({
   settings,
   onInternChange,
   onWeekChange,
+  onOpenQueue,
   onSave,
   onDirtyChange,
   loading = false,
@@ -368,6 +372,8 @@ export function AssignScreen({
   const [addedNote, setAddedNote] = useState<string | null>(null);
   const [fillNote, setFillNote] = useState<string | null>(null);
   const [fill, setFill] = useState<Fill | null>(null);
+  // Clear all's last sweep, until it's saved, undone or added to.
+  const [cleared, setCleared] = useState<{ readonly for: string; readonly entries: readonly QueueEntry[] } | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [mode, setMode] = useState<Mode>('library');
   const [tab, setTab] = useState<CategoryTab>('all');
@@ -388,6 +394,7 @@ export function AssignScreen({
     setAddedNote(null);
     setFillNote(null);
     setFill(null);
+    setCleared(null);
     setPending(null);
     setMatched(null);
   }, [queueFor]);
@@ -443,6 +450,11 @@ export function AssignScreen({
       if (fresh.length === 0) return 0;
       setEntries((now) => [...now, ...fresh.filter((e) => !now.some((n) => n.key === e.key))]);
       setProblems([]);
+      if (cleared) {
+        // Added to since: Undo would no longer put back what was there.
+        setCleared(null);
+        setFillNote(null);
+      }
       const total = entries.length + fresh.length;
       announce(
         fresh.length === 1
@@ -451,7 +463,7 @@ export function AssignScreen({
       );
       return fresh.length;
     },
-    [addable, setEntries, entries.length, announce],
+    [addable, setEntries, entries.length, announce, cleared],
   );
 
   // ---- quick fill -----------------------------------------------------------
@@ -496,6 +508,7 @@ export function AssignScreen({
     }
     setEntries((now) => [...now, ...fresh.filter((e) => !now.some((n) => n.key === e.key))]);
     setProblems([]);
+    setCleared(null);
     setFill({ for: queueFor, keys: fresh.map((e) => e.key) });
     const note = fresh.length < count ? `Added ${fresh.length}${where}. That's all that's free.` : `Added ${fresh.length}${where}.`;
     setFillNote(note);
@@ -737,6 +750,7 @@ export function AssignScreen({
     setRefused(new Map());
     setAddedNote(null);
     setFill(null);
+    setCleared(null);
     setFillNote(null);
   };
 
@@ -769,6 +783,7 @@ export function AssignScreen({
       setSaved({ for: forQueue, entries: snapshot, assignments: rowsWhenSaved, weeks: period.weeks });
       setAddedNote(null);
       setFill(null);
+      setCleared(null);
       setFillNote(null);
       setSavedNote(true);
       announce(`Saved. ${plural(snapshot.length, 'listing', 'listings')}, due ${shortDate(period.due)}.`);
@@ -806,9 +821,33 @@ export function AssignScreen({
     announce(`Removed ${plural(keys.size, 'held listing', 'held listings')}.`);
   };
 
-  const undo = () => {
-    resetDraft();
-    announce('Changes undone.');
+  // ---- clear all -------------------------------------------------------------
+
+  /** What Clear all takes out: everything not shared yet. Pending and Posted stay. */
+  const clearable = open.filter((e) => !(rules?.isStarted(e.key) ?? true));
+  const clearedNow = cleared && cleared.for === queueFor ? cleared : null;
+
+  const clearAll = () => {
+    if (clearable.length === 0 || saving) return;
+    const gone = new Set(clearable.map((e) => e.key));
+    const before = entries;
+    setEntries((now) => now.filter((e) => !gone.has(e.key)));
+    setCleared({ for: queueFor, entries: before });
+    setFill(null);
+    setRefused(new Map());
+    setProblems([]);
+    const kept = entries.length - gone.size;
+    const note = `Cleared ${plural(gone.size, 'listing', 'listings')}.${kept > 0 ? ` ${kept} already shared ${kept === 1 ? 'stays' : 'stay'}.` : ''}`;
+    setFillNote(note);
+    announce(note);
+  };
+
+  const undoClear = () => {
+    if (!clearedNow) return;
+    setDraftState((d) => ({ ...d, entries: clearedNow.entries }));
+    setCleared(null);
+    setFillNote(null);
+    announce(`Put back ${plural(clearedNow.entries.length, 'listing', 'listings')}.`);
   };
 
   // ---- search and paste -----------------------------------------------------
@@ -868,6 +907,14 @@ export function AssignScreen({
 
   // Step one: whose queue.
   if (intern === null) {
+    const unfinished = unfinishedQueues([...interns, ...admins], assignments, today);
+    const review = (name: string, key: string) => {
+      if (onOpenQueue) onOpenQueue(name, key);
+      else {
+        onWeekChange(key);
+        onInternChange(name);
+      }
+    };
     return (
       <div className="page assign">
         <header className="page-header assign__header">
@@ -904,6 +951,26 @@ export function AssignScreen({
           />
         ) : null}
         {errorNotice}
+        {unfinished.length > 0 ? (
+          <Notice
+            tone="warn"
+            className="assign__notice assign-unfinished"
+            title={unfinished.length === 1 ? "A queue wasn't finished" : `${unfinished.length} queues weren't finished`}
+          >
+            <ul className="assign-unfinished__list">
+              {unfinished.map((u) => (
+                <li key={u.name} className="assign-unfinished__item">
+                  <span>
+                    <strong>{u.name}</strong> missed {u.missed} of {u.total}, due {shortDate(u.period.due)}. They were cleared from the queue.
+                  </span>
+                  <Button size="small" onClick={() => review(u.name, u.period.key)} aria-label={`Review ${u.name}'s missed listings`}>
+                    Review
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </Notice>
+        ) : null}
         <Highlighted highlights={highlights ?? []} from={FROM_ASSIGN} onRemove={onRemoveHighlight} />
         {interns.length === 0 && admins.length === 0 ? (
           <NoInterns managedInHub={managedInHub} />
@@ -965,11 +1032,15 @@ export function AssignScreen({
             weeks={weeks}
             allowed={lengthAllowed}
             disabled={saving}
+            dueWords={(n) => shortDate(withWeeks(period, n).due)}
             onChange={(n) => {
               setLength({ for: queueFor, weeks: n });
               announce(`${weeksLabel(n)}. Due ${shortDate(withWeeks(period, n).due)}.`);
             }}
           />
+        ) : null}
+        {!over && period ? (
+          <p className="assign__deadline-note">After the deadline, what isn't posted is cleared from the queue and flagged as missed.</p>
         ) : null}
       </div>
       {choice && period ? (
@@ -1009,6 +1080,12 @@ export function AssignScreen({
                   {' · '}
                   <span className={missed.length > 0 ? 'assign-review__missed' : undefined}>{missed.length} missed</span>
                 </p>
+                {missed.length > 0 ? (
+                  <p className="assign-review__note">
+                    The deadline passed, so {missed.length === 1 ? 'the missed listing was' : `the ${missed.length} missed listings were`} cleared
+                    from {first}'s queue and can be assigned again.
+                  </p>
+                ) : null}
                 {missed.some((e) => e.property) ? (
                   <Button size="small" onClick={() => copyMissed(missed)}>
                     Copy missed to next queue
@@ -1147,11 +1224,66 @@ export function AssignScreen({
           title="Queue"
           actions={<Badge count={entries.length} label={plural(entries.length, 'listing', 'listings')} />}
         >
+          <div className="assign-savebar">
+            <p className="assign-savebar__state" role="status">
+              {saving ? (
+                'Saving…'
+              ) : dirty ? (
+                <>
+                  <Icon name="warn" size={18} className="assign-savebar__icon assign-savebar__icon--warn" />
+                  Unsaved changes
+                </>
+              ) : savedNote ? (
+                <>
+                  <Icon name="pass" size={18} className="assign-savebar__icon assign-savebar__icon--ok" />
+                  Saved
+                </>
+              ) : null}
+            </p>
+            <div className="assign-savebar__actions">
+              <Button size="small" disabled={clearable.length === 0 || saving} onClick={clearAll}>
+                Clear all
+              </Button>
+              <Button
+                variant="primary"
+                size="small"
+                busy={saving}
+                disabled={!dirty || rules === null || loading}
+                nudge={dirty}
+                onClick={() => void save()}
+              >
+                {saving ? 'Saving…' : `Save queue (${entries.length})`}
+              </Button>
+            </div>
+          </div>
+          {problems.length > 0 ? (
+            <Notice
+              tone="danger"
+              live
+              className="assign__notice"
+              title="The queue wasn't saved"
+              action={
+                refused.size > 0 ? (
+                  <Button size="small" onClick={removeRefused}>
+                    {refused.size === 1 ? 'Remove it' : `Remove ${refused.size}`}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {problems.map((p) => (
+                <p key={p}>{p}</p>
+              ))}
+            </Notice>
+          ) : null}
           <div className="assign-queue__body">
           {fillNote ? (
             <div className="assign-fill" role="status">
               <span>{fillNote}</span>
-              {fillKeys && fillKeys.size > 0 ? (
+              {clearedNow ? (
+                <Button size="small" variant="quiet" onClick={undoClear}>
+                  Undo
+                </Button>
+              ) : fillKeys && fillKeys.size > 0 ? (
                 <Button size="small" variant="quiet" onClick={undoFill}>
                   Undo
                 </Button>
@@ -1220,50 +1352,6 @@ export function AssignScreen({
           )}
           </div>
 
-          {problems.length > 0 ? (
-            <Notice
-              tone="danger"
-              live
-              className="assign__notice"
-              title="The queue wasn't saved"
-              action={
-                refused.size > 0 ? (
-                  <Button size="small" onClick={removeRefused}>
-                    {refused.size === 1 ? 'Remove it' : `Remove ${refused.size}`}
-                  </Button>
-                ) : undefined
-              }
-            >
-              {problems.map((p) => (
-                <p key={p}>{p}</p>
-              ))}
-            </Notice>
-          ) : null}
-          <div className="assign-savebar">
-            <p className="assign-savebar__state" role="status">
-              {saving ? (
-                'Saving…'
-              ) : dirty ? (
-                <>
-                  <Icon name="warn" size={18} className="assign-savebar__icon assign-savebar__icon--warn" />
-                  Unsaved changes
-                </>
-              ) : savedNote ? (
-                <>
-                  <Icon name="pass" size={18} className="assign-savebar__icon assign-savebar__icon--ok" />
-                  Saved
-                </>
-              ) : null}
-            </p>
-            <div className="assign-savebar__actions">
-              <Button variant="quiet" disabled={!dirty || saving} onClick={undo}>
-                Undo changes
-              </Button>
-              <Button variant="primary" busy={saving} disabled={!dirty || rules === null || loading} nudge={dirty} onClick={() => void save()}>
-                {saving ? 'Saving…' : `Save queue (${entries.length})`}
-              </Button>
-            </div>
-          </div>
         </Card>
       </div>
       {announcer}

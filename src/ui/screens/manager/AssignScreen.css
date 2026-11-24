@@ -405,7 +405,7 @@
 
 /* ---- the save bar: stays at the bottom of the window while the page scrolls -- */
 
-/* The queue's foot: what's unsaved, Undo and Save. */
+/* The queue's head: what's unsaved, Clear all and Save, above the rows so they never scroll out of sight. */
 .assign-savebar {
   display: flex;
   flex: none;
@@ -413,9 +413,14 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-4) var(--space-6);
-  margin-top: var(--space-8);
-  padding-top: var(--space-8);
-  border-top: var(--border-width) solid var(--border-soft);
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-6);
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+
+.assign__queue > .assign__notice {
+  flex: none;
+  margin-bottom: var(--space-6);
 }
 
 .assign-savebar__state {
@@ -548,6 +553,60 @@
   transition: transform var(--dur-press) var(--ease-out);
 }
 
+/* Has a queue or not, told apart at a glance: a solid, lit card with a ticked line, or a dashed, quiet one. */
+.assign-pick__card--assigned {
+  border-color: var(--border);
+  background: var(--surface-raised);
+}
+
+.assign-pick__card--none {
+  border-style: dashed;
+  border-color: var(--border);
+  background: none;
+}
+
+.assign-pick__card--none .assign-pick__name {
+  color: var(--text-label);
+}
+
+.assign-pick__card--none .assign-pick__progress {
+  display: none;
+}
+
+.assign-pick__queue {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.assign-pick__queue--assigned {
+  color: var(--text);
+}
+
+.assign-pick__queue-icon {
+  flex: none;
+  color: var(--ok-strong);
+}
+
+.assign-pick__queue-plus {
+  flex: none;
+  width: 18px;
+  color: var(--text-label);
+  font-family: var(--heading-font);
+  font-weight: var(--weight-heading);
+  text-align: center;
+}
+
+.assign-pick__show {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
 .assign-pick__top {
   display: flex;
   align-items: center;
@@ -652,20 +711,26 @@
   gap: var(--space-6);
 }
 
-/* The categories on one line; more than fit scroll sideways, never wrap. */
-.lib__tabs {
+/* The categories: every one shows. More than fit one line wrap to the next; nothing scrolls sideways. */
+.lib__tabs,
+.lib__filters {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-3);
-  margin-inline: calc(var(--space-2) * -1);
-  padding: var(--space-2) var(--space-20) var(--space-2) var(--space-2);
-  overflow-x: auto;
-  scrollbar-width: none;
-  /* The row fades at its end, so more chips read as "scroll", not as cut off. */
-  mask-image: linear-gradient(to right, var(--text) calc(100% - var(--space-20)), transparent);
 }
 
-.lib__tabs > .chip {
+.lib__tabs > .chip,
+.lib__filters > .chip {
   flex: none;
+}
+
+/* The filters, in the open under the search: each a chip with what it would show. */
+.lib__filters-label {
+  margin-inline-end: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
 }
 
 .lib__find {
@@ -888,8 +953,8 @@
   top: var(--space-12);
   display: flex;
   flex-direction: column;
-  /* Short enough that Save shows below the page's header on first view (≈168px above it). */
-  max-height: calc(100vh - 168px);
+  /* Short enough that the whole card shows under the page's header on first view (≈232px above it). */
+  max-height: calc(100vh - 248px);
   min-height: 320px;
 }
 
@@ -1102,6 +1167,43 @@
   align-items: center;
   gap: var(--space-2);
   margin-block-start: var(--space-2);
+}
+
+.queue-length__due {
+  font-weight: var(--weight-label);
+}
+
+/* What the deadline does, once, under its chips. */
+.assign__deadline-note,
+.assign-review__note {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}
+
+.assign__deadline-note {
+  margin-block-start: var(--space-2);
+}
+
+.assign-review__note {
+  flex-basis: 100%;
+}
+
+/* Queues whose deadline passed with listings left: one line each, with Review. */
+.assign-unfinished__list {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assign-unfinished__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
 }
 
 .queue-length__label {

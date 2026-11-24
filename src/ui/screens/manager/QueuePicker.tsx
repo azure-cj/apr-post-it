@@ -69,14 +69,20 @@ export interface LengthPickerProps {
   readonly allowed: (weeks: number) => boolean;
   readonly onChange: (weeks: number) => void;
   readonly disabled?: boolean | undefined;
+  /** The day each length is due, in words ("Fri 13 Nov"), when one start day is known: each chip then says its day. */
+  readonly dueWords?: ((weeks: number) => string) | undefined;
 }
 
-/** Length: 1 wk, 2 wks, 3 wks. How long the queue runs, in weeks of working days. */
-export function LengthPicker({ weeks, allowed, onChange, disabled = false }: LengthPickerProps) {
+/**
+ * Deadline: 1 week, 2 weeks, 3 weeks. How long the queue runs, in weeks of
+ * working days, said as what it decides: the day it is due.
+ */
+export function LengthPicker({ weeks, allowed, onChange, disabled = false, dueWords }: LengthPickerProps) {
+  const words = (n: number) => (n === 1 ? '1 week' : `${n} weeks`);
   return (
-    <div className="queue-length" role="group" aria-label="Queue length">
+    <div className="queue-length" role="group" aria-label="Deadline">
       <span className="queue-length__label" aria-hidden="true">
-        Length
+        Deadline
       </span>
       {QUEUE_WEEK_CHOICES.map((n) => (
         <Chip
@@ -84,12 +90,13 @@ export function LengthPicker({ weeks, allowed, onChange, disabled = false }: Len
           className="queue-length__chip"
           selected={weeks === n}
           disabled={disabled || (weeks !== n && !allowed(n))}
-          aria-label={n === 1 ? '1 week' : `${n} weeks`}
+          aria-label={dueWords ? `${words(n)}, due ${dueWords(n)}` : words(n)}
           onSelectedChange={() => {
             if (weeks !== n) onChange(n);
           }}
         >
-          {n === 1 ? '1 wk' : `${n} wks`}
+          {words(n)}
+          {dueWords ? <span className="queue-length__due"> · {dueWords(n)}</span> : null}
         </Chip>
       ))}
     </div>

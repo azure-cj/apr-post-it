@@ -1,6 +1,6 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
-import { Card, EmptyState, Pill, SearchBox, type Tone } from '../../components';
-import { plural, samePerson, teamWeek, type TeamWeekRow } from '@/core/summary';
+import { Card, Chip, EmptyState, Icon, Pill, SearchBox, type Tone } from '../../components';
+import { plural, samePerson, shortDate, teamWeek, type TeamWeekRow } from '@/core/summary';
 import type { Assignment, PostLogEntry } from '@/core/types';
 
 export interface AssignPickerProps {
@@ -45,6 +45,9 @@ const SEARCH_FROM = 9;
 
 const NONE: readonly string[] = [];
 
+/** Which cards show: everyone, those with a queue that week, or those without. */
+type Show = 'all' | 'assigned' | 'none';
+
 export function cardStatus(row: TeamWeekRow): CardStatus {
   return row.target === 0 ? 'no-queue' : row.pace;
 }
@@ -63,6 +66,7 @@ export function cardOrder(rows: readonly TeamWeekRow[]): TeamWeekRow[] {
  */
 export function AssignPicker({ interns, admins = NONE, me, managedInHub = false, week, assignments, posts, today, onPick }: AssignPickerProps) {
   const [query, setQuery] = useState('');
+  const [show, setShow] = useState<Show>('all');
   const agentRows = useMemo(
     () => cardOrder(teamWeek(interns, week, assignments, posts, today)),
     [interns, week, assignments, posts, today],
@@ -74,7 +78,13 @@ export function AssignPicker({ interns, admins = NONE, me, managedInHub = false,
 
   const grouped = adminRows.length > 0;
   const q = query.trim().toLowerCase();
-  const matches = (r: TeamWeekRow) => q === '' || r.name.toLowerCase().includes(q);
+  const everyone = [...agentRows, ...adminRows];
+  const assigned = everyone.filter((r) => r.target > 0).length;
+  const without = everyone.length - assigned;
+  // Nothing left to tell apart: the chips go, and so does a choice that would show no one.
+  const shown: Show = assigned === 0 || without === 0 ? 'all' : show;
+  const matches = (r: TeamWeekRow) =>
+    (q === '' || r.name.toLowerCase().includes(q)) && (shown === 'all' || (shown === 'assigned') === r.target > 0);
   const agentsShown = agentRows.filter(matches);
   const adminsShown = adminRows.filter(matches);
   const found = agentsShown.length + adminsShown.length;
@@ -94,6 +104,19 @@ export function AssignPicker({ interns, admins = NONE, me, managedInHub = false,
           onValueChange={setQuery}
           className="assign-pick__search"
         />
+      ) : null}
+      {assigned > 0 && without > 0 ? (
+        <div className="assign-pick__show" role="group" aria-label="Show">
+          <Chip selected={shown === 'all'} count={everyone.length} onSelectedChange={() => setShow('all')}>
+            Everyone
+          </Chip>
+          <Chip selected={shown === 'assigned'} count={assigned} onSelectedChange={() => setShow('assigned')}>
+            Has a queue
+          </Chip>
+          <Chip selected={shown === 'none'} count={without} onSelectedChange={() => setShow('none')}>
+            No queue yet
+          </Chip>
+        </div>
       ) : null}
       {found === 0 && q !== '' ? (
         <p className="assign__quiet assign-pick__none" role="status">
@@ -143,8 +166,9 @@ function InternCard({ row, you, onPick }: { readonly row: TeamWeekRow; readonly 
   const status = STATUS[cardStatus(row)];
   const done = row.posted + row.pending;
   const of = Math.max(row.target, 1);
+  const has = row.target > 0;
   return (
-    <button type="button" className="assign-pick__card" onClick={onPick}>
+    <button type="button" className={`assign-pick__card assign-pick__card--${has ? 'assigned' : 'none'}`} onClick={onPick}>
       <span className="assign-pick__top">
         <span className="assign-pick__who">
           <span className="assign-pick__name">{row.name}</span>
@@ -154,6 +178,22 @@ function InternCard({ row, you, onPick }: { readonly row: TeamWeekRow; readonly 
           {status.label}
         </Pill>
       </span>
+      {has ? (
+        <span className="assign-pick__queue assign-pick__queue--assigned">
+          <Icon name="pass" size={18} className="assign-pick__queue-icon" />
+          <span>
+            Queue assigned · {plural(row.target, 'listing', 'listings')}
+            {row.period ? ` · due ${shortDate(row.period.due)}` : ''}
+          </span>
+        </span>
+      ) : (
+        <span className="assign-pick__queue">
+          <span className="assign-pick__queue-plus" aria-hidden="true">
+            +
+          </span>
+          <span>Nothing assigned yet</span>
+        </span>
+      )}
       <span className="assign-pick__progress">
         <span className="assign-pick__bar" aria-hidden="true">
           <span className="assign-pick__bar-posted" style={{ width: `${(Math.min(row.posted, of) / of) * 100}%` }} />

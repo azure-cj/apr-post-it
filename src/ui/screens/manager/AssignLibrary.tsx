@@ -1,6 +1,5 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Button, CategoryDot, Chip, Icon, PAGE_SIZE, Pagination, SearchBox, categoryLabel, usePaged, type CategoryKind } from '../../components';
-import { MenuButton } from './AssignMenu';
 import { plural } from '@/core/summary';
 import type { Property } from '@/core/types';
 import { byPriority, lastPostedWords, placeWords, type ListingState } from './assignListing';
@@ -38,9 +37,10 @@ export function tabLabel(tab: CategoryTab, states: readonly ListingState[]): str
 }
 
 /**
- * The library for one queue: category chips with what's free in each, a
- * search, and a Filter menu (Fresh, Due for repost, Show unavailable). What
- * can't be added is hidden unless asked for.
+ * The library for one queue: category chips with what's free in each (they
+ * wrap, so every one shows), a search, and the filters as chips of their own
+ * (Never posted, Due for repost, Unavailable), each with its count. What can't
+ * be added is hidden unless asked for.
  */
 export function LibraryPanel({
   states,
@@ -76,6 +76,29 @@ export function LibraryPanel({
     });
     return { all, map, kinds };
   }, [states]);
+
+  // What each filter would show in the category picked.
+  const filterCounts = useMemo(() => {
+    let nFresh = 0;
+    let nDue = 0;
+    let nOff = 0;
+    for (const s of states) {
+      if (tab !== 'all' && s.kind !== tab) continue;
+      if (s.unavailable) {
+        if (!inQueue.has(keyOf(s.property))) nOff++;
+        continue;
+      }
+      if (s.fresh) nFresh++;
+      if (s.due) nDue++;
+    }
+    return { fresh: nFresh, due: nDue, off: nOff };
+  }, [states, tab, inQueue, keyOf]);
+  const filtersOn = fresh || due || showOff;
+  const clearFilters = () => {
+    setFresh(false);
+    setDue(false);
+    setShowOff(false);
+  };
 
   const matched = useMemo(() => search(query), [search, query]);
 
@@ -141,16 +164,26 @@ export function LibraryPanel({
           value={query}
           onValueChange={setQuery}
         />
-        <MenuButton label="Filter" count={[fresh, due, showOff].filter(Boolean).length} className="lib__filter">
-          {() => (
-            <fieldset className="menu__group">
-              <legend className="visually-hidden">Filter</legend>
-              <FilterCheck label="Fresh" checked={fresh} onChange={setFresh} />
-              <FilterCheck label="Due for repost" checked={due} onChange={setDue} />
-              <FilterCheck label="Show unavailable" checked={showOff} onChange={setShowOff} />
-            </fieldset>
-          )}
-        </MenuButton>
+      </div>
+
+      <div className="lib__filters" role="group" aria-label="Show only">
+        <span className="lib__filters-label" aria-hidden="true">
+          Show only
+        </span>
+        <Chip selected={fresh} count={filterCounts.fresh} onSelectedChange={setFresh}>
+          Never posted
+        </Chip>
+        <Chip selected={due} count={filterCounts.due} onSelectedChange={setDue}>
+          Due for repost
+        </Chip>
+        <Chip selected={showOff} count={filterCounts.off} onSelectedChange={setShowOff}>
+          Unavailable
+        </Chip>
+        {filtersOn ? (
+          <Button variant="link" size="small" onClick={clearFilters}>
+            Clear
+          </Button>
+        ) : null}
       </div>
 
       <p className="visually-hidden" role="status">
@@ -265,15 +298,6 @@ function LibraryRow({ state, added, today, showCategory, onAdd }: LibraryRowProp
         </span>
       </button>
     </li>
-  );
-}
-
-function FilterCheck({ label, checked, onChange }: { readonly label: string; readonly checked: boolean; readonly onChange: (on: boolean) => void }) {
-  return (
-    <label className="menu__check">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
-      <span>{label}</span>
-    </label>
   );
 }
 

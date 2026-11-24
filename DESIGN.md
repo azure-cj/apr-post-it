@@ -332,18 +332,27 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   week). With no `?intern=`, a grid of cards, one per active intern: the
   name, one pace pill (Behind warn, Not started and Missed danger, No queue neutral, On
   track info, Done ok) and "12 / 40" beside a posted-green, pending-amber bar; Behind
-  first. With admins on the team (D31), the grid is headed Agents ("No agents yet. Add them
+  first. A card with a queue is solid and says "Queue assigned · 40 listings · due Fri 6
+  Nov" after a green tick; one without is dashed and says "Nothing assigned yet", with no
+  bar. While the team has both, three chips above the grid show Everyone, Has a queue or
+  No queue yet, each with its count. Above them, for a week after a deadline, a warn
+  Notice lists every queue that ended with listings left ("Kyla missed 5 of 20, due Fri
+  20 Nov"), each with Review, which opens that queue; the agent sees the same on My queue. With admins on the team (D31), the grid is headed Agents ("No agents yet. Add them
   in Settings → Team." when there are none; signed in by account, "… on Alpha Listing Hub's
   People screen.") and the admins' cards follow under Admins, the
   same cards, yours with a muted "You" after the name (below it, rather than cut the
   name, on a narrow card). With one,
   the header says the name, under an "Everyone" back button, and "Due Fri 6 Nov" ("Ended …" for a week that
-  is over), then two panes. Left, Listings: the categories as one row of chips that
-  scrolls sideways (its end fades), a search and a Filter menu (Fresh, Due for repost,
-  Show unavailable, with a count while any is on); "− Add 40 +" (perWeek, stepped by 5)
-  and ⋯ (Paste a list) in its header. Right, the week's Queue, grouped Not shared
-  (drag, Alt+Up/Down, remove), Pending, Posted (Open post); its rows scroll inside it and
-  its foot holds Undo changes and Save queue (n), the one gold button. A week that is over
+  is over), then Deadline: three chips that each say their day ("2 weeks · Fri 13 Nov")
+  over one line on what the deadline does, then two panes. Left, Listings: the categories
+  as chips that wrap (nothing scrolls sideways), a search, and under it "Show only":
+  Never posted, Due for repost and Unavailable as chips with counts, and Clear while any
+  is on; "− Add 40 +" (perWeek, stepped by 5)
+  and ⋯ (Paste a list) in its header. Right, the week's Queue: at its head, above the
+  rows, what is unsaved, Clear all (takes out everything not shared yet; its note has
+  Undo) and Save queue (n), the one gold button; then the rows, grouped Not shared
+  (drag, Alt+Up/Down, remove), Pending, Posted (Open post), scrolling inside the card,
+  which fits the window. A week that is over
   is one read-only card: "32 posted · 8 missed", Copy missed to next week (they arrive
   tinted, with Undo, unsaved), then Missed, Pending, Posted. Quick fill's rows are tinted
   info until saved or undone. **Fill queues** in step one's header opens a wide dialog:

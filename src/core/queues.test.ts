@@ -14,6 +14,7 @@ import {
   queuesOf,
   queueWeeksOf,
   rowsInWeek,
+  unfinishedQueues,
   workdaysBetween,
 } from './queues';
 import { fridayWarning, fridayWarningWords, heldListings, queueProgress, weekProgress } from './summary';
@@ -188,5 +189,29 @@ describe('progress over a queue', () => {
     expect(tue).toEqual({ left: 20, daysLeft: 8, perDay: 3 });
     expect(fridayWarningWords(fridayWarning(p('2026-11-19'), '2026-11-16', '2026-11-19')!)).toBe('20 left: due today.');
     expect(fridayWarning(p('2026-11-20'), '2026-11-16', '2026-11-20')).toBeNull();
+  });
+});
+
+describe('queues not finished by their deadline', () => {
+  // Jan's queue of the week before: due Fri 30 Oct, one posted, two left. Mika's: all posted.
+  const rows = [
+    row('Jan', '2026-10-26', 'A', '2026-10-30', 'Posted'),
+    row('Jan', '2026-10-26', 'B', '2026-10-30'),
+    row('Jan', '2026-10-26', 'C', '2026-10-30'),
+    row('Mika', '2026-10-26', 'D', '2026-10-30', 'Posted'),
+    // Jan's queue now: still running, so not counted.
+    row('Jan', '2026-11-02', 'E', '2026-11-13'),
+  ];
+
+  it('names the last queue that ended with listings not shared, for a week after its deadline', () => {
+    expect(unfinishedQueues(['Jan', 'Mika', 'jan'], rows, FRI)).toEqual([
+      { name: 'Jan', period: { key: '2026-10-26', start: '2026-10-26', due: '2026-10-30', weeks: 1 }, missed: 2, total: 3 },
+    ]);
+  });
+
+  it('says nothing before the deadline, or more than a week after it', () => {
+    expect(unfinishedQueues(['Jan'], rows, '2026-10-30')).toEqual([]);
+    expect(unfinishedQueues(['Jan'], rows.slice(0, 4), '2026-11-06')).toHaveLength(1);
+    expect(unfinishedQueues(['Jan'], rows.slice(0, 4), '2026-11-07')).toEqual([]);
   });
 });

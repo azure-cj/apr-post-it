@@ -361,3 +361,42 @@ export function chooseQueue(
     latestDue: undefined,
   };
 }
+
+// ------------------------------------------------------------------ queues not finished
+
+/** How long after a deadline an unfinished queue is still said: a week of days. */
+export const UNFINISHED_DAYS = 7;
+
+/** A queue whose deadline passed with listings not shared. */
+export interface UnfinishedQueue {
+  readonly name: string;
+  readonly period: QueuePeriod;
+  /** Rows still Not Shared at the deadline: missed, and held by no one now. */
+  readonly missed: number;
+  /** Every row of the queue. */
+  readonly total: number;
+}
+
+/**
+ * For each of `people`, their latest queue that is over on `today` — if it
+ * ended in the last UNFINISHED_DAYS days with rows still Not Shared. The most
+ * missed first. What the reminder on Assign and My queue says.
+ */
+export function unfinishedQueues(people: readonly string[], assignments: readonly Assignment[], today: string): UnfinishedQueue[] {
+  const since = addDays(today, -UNFINISHED_DAYS);
+  const out: UnfinishedQueue[] = [];
+  const seen = new Set<string>();
+  for (const name of people) {
+    const who = name.trim().toLowerCase();
+    if (!who || seen.has(who)) continue;
+    seen.add(who);
+    const last = queuesOf(name, assignments)
+      .filter((q) => isQueueOver(q, today))
+      .pop();
+    if (!last || last.due < since) continue;
+    const rows = rowsOf(name, last.key, assignments);
+    const missed = rows.filter((r) => r.status === 'Not Shared').length;
+    if (missed > 0) out.push({ name, period: last, missed, total: rows.length });
+  }
+  return out.sort((a, b) => b.missed - a.missed);
+}

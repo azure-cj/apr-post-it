@@ -990,6 +990,7 @@ function AssignRoute({ onDirtyChange }: { readonly onDirtyChange: (dirty: boolea
       settings={app.settings}
       onInternChange={(name) => set({ intern: name })}
       onWeekChange={(monday) => set({ week: monday })}
+      onOpenQueue={(name, monday) => set({ intern: name, week: monday })}
       onSave={onSave}
       onDirtyChange={onDirtyChange}
       loading={rows.loading}

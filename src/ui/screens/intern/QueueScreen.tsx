@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { postLinkProblem } from '@/core/links';
-import { currentQueue, type QueuePeriod } from '@/core/queues';
+import { currentQueue, unfinishedQueues, type QueuePeriod } from '@/core/queues';
 import { fridayWarning, fridayWarningWords, queueProgress, waitingPosts } from '@/core/summary';
 import { canManage, type AssignmentStatus, type Property } from '@/core/types';
 import { Button, CategoryDot, EmptyState, Notice, PAGE_SIZE, Pagination, Pill, TextInput, categoryKind, categoryLabel, usePaged } from '../../components';
@@ -72,6 +72,9 @@ export function QueueScreen() {
     return waitingPosts(posts.data ?? [], user.name, today).filter((w) => !shown.has(w.post));
   }, [items, posts.data, user.name, today]);
 
+  // The last queue's deadline passed with listings left: said for a week, since they are gone from the list.
+  const unfinished = useMemo(() => unfinishedQueues([user.name], queue.data ?? [], today)[0], [user.name, queue.data, today]);
+
   const toPost = items.filter((i) => i.status === 'Not Shared');
   const pending = items.filter((i) => i.status === 'Pending');
   const posted = items.filter((i) => i.status === 'Posted');
@@ -118,6 +121,13 @@ export function QueueScreen() {
           />
         ) : null}
       </header>
+
+      {unfinished ? (
+        <Notice tone="warn" title="Your last queue wasn't finished" className="queue__behind">
+          {unfinished.missed} of {unfinished.total} {unfinished.total === 1 ? 'listing' : 'listings'} weren't posted by {shortDate(unfinished.period.due)}.
+          They were cleared from your queue, and your admin can see it.
+        </Notice>
+      ) : null}
 
       {behind ? (
         <Notice tone="warn" title="Behind schedule" className="queue__behind">
