@@ -43,14 +43,16 @@
 /* ---- who posted? ---------------------------------------------------------- */
 
 .who-posted {
-  margin-bottom: var(--space-12);
+  margin-bottom: var(--space-6);
 }
 
-/* The one search on the screen, and the first thing to reach for. */
+/* A search of ordinary size over the table: there when an inquiry comes, out of the way otherwise. Its results take the full width. */
+.who-posted__search {
+  max-width: 420px;
+}
+
 .who-posted__search .searchbox__input {
   width: 100%;
-  height: 52px;
-  font-size: var(--text-name);
 }
 
 .who-posted__results {

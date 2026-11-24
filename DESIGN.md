@@ -315,7 +315,7 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   bars, today ringed, days to come dashed; Last post; Waiting for approval); Open in
   Assign and FB profile; the spot check; the last 4 weeks as small bars;
   then Not shared / Pending / Posted (with Open) / Missed, ten a page (compact pages).
-  "Who posted?" follows the table: a listing name or a pasted Facebook link shows every
+  "Who posted?" is a search of ordinary size between the tiles and the table: a listing name or a pasted Facebook link shows every
   matching post right below (listing, agent, when, FB account, status, Open), and Escape
   clears it.
   Escape or Close shuts it. Revoked people sit in a folded "Revoked" card below. An admin

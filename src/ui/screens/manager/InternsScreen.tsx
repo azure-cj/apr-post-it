@@ -69,8 +69,8 @@ export interface InternsScreenProps {
  * The weekly monitor, pared to what an admin looks for: is each agent posting,
  * how far through their queue they are, and whether that is on pace, worst
  * first. Everything else about an agent (the days, what waits for approval,
- * the spot checks, their queue) is in the panel a row opens. "Who posted?"
- * follows, for inquiries. Revoked people are kept apart, folded away.
+ * the spot checks, their queue) is in the panel a row opens. "Who posted?" is
+ * a small search over the table, for inquiries. Revoked people are kept apart, folded away.
  */
 export function InternsScreen({
   week,
@@ -250,6 +250,8 @@ export function InternsScreen({
             </Notice>
           ) : null}
 
+          <WhoPosted posts={posts} today={today} onOpenLink={onOpenLink} />
+
           <div className={`interns__body${openRow ? ' interns__body--panel' : ''}`}>
             <Card className="interns__list" padding="tight">
               {rows.length === 0 ? (
@@ -294,8 +296,6 @@ export function InternsScreen({
           {revoked.length > 0 ? <Revoked people={revoked} /> : null}
         </>
       )}
-
-      <WhoPosted posts={posts} today={today} onOpenLink={onOpenLink} />
     </div>
   );
 }
