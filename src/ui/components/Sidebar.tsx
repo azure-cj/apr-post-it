@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type FocusEvent, type MouseEvent } from 'react';
+import appIcon from '@/assets/app-icon.png';
 import { initials } from '@/core/types';
 import { Icon, type IconName } from './Icon';
 import { Badge } from './Pill';
@@ -144,11 +145,9 @@ export function Sidebar({
     >
       <div className="sidebar__brand-row" {...drag}>
         <a className="sidebar__brand brand-word" href={brandHref} aria-label="APG Post-It" {...tipFor('APG Post-It')}>
+          <img className="sidebar__brand-icon" src={appIcon} alt="" width={28} height={28} draggable={false} />
           <span className="sidebar__brand-full">
             <span className="brand-word__company">APG</span> <span className="brand-word__product">Post-It</span>
-          </span>
-          <span className="sidebar__brand-short" aria-hidden="true">
-            APG
           </span>
         </a>
       </div>

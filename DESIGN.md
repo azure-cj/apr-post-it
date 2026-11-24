@@ -289,8 +289,7 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   1100, 16 between, 12 below 900. Page content is at most `--page-max`, 1320.
 - Two-pane screens: a side pane of `--pane-regular` 400 (`--pane-compact` 340 below
   1100), a gap of `--gap-regular` 40 (`--gap-compact` 24), stacking below 900.
-- **A left sidebar holds the app's chrome**: the words "APG Post-It" at the top (no logo
-  mark), the nav, then the person, Sign out and the collapse toggle at the bottom. It
+- **A left sidebar holds the app's chrome**: the app's icon (28px, the one on the taskbar) and the words "APG Post-It" at the top, the nav, then the person, Sign out and the collapse toggle at the bottom. It
   lists no people: an Admin reaches the interns through the **Interns** nav item, which
   opens the Interns screen, so the sidebar stays the same short height however large the
   team grows. Collapsed it is a 64px icon rail with tooltips; Ctrl+B toggles it; the

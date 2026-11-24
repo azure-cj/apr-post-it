@@ -45,11 +45,18 @@
 }
 
 .sidebar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-5);
   font-size: var(--text-title);
 }
 
-.sidebar__brand-short {
-  display: none;
+/* The app's icon, as on the taskbar, beside its name; alone on the collapsed rail. */
+.sidebar__brand-icon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-chip);
 }
 
 .sidebar--collapsed .sidebar__brand-row {
@@ -59,12 +66,6 @@
 
 .sidebar--collapsed .sidebar__brand-full {
   display: none;
-}
-
-.sidebar--collapsed .sidebar__brand-short {
-  display: inline;
-  font-size: var(--text-name);
-  line-height: var(--lh-name);
 }
 
 /* ---- items: nav links and the footer's buttons ------------------------ */
