@@ -288,26 +288,6 @@ export function FindScreen() {
             </kbd>
           </div>
           <div className="find__tools">
-            <MenuButton label="Filter" count={filtersOn} className="find__filter">
-              {() => (
-                <fieldset className="menu__group">
-                  <legend className="visually-hidden">Filter</legend>
-                  {FILTERS.map(({ key, label }, i) => (
-                    <div key={key} className="find__filter-item">
-                      {i === 2 ? <hr className="menu__sep" /> : null}
-                      <label className="menu__check">
-                        <input
-                          type="checkbox"
-                          checked={find.filters[key]}
-                          onChange={(event) => change({ filters: { ...find.filters, [key]: event.target.checked } })}
-                        />
-                        <span>{label}</span>
-                      </label>
-                    </div>
-                  ))}
-                </fieldset>
-              )}
-            </MenuButton>
             <MenuButton label="Sort" text={SORT_LABEL[sort]} leading={<SortIcon />} className="find__sort">
               {(close) => (
                 <fieldset className="menu__group">
@@ -350,6 +330,27 @@ export function FindScreen() {
               {label}
             </Chip>
           ))}
+        </div>
+        <div className="find__filters" role="group" aria-label="Show only">
+          <span className="find__filters-label" aria-hidden="true">
+            Show only
+          </span>
+          {FILTERS.map(({ key, label }, i) => (
+            <Chip
+              key={key}
+              // Sale or lease, then what a listing is ready for: a gap sets the two apart.
+              className={i === 2 ? 'find__filters-next' : undefined}
+              selected={find.filters[key]}
+              onSelectedChange={(on) => change({ filters: { ...find.filters, [key]: on } })}
+            >
+              {label}
+            </Chip>
+          ))}
+          {filtersOn > 0 ? (
+            <Button variant="link" size="small" onClick={() => change({ filters: NO_FIND_FILTERS })}>
+              Clear
+            </Button>
+          ) : null}
         </div>
       </div>
 

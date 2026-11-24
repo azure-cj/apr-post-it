@@ -373,9 +373,10 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
 - **Find** (`/find`, both roles) is the listing browser: "Find" and a small "Updated 10:42 ·
   Refresh" on one line (a failed refresh says "Couldn't update · Try again" there, never a
   banner); one big search (name, city, building; focused on arrival, `/` from anywhere) with
-  Filter (For sale, For lease · Ready to post, Never posted, Has photos) and Sort (Best match
-  while searching, Name, Newest once the checker sends Created, Last posted) at its end; the
-  categories as one scrolling row of chips with counts, as Assign's. Ten rows a page, in
+  Sort (Best match while searching, Name, Newest once the checker sends Created, Last
+  posted) at its end; the categories as chips with counts, which wrap; under them "Show
+  only": For sale, For lease, then Ready to post, Never posted, Has photos, each a chip, and
+  Clear while any is on. Ten rows a page, in
   columns: name over "● category · city · size · sale/lease"; one status pill (Ready ok, In
   cooldown until Fri 13 Nov danger, Sold neutral, No separator warn, No document danger) with
   "In your queue" (an intern) or "With Jan" (an admin) beside it in info text; the photos.

@@ -108,21 +108,36 @@
   margin-bottom: var(--space-6);
 }
 
-/* The categories on one line; more than fit scroll sideways, never wrap. */
-.find__chips {
-  display: flex;
-  gap: var(--space-3);
-  min-width: 0;
-  margin-inline-start: calc(var(--space-2) * -1);
-  padding: var(--space-2) var(--space-12) var(--space-2) var(--space-2);
-  overflow-x: auto;
-  scrollbar-width: none;
-  /* The row fades at its end, so more chips read as "scroll", not as cut off. */
-  mask-image: linear-gradient(to right, var(--text) calc(100% - var(--space-12)), transparent);
+/* The categories, then the filters, each a row of chips in the open. More than fit one line wrap; nothing scrolls sideways. */
+.find__bar {
+  display: grid;
+  gap: var(--space-4);
 }
 
-.find__chips > .chip {
+.find__chips,
+.find__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.find__chips > .chip,
+.find__filters > .chip {
   flex: none;
+}
+
+.find__filters-label {
+  margin-inline-end: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--lh-meta);
+}
+
+/* Sale or lease, then readiness: the second set stands a little apart. */
+.find__filters-next {
+  margin-inline-start: var(--space-6);
 }
 
 .find__tools {

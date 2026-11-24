@@ -147,10 +147,10 @@ async function openFind(user = intern) {
   await waitFor(() => expect(within(row('Alabang Loft 2BR')).queryByText('Ready')).toBeTruthy());
 }
 
+/** The filters are chips in the open, under the categories. */
+const filterChip = (label: string) => within(screen.getByRole('group', { name: 'Show only' })).getByRole('button', { name: label });
 const filter = async (label: string) => {
-  await userEvent.click(screen.getByRole('button', { name: /^Filter/ }));
-  await userEvent.click(screen.getByRole('checkbox', { name: label }));
-  await userEvent.keyboard('{Escape}');
+  await userEvent.click(filterChip(label));
 };
 
 const sortBy = async (label: string) => {
@@ -259,7 +259,7 @@ describe('Find, narrowing and ordering', () => {
   it('filters: for sale or lease, ready to post, never posted, has photos', async () => {
     await openFind();
     await filter('Ready to post');
-    expect(screen.getByRole('button', { name: 'Filter, 1 on' })).toBeTruthy();
+    expect(filterChip('Ready to post').getAttribute('aria-pressed')).toBe('true');
     // Not sold, not in cooldown, has a document: one with no separator counts.
     expect(names().slice(0, 2)).toEqual(['Alabang Loft 2BR', 'Dasma Warehouse 1']);
     expect(names()).not.toContain('Bonifacio Tower 12F');
@@ -314,7 +314,7 @@ describe('Find, narrowing and ordering', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     await waitFor(() => expect(names()).toHaveLength(10));
     expect((box() as HTMLInputElement).value).toBe('');
-    expect(screen.getByRole('button', { name: 'Filter' })).toBeTruthy();
+    expect(filterChip('Ready to post').getAttribute('aria-pressed')).toBe('false');
     expect(document.activeElement).toBe(box());
   });
 });
@@ -336,7 +336,7 @@ describe('Find, coming back', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Find' })).toBeTruthy();
     expect((box() as HTMLInputElement).value).toBe('unit');
     expect(chip(/Condo/).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Filter, 1 on' })).toBeTruthy();
+    expect(filterChip('Has photos').getAttribute('aria-pressed')).toBe('true');
     expect(within(pages()!).getByRole('button', { name: 'Page 2' }).getAttribute('aria-current')).toBe('page');
     expect(names()[0]).toBe('Filler Unit 11');
     expect(document.activeElement).toBe(row('Filler Unit 13'));
