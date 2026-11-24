@@ -1,3 +1,4 @@
+import { DEFAULT_POST_REMINDER_HOUR, postReminderHourOf } from '@/core/reminders';
 import { BUILT_IN_SCRIPT_URL } from '@/config';
 import { defaultSettings, RULE_LIMITS, type ServerRules } from '@/core/types';
 
@@ -28,6 +29,8 @@ export interface AppSettings {
   readonly queueWeeks: number;
   /** A Windows notification when a post has waited this many days for approval (PI-88). 0: never. This PC's own. */
   readonly pendingReminderDays: number;
+  /** The hour (Manila) from which a Windows notification reminds you to post, once a day. 0: never. This PC's own. */
+  readonly postReminderHour: number;
 }
 
 /** Where the settings are kept, through platform.readLocal / writeLocal. */
@@ -41,6 +44,7 @@ export const defaultAppSettings: AppSettings = Object.freeze({
   perIntern: defaultSettings.perWeek,
   queueWeeks: defaultSettings.queueWeeks,
   pendingReminderDays: 2,
+  postReminderHour: DEFAULT_POST_REMINDER_HOUR,
 });
 
 /**
@@ -104,6 +108,7 @@ export function parseSettings(text: string | null | undefined): AppSettings {
     perIntern: perWeek,
     queueWeeks: inRange(saved['queueWeeks'], RULE_LIMITS.queueWeeks, defaultAppSettings.queueWeeks),
     pendingReminderDays: reminderDays(saved['pendingReminderDays']),
+    postReminderHour: postReminderHourOf(saved['postReminderHour']),
   });
 }
 
@@ -115,6 +120,7 @@ export function serializeSettings(settings: AppSettings): string {
     perWeek: settings.perWeek,
     queueWeeks: settings.queueWeeks,
     pendingReminderDays: settings.pendingReminderDays,
+    postReminderHour: settings.postReminderHour,
   });
 }
 

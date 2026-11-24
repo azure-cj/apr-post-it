@@ -34,6 +34,7 @@ import { AccountSignInScreen } from './screens/AccountSignIn';
 import { SignInScreen } from './screens/SignInScreen';
 import { OutboxBanner } from './OutboxBanner';
 import { PendingNotifier } from './PendingNotifier';
+import { PostReminder } from './PostReminder';
 import { WhatsNew } from './WhatsNew';
 import { OnboardingContext, useOnboarding, useOnboardingController } from './onboarding';
 import { UpdateBanner, type CheckResult } from './UpdateBanner';
@@ -459,6 +460,7 @@ export function AppShell({ signInNote }: AppProps) {
           <UpdateBanner platform={platform} requestLeave={requestLeave} onCheckReady={onCheckReady} />
           {user ? <OutboxBanner who={user.name} /> : null}
           {user ? <PendingNotifier who={user.name} /> : null}
+          {user ? <PostReminder who={user.name} /> : null}
           {user ? (
             <WhatsNew
               platform={platform}
@@ -1193,6 +1195,8 @@ function useAppCards(): SettingsScreenProps['app'] {
     onThemeChange: theme.setChoice,
     reminderDays: app.settings.pendingReminderDays,
     onReminderDaysChange: (days) => void app.saveSettings({ pendingReminderDays: days }).catch(() => {}),
+    postReminderHour: app.settings.postReminderHour,
+    onPostReminderHourChange: (hour) => void app.saveSettings({ postReminderHour: hour }).catch(() => {}),
   };
 }
 

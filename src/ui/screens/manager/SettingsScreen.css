@@ -858,3 +858,21 @@ summary.check__row:focus-visible {
     transition: none;
   }
 }
+
+/* Reminders: each with its control, then what sets it off. */
+.app-reminders {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.app-reminders__one {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.app-reminders__what {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: var(--lh-caption);
+}

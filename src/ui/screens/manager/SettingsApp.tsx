@@ -25,7 +25,17 @@ export interface SettingsAppProps {
   readonly reminderDays?: number | undefined;
   /** Without it, no Reminders. */
   readonly onReminderDaysChange?: ((days: number) => void) | undefined;
+  /** The hour from which a Windows notification reminds you to post; 0: never. */
+  readonly postReminderHour?: number | undefined;
+  /** Without it, no reminder to post. */
+  readonly onPostReminderHourChange?: ((hour: number) => void) | undefined;
 }
+
+/** When the reminder to post may start: off, or from this hour. */
+const POST_TIMES = ['Off', '10 am', '1 pm', '3 pm'] as const;
+type PostTimeLabel = (typeof POST_TIMES)[number];
+const POST_TIME_HOUR: Record<PostTimeLabel, number> = { Off: 0, '10 am': 10, '1 pm': 13, '3 pm': 15 };
+const postTimeLabelOf = (hour: number): PostTimeLabel => POST_TIMES.find((l) => POST_TIME_HOUR[l] === hour) ?? '10 am';
 
 /** The reminder ages offered: off, or after this many days. */
 const REMINDERS = ['Off', '1 day', '2 days', '3 days', '7 days'] as const;
@@ -53,6 +63,8 @@ export function SettingsApp({
   buildDate = BUILT,
   reminderDays = 2,
   onReminderDaysChange,
+  postReminderHour = 10,
+  onPostReminderHourChange,
 }: SettingsAppProps) {
   return (
     <div className="settings__column">
@@ -68,14 +80,34 @@ export function SettingsApp({
         </Card>
       ) : null}
 
-      {onReminderDaysChange ? (
-        <Card title="Reminders" description="A Windows notification when a post waits this long for approval. Once a day.">
-          <Segmented
-            label="Remind me after"
-            options={REMINDERS}
-            value={reminderLabelOf(reminderDays)}
-            onChange={(label) => onReminderDaysChange(REMINDER_DAYS[label])}
-          />
+      {onReminderDaysChange || onPostReminderHourChange ? (
+        <Card title="Reminders" description="Windows notifications, once a day each, while Post-It is open.">
+          <div className="app-reminders">
+            {onPostReminderHourChange ? (
+              <div className="app-reminders__one">
+                <Segmented
+                  label="Remind me to post from"
+                  options={POST_TIMES}
+                  value={postTimeLabelOf(postReminderHour)}
+                  onChange={(label) => onPostReminderHourChange(POST_TIME_HOUR[label])}
+                />
+                <p className="app-reminders__what">
+                  When your queue has listings left and you haven't posted that day, or its deadline is today or the next working day.
+                </p>
+              </div>
+            ) : null}
+            {onReminderDaysChange ? (
+              <div className="app-reminders__one">
+                <Segmented
+                  label="Remind me after"
+                  options={REMINDERS}
+                  value={reminderLabelOf(reminderDays)}
+                  onChange={(label) => onReminderDaysChange(REMINDER_DAYS[label])}
+                />
+                <p className="app-reminders__what">When a post has waited this long for a group admin's approval.</p>
+              </div>
+            ) : null}
+          </div>
         </Card>
       ) : null}
 

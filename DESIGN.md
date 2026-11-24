@@ -335,7 +335,10 @@ duration drops to 0 and the rise to 0px. The spinner stops turning and breathes 
   dialog whose focus starts on Cancel; a new key is shown once in a monospace well with
   Copy and "You won't see this again." The side pane holds a compact Listings check
   (two count tiles, then Only in Directory / Only in checker / Sold as folded lists),
-  the Rules and the web app link.
+  the Rules and the web app link. The App tab (all of an agent's Settings) has
+  Reminders: "Remind me to post from" (Off, 10 am, 1 pm, 3 pm) and "Remind me after" (a
+  post waiting for approval), each a segmented control over one line on what sets it off.
+  Both are Windows notifications, once a day, only while the app is open.
 - **Assign** is two steps, a week at a time (`?week=` its Monday; this week, or the coming
   one from Saturday). The header holds the week picker (‹ "2–6 Nov" ›, This week, Next
   week). With no `?intern=`, a grid of cards, one per active intern: the
