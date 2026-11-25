@@ -141,7 +141,17 @@ function fakeContext() {
       drawn++;
     },
     fill: () => undefined,
+    moveTo: () => undefined,
+    lineTo: () => undefined,
+    closePath: () => undefined,
+    stroke: () => undefined,
+    save: () => undefined,
+    restore: () => undefined,
+    clip: () => undefined,
     set fillStyle(_v: unknown) {},
+    set strokeStyle(_v: unknown) {},
+    set lineWidth(_v: unknown) {},
+    set lineJoin(_v: unknown) {},
     set globalAlpha(_v: unknown) {},
     get drawn() {
       return drawn;
@@ -327,11 +337,12 @@ describe('the numbers and the greeting', () => {
     expect(screen.getByText('3 listings on the map')).toBeTruthy();
   });
 
-  it('shows no cards and no map with nobody signed in and nothing saved', async () => {
+  it('shows no cards and an empty map (the islands, no dots) with nobody signed in and nothing saved', async () => {
     launch({ key: null });
     await wait(0);
     expect(cards()).toEqual([]);
-    expect(document.querySelector('canvas')).toBeNull();
+    expect(document.querySelector('canvas')).toBeTruthy();
+    expect(screen.queryByText(/listings on the map/)).toBeNull();
   });
 });
 

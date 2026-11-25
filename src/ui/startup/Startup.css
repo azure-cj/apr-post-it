@@ -247,3 +247,122 @@
   color: var(--text-muted);
   white-space: nowrap;
 }
+
+/* ---- coming in: the column rises line by line, the cards after it; the map has its own wave ---- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .startup__apg,
+  .startup__name,
+  .startup__by,
+  .startup__status,
+  .startup__bar,
+  .startup__stat {
+    animation: startup-rise 520ms var(--ease-out) both;
+  }
+  .startup__name {
+    animation-delay: 70ms;
+  }
+  .startup__by {
+    animation-delay: 140ms;
+  }
+  .startup__status {
+    animation-delay: 210ms;
+  }
+  .startup__bar {
+    animation-delay: 260ms;
+  }
+  .startup__stat {
+    animation-delay: 300ms;
+  }
+  .startup__stat:nth-child(2) {
+    animation-delay: 360ms;
+  }
+  .startup__stat:nth-child(3) {
+    animation-delay: 420ms;
+  }
+  .startup__stat:nth-child(4) {
+    animation-delay: 480ms;
+  }
+  .startup__greeting {
+    animation: startup-drop 520ms var(--ease-out) 180ms both;
+  }
+  .startup__foot {
+    animation: startup-fade 600ms var(--ease-out) 320ms both;
+  }
+
+  /* Each line slides in as it arrives. */
+  .startup__line {
+    animation: startup-slide 260ms var(--ease-out) both;
+  }
+
+  /* A light running along the filled part of the bar. */
+  .startup__fill {
+    position: relative;
+    overflow: hidden;
+  }
+  .startup__fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 248, 225, 0.65), transparent);
+    transform: translateX(-100%);
+    animation: startup-run 1400ms ease-in-out infinite;
+  }
+}
+
+/* One sheen across "Post-It", once it has risen in. Not in forced colours, where the name is plain text. */
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  .startup__name {
+    background:
+      linear-gradient(105deg, transparent 42%, rgba(255, 248, 225, 0.8) 50%, transparent 58%) 100% 0 / 250% 100% no-repeat,
+      var(--gold-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation:
+      startup-rise 520ms var(--ease-out) 70ms both,
+      startup-sheen 1100ms var(--ease-out) 650ms both;
+  }
+}
+
+@keyframes startup-rise {
+  from {
+    opacity: 0;
+    transform: translateY(calc(14 * var(--u)));
+  }
+}
+
+@keyframes startup-drop {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-10 * var(--u)));
+  }
+}
+
+@keyframes startup-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes startup-slide {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-8 * var(--u)));
+  }
+}
+
+/* The highlight is a quarter of the name's width off the left edge at 100%, and off the right at 0%. */
+@keyframes startup-sheen {
+  from {
+    background-position: 100% 0, 0 0;
+  }
+  to {
+    background-position: 0% 0, 0 0;
+  }
+}
+
+@keyframes startup-run {
+  to {
+    transform: translateX(100%);
+  }
+}

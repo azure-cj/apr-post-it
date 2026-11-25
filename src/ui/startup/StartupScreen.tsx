@@ -53,7 +53,8 @@ export const StartupScreen = forwardRef<HTMLDivElement, StartupScreenProps>(func
       aria-modal="true"
       onClick={onSkip}
     >
-      {points.length > 0 ? <StartupMap points={points} reducedMotion={reducedMotion} /> : null}
+      {/* The islands from the start; the listings' dots join them as the list arrives. */}
+      <StartupMap points={points} reducedMotion={reducedMotion} />
 
       <div className="startup__intro">
         <h1 id="startup-brand" className="startup__brand">
