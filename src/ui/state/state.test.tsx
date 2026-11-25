@@ -130,6 +130,7 @@ describe('settings', () => {
       perIntern: 40,
       queueWeeks: 2,
       pendingReminderDays: 2,
+      postReminderHour: 10,
     });
     expect(parseSettings('not json')).toEqual({
       scriptUrl: '',
@@ -139,6 +140,7 @@ describe('settings', () => {
       perIntern: 40,
       queueWeeks: 2,
       pendingReminderDays: 2,
+      postReminderHour: 10,
     });
     // The reminder's days: 0 (off) to 30; anything else is the default.
     expect([0, 7, 31, -1, 1.5, '3'].map((d) => parseSettings(JSON.stringify({ pendingReminderDays: d })).pendingReminderDays)).toEqual([0, 7, 2, 2, 2, 2]);
