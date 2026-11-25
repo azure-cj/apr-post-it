@@ -23,9 +23,11 @@ export interface OnboardingApi {
   readonly helpOpen: boolean;
   /** "2/4" for the Help button, or null once the list is done or put away. */
   readonly badge: string | null;
+  /** The person has taken this tour, or closed it. True until their record is read, so nothing glows and then stops. */
+  readonly seen: (id: TourId) => boolean;
 }
 
-const NOOP: OnboardingApi = { start: () => {}, complete: () => {}, openHelp: () => {}, helpOpen: false, badge: null };
+const NOOP: OnboardingApi = { start: () => {}, complete: () => {}, openHelp: () => {}, helpOpen: false, badge: null, seen: () => true };
 
 export const OnboardingContext = createContext<OnboardingApi>(NOOP);
 
@@ -218,8 +220,9 @@ export function useOnboardingController({
       openHelp,
       helpOpen,
       badge,
+      seen: (id) => (record ? record.tours[id] !== undefined : true),
     }),
-    [user, start, complete, openHelp, helpOpen, badge],
+    [user, start, complete, openHelp, helpOpen, badge, record],
   );
 
   const ui = (

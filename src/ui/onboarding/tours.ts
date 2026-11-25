@@ -12,7 +12,7 @@ import { canManage } from '@/core/types';
  * caption, photos, Facebook, and the logged link.
  */
 
-export type TourId = 'welcome-agent' | 'welcome-admin' | 'listing';
+export type TourId = 'welcome-agent' | 'welcome-admin' | 'listing' | 'paste';
 
 export interface TourStep {
   /** The `data-tour` name of the element to point at. None: the step sits in the middle. */
@@ -145,6 +145,38 @@ const LISTING: Tour = {
   ],
 };
 
+/**
+ * A listing with no text to copy (1.1.8): how to paste the document's text in.
+ * Never starts by itself: its Show me how button glows until it is taken once.
+ */
+const PASTE: Tour = {
+  id: 'paste',
+  scope: (pathname) => pathname.startsWith('/property/'),
+  steps: [
+    {
+      target: 'listing-text',
+      title: 'No text to copy yet',
+      body: "Post-It couldn't get this listing's text. You can paste it in yourself. Here is how, in {steps} steps.",
+    },
+    {
+      target: 'paste-drive',
+      title: 'Open the document',
+      body: "Press Open in Drive to see the listing's folder, and open its document. Press Ctrl+A, then Ctrl+C to copy all of it.",
+      optional: true,
+    },
+    {
+      target: 'paste-box',
+      title: 'Paste it here',
+      body: "Click this box and press Ctrl+V. Paste everything: lines with the owner's details or the commission are marked and left out.",
+    },
+    {
+      target: 'paste-use',
+      title: 'Use this text',
+      body: 'Press Use this text. Look over the marked lines, tick I checked it, then press Copy. Reword gives a fresh caption.',
+    },
+  ],
+};
+
 export function welcomeTourFor(user: User): TourId {
   return canManage(user) ? 'welcome-admin' : 'welcome-agent';
 }
@@ -155,7 +187,7 @@ export function welcomeTourFor(user: User): TourId {
  * or a post waiting for approval (D31). The welcome counts these.
  */
 export function tourFor(id: TourId, user: User, myQueue = true): Tour {
-  const tour = id === 'listing' ? LISTING : id === 'welcome-admin' ? WELCOME_ADMIN : WELCOME_AGENT;
+  const tour = id === 'listing' ? LISTING : id === 'paste' ? PASTE : id === 'welcome-admin' ? WELCOME_ADMIN : WELCOME_AGENT;
   const admin = canManage(user);
   const steps = tour.steps.filter((s) => (admin || !s.adminOnly) && (myQueue || s.target !== 'nav-queue'));
   return { ...tour, steps: steps.map((s) => ({ ...s, body: s.body.replace('{steps}', String(steps.length)) })) };

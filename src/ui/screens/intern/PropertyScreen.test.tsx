@@ -275,10 +275,10 @@ describe('a document nobody has separated, from an older server or with no docum
     renderApp({ platform, path: PATH });
 
     expect(await screen.findByText("There's nothing safe to show yet")).toBeTruthy();
-    expect(screen.getByText(/An admin has to add a separator above the owner's details/)).toBeTruthy();
+    expect(screen.getByText(/Open the document in Drive, copy its text, and paste it below/)).toBeTruthy();
     expect(screen.queryByRole('document')).toBeNull();
     expect(copyButton().disabled).toBe(true);
-    expect(reason()).toBe('Copy is blocked: nobody has separated this document yet.');
+    expect(reason()).toBe('Copy is blocked: paste the document’s text below first.');
   });
 
   it('shows an intern none of it when an older server, without `unseparated`, carried the text', async () => {
@@ -317,6 +317,64 @@ describe('a document nobody has separated, from an older server or with no docum
     renderApp({ platform, path: PATH });
     expect(await screen.findByText("There's no posting document yet")).toBeTruthy();
     expect(reason()).toBe('Copy is blocked: this listing has no posting document yet.');
+    expect(screen.getByRole('textbox', { name: 'Write or paste the post' })).toBeTruthy();
+  });
+});
+
+describe('text pasted by hand, when the app has none to show (1.1.8)', () => {
+  /** A Word file the server couldn't read: no text, no separator. */
+  const UNREAD = propertyReply({ hasInternal: false, withheld: true, cutAt: '', publicText: '', issues: 'Could not read document: Word file' });
+  const OWNER_LINE = 'Call Mr. Lim, 0918 555 0135';
+  const flaggedRows = () => Array.from(document.querySelectorAll('.post-text__row--flag')).map((r) => r.textContent);
+
+  async function paste(text: string) {
+    const box = await screen.findByRole('textbox', { name: 'Paste the document’s text' });
+    await userEvent.click(box);
+    await userEvent.paste(text);
+    await userEvent.click(screen.getByRole('button', { name: 'Use this text' }));
+  }
+
+  it('opens the folder in Drive, marks the owner line of the pasted text, and never copies it', async () => {
+    const platform = fakeServer({ property: UNREAD });
+    renderApp({ platform, path: PATH });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Open in Drive' }));
+    expect(platform.opened).toEqual([`https://drive.google.com/drive/folders/${CLEAN.id}`]);
+    expect((screen.getByRole('button', { name: 'Use this text' }) as HTMLButtonElement).disabled).toBe(true);
+
+    await paste(`FOR LEASE: 442 sqm warehouse, Novaliches\nRent: ₱180,000 a month\n${OWNER_LINE}`);
+    expect(await screen.findByText('Pasted by you. Not saved.')).toBeTruthy();
+    expect(flaggedRows()).toEqual([`Not copied: ${OWNER_LINE}`]);
+    await waitFor(() => expect(reason()).toBe('Tick “I checked it” to copy.'));
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'I checked it' }));
+    await userEvent.click(copyButton());
+    await waitFor(() => expect(platform.copied).toEqual(['FOR LEASE: 442 sqm warehouse, Novaliches\nRent: ₱180,000 a month']));
+
+    // Change it: the text comes back to edit, and Copy waits again.
+    await userEvent.click(screen.getByRole('button', { name: 'Change it' }));
+    expect((screen.getByRole('textbox', { name: 'Paste the document’s text' }) as HTMLTextAreaElement).value).toContain(OWNER_LINE);
+    expect(copyButton().disabled).toBe(true);
+  }, 15_000);
+
+  it('cuts pasted text at its separator, as the server cuts a document', async () => {
+    const platform = fakeServer({ property: UNREAD });
+    renderApp({ platform, path: PATH });
+
+    await paste(`${CLEAN.publicText}\n---\n${OWNER_LINE}\nCommission: 3%`);
+    await settled();
+    expect(reason()).toBe('Ready to copy. Every check passed.');
+    expect(screen.queryByRole('checkbox', { name: 'I checked it' })).toBeNull();
+    expect(document.body.textContent).not.toContain('Mr. Lim');
+    await userEvent.click(copyButton());
+    await waitFor(() => expect(platform.copied).toEqual([CLEAN.publicText]));
+  });
+
+  it('is not offered when the document has text to show', async () => {
+    renderApp({ platform: fakeServer(), path: PATH });
+    await settled();
+    expect(screen.queryByRole('textbox', { name: 'Paste the document’s text' })).toBeNull();
+    expect(screen.queryByText('Pasted by you. Not saved.')).toBeNull();
   });
 });
 

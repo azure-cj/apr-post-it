@@ -22,6 +22,7 @@ export const RELEASE_NOTES: readonly ReleaseNotes[] = [
     items: [
       'A new app icon.',
       'Make a flyer from a listing: three looks, your choice of photos on more pages, and an optional satellite map that rings the area, never the exact spot. Copy a page or save them all.',
+      'No text on a listing? Open it in Drive, paste the text, then Copy or Reword it. Owner lines stay out.',
       'The next step glows: Copy, then Download photos, then Posted, so you always know what to press.',
       'A reminder to post, once a day, while your queue has listings left.',
       'Find shows its filters as chips you can clear one at a time.',

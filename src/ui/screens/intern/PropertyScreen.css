@@ -301,6 +301,59 @@
   width: 55%;
 }
 
+/* ---- text pasted by hand, when the app has none to show (1.1.8) ---- */
+
+.post-text__paste {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.post-text__paste-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.post-text__paste-label {
+  font: var(--weight-heading) var(--text-body) / 1.3 var(--heading-font);
+  color: var(--text-label);
+}
+
+.post-text__paste-box {
+  width: 100%;
+  min-height: 160px;
+  padding: var(--space-4);
+  border: 1px solid var(--pick-edge);
+  border-radius: var(--radius-input);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.post-text__paste-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.post-text__paste-foot .meta {
+  margin: 0 auto 0 0;
+}
+
+.post-text__pasted {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0;
+}
+
 .post-text__source,
 .post-text__empty {
   margin-top: calc(var(--space-4) * -1);

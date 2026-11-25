@@ -4,7 +4,7 @@ import { BackendError } from '@/core/backend';
 import { runChecks } from '@/core/checks';
 import { cooldown, lastPostedOn } from '@/core/cooldown';
 import { normalize } from '@/core/matcher';
-import { copyTextFor, flaggedLinesOf, linesOf, STANDARD_SEPARATOR } from '@/core/posting-text';
+import { copyTextFor, cutPasted, flaggedLinesOf, linesOf, STANDARD_SEPARATOR } from '@/core/posting-text';
 import { rewordProblem } from '@/core/reword';
 import {
   canManage,
@@ -105,7 +105,7 @@ function PropertyPage({ id }: { readonly id: string }) {
   const notify = useNotify();
   const manager = canManage(user);
   const section = sectionOf(location.state);
-  const { complete } = useOnboarding();
+  const { complete, start: startTour, seen } = useOnboarding();
 
   // Getting started: a listing opened.
   useEffect(() => {
@@ -137,7 +137,18 @@ function PropertyPage({ id }: { readonly id: string }) {
   }, [openProperty, id, attempt]);
 
   const posts = usePosts();
-  const detail = load.status === 'ready' ? load.detail : null;
+  const loaded = load.status === 'ready' ? load.detail : null;
+
+  // ---- text pasted by hand (1.1.8) -------------------------------------------
+  // When the app has no text to show (a Word file it can't read, no separator
+  // from an older server, no document), the agent may paste the document's
+  // text from Drive. It is cut and flagged as a document is, and only kept
+  // on this screen: never saved, never sent anywhere but a reword.
+  const [draft, setDraft] = useState('');
+  const [pasted, setPasted] = useState<string | null>(null);
+  const loadedWithheld = loaded !== null && !manager && !isUnseparated(loaded, manager) && isWithheld(loaded);
+  const pasteable = loaded !== null && !isSold(loaded) && !isSold(summary) && (loadedWithheld || !loaded.publicText.trim());
+  const detail = loaded !== null && pasteable && pasted !== null ? fromPasted(loaded, pasted) : loaded;
   const name = detail?.name ?? summary?.name ?? '';
   const known: Property | undefined = detail ?? summary;
 
@@ -176,14 +187,14 @@ function PropertyPage({ id }: { readonly id: string }) {
   // Offered for a separated document whose public text passes every check: only
   // what Copy would copy is sent, never the internal section. The reword gets
   // the same checks, and one whose numbers differ from the original's can't be
-  // chosen. Copy takes whichever the person chooses.
+  // chosen. Copy takes whichever the person chooses. Pasted text with no
+  // separator only once it is ticked as checked, and without its marked lines.
   const [reword, setReword] = useState<RewordState>({ status: 'idle' });
   const [chooseReword, setChooseReword] = useState(false);
   const mayReword =
     app.usesAccounts &&
     detail !== null &&
-    detail.hasInternal &&
-    !unseparated &&
+    ((detail.hasInternal && !unseparated) || (pasted !== null && unseparated && checked)) &&
     !withheld &&
     !sold &&
     copyText.trim() !== '' &&
@@ -320,6 +331,22 @@ function PropertyPage({ id }: { readonly id: string }) {
     } catch (err) {
       setPhotoError(sentenceOf(err));
     }
+  };
+
+  // The pasted text, used or taken back to change: each starts the checks and any reword afresh.
+  const usePasted = () => {
+    if (!draft.trim()) return;
+    setPasted(draft);
+    setChecked(false);
+    setReword({ status: 'idle' });
+    setChooseReword(false);
+    setCopiedAt(null);
+  };
+  const changePasted = () => {
+    setPasted(null);
+    setChecked(false);
+    setReword({ status: 'idle' });
+    setChooseReword(false);
   };
 
   const openInDrive = async () => {
@@ -479,6 +506,15 @@ function PropertyPage({ id }: { readonly id: string }) {
               </Notice>
             ) : null}
 
+            {pasteable && pasted !== null ? (
+              <p className="post-text__pasted meta">
+                <span>Pasted by you. Not saved.</span>
+                <Button variant="link" onClick={changePasted}>
+                  Change it
+                </Button>
+              </p>
+            ) : null}
+
             {unseparated ? (
               <Notice
                 tone="warn"
@@ -570,6 +606,18 @@ function PropertyPage({ id }: { readonly id: string }) {
                 hitLine={hitLine?.index ?? null}
               />
             )}
+
+            {pasteable && pasted === null ? (
+              <PasteBox
+                noDocument={noDocument}
+                draft={draft}
+                onDraft={setDraft}
+                onUse={usePasted}
+                onOpenDrive={detail?.folder ? () => void openInDrive() : null}
+                onHelp={() => startTour('paste')}
+                helpNew={!seen('paste')}
+              />
+            ) : null}
           </section>
 
           {detail?.hasInternal && detail.internalText !== undefined ? <InternalSection detail={detail} /> : null}
@@ -790,7 +838,7 @@ function copyGate(input: {
     return { kind: 'blocked', cause: 'no-document', text: 'Copy is blocked: this listing has no posting document yet.' };
   }
   if (withheld) {
-    return { kind: 'blocked', cause: 'withheld', text: 'Copy is blocked: nobody has separated this document yet.' };
+    return { kind: 'blocked', cause: 'withheld', text: 'Copy is blocked: paste the document’s text below first.' };
   }
   const failed = checks.filter((c) => c.status === 'fail');
   const first = failed[0];
@@ -827,6 +875,84 @@ function isWithheld(detail: PropertyDetail): boolean {
 function isUnseparated(detail: PropertyDetail, manager: boolean): boolean {
   if (detail.hasInternal || !detail.publicText.trim()) return false;
   return manager || (detail.unseparated === true && detail.withheld !== true);
+}
+
+/**
+ * The listing with text pasted by hand in place of its document's (1.1.8). Cut
+ * where the server would cut it; with no separator it is an unseparated
+ * document, its owner lines flagged by the app and never copied (D15). The
+ * internal section, if any came, is dropped: none of the server's text is kept.
+ */
+function fromPasted(detail: PropertyDetail, raw: string): PropertyDetail {
+  const { internalText: _internal, ...rest } = detail;
+  const cut = cutPasted(raw);
+  return {
+    ...rest,
+    publicText: cut.publicText,
+    hasInternal: cut.separated,
+    unseparated: !cut.separated,
+    withheld: false,
+    flaggedLines: [],
+    cutAt: '',
+  };
+}
+
+/** Where the agent pastes a document's text the app couldn't show (1.1.8). */
+function PasteBox({
+  noDocument,
+  draft,
+  onDraft,
+  onUse,
+  onOpenDrive,
+  onHelp,
+  helpNew,
+}: {
+  readonly noDocument: boolean;
+  readonly draft: string;
+  readonly onDraft: (text: string) => void;
+  readonly onUse: () => void;
+  /** Opens the listing's folder in Drive; null when there is no folder. */
+  readonly onOpenDrive: (() => void) | null;
+  /** Starts the walkthrough of this box. */
+  readonly onHelp: () => void;
+  /** Not taken yet: Show me how glows, and is the one thing that does. */
+  readonly helpNew: boolean;
+}) {
+  const boxId = useId();
+  const ready = draft.trim() !== '';
+  return (
+    <div className="post-text__paste">
+      <div className="post-text__paste-head">
+        <label htmlFor={boxId} className="post-text__paste-label">
+          {noDocument ? 'Write or paste the post' : 'Paste the document’s text'}
+        </label>
+        <Button size="small" icon={<Icon name="help" size={16} />} nudge={helpNew && !ready} onClick={onHelp}>
+          Show me how
+        </Button>
+      </div>
+      <textarea
+        id={boxId}
+        data-tour="paste-box"
+        className="post-text__paste-box"
+        rows={7}
+        value={draft}
+        spellCheck={false}
+        placeholder="Paste everything. Owner and commission lines are marked and left out."
+        onChange={(event) => onDraft(event.target.value)}
+      />
+      <div className="post-text__paste-foot">
+        <p className="meta">Not saved: it stays on this screen.</p>
+        {onOpenDrive ? (
+          <Button data-tour="paste-drive" size="small" variant={ready ? 'ghost' : 'primary'} nudge={!ready && !helpNew} onClick={onOpenDrive}>
+            Open in Drive
+          </Button>
+        ) : null}
+        <Button data-tour="paste-use" size="small" variant="primary" disabled={!ready} nudge={ready} onClick={onUse}>
+          Use this text
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 const NONE: ReadonlySet<number> = new Set();
@@ -901,11 +1027,11 @@ function PostText({
     // None of the text: not hidden, absent (D13).
     return noDocument ? (
       <Notice tone="warn" title="There's no posting document yet" className="post-text__withheld">
-        Tell your admin.
+        Write the post below, or tell your admin.
       </Notice>
     ) : (
-      <Notice tone="danger" title="There's nothing safe to show yet" className="post-text__withheld">
-        An admin has to add a separator above the owner's details. Tell your admin.
+      <Notice tone="warn" title="There's nothing safe to show yet" className="post-text__withheld">
+        Open the document in Drive, copy its text, and paste it below.
       </Notice>
     );
   }
@@ -1022,9 +1148,9 @@ function Verdict({
       case 'sold':
         return ['danger', 'Sold', 'Not to be posted.'];
       case 'no-document':
-        return ['danger', 'No document', 'Nothing to post from yet.'];
+        return ['warn', 'No document', 'Write the post, or tell your admin.'];
       case 'withheld':
-        return ['danger', 'Not separated', 'An admin must add a separator first.'];
+        return ['warn', 'No text yet', 'Paste it from the document.'];
       case 'empty':
         return ['danger', 'Nothing to post', 'The document has no public text.'];
       case 'check':

@@ -476,3 +476,23 @@ town and province, and says the address is shared on inquiry.
 **Imagery.** Esri World Imagery, as APG GIS's live map, with its credit on the picture. Its
 terms for printed and posted marketing pictures are to be checked before flyers with a map go
 out; the provider is one line in `src/ui/screens/intern/flyer/locationMap.ts`.
+
+### D34. Pasting a document's text the app can't show (Nov 25, 2026)
+
+**The problem.** An agent opened a listing and saw nothing to copy: the server had no text to
+send (a Word file read without the Drive service, no document, or an older server withholding
+a document with no separator). The listing could not be posted until an admin fixed it.
+
+**What the agent does now.** The Posting text card offers Open in Drive (the listing's folder;
+the agent may be asked for access) and a box to paste the document's text. Pasted text goes
+the same way as a document: it is cut at its separator with Separators.gs's own splitter
+(D13), so a separator or an "Owner:" heading still keeps everything below it out. With no
+separator it is an unseparated document (D15): the app flags the owner and commission lines,
+never copies them, runs the checks on what would be copied, and waits for "I checked it".
+Reword is offered on it only after the tick, and is sent only what Copy would copy.
+
+**Not kept.** The pasted text lives on that screen only: never saved, never sent to the
+server, gone when the listing is closed. The document itself is still the admin's to fix.
+
+**Show me how.** A walkthrough of the box (the `paste` tour). It never starts by itself; its
+button glows, as the one next step, until the person has taken or closed it once.

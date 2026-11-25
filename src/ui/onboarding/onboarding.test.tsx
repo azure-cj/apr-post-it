@@ -11,7 +11,7 @@ import { version } from '../../../package.json';
 import { AppShell, routerFuture } from '../App';
 import { SEEN_VERSION_KEY } from '../releaseNotes';
 import { AppStateProvider } from '../state';
-import { EXEC, fakeServer, intern, manager, NOW, PROPERTIES, renderApp, TODAY } from '../state/testing';
+import { EXEC, fakeServer, intern, manager, NOW, PROPERTIES, propertyReply, renderApp, TODAY } from '../state/testing';
 import { WhatsNew } from '../WhatsNew';
 import { placeCard } from './place';
 import { EMPTY_RECORD, NEW_RECORD, recordKey, withTask, withTour } from './record';
@@ -105,7 +105,7 @@ describe('the step lists', () => {
   });
 
   it('every step is short sentences, with its count filled in', () => {
-    for (const tour of [tourFor('welcome-agent', intern), tourFor('welcome-admin', manager), tourFor('listing', manager)]) {
+    for (const tour of [tourFor('welcome-agent', intern), tourFor('welcome-admin', manager), tourFor('listing', manager), tourFor('paste', intern)]) {
       for (const step of tour.steps) {
         expect(step.body).not.toContain('{steps}');
         for (const sentence of step.body.split(/(?<=[.?]) /)) expect(sentence.split(' ').length).toBeLessThanOrEqual(25);
@@ -288,6 +288,35 @@ describe('the listing tour', () => {
     const card = await screen.findByRole('dialog', { name: 'Copy the caption' }, LONG);
     await userEvent.click(within(card).getByRole('button', { name: 'Close the tour' }));
     await waitFor(async () => expect((await recordOf(platform, intern.name))?.tours.listing).toBe('skipped'));
+  });
+});
+
+describe('the paste walkthrough (1.1.8)', () => {
+  const NO_TEXT = { property: propertyReply({ hasInternal: false, withheld: true, cutAt: '', publicText: '' }) };
+  const showMeHow = () => screen.findByRole('button', { name: 'Show me how' }, LONG);
+
+  it('never starts by itself: Show me how glows until it is taken, then stops', async () => {
+    const platform = fresh(NO_TEXT);
+    await platform.writeLocal(recordKey(intern.name), JSON.stringify({ ...EMPTY_RECORD, tours: { 'welcome-agent': 'done', listing: 'done' } }));
+    renderApp({ platform, path: '/property/1VerdantHillsLot12' });
+
+    const button = await showMeHow();
+    await waitFor(() => expect(button.className).toContain('button--nudge'));
+    expect(screen.queryByTestId('tour')).toBeNull();
+
+    await userEvent.click(button);
+    await walk(['No text to copy yet', 'Open the document', 'Paste it here']);
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Use this text' })).getByRole('button', { name: 'Done' }));
+    await waitFor(async () => expect((await recordOf(platform, intern.name))?.tours.paste).toBe('done'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Show me how' }).className).not.toContain('button--nudge'));
+    // Open in Drive is the next step now, and the one thing that glows.
+    expect(screen.getByRole('button', { name: 'Open in Drive' }).className).toContain('button--nudge');
+  }, 15_000);
+
+  it('is the same steps for everyone, the Drive step passed over when there is no folder', () => {
+    expect(titles(tourFor('paste', intern))).toEqual(['No text to copy yet', 'Open the document', 'Paste it here', 'Use this text']);
+    expect(titles(tourFor('paste', manager))).toEqual(titles(tourFor('paste', intern)));
+    expect(tourFor('paste', intern).steps.find((s) => s.target === 'paste-drive')?.optional).toBe(true);
   });
 });
 

@@ -98,6 +98,24 @@ describe('rewording with Claude', () => {
     // Many clicks: more than the default 5 seconds while the whole suite runs.
   }, 15_000);
 
+  it('rewords pasted text only once it is ticked as checked, and never sends its marked lines (1.1.8)', async () => {
+    const firebase = fakeFirebase(async () => ({ text: 'Warehouse for lease in Novaliches, 442 sqm\nRent ₱180,000 a month' }));
+    const platform = platformWith(firebase, propertyReply({ hasInternal: false, withheld: true, cutAt: '', publicText: '' }));
+    renderApp({ platform, path: PATH });
+
+    const box = await screen.findByRole('textbox', { name: 'Paste the document’s text' }, { timeout: 5000 });
+    await userEvent.click(box);
+    await userEvent.paste('FOR LEASE: 442 sqm warehouse, Novaliches\nRent: ₱180,000 a month\nCall Mr. Lim, 0918 555 0135');
+    await userEvent.click(screen.getByRole('button', { name: 'Use this text' }));
+    await screen.findByText('Pasted by you. Not saved.');
+    expect(screen.queryByRole('button', { name: 'Reword' })).toBeNull();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'I checked it' }));
+    await userEvent.click(await rewordButton());
+    await screen.findByRole('group', { name: 'Which text Copy takes' });
+    expect(firebase.sent).toEqual([{ text: 'FOR LEASE: 442 sqm warehouse, Novaliches\nRent: ₱180,000 a month' }]);
+  }, 15_000);
+
   it('works on a listing found by searching, and the post is saved to the person signed in', async () => {
     const LINK = 'https://www.facebook.com/groups/apgmain/posts/1029384801/';
     const platform = createFakePlatform({

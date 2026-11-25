@@ -65,6 +65,17 @@ export function parsePostingText(raw: string | null | undefined): PostingText {
   };
 }
 
+/**
+ * Text an agent pasted from a document the app could not show (1.1.8), cut
+ * exactly where the server cuts a document (D13): a separator in it still
+ * keeps everything below out. `separated` false means none of it is confirmed
+ * safe, and it is then treated as an unseparated document (D15).
+ */
+export function cutPasted(raw: string): { readonly publicText: string; readonly separated: boolean } {
+  const cut = splitAtSeparator_(linesOf(raw.replace(/^﻿/, '')).join('\n'));
+  return { publicText: cut.posting, separated: cut.found };
+}
+
 /** What copyTextFor and flaggedLinesOf need of a property. */
 export type CopySource = Pick<PropertyDetail, 'publicText' | 'hasInternal' | 'flaggedLines'>;
 
