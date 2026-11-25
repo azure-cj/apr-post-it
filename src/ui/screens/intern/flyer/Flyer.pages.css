@@ -1,0 +1,143 @@
+@import "@fontsource/montserrat/latin-800.css";
+@import "@fontsource/montserrat/latin-900.css";
+
+/*
+ * The flyer's pages (1.1.8), from docs/mockups/flyer.html: laid out at
+ * 540 x 675 and made at twice that, 1080 x 1350. Fixed colours, not the app's
+ * tokens: a page looks the same whatever the app's theme.
+ */
+.fl { position: relative; width: 540px; height: 675px; overflow: hidden; font-family: "Montserrat", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+.fl * { box-sizing: border-box; }
+.fl .ph { position: absolute; overflow: hidden; background: #222; }
+.fl .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fl .gold-text { background: linear-gradient(180deg, #f8e3a0 0%, #e0b84a 55%, #b98a26 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.fl .roof { position: relative; overflow: hidden; flex: none; }
+.fl .roof img { position: absolute; max-width: none; }
+
+/* ---- A · Framed: gold-framed photos under the company's gold arc and badge, as on its own photos ---- */
+.fl.fa { background: radial-gradient(90% 55% at 0% 0%, rgba(224,184,74,.10), transparent 60%), linear-gradient(180deg, #110d08 0%, #0b0906 55%, #080604 100%); color: #fff; }
+.fl.fa .arc { position: absolute; right: 0; top: 0; width: 300px; height: 170px; }
+.fl.fa .badge { position: absolute; right: 26px; top: 20px; width: 78px; height: 78px; border-radius: 50%; background: #0b0906; box-shadow: 0 0 0 1.5px #e0b84a, 0 0 0 6px rgba(224,184,74,.1), 0 8px 20px rgba(0,0,0,.5); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.fl.fa .badge em { font-style: normal; font-size: 7px; font-weight: 800; letter-spacing: 1.6px; color: #e9e3d6; }
+.fl.fa .deal { position: absolute; left: 28px; top: 30px; display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; color: #e0b84a; }
+.fl.fa .deal::before { content: ""; width: 26px; height: 2px; background: #e0b84a; }
+.fl.fa h2 { position: absolute; left: 25px; top: 50px; max-width: 390px; margin: 0; font-size: 52px; font-weight: 900; line-height: 1.04; letter-spacing: -1.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fl.fa .where { position: absolute; left: 28px; top: 112px; display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: #d9d2c4; }
+.fl.fa .frame { position: absolute; padding: 4px; border-radius: 6px; background: #0b0906; box-shadow: 0 0 0 1.5px rgba(224,184,74,.85), 0 14px 30px rgba(0,0,0,.55); }
+.fl.fa .frame .ph { position: relative; width: 100%; height: 100%; border-radius: 3px; }
+.fl.fa .f1 { left: 26px; top: 150px; width: 324px; height: 284px; }
+.fl.fa .f1.only { width: 488px; }
+.fl.fa .f2 { left: 362px; top: 150px; width: 152px; height: 136px; }
+.fl.fa .f3 { left: 362px; top: 298px; width: 152px; height: 136px; }
+.fl.fa .seal { position: absolute; top: 374px; width: 100px; height: 100px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #fbe7a6 0%, #e0b84a 45%, #b98a26 100%); color: #1a1408; display: flex; flex-direction: column; align-items: center; justify-content: center; transform: rotate(-10deg); box-shadow: 0 10px 24px rgba(0,0,0,.55); }
+.fl.fa .seal::before { content: ""; position: absolute; inset: 6px; border-radius: 50%; border: 1.2px dashed rgba(26,20,8,.5); }
+.fl.fa .seal b { font-size: 29px; font-weight: 900; line-height: 1; letter-spacing: -.8px; }
+.fl.fa .seal b.long { font-size: 21px; }
+.fl.fa .seal span { margin-top: 1px; font-size: 10.5px; font-weight: 800; letter-spacing: 2.5px; }
+.fl.fa .seal small { margin-top: 2px; font-size: 7px; font-weight: 800; letter-spacing: 1.2px; opacity: .75; }
+.fl.fa .tag { position: absolute; left: 14px; top: 398px; padding: 8px 16px 8px 13px; border-left: 4px solid #e0b84a; border-radius: 0 6px 6px 0; background: #0b0906; box-shadow: 0 10px 22px rgba(0,0,0,.55); white-space: nowrap; }
+.fl.fa .tag b { font-size: 20px; font-weight: 800; letter-spacing: -.3px; color: #f2d377; }
+.fl.fa .tag span { margin-left: 5px; font-size: 11px; font-weight: 600; color: #d9d2c4; }
+.fl.fa .tag.duo { top: 372px; }
+.fl.fa .tag.duo div + div { margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(224,184,74,.25); }
+.fl.fa .ft { position: absolute; left: 28px; right: 28px; top: 482px; }
+.fl.fa .ft h4 { display: flex; align-items: center; gap: 10px; margin: 0 0 11px; font-size: 10.5px; font-weight: 800; letter-spacing: 2.6px; text-transform: uppercase; color: #e0b84a; }
+.fl.fa .ft h4::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(224,184,74,.55), transparent); }
+.fl.fa .ft ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 7px 20px; }
+.fl.fa .ft li { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; font-weight: 600; line-height: 1.32; color: #f3eee4; }
+.fl.fa .ft li i { flex: none; width: 16px; height: 16px; border-radius: 4px; background: #e0b84a; display: grid; place-items: center; }
+.fl.fa .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; padding: 20px 28px 0; background: linear-gradient(100deg, #b98a26 0%, #e0b84a 42%, #f2d377 100%); color: #1a1408; clip-path: polygon(0 18px, 100% 0, 100% 100%, 0 100%); display: flex; align-items: center; gap: 12px; }
+.fl.fa .foot small { display: block; font-size: 9.5px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: .72; }
+.fl.fa .foot b { display: block; font-size: 15px; font-weight: 800; letter-spacing: -.1px; }
+.fl.fa .foot .mail { display: block; margin-top: 1px; font-size: 11px; font-weight: 700; opacity: .8; }
+.fl.fa .foot .em { margin-left: auto; text-align: right; font-size: 11px; font-weight: 700; line-height: 1.45; }
+.fl.fa .foot .av { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #1a1408; color: #e0b84a; display: grid; place-items: center; font-size: 14px; font-weight: 800; }
+
+/* ---- B · Big photo: one photo across the top, the numbers in a row ---- */
+.fl.fb { background: linear-gradient(180deg, #0b0906 0%, #15110a 100%); color: #fff; }
+.fl.fb .hero { left: 0; top: 0; width: 540px; height: 404px; -webkit-mask: linear-gradient(180deg, #000 80%, transparent); mask: linear-gradient(180deg, #000 80%, transparent); }
+.fl.fb .shade { position: absolute; left: 0; top: 0; width: 540px; height: 404px; background: linear-gradient(180deg, rgba(0,0,0,.6) 0%, rgba(0,0,0,0) 24%, rgba(0,0,0,0) 46%, rgba(11,9,6,.92) 88%, #0b0906 100%); }
+.fl.fb .brand { position: absolute; left: 22px; top: 18px; display: flex; align-items: center; gap: 10px; }
+.fl.fb .brand b { display: block; font-size: 14px; font-weight: 800; line-height: 1.1; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.fl.fb .brand small { display: block; font-size: 9.5px; font-weight: 600; color: #f2d377; letter-spacing: .3px; }
+.fl.fb .deal { position: absolute; right: 22px; top: 22px; padding: 6px 13px; border-radius: 99px; background: linear-gradient(135deg, #f6dc8a, #e0b84a 50%, #c99a30); color: #1a1408; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+.fl.fb .kind { position: absolute; left: 24px; right: 24px; top: 296px; font-size: 11.5px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; color: #f2d377; }
+.fl.fb h2 { position: absolute; left: 24px; right: 24px; top: 316px; margin: 0; font-size: 29px; font-weight: 800; line-height: 1.1; letter-spacing: -.3px; text-wrap: balance; }
+.fl.fb .stats { position: absolute; left: 24px; right: 24px; top: 420px; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.fl.fb .stat { padding: 2px 14px; border-left: 1px solid rgba(224,184,74,.45); }
+.fl.fb .stat:first-child { padding-left: 0; border-left: 0; }
+.fl.fb .stat b { display: block; font-size: 22px; font-weight: 800; line-height: 1.1; letter-spacing: -.3px; }
+.fl.fb .stat b small { font-size: 13px; font-weight: 700; margin-left: 2px; }
+.fl.fb .stat.money b { color: #f2d377; }
+.fl.fb .stat span { display: block; margin-top: 3px; font-size: 10.5px; font-weight: 600; color: #b8af9c; }
+.fl.fb .hl { position: absolute; left: 24px; right: 24px; top: 488px; margin: 0; padding: 14px 0 0; list-style: none; border-top: 1px solid rgba(243,238,228,.1); display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
+.fl.fb .hl li { position: relative; padding-left: 15px; font-size: 12.5px; font-weight: 600; line-height: 1.35; color: #e9e3d6; }
+.fl.fb .hl li::before { content: ""; position: absolute; left: 0; top: 5px; width: 6px; height: 6px; background: #e0b84a; transform: rotate(45deg); }
+.fl.fb .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 74px; padding: 0 24px; background: #070604; border-top: 2px solid #e0b84a; display: flex; align-items: center; gap: 12px; }
+.fl.fb .foot .av { flex: none; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #f6dc8a, #c99a30); color: #1a1408; display: grid; place-items: center; font-size: 14px; font-weight: 800; }
+.fl.fb .foot small { display: block; font-size: 10px; font-weight: 600; color: #b8af9c; }
+.fl.fb .foot b { display: block; font-size: 14px; font-weight: 800; }
+.fl.fb .foot .nums { margin-left: auto; text-align: right; font-size: 12.5px; font-weight: 800; line-height: 1.4; color: #f2d377; }
+
+/* ---- C · Light: cream and gold, a badge for the size, two photos overlapping ---- */
+.fl.fc { background: #f7f3ea; color: #1a1408; }
+.fl.fc .bars { position: absolute; right: 34px; top: 0; width: 64px; height: 236px; background: repeating-linear-gradient(90deg, #e0b84a 0 14px, transparent 14px 25px); -webkit-mask: linear-gradient(180deg, #000 70%, transparent); mask: linear-gradient(180deg, #000 70%, transparent); }
+.fl.fc .corner { position: absolute; right: 0; bottom: 0; width: 150px; height: 210px; background: linear-gradient(160deg, #f2d377, #c99a30); }
+.fl.fc .corner::before { content: ""; position: absolute; left: 14px; top: -64px; width: 18px; height: 54px; background: repeating-linear-gradient(135deg, #c99a30 0 4px, transparent 4px 10px); }
+.fl.fc .hatch { position: absolute; left: 0; top: 230px; width: 22px; height: 100px; background: repeating-linear-gradient(135deg, #e0b84a 0 5px, transparent 5px 12px); }
+.fl.fc .brand { position: absolute; left: 30px; top: 26px; display: flex; align-items: center; gap: 9px; }
+.fl.fc .brand b { font-size: 12.5px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; }
+.fl.fc .hd { position: absolute; left: 30px; top: 70px; }
+.fl.fc .hd .k { display: block; font-size: 45px; font-weight: 900; line-height: .95; letter-spacing: -.8px; }
+.fl.fc .hd .d { display: block; font-size: 45px; font-weight: 900; line-height: .95; letter-spacing: -.8px; color: #a87c1c; }
+.fl.fc .money { position: absolute; left: 30px; top: 176px; font-size: 16px; font-weight: 800; padding-bottom: 3px; border-bottom: 3px solid #e0b84a; }
+.fl.fc .money span { font-size: 12px; font-weight: 600; color: #6b6457; }
+.fl.fc .big { left: 64px; top: 222px; width: 366px; height: 246px; border: 6px solid #fff; box-shadow: 0 16px 34px rgba(60,40,0,.22); }
+.fl.fc .small { left: 262px; top: 404px; width: 226px; height: 158px; border: 6px solid #fff; box-shadow: 0 16px 34px rgba(60,40,0,.28); }
+.fl.fc .badge { position: absolute; left: 30px; top: 206px; width: 104px; height: 122px; background: #1a1408; clip-path: polygon(0 0, 100% 0, 100% 76%, 50% 100%, 0 76%); display: flex; flex-direction: column; align-items: center; padding-top: 18px; }
+.fl.fc .badge b { font-size: 33px; font-weight: 900; line-height: 1; letter-spacing: -.8px; }
+.fl.fc .badge b.long { font-size: 25px; }
+.fl.fc .badge span { margin-top: 3px; font-size: 15px; font-weight: 800; color: #f3eee4; letter-spacing: 1px; }
+.fl.fc .info { position: absolute; left: 30px; top: 486px; width: 222px; }
+.fl.fc .info h5 { margin: 0 0 3px; font-size: 14px; font-weight: 900; color: #a87c1c; letter-spacing: .3px; }
+.fl.fc .info p { margin: 0 0 12px; font-size: 13px; font-weight: 700; line-height: 1.38; }
+.fl.fc .info p small { display: block; font-size: 11px; font-weight: 600; color: #4a4336; }
+
+/* ---- More pages: the photos that don't fit on the flyer, in the same look ---- */
+.fl .tile { position: absolute; overflow: hidden; background: #222; }
+.fl .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.fl.fa .mk { position: absolute; left: 26px; top: 44px; font-size: 32px; font-weight: 900; line-height: 1.05; letter-spacing: -.8px; }
+.fl.fa.more .badge { right: 22px; top: 18px; width: 62px; height: 62px; }
+.fl.fa.more .deal { top: 26px; }
+.fl.fa.more .where { top: 86px; font-size: 13px; }
+.fl.fa .foot.slim { height: 64px; padding-top: 14px; clip-path: polygon(0 14px, 100% 0, 100% 100%, 0 100%); }
+.fl.fa .foot.slim b { font-size: 13.5px; }
+.fl.fa .foot .pgno { margin-left: auto; flex: none; width: 42px; height: 42px; border-radius: 50%; background: #1a1408; color: #f2d377; display: grid; place-items: center; font-size: 12.5px; font-weight: 800; }
+
+.fl.fb.more { background: #0b0906; }
+.fl.fb .chip { position: absolute; left: 16px; top: 16px; display: flex; align-items: center; gap: 8px; padding: 6px 13px 6px 9px; border-radius: 99px; background: rgba(11,9,6,.8); font-size: 12px; font-weight: 800; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.fl.fb .pgpill { position: absolute; right: 16px; top: 18px; padding: 5px 11px; border-radius: 99px; background: linear-gradient(135deg, #f6dc8a, #e0b84a 50%, #c99a30); color: #1a1408; font-size: 12px; font-weight: 800; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.fl.fb .foot.slim { height: 62px; }
+.fl.fb .foot .k2 small { color: #f2d377; font-size: 9.5px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; }
+.fl.fb .foot .k2 b { font-size: 13px; }
+.fl.fb .foot.slim .nums { font-size: 11.5px; }
+
+.fl.fc.more .bars { height: 120px; }
+.fl.fc .mk { position: absolute; left: 30px; top: 56px; font-size: 30px; font-weight: 900; line-height: 1.1; letter-spacing: -.6px; }
+.fl.fc .mk em { font-style: normal; color: #a87c1c; }
+.fl.fc .sub2 { position: absolute; left: 30px; top: 94px; font-size: 12.5px; font-weight: 700; color: #4a4336; }
+.fl.fc .tile.w { border: 5px solid #fff; box-shadow: 0 12px 26px rgba(60,40,0,.2); }
+.fl.fc .foot2 { position: absolute; left: 30px; right: 120px; bottom: 16px; font-size: 12.5px; font-weight: 700; line-height: 1.45; }
+.fl.fc .foot2 h5 { margin: 0; font-size: 12px; font-weight: 900; letter-spacing: .3px; color: #a87c1c; }
+.fl.fc .pgbox { position: absolute; right: 0; bottom: 0; width: 96px; height: 70px; background: linear-gradient(160deg, #f2d377, #c99a30); display: grid; place-items: center; font-size: 20px; font-weight: 900; color: #1a1408; }
+
+/* ---- The location map page: the map in the place of the photos ---- */
+.fl .mapbox { position: absolute; overflow: hidden; background: #1d2a22; }
+.fl .mapbox > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fl .mapbox .north { position: absolute; right: 10px; top: 8px; font-size: 12px; font-weight: 800; line-height: 1.05; color: #fff; text-align: center; text-shadow: 0 1px 3px #000; }
+.fl .mapbox .credit { position: absolute; right: 8px; bottom: 6px; font-family: "Segoe UI", sans-serif; font-size: 7.5px; color: #fff; text-shadow: 0 1px 2px #000; }
+.fl .mapbox .scale { position: absolute; left: 10px; bottom: 8px; font-size: 8.5px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px #000; }
+.fl .mapbox .scale i { display: block; height: 5px; margin-top: 2px; border: 1.5px solid #fff; border-top: 0; box-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.fl .mapbox .wait { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; color: #e9e3d6; font-size: 13px; font-weight: 600; text-align: center; }
+.fl .fine { position: absolute; font-size: 10px; font-weight: 600; letter-spacing: .2px; }

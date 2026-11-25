@@ -1,6 +1,7 @@
 /**
  * The platform inside the Tauri app: each call goes to a plugin or to one of
- * the three Rust commands in src-tauri/src (save_photos, read_key, write_key).
+ * the Rust commands in src-tauri/src (save_photos, copy_photo, photo_data,
+ * copy_image, save_images, read_key, write_key).
  * Everything the WebView may reach is granted in
  * src-tauri/capabilities/default.json, and nothing else.
  *
@@ -128,6 +129,35 @@ export function createTauriPlatform(): Platform {
         await invoke('copy_photo', { name, url });
       } catch (err) {
         throw fromRust(err, `Could not copy ${name}`);
+      }
+    },
+
+    async photoData(url, name) {
+      // Rust fetches it as copyPhoto does, turns it upright, scales it to
+      // 2000 px at most, and answers with JPEG bytes (src-tauri/src/images.rs).
+      let jpeg: unknown;
+      try {
+        jpeg = await invoke<unknown>('photo_data', { name, url });
+      } catch (err) {
+        throw fromRust(err, `Could not read ${name}`);
+      }
+      return `data:image/jpeg;base64,${base64(bytesOf(jpeg))}`;
+    },
+
+    async copyImage(png, name) {
+      try {
+        await invoke('copy_image', framed({ name }, [png]));
+      } catch (err) {
+        throw fromRust(err, `Could not copy ${name}`);
+      }
+    },
+
+    async saveImages(property, images) {
+      const head = { property, images: images.map(({ name, png }) => ({ name, size: png.byteLength })) };
+      try {
+        return await invoke<string>('save_images', framed(head, images.map(({ png }) => png)));
+      } catch (err) {
+        throw fromRust(err, 'Could not save the images');
       }
     },
 
@@ -276,6 +306,42 @@ function listening(started: Promise<() => void>): () => void {
     unlisten?.();
     unlisten = null;
   };
+}
+
+/**
+ * Bytes for a Rust command, sent raw rather than inside JSON (as base64, a
+ * 3 MB PNG would be 4 MB of text): one line of JSON saying what they are, a
+ * newline, then the parts back to back. src-tauri/src/images.rs `unframe`
+ * reads it. JSON.stringify writes a newline inside a string as `\n`, so the
+ * first newline is always the end of the line.
+ */
+export function framed(head: unknown, parts: readonly Uint8Array[]): Uint8Array {
+  const line = new TextEncoder().encode(`${JSON.stringify(head)}\n`);
+  const body = new Uint8Array(parts.reduce((length, part) => length + part.byteLength, line.byteLength));
+  body.set(line);
+  let at = line.byteLength;
+  for (const part of parts) {
+    body.set(part, at);
+    at += part.byteLength;
+  }
+  return body;
+}
+
+/** Raw bytes from a Rust command: an ArrayBuffer, or numbers where the WebView fell back to postMessage. */
+function bytesOf(value: unknown): Uint8Array {
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  if (Array.isArray(value)) return Uint8Array.from(value as number[]);
+  throw new UserFacingError('Post-It got something other than a photo back. Try again.');
+}
+
+function base64(bytes: Uint8Array): string {
+  let text = '';
+  // In pieces: one call with millions of arguments would overflow the stack.
+  for (let at = 0; at < bytes.length; at += 0x8000) {
+    text += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+  }
+  return btoa(text);
 }
 
 /** JSON when it is JSON; the text otherwise, so backend.ts can recognise a sign-in page. */

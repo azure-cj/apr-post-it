@@ -85,6 +85,28 @@ pub fn write_unique(dir: &Path, stem: &str, ext: &str, bytes: &[u8]) -> io::Resu
     ))
 }
 
+/// Writes `bytes` to `stem.ext` in `dir`, replacing a file of that name: for
+/// what Post-It makes again rather than downloads again (a flyer's pages).
+/// Written beside it as `stem.ext.part` first and then moved over it, so the
+/// old file stays whole until the new one is, and a link of that name is
+/// replaced rather than followed.
+pub fn write_replacing(dir: &Path, stem: &str, ext: &str, bytes: &[u8]) -> io::Result<PathBuf> {
+    let path = dir.join(numbered(stem, ext, 1));
+    let part = dir.join(format!("{stem}.{ext}.part"));
+    // Left by a save that stopped halfway. Removing a link removes the link.
+    let _ = std::fs::remove_file(&part);
+    let written = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&part)
+        .and_then(|file| fill(file, bytes))
+        .and_then(|()| std::fs::rename(&part, &path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    written.map(|()| path)
+}
+
 fn fill(mut file: File, bytes: &[u8]) -> io::Result<()> {
     file.write_all(bytes)?;
     file.sync_all()
@@ -336,6 +358,35 @@ mod tests {
         std::fs::create_dir(dir.join("photo 1.jpg")).unwrap();
         let saved = write_unique(&dir, "photo 1", "jpg", b"x").unwrap();
         assert_eq!(saved.file_name().unwrap(), "photo 1 (2).jpg");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn replaces_a_file_that_is_there_when_asked_to_and_leaves_nothing_beside_it() {
+        let dir = scratch_dir("replacing");
+        let first = write_replacing(&dir, "Flyer 1", "png", b"first").unwrap();
+        let second = write_replacing(&dir, "Flyer 1", "png", b"second").unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(second.file_name().unwrap(), "Flyer 1.png");
+        assert_eq!(std::fs::read(&second).unwrap(), b"second");
+        let names: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(names, ["Flyer 1.png"]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn replacing_writes_over_what_a_stopped_save_left_and_never_replaces_a_folder() {
+        let dir = scratch_dir("replacing-part");
+        std::fs::write(dir.join("Flyer 1.png.part"), b"half").unwrap();
+        let saved = write_replacing(&dir, "Flyer 1", "png", b"whole").unwrap();
+        assert_eq!(std::fs::read(&saved).unwrap(), b"whole");
+        assert!(!dir.join("Flyer 1.png.part").exists());
+
+        std::fs::create_dir(dir.join("Flyer 2.png")).unwrap();
+        assert!(write_replacing(&dir, "Flyer 2", "png", b"x").is_err());
+        assert!(dir.join("Flyer 2.png").is_dir());
+        assert!(!dir.join("Flyer 2.png.part").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

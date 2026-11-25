@@ -450,3 +450,29 @@ Settings keeps its four tabs.
   version in Apps Script", as Settings used to say; to an agent, "tell your admin".
 - **Errors that pointed at Settings** for the web app link or the key now say to sign in with
   them, or to check the link.
+
+### D33. The flyer, with an optional location map (Nov 25, 2026)
+
+**What.** A listing page offers **Make a flyer** (Alt+F) under the photos, once the text may be
+copied. The flyer follows `docs/mockups/flyer.html`: three looks (Framed, Big photo, Light),
+page 1 the flyer, then the photos the person picks on more pages (2, 3, 4 or 6 a page), each
+1080 × 1350. An optional last page is a satellite map with a red ring around the area.
+**Copy page** puts one page on the clipboard; **Save all pages** writes `Flyer 1.png`… next to
+the downloaded photos.
+
+**Only the text Copy takes.** The facts (size, prices, place, highlights, contact numbers) are
+read from the same text the Copy button takes, so nothing below the line can reach a flyer.
+Kind, deal, title and place can be edited in the dialog; nothing edited there is saved.
+
+**The ring, never the spot** (apg-gis `docs/BROCHURE-MAP.md`). The server works the ring out
+(`locationRing`) and the app only ever gets the ring. Its centre is APG GIS's public pin for
+the listing, worked out with the same `PIN_SECRET`, copied into Post-It's Script Properties, so
+the flyer and the APG map never narrow the spot down together. The ring is bigger than the
+furthest the pin can be from the listing plus the lot's reach plus 50 m, so the listing is
+always inside, never at its centre. The ring's size never depends on the spot itself: it uses APG's furthest move
+(220 m, 550 m for a warehouse), not the distance from the spot to the pin, which would tell it. Only city and town names are drawn; the page names the
+town and province, and says the address is shared on inquiry.
+
+**Imagery.** Esri World Imagery, as APG GIS's live map, with its credit on the picture. Its
+terms for printed and posted marketing pictures are to be checked before flyers with a map go
+out; the provider is one line in `src/ui/screens/intern/flyer/locationMap.ts`.

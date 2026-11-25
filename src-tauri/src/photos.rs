@@ -428,7 +428,12 @@ async fn as_jpeg(photo: PhotoFile) -> Result<PhotoFile, Failure> {
 pub(crate) fn webp_to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let photo = image::load_from_memory_with_format(bytes, image::ImageFormat::WebP)
         .map_err(|e| e.to_string())?;
-    let rgba = photo.into_rgba8();
+    jpeg_on_white(&photo.into_rgba8(), JPEG_QUALITY)
+}
+
+/// Encodes pixels as a JPG at `quality` (1–100). A JPG can't be see-through,
+/// so any transparent part is laid on white. Also what `images::photo_data` uses.
+pub(crate) fn jpeg_on_white(rgba: &image::RgbaImage, quality: u8) -> Result<Vec<u8>, String> {
     let mut rgb = image::RgbImage::new(rgba.width(), rgba.height());
     for (out, px) in rgb.pixels_mut().zip(rgba.pixels()) {
         let alpha = u32::from(px[3]);
@@ -437,7 +442,7 @@ pub(crate) fn webp_to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, String> {
         }
     }
     let mut jpeg = Vec::new();
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, JPEG_QUALITY)
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, quality)
         .encode_image(&rgb)
         .map_err(|e| e.to_string())?;
     Ok(jpeg)

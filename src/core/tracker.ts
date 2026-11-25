@@ -51,6 +51,11 @@ export interface AddPersonResult {
 export const PROFILE_LINK_DROPPED =
   "The profile link wasn't saved: the web app is an older version. Deploy a New version in Apps Script, then open their row to add it.";
 
+/** The flyer's location ring: [lng, lat] points, closed. */
+export interface LocationRing {
+  readonly ring: readonly (readonly [number, number])[];
+}
+
 export interface TrackerDeps {
   readonly backend: Pick<Backend, 'call'>;
 }
@@ -227,6 +232,12 @@ export interface Tracker {
 
   /** The listings an admin highlighted, newest first (everyone, v19). */
   highlights(): Promise<readonly Highlight[]>;
+  /**
+   * The flyer's location map (1.1.8): the red "somewhere in here" ring for a
+   * listing, worked out on the server around APG GIS's public pin. Never the
+   * listing's own spot.
+   */
+  locationRing(propertyId: string): Promise<LocationRing>;
 
   /** Highlights a listing, changes its note, or takes it off (Admin, v19). Resolves with the list as it now is. */
   setHighlight(input: HighlightInput): Promise<readonly Highlight[]>;
@@ -584,6 +595,15 @@ export function createTracker(deps: TrackerDeps): Tracker {
 
     async highlights(): Promise<readonly Highlight[]> {
       return readHighlights(await backend.call('highlights'), 'highlights');
+    },
+
+    async locationRing(propertyId: string): Promise<LocationRing> {
+      const reply = await backend.call('locationRing', { id: propertyId });
+      const ring = (asList(reply['ring']) ?? [])
+        .map((p) => (Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === 'number' && Number.isFinite(n)) ? ([p[0], p[1]] as [number, number]) : null))
+        .filter((p): p is [number, number] => p !== null);
+      if (ring.length < 8) throw unreadableReply('locationRing');
+      return { ring };
     },
 
     async setHighlight(input: HighlightInput): Promise<readonly Highlight[]> {

@@ -8,6 +8,9 @@
 
     "allow-save-photos",
     "allow-copy-photo",
+    "allow-photo-data",
+    "allow-copy-image",
+    "allow-save-images",
     "allow-read-key",
     "allow-write-key",
 

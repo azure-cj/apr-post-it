@@ -48,7 +48,8 @@ export type Action =
   | 'refusedPosts'
   | 'handleRefused'
   | 'highlights'
-  | 'setHighlight';
+  | 'setHighlight'
+  | 'locationRing';
 
 /** Where the web app is, and who is asking. Blank, null or missing means "not set". */
 export interface BackendConfig {
@@ -294,6 +295,7 @@ const DOING: Readonly<Record<Action, string>> = {
   handleRefused: 'mark it handled',
   highlights: 'load the highlighted listings',
   setHighlight: 'save the highlight',
+  locationRing: 'make the location map',
 };
 
 /** Completes "Google sent … in a form Post-It could not read". */
@@ -323,6 +325,7 @@ const WHAT: Readonly<Record<Action, string>> = {
   handleRefused: 'its answer',
   highlights: 'the highlighted listings',
   setHighlight: 'its answer',
+  locationRing: 'the location map',
 };
 
 /** Calls that change the sheet. When one times out it may still have gone through. */

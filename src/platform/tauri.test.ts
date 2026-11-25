@@ -1,8 +1,9 @@
 /**
  * The Tauri platform against a mocked IPC: which command each call makes, with
  * which arguments, and how what comes back is put into words. The argument
- * names are the contract with src-tauri/src (save_photos, copy_photo, read_key, write_key)
- * and with the plugins' versions pinned in package.json.
+ * names are the contract with src-tauri/src (save_photos, copy_photo,
+ * photo_data, copy_image, save_images, read_key, write_key) and with the
+ * plugins' versions pinned in package.json.
  */
 
 import { emit } from '@tauri-apps/api/event';
@@ -10,7 +11,7 @@ import { clearMocks, mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserFacingError } from '../core/types';
-import { createTauriPlatform, HttpStatusError, LOCAL_STORE_FILE, PHOTOS_PROGRESS } from './tauri';
+import { createTauriPlatform, framed, HttpStatusError, LOCAL_STORE_FILE, PHOTOS_PROGRESS } from './tauri';
 
 type Args = Record<string, unknown>;
 type Handler = (cmd: string, args: Args) => unknown;
@@ -208,6 +209,126 @@ describe('copyPhoto', () => {
     });
     await expect(createTauriPlatform().copyPhoto('https://drive.google.com/x', 'Photo 3')).rejects.toThrow(
       'Could not copy Photo 3: copy_photo not allowed',
+    );
+  });
+});
+
+describe('photoData', () => {
+  const PHOTO = 'https://drive.google.com/uc?export=download&id=a';
+  const dataOf = (bytes: Uint8Array): string => `data:image/jpeg;base64,${Buffer.from(bytes).toString('base64')}`;
+
+  it('calls photo_data with the name the person sees and the address, and makes a data: address of the JPEG', async () => {
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9]);
+    ipc(() => jpeg.buffer);
+    await expect(createTauriPlatform().photoData(PHOTO, 'Photo 3')).resolves.toBe(dataOf(jpeg));
+    expect(calls).toEqual([{ cmd: 'photo_data', args: { name: 'Photo 3', url: PHOTO } }]);
+  });
+
+  it('reads the bytes however they arrive, a large photo included', async () => {
+    const large = Uint8Array.from({ length: 300_000 }, (_, i) => (i * 7) % 256);
+    ipc(() => large.buffer);
+    await expect(createTauriPlatform().photoData(PHOTO, 'Photo 3')).resolves.toBe(dataOf(large));
+    ipc(() => [0xff, 0xd8, 0xff]); // postMessage's numbers
+    await expect(createTauriPlatform().photoData(PHOTO, 'Photo 3')).resolves.toBe(dataOf(Uint8Array.from([0xff, 0xd8, 0xff])));
+  });
+
+  it("passes Rust's sentence on as it is, and says what it was doing otherwise", async () => {
+    const sentence = 'Drive could not find "Photo 3" (404). It may have been moved or deleted.';
+    ipc(() => {
+      throw sentence;
+    });
+    await expect(createTauriPlatform().photoData(PHOTO, 'Photo 3')).rejects.toThrow(sentence);
+    ipc(() => {
+      throw new Error('photo_data not allowed');
+    });
+    const error = await createTauriPlatform()
+      .photoData(PHOTO, 'Photo 3')
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(UserFacingError);
+    expect((error as Error).message).toBe('Could not read Photo 3: photo_data not allowed');
+  });
+});
+
+/** A framed body, as Rust's images.rs `unframe` reads it: the line of JSON, then the bytes. */
+function unframe(body: unknown): { head: unknown; bytes: number[] } {
+  expect(body).toBeInstanceOf(Uint8Array);
+  const raw = body as Uint8Array;
+  const end = raw.indexOf(0x0a);
+  return { head: JSON.parse(new TextDecoder().decode(raw.subarray(0, end))) as unknown, bytes: [...raw.subarray(end + 1)] };
+}
+
+// A PNG's signature has a newline in it, as real PNG bytes do.
+const PNG_1 = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+const PNG_2 = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 4, 0x0a, 5, 6]);
+
+describe('framed bodies', () => {
+  it('are a line of JSON, then each part back to back', () => {
+    expect(unframe(framed({ a: 'x\ny' }, [PNG_1, PNG_2]))).toEqual({ head: { a: 'x\ny' }, bytes: [...PNG_1, ...PNG_2] });
+    expect(unframe(framed({}, []))).toEqual({ head: {}, bytes: [] });
+  });
+
+  it('send only the bytes a part shows, when it is a view of something larger', () => {
+    const larger = Uint8Array.from([9, ...PNG_1, 9]);
+    expect(unframe(framed({}, [larger.subarray(1, -1)])).bytes).toEqual([...PNG_1]);
+  });
+});
+
+describe('copyImage', () => {
+  it('sends the PNG raw to copy_image, after a line naming it', async () => {
+    ipc(() => null);
+    await createTauriPlatform().copyImage(PNG_1, 'Flyer 1');
+    expect(commands()).toEqual(['copy_image']);
+    expect(unframe(calls[0]?.args)).toEqual({ head: { name: 'Flyer 1' }, bytes: [...PNG_1] });
+  });
+
+  it("passes Rust's sentence on as it is, and says what it was doing otherwise", async () => {
+    const sentence = 'Could not put "Flyer 1" on the clipboard: the clipboard is busy.';
+    ipc(() => {
+      throw sentence;
+    });
+    await expect(createTauriPlatform().copyImage(PNG_1, 'Flyer 1')).rejects.toThrow(sentence);
+    ipc(() => {
+      throw new Error('copy_image not allowed');
+    });
+    await expect(createTauriPlatform().copyImage(PNG_1, 'Flyer 1')).rejects.toThrow('Could not copy Flyer 1: copy_image not allowed');
+  });
+});
+
+describe('saveImages', () => {
+  it('sends the listing, each name and size, then the PNGs back to back, and answers with the folder', async () => {
+    const folder = 'C:\\Users\\Mia\\Downloads\\APG Post-It\\Lot 7';
+    ipc(() => folder);
+
+    await expect(
+      createTauriPlatform().saveImages('Lot 7', [
+        { name: 'Flyer 1.png', png: PNG_1 },
+        { name: 'Flyer 2.png', png: PNG_2 },
+      ]),
+    ).resolves.toBe(folder);
+    expect(commands()).toEqual(['save_images']);
+    expect(unframe(calls[0]?.args)).toEqual({
+      head: {
+        property: 'Lot 7',
+        images: [
+          { name: 'Flyer 1.png', size: PNG_1.byteLength },
+          { name: 'Flyer 2.png', size: PNG_2.byteLength },
+        ],
+      },
+      bytes: [...PNG_1, ...PNG_2],
+    });
+  });
+
+  it("passes Rust's sentence on as it is, and says what it was doing otherwise", async () => {
+    const sentence = '"Flyer 2.png" is not a PNG image, so nothing was saved.';
+    ipc(() => {
+      throw sentence;
+    });
+    await expect(createTauriPlatform().saveImages('Lot 7', [{ name: 'Flyer 2.png', png: PNG_2 }])).rejects.toThrow(sentence);
+    ipc(() => {
+      throw new Error('save_images not allowed');
+    });
+    await expect(createTauriPlatform().saveImages('Lot 7', [{ name: 'Flyer 1.png', png: PNG_1 }])).rejects.toThrow(
+      'Could not save the images: save_images not allowed',
     );
   });
 });

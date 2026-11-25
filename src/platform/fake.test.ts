@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { UserFacingError } from '../core/types';
-import { createFakePlatform, FAKE_PHOTOS_FOLDER, fakeHttpError, safeFolderName } from './fake';
+import { createFakePlatform, FAKE_PHOTOS_FOLDER, fakeHttpError, fakePhotoData, safeFolderName } from './fake';
 import { platform, setPlatform, type Platform } from './index';
 
 const URL_ = 'https://script.google.com/macros/s/AKfy/exec';
@@ -268,6 +268,117 @@ describe('savePhotos', () => {
       'Could not find your Downloads folder.',
     );
     expect(fake.saves).toHaveLength(1);
+  });
+});
+
+describe('photoData', () => {
+  it('answers with a real JPEG as a data: address, a different one for each photo, and records each read', async () => {
+    const fake = createFakePlatform();
+    const a = await fake.photoData(drive('a'), 'Photo 1');
+    const b = await fake.photoData(drive('b'), 'Photo 2');
+
+    expect(a).toBe(fakePhotoData(drive('a')));
+    expect(b).toBe(fakePhotoData(drive('b')));
+    expect(a).not.toBe(b);
+    expect(fake.photosRead).toEqual([drive('a'), drive('b')]);
+
+    expect(a).toMatch(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/);
+    const jpeg = Buffer.from(a.slice(a.indexOf(',') + 1), 'base64');
+    expect([...jpeg.subarray(0, 4)]).toEqual([0xff, 0xd8, 0xff, 0xfe]); // the start, then the comment
+    expect([...jpeg.subarray(-2)]).toEqual([0xff, 0xd9]); // the end
+    expect(jpeg.toString('latin1')).toContain(drive('a'));
+  });
+
+  it('refuses an address that is not Drive, and fails a photo the test says fails', async () => {
+    const fake = createFakePlatform({ failingPhotos: ['Photo 2'] });
+    await expect(fake.photoData('https://example.com/a.jpg', 'Photo 1')).rejects.toThrow(
+      'Refused to download "Photo 1": its address points to example.com',
+    );
+    await expect(fake.photoData(drive('b'), 'Photo 2')).rejects.toBeInstanceOf(UserFacingError);
+    expect(fake.photosRead).toEqual([]);
+  });
+});
+
+// A PNG is known by its signature; what follows doesn't matter to the fake.
+const png = (...rest: number[]): Uint8Array => Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...rest]);
+
+describe('copyImage', () => {
+  it('records each PNG copied, with its name, as it was when copied', async () => {
+    const fake = createFakePlatform();
+    const page = png(1);
+    await fake.copyImage(page, 'Flyer 1');
+    page[8] = 9;
+    expect(fake.copiedImages).toEqual([{ name: 'Flyer 1', png: png(1) }]);
+  });
+
+  it('refuses what is not a PNG, as the real platform does', async () => {
+    const fake = createFakePlatform();
+    await expect(fake.copyImage(Uint8Array.from([0xff, 0xd8, 0xff]), 'Flyer 1')).rejects.toThrow(
+      'Could not copy "Flyer 1": it is not a PNG image.',
+    );
+    expect(fake.copiedImages).toEqual([]);
+  });
+});
+
+describe('saveImages', () => {
+  it('saves into the listing\'s photo folder, named as the real platform names them, and answers with the folder', async () => {
+    const fake = createFakePlatform();
+    const folder = await fake.saveImages('FOR LEASE/ FOR RENT', [
+      { name: 'Flyer 1.png', png: png(1) },
+      { name: 'Flyer/2', png: png(2) },
+    ]);
+
+    expect(folder).toBe(`${FAKE_PHOTOS_FOLDER}\\FOR LEASE_ FOR RENT`);
+    expect(fake.imageSaves).toEqual([
+      {
+        property: 'FOR LEASE/ FOR RENT',
+        images: [
+          { name: 'Flyer 1.png', png: png(1) },
+          { name: 'Flyer/2', png: png(2) },
+        ],
+        folder,
+        paths: [`${folder}\\Flyer 1.png`, `${folder}\\Flyer_2.png`],
+      },
+    ]);
+  });
+
+  it('replaces an image of the same name instead of numbering it, and a photo saved later is numbered past it', async () => {
+    const fake = createFakePlatform();
+    await fake.saveImages('Lot 7', [{ name: 'Flyer 1.png', png: png(1) }]);
+    await fake.saveImages('Lot 7', [{ name: 'Flyer 1.png', png: png(2) }]);
+    const [photo] = await fake.savePhotos('Lot 7', [{ name: 'Flyer 1.png', url: drive('a') }]);
+
+    expect(fake.imageSaves.map((s) => s.paths)).toEqual([
+      [`${FAKE_PHOTOS_FOLDER}\\Lot 7\\Flyer 1.png`],
+      [`${FAKE_PHOTOS_FOLDER}\\Lot 7\\Flyer 1.png`],
+    ]);
+    expect(photo?.path).toBe(`${FAKE_PHOTOS_FOLDER}\\Lot 7\\Flyer 1 (2).png`);
+  });
+
+  it.each([
+    [
+      'one is not a PNG',
+      [{ name: 'Flyer 1', png: png(1) }, { name: 'Flyer 2', png: Uint8Array.from([0xff, 0xd8]) }],
+      '"Flyer 2" is not a PNG image, so nothing was saved.',
+    ],
+    [
+      'two would get the same name',
+      [{ name: 'Flyer 1.png', png: png(1) }, { name: 'flyer 1', png: png(2) }],
+      '"Flyer 1.png" and "flyer 1" would both be saved as flyer 1.png, so nothing was saved.',
+    ],
+    ['there are none', [], 'There were no images to save.'],
+  ])('saves nothing when %s, saying why, as the real platform does', async (_, images, why) => {
+    const fake = createFakePlatform();
+    await expect(fake.saveImages('Lot 7', images)).rejects.toThrow(why);
+    expect(fake.imageSaves).toEqual([{ property: 'Lot 7', images, folder: '', paths: [] }]);
+  });
+
+  it('can be made to fail outright', async () => {
+    const fake = createFakePlatform({ failures: { saveImages: 'Could not find your Downloads folder.' } });
+    await expect(fake.saveImages('Lot 7', [{ name: 'Flyer 1', png: png(1) }])).rejects.toThrow(
+      'Could not find your Downloads folder.',
+    );
+    expect(fake.imageSaves).toHaveLength(1);
   });
 });
 

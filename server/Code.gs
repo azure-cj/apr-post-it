@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-19.1';
+const SERVER_VERSION = '2026-11-25.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -99,7 +99,7 @@ const ROLES = ['Intern', 'Admin'];
 // An admin may be given a queue too, and posts it as an intern does (D31).
 // A Team row that still says "Manager" (the old middle role) counts as Admin.
 const PERMISSIONS = {
-  Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink', 'setStatus', 'highlights'],
+  Intern:  ['ping', 'properties', 'property', 'posts', 'assignments', 'logPost', 'addLink', 'setStatus', 'highlights', 'locationRing'],
   Admin:   ['*'],
 };
 
@@ -168,6 +168,7 @@ function route_(req) {
       case 'handleRefused': return json_(handleRefused_(req, me));
       case 'highlights':    return json_({ ok: true, highlights: highlights_() });
       case 'setHighlight':  return json_(setHighlight_(req, me));
+      case 'locationRing':  return json_(locationRing_(req));
       default:            return json_({ ok: false, error: 'unknown action: ' + req.action });
     }
   } catch (err) {
@@ -983,6 +984,194 @@ function joinChecker_(out, checker, id) {
   out.availability = c ? availabilityOf_(c.status) : '';
   out.inChecker = !!c;
   return out;
+}
+
+// ---------------------------------------------------------------- the brochure map's ring
+//
+// A brochure's location map is a satellite photo with a red ellipse on it, "the
+// property is somewhere in here", and nothing that points to the spot (APG
+// GIS's docs/BROCHURE-MAP.md). `locationRing` works the ellipse out here, so
+// the exact point never leaves the server: the reply is the finished ring, its
+// centre, its size and its tilt, and nothing else.
+//
+// The centre is the listing's pin on the APG map, always (the brief's rule 5).
+// That pin is public already, so a ring around it gives nothing new away; a
+// ring moved its own way would combine with the pin and narrow the spot down.
+// So Post-It works the pin out exactly as APG GIS does: from the same geocoding
+// sheet, the same folder id, the same kind and the same secret, the Script
+// Property PIN_SECRET copied from APG GIS's project. It is never made here,
+// unlike APG GIS's pinSecret_: a new one would not match the APG map. Changing
+// it moves every ring, as it moves every APG pin (D33).
+
+const PIN_SECRET_PROPERTY = 'PIN_SECRET';
+const RING = {
+  STEPS: 128,              // points around the ellipse; the reply has one more, the first again
+  NEAR: 220,               // metres: the furthest APG moves a pin (apgMovePin_)...
+  FAR: 550,                // ...and a warehouse's
+  MARGIN: 50,              // metres: also covers the pin's rounding (under 8 m) and the polygon's chords
+  BUILDING_REACH: 40,      // metres: how far one building reaches from its middle
+  UNKNOWN_LOT_REACH: 500,  // metres: land or a warehouse whose size can't be read (a 79 ha tract)
+  MAX_LOT_SQM: 10000000,   // 1,000 ha: a Size bigger than this is a typo, read as unknown
+};
+const METRES_PER_DEGREE = 111320;
+
+// APG GIS's KINDS (server/Feed.gs), unchanged: a pin's distance depends on its kind.
+const APG_KINDS = {
+  'COMMERCIAL SPACE': 'commercial', COMMERCIAL: 'commercial',
+  'CONDO HOUSE AND LOT': 'condo', CONDO: 'condo', 'HOUSE AND LOT': 'condo',
+  'OFFICE SPACE': 'office', OFFICE: 'office',
+  WAREHOUSE: 'warehouse',
+};
+
+/**
+ * Everyone: the brochure map's ring for the listing whose folder id is
+ * `req.id`. { ring: [[lng, lat] x 129], center: [lng, lat], semiMajor,
+ * semiMinor (metres), tilt (degrees, anticlockwise from east) }. Refused, with
+ * a sentence and a `reason`, when there is no PIN_SECRET ('no-secret'), no such
+ * listing ('not-found') or no position for it ('no-position').
+ *
+ * The brief's highlightFor with a publicPin, then its ellipseRing. One change:
+ * `far` is APG's furthest move, without the brief's max(.., distance(point,
+ * pin)). Here the pin is worked out from the very point, so that distance is
+ * past the furthest move only by the pin's rounding, under 8 m, which MARGIN
+ * covers; and when it is, the ring's size would give away how far the point
+ * is from the public pin, to the metre. So the size never depends on the point.
+ */
+function locationRing_(req) {
+  requireAll_(req, ['id']);
+  var secret = textOf_(PropertiesService.getScriptProperties().getProperty(PIN_SECRET_PROPERTY)).trim();
+  if (!secret) return ringRefusal_('no-secret', 'The location map isn\'t set up yet. Ask your admin.');
+
+  var want = textOf_(req.id).trim();
+  var row = directoryRows_().filter(function (r) { return textOf_(r.id).trim() === want; })[0];
+  if (!row) return ringRefusal_('not-found', 'That listing isn\'t in the directory.');
+  var id = textOf_(row.id).trim();
+  var spot = geoIndex_()[id];
+  if (!spot) return ringRefusal_('no-position', 'This listing has no map position yet.');
+
+  var kind = apgKindOf_(row.category);
+  var wide = kind === 'warehouse';
+  var pin = apgMovePin_(spot.lat, spot.lng, id, wide, secret);
+  var draws = ringDraws_(id, secret);
+  var checker = checkerIndex_(false);
+  var reach = ringReach_(row.category, checker && checker[id] ? checker[id].size : '');
+
+  var far = wide ? RING.FAR : RING.NEAR;
+  var semiMinor = Math.ceil(far + reach + RING.MARGIN);
+  var semiMajor = Math.ceil(semiMinor * (1.25 + 0.4 * draws[2]));
+  var tilt = Math.round(draws[3] * 180);
+  var center = [pin[1], pin[0]];
+  return {
+    ok: true,
+    ring: ellipseRing_(center, semiMajor, semiMinor, tilt),
+    center: center,
+    semiMajor: semiMajor,
+    semiMinor: semiMinor,
+    tilt: tilt,
+  };
+}
+
+/** A refusal the app can show as it is: `error` and `message` are the same sentence. */
+function ringRefusal_(reason, sentence) {
+  return { ok: false, error: sentence, message: sentence, reason: reason };
+}
+
+/** APG GIS's kindOf_ (server/Feed.gs), unchanged: 'commercial', 'condo', 'office', 'warehouse' or 'unsorted'. */
+function apgKindOf_(category) {
+  var n = textOf_(category).toUpperCase().replace(/&/g, ' AND ').replace(/[^A-Z0-9]+/g, ' ').trim();
+  return APG_KINDS[n] || 'unsorted';
+}
+
+/**
+ * APG GIS's movePin_ (server/Feed.gs), unchanged: the listing's public pin,
+ * [lat, lng]. Moved 80-220 m (a warehouse, `wide`, 200-550 m) in a direction
+ * only the secret decides, then rounded to 4 decimals. It must stay identical
+ * to APG GIS's, byte for byte, or the ring is a second, separately moved pin.
+ */
+function apgMovePin_(lat, lng, id, wide, secret) {
+  var bytes = Utilities.computeHmacSha256Signature(String(id), secret);
+  var unit = function (i) {
+    return (((bytes[i] & 255) << 8) | (bytes[i + 1] & 255)) / 65536;
+  };
+  var angle = unit(0) * 2 * Math.PI;
+  var metres = wide ? 200 + unit(2) * 350 : 80 + unit(2) * 140;
+  var dLat = (metres * Math.cos(angle)) / 111320;
+  var dLng = (metres * Math.sin(angle)) / (111320 * Math.cos((lat * Math.PI) / 180));
+  return [Math.round((lat + dLat) * 1e4) / 1e4, Math.round((lng + dLng) * 1e4) / 1e4];
+}
+
+/**
+ * The brief's draws(): four numbers in [0, 1) from the HMAC apgMovePin_ uses,
+ * each two bytes big-endian over 65536. Bytes 0-3 move the pin; 4-5 shape the
+ * ring and 6-7 tilt it.
+ */
+function ringDraws_(id, secret) {
+  var bytes = Utilities.computeHmacSha256Signature(String(id), secret);
+  return [0, 2, 4, 6].map(function (i) {
+    return (((bytes[i] & 255) << 8) | (bytes[i + 1] & 255)) / 65536;
+  });
+}
+
+/**
+ * How far the lot reaches from its middle, in metres. Land and warehouses: the
+ * radius of a circle of the lot's area, from the checker's Size (sqm), never
+ * less than one building; UNKNOWN_LOT_REACH when the size can't be read. Anything
+ * else is one building.
+ */
+function ringReach_(category, size) {
+  if (apgKindOf_(category) !== 'warehouse' && !landCategory_(category)) return RING.BUILDING_REACH;
+  var sqm = lotSqm_(size);
+  return sqm === null ? RING.UNKNOWN_LOT_REACH : Math.max(RING.BUILDING_REACH, Math.sqrt(sqm / Math.PI));
+}
+
+/** Land: a category APG GIS has no kind for that names a lot or land ("LOT", "LOT ONLY"), not "HOUSE AND LOT". */
+function landCategory_(category) {
+  if (apgKindOf_(category) !== 'unsorted') return false;
+  var n = textOf_(category).toUpperCase().replace(/&/g, ' AND ').replace(/[^A-Z0-9]+/g, ' ').trim();
+  return /\b(?:LOTS?|LAND)\b/.test(n);
+}
+
+/**
+ * The lot's area in sqm from the checker's Size (sqm) text, read to err large,
+ * or null when it says nothing readable. Every number counts, added up, so a
+ * range or several units ("150-245", "160.63, 370") are all of them together.
+ * A comma between groups of three digits is a thousands comma: "787,374" is
+ * one lot of 787,374 sqm. A number followed by ha or hectares is 10,000 sqm a
+ * hectare. More than MAX_LOT_SQM is a typo, not a lot: null.
+ */
+function lotSqm_(size) {
+  var text = textOf_(size).toLowerCase().replace(/m2(?!\d)/g, 'm');
+  var number = /\d{1,3}(?:,\d{3})+(?!\d)(?:\.\d+)?|\d+(?:\.\d+)?/g;
+  var total = 0;
+  var found = false;
+  var m;
+  while ((m = number.exec(text)) !== null) {
+    var value = Number(m[0].replace(/,/g, ''));
+    if (/^\s*(?:ha|has|hectares?)\b/.test(text.slice(m.index + m[0].length))) value *= 10000;
+    total += value;
+    found = true;
+  }
+  if (!found || !(total > 0) || total > RING.MAX_LOT_SQM) return null;
+  return total;
+}
+
+/** The brief's ellipseRing: STEPS points around the ellipse, [lng, lat], and the first again to close it. */
+function ellipseRing_(center, semiMajor, semiMinor, tilt) {
+  var t = (tilt * Math.PI) / 180;
+  var ring = [];
+  for (var i = 0; i < RING.STEPS; i++) {
+    var a = (i / RING.STEPS) * 2 * Math.PI;
+    var x = semiMajor * Math.cos(a);
+    var y = semiMinor * Math.sin(a);
+    ring.push(shiftPoint_(center, x * Math.cos(t) - y * Math.sin(t), x * Math.sin(t) + y * Math.cos(t)));
+  }
+  ring.push(ring[0]);
+  return ring;
+}
+
+/** The brief's shift: [lng, lat] moved `east` and `north` metres. */
+function shiftPoint_(p, east, north) {
+  return [p[0] + east / (METRES_PER_DEGREE * Math.cos((p[1] * Math.PI) / 180)), p[1] + north / METRES_PER_DEGREE];
 }
 
 // ---------------------------------------------------------------- the listing checker's index
@@ -3033,6 +3222,10 @@ function SETUP() {
     Logger.log(checker ? 'Checker index: %s listings.' : 'Checker index: could not be read%s.',
                checker ? Object.keys(checker).length : '');
   }
+  // Never the secret itself: only whether it is there.
+  Logger.log(textOf_(PropertiesService.getScriptProperties().getProperty(PIN_SECRET_PROPERTY)).trim()
+    ? 'Location map: PIN_SECRET is set.'
+    : 'Location map: no PIN_SECRET. Copy APG GIS\'s into this project\'s Script Properties, under the same name.');
   if (!properties.length) {
     Logger.log('The directory is empty — run BuildDirectory.gs before using the app.');
   }

@@ -193,6 +193,20 @@ describe('what a browser can and cannot do', () => {
     expect((error as Error).message).toBe('Saving photos works in the desktop app.');
   });
 
+  it("gives a photo's own address for photoData, and cannot copy or save images", async () => {
+    const { platform } = setup();
+    const photo = 'https://drive.google.com/uc?export=download&id=1';
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+    await expect(platform.photoData(` ${photo} `, 'Photo 1')).resolves.toBe(photo);
+    await expect(platform.copyImage(png, 'Flyer 1')).rejects.toThrow(
+      new UserFacingError('Copying an image works in the desktop app.'),
+    );
+    await expect(platform.saveImages('Lot 9', [{ name: 'Flyer 1.png', png }])).rejects.toThrow(
+      new UserFacingError('Saving images works in the desktop app.'),
+    );
+  });
+
   it('has no file system and draws no window controls, which do nothing', async () => {
     const { platform } = setup();
     const asPlatform: Platform = platform;

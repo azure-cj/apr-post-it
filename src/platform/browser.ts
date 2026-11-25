@@ -5,8 +5,10 @@
  * `import.meta.env.DEV` is true, so a production build never contains it; a
  * production build opened in a browser says to open the desktop app instead.
  *
- * What a browser cannot do, it says so: photos cannot be saved to disk or a
- * folder opened in Explorer, and there is no window frame to draw.
+ * What a browser cannot do, it says so: photos and images cannot be saved to
+ * disk or copied as pictures, a folder cannot be opened in Explorer, and there
+ * is no window frame to draw. photoData answers with the photo's own address,
+ * which shows but can't be saved from a canvas.
  *
  * The request is sent as text/plain, which makes it a "simple" request: the
  * browser sends no CORS preflight, which Apps Script cannot answer. Code.gs
@@ -154,6 +156,20 @@ export function createBrowserPlatform(options: BrowserPlatformOptions = {}): Pla
     async copyPhoto() {
       // Drive answers a page's fetch without the headers a canvas needs, so the photo can't be read here.
       throw new UserFacingError('Copying a photo works in the desktop app.');
+    },
+
+    async photoData(url) {
+      // For the same reason there are no bytes to give: the address itself
+      // shows in an <img>, but a canvas it is drawn on can't be saved.
+      return url.trim();
+    },
+
+    async copyImage() {
+      throw new UserFacingError('Copying an image works in the desktop app.');
+    },
+
+    async saveImages() {
+      throw new UserFacingError('Saving images works in the desktop app.');
     },
 
     async savePhotos() {

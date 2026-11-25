@@ -42,6 +42,12 @@ pub async fn copy_photo(app: AppHandle, name: String, url: String) -> Result<(),
         .await
         .map_err(|e| format!("Could not read \"{name}\": {e}."))?
         .map_err(|why| format!("Could not copy \"{name}\": {why}. Use Download instead."))?;
+    put_on_clipboard(&app, pixels, &name)
+}
+
+/// Puts decoded pixels on the clipboard as an image. Also what
+/// `images::copy_image` uses.
+pub(crate) fn put_on_clipboard(app: &AppHandle, pixels: Pixels, name: &str) -> Result<(), String> {
     app.clipboard()
         .write_image(&Image::new_owned(pixels.rgba, pixels.width, pixels.height))
         .map_err(|e| format!("Could not put \"{name}\" on the clipboard: {e}."))
@@ -69,12 +75,26 @@ pub(crate) async fn fetch_photo(
 /// neither side is over `max_side`. The reason, in words, when it can't.
 pub(crate) fn pixels_of(bytes: &[u8], max_side: u32) -> Result<Pixels, String> {
     let kind = photos::sniff(bytes);
-    if !matches!(kind, Some("jpg" | "png" | "webp" | "gif")) {
+    if !decodes(kind) {
         return Err(match kind {
             Some(other) => format!("Post-It can't copy a .{other} photo"),
             None => "it is not a photo".to_string(),
         });
     }
+    let rgba = upright(bytes, max_side)?.into_rgba8();
+    let (width, height) = rgba.dimensions();
+    Ok(Pixels { rgba: rgba.into_raw(), width, height })
+}
+
+/// True for the formats Post-It decodes, as `photos::sniff` names them: the
+/// ones Drive serves listing photos in.
+pub(crate) fn decodes(kind: Option<&str>) -> bool {
+    matches!(kind, Some("jpg" | "png" | "webp" | "gif"))
+}
+
+/// Decodes a photo in a format that `decodes`, turns it upright, and scales it
+/// down so neither side is over `max_side`. Also what `images::photo_data` uses.
+pub(crate) fn upright(bytes: &[u8], max_side: u32) -> Result<DynamicImage, String> {
     let reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|e| e.to_string())?;
@@ -86,9 +106,7 @@ pub(crate) fn pixels_of(bytes: &[u8], max_side: u32) -> Result<Pixels, String> {
         // Keeps the shape: the longer side becomes max_side.
         photo = photo.resize(max_side, max_side, FilterType::Triangle);
     }
-    let rgba = photo.into_rgba8();
-    let (width, height) = rgba.dimensions();
-    Ok(Pixels { rgba: rgba.into_raw(), width, height })
+    Ok(photo)
 }
 
 #[cfg(test)]

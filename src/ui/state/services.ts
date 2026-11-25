@@ -261,6 +261,7 @@ export function createServices(
       }
     },
     highlights: () => raw.highlights(),
+    locationRing: (id) => raw.locationRing(id),
     async setHighlight(input) {
       try {
         const list = await raw.setHighlight(input);

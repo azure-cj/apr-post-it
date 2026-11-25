@@ -25,7 +25,7 @@
  * Utilities.formatDate and Date.UTC are the way.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -215,6 +215,31 @@ function dateField(letter: string, count: number, d: Date, pattern: string): str
     default:
       throw new HarnessError(`Utilities.formatDate: the fake does not know the letter "${letter}" in "${pattern}".`);
   }
+}
+
+/**
+ * Utilities.computeHmacSha256Signature(value, key): the HMAC's 32 bytes as
+ * Apps Script gives them, Java bytes, so signed (-128 to 127): `b & 255` is the
+ * byte. Both text (read as UTF-8) or both byte arrays, as its two overloads
+ * take them. A charset, the third overload, is refused rather than guessed.
+ */
+export function computeHmacSha256Signature(value: unknown, key: unknown, ...charset: unknown[]): number[] {
+  const method = 'Utilities.computeHmacSha256Signature';
+  if (charset.length) throw new HarnessError(`${method}: the fake reads text as UTF-8 only; pass no charset.`);
+  const isBytes = (v: unknown): v is number[] =>
+    Array.isArray(v) && v.every((b) => Number.isInteger(b) && b >= -128 && b <= 127);
+  let data: Buffer;
+  let secret: Buffer;
+  if (typeof value === 'string' && typeof key === 'string') {
+    data = Buffer.from(value, 'utf8');
+    secret = Buffer.from(key, 'utf8');
+  } else if (isBytes(value) && isBytes(key)) {
+    data = Buffer.from(value.map((b) => b & 255));
+    secret = Buffer.from(key.map((b) => b & 255));
+  } else {
+    throw SIGNATURE(method);
+  }
+  return Array.from(createHmac('sha256', secret).update(data).digest(), (b) => (b << 24) >> 24);
 }
 
 // ------------------------------------------------------------------ executions and locks
@@ -943,6 +968,7 @@ export function loadProject(options: ProjectOptions = {}): Project {
       formatDate,
       getUuid: () => randomUUID(),
       parseCsv,
+      computeHmacSha256Signature,
     }),
     Session: Object.freeze({
       // A web app that executes as its owner, opened by anyone: nobody is signed in.

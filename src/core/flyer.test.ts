@@ -1,0 +1,114 @@
+import { describe, expect, it } from 'vitest';
+import { flyerContent, laterPages, priceOf, rects } from './flyer';
+
+const POST = `COMMERCIAL-INDUSTRIAL WAREHOUSE FOR SALE / LEASE – LIIP, MAMPLASAN, BIÑAN, LAGUNA
+
+Property Details:
+• Lot Area: 2,277 sqm
+• For Sale: ₱120,000,000 Gross
+• For Lease: ₱250/sqm
+• Commercial-industrial warehouse with office
+• With 3-storey office building
+
+Property Highlights:
+• With strong water source
+• NWRB permit
+• Code: MYPFS365
+
+Property’s availability is upon owner’s confirmation.
+
+Contact Alpha Premier Realty for Inquiries & Viewing:
+realty@alphapremiergroup.com
+0927 555 5803 | 0915 888 9482 | 0921 217 4555`;
+
+const LISTING = { category: 'WAREHOUSE', listingType: 'FOR LEASE/ FOR RENT' };
+
+describe('the flyer reads the post', () => {
+  it('takes the kind, the deal, the size, both prices, the place and the contacts', () => {
+    const c = flyerContent(POST, LISTING);
+    expect(c.kind).toBe('Warehouse');
+    expect(c.deal).toBe('Sale or lease');
+    expect(c.size).toBe('2,277');
+    expect(c.sizeLabel).toBe('Lot area');
+    expect(c.sale).toEqual({ amount: '₱120M', unit: 'to buy' });
+    expect(c.lease).toEqual({ amount: '₱250', unit: 'per sqm' });
+    expect(c.place).toBe('LIIP, Mamplasan, Biñan, Laguna');
+    expect(c.shortPlace).toBe('Biñan, Laguna');
+    expect(c.title).toBe('Commercial-industrial warehouse');
+    expect(c.email).toBe('realty@alphapremiergroup.com');
+    expect(c.numbers).toEqual(['0927 555 5803', '0915 888 9482', '0921 217 4555']);
+  });
+
+  it('puts the Highlights first, then the other details, and leaves out codes and contacts', () => {
+    expect(flyerContent(POST, LISTING).highlights).toEqual([
+      'With strong water source',
+      'NWRB permit',
+      'Commercial-industrial warehouse with office',
+      'With 3-storey office building',
+    ]);
+  });
+
+  it('falls back to the listing when the text says little', () => {
+    const c = flyerContent('Office space in Makati', { category: 'OFFICE SPACE', listingType: 'FOR LEASE', city: 'Makati', size: '120' });
+    expect(c.kind).toBe('Office space');
+    expect(c.deal).toBe('For lease');
+    expect(c.place).toBe('Makati');
+    expect(c.size).toBe('120');
+    expect(c.sale).toBeNull();
+    expect(c.numbers).toEqual([]);
+  });
+
+  it('reads bullets with no heading as details', () => {
+    const c = flyerContent('HOUSE FOR SALE – ANTIPOLO, RIZAL\n- Floor Area: 180 sqm\n- Price: Php 12.5M\n- 3 bedrooms', { category: 'HOUSE AND LOT', listingType: '' });
+    expect(c.size).toBe('180');
+    expect(c.sizeLabel).toBe('Floor area');
+    expect(c.sale).toEqual({ amount: '₱12.5M', unit: 'to buy' });
+    expect(c.highlights).toEqual(['3 bedrooms']);
+    expect(c.deal).toBe('For sale');
+  });
+
+  it('shortens prices for a picture', () => {
+    expect(priceOf('₱85,000 per month', 'lease')).toEqual({ amount: '₱85K', unit: 'a month' });
+    expect(priceOf('PHP 1,500/sqm/month', 'lease')).toEqual({ amount: '₱1,500', unit: 'per sqm' });
+    expect(priceOf('to be discussed', 'sale')).toBeNull();
+  });
+});
+
+describe('pages', () => {
+  it('spreads the photos after the flyer evenly over as few pages as hold them', () => {
+    const picked = Array.from({ length: 11 }, (_, i) => i + 1);
+    expect(laterPages(picked, 'framed', 4).map((p) => p.length)).toEqual([4, 4]);
+    expect(laterPages(picked, 'big', 4).map((p) => p.length)).toEqual([4, 3, 3]);
+    expect(laterPages([1, 2], 'framed', 4)).toEqual([]);
+  });
+
+  it('lays out one to six photos inside the box', () => {
+    for (let n = 1; n <= 6; n++) {
+      const r = rects(n, 10, 20, 400, 300, 8);
+      expect(r).toHaveLength(n);
+      for (const box of r) {
+        expect(box.x).toBeGreaterThanOrEqual(10);
+        expect(box.y).toBeGreaterThanOrEqual(20);
+        expect(box.x + box.w).toBeLessThanOrEqual(410.0001);
+        expect(box.y + box.h).toBeLessThanOrEqual(320.0001);
+      }
+    }
+  });
+});
+
+describe('a plain post, no bullets', () => {
+  it('still finds the price, the size in the heading, and the kind from the sub-category', () => {
+    const c = flyerContent('FOR SALE: 320 sqm lot in Verdant Hills\nPrice: ₱4.2M\nContact: 0917 555 0142', {
+      category: 'CONDO / HOUSE AND LOT',
+      subCategory: 'Lot',
+      listingType: 'FOR SALE',
+    });
+    expect(c.sale).toEqual({ amount: '₱4.2M', unit: 'to buy' });
+    expect(c.size).toBe('320');
+    expect(c.sizeLabel).toBe('Lot area');
+    expect(c.kind).toBe('Lot');
+    expect(c.title).toBe('320 sqm lot in Verdant Hills');
+    expect(c.numbers).toEqual(['0917 555 0142']);
+    expect(flyerContent('x', { category: 'CONDO / HOUSE AND LOT', listingType: '' }).kind).toBe('Condo / house and lot');
+  });
+});

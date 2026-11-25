@@ -46,6 +46,7 @@ import {
 import { HighlightControl } from './HighlightControl';
 import { LogStep } from './LogStep';
 import { PhotoPicker, Thumb } from './PhotoPicker';
+import { FlyerDialog } from './flyer/FlyerDialog';
 import { PhotoViewer } from './PhotoViewer';
 import { BackLink, Key, Waiting } from './shared';
 import './PropertyScreen.css';
@@ -83,7 +84,7 @@ const backPaths: Record<NavKey, string> = {
 };
 
 /** Alt+key shortcuts, by KeyboardEvent.code so they hold whatever the keyboard layout. */
-const SHORTCUTS = { copy: 'KeyC', photos: 'KeyP', log: 'KeyL' } as const;
+const SHORTCUTS = { copy: 'KeyC', photos: 'KeyP', log: 'KeyL', flyer: 'KeyF' } as const;
 
 /**
  * One listing, the whole job on one screen: its public text with Copy, the
@@ -280,6 +281,9 @@ function PropertyPage({ id }: { readonly id: string }) {
   const photos = detail?.photos ?? [];
   const [viewing, setViewing] = useState<number | null>(null);
   const [picking, setPicking] = useState(false);
+  const [flyering, setFlyering] = useState(false);
+  const flyerRef = useRef<HTMLButtonElement>(null);
+  const mayFlyer = detail !== null && canCopy && app.platform.hasFileSystem && photos.length > 0;
 
   const download = async (chosen: readonly Photo[]) => {
     setPicking(false);
@@ -337,6 +341,7 @@ function PropertyPage({ id }: { readonly id: string }) {
       if (event.code === SHORTCUTS.copy) copyRef.current?.click();
       else if (event.code === SHORTCUTS.photos) photosRef.current?.click();
       else if (event.code === SHORTCUTS.log) linkRef.current?.focus();
+      else if (event.code === SHORTCUTS.flyer && flyerRef.current) flyerRef.current.click();
       else return;
       event.preventDefault();
     };
@@ -579,7 +584,7 @@ function PropertyPage({ id }: { readonly id: string }) {
           />
 
           <p className="keys meta">
-            <Key>Alt</Key>+<Key>C</Key> copy · <Key>Alt</Key>+<Key>P</Key> save photos · <Key>Alt</Key>+<Key>L</Key> post link
+            <Key>Alt</Key>+<Key>C</Key> copy · <Key>Alt</Key>+<Key>P</Key> save photos · <Key>Alt</Key>+<Key>L</Key> post link{mayFlyer ? <> · <Key>Alt</Key>+<Key>F</Key> flyer</> : null}
           </p>
         </div>
 
@@ -645,6 +650,17 @@ function PropertyPage({ id }: { readonly id: string }) {
                 ))}
               </ul>
             )}
+            {mayFlyer ? (
+              <div className="flyer-offer">
+                <p>
+                  <b>Flyer</b> <span className="flyer-offer__new">New</span>
+                  <span className="meta">The main facts and your choice of photos as pictures to post, with a map if you like. Optional.</span>
+                </p>
+                <Button ref={flyerRef} size="small" aria-keyshortcuts="Alt+F" onClick={() => setFlyering(true)}>
+                  Make a flyer
+                </Button>
+              </div>
+            ) : null}
           </section>
 
           <Card title="Pre-post checks" headingLevel={2} padding="tight">
@@ -690,6 +706,7 @@ function PropertyPage({ id }: { readonly id: string }) {
       {viewing !== null ? (
         <PhotoViewer photos={photos} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)} />
       ) : null}
+      {flyering && detail ? <FlyerDialog detail={detail} text={copyText} onClose={() => setFlyering(false)} /> : null}
       {picking && detail ? (
         <PhotoPicker
           property={detail.name}

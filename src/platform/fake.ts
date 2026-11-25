@@ -24,7 +24,9 @@
  * the body goes through JSON, photos are named and numbered the way
  * src-tauri/src/names.rs names them, only Google Drive addresses are
  * downloaded, only https:// links and the photo folders are opened, and an
- * empty key removes the key.
+ * empty key removes the key. Only PNGs are copied or saved as images, and a
+ * saved image replaces a file of the same name. photoData answers with a tiny
+ * real JPEG that names the photo (fakePhotoData), so it loads with no network.
  */
 
 import { UserFacingError } from '../core/types';
@@ -102,11 +104,32 @@ export interface FakeSave {
   readonly saved: readonly SavedPhoto[];
 }
 
+export interface FakeImage {
+  readonly name: string;
+  /** A copy of the bytes as they were when the call was made. */
+  readonly png: Uint8Array;
+}
+
+export interface FakeImageSave {
+  readonly property: string;
+  readonly images: readonly FakeImage[];
+  /** What the call resolved with. '' when it failed. */
+  readonly folder: string;
+  /** The file each image went to, in order. Empty when it failed. */
+  readonly paths: readonly string[];
+}
+
 export interface FakePlatform extends Platform {
   /** Everything copied, oldest first. */
   readonly copied: readonly string[];
   /** Every photo copied to the clipboard, by its address, oldest first. */
   readonly copiedPhotos: readonly string[];
+  /** Every photo photoData answered with, by its address, oldest first. */
+  readonly photosRead: readonly string[];
+  /** Every image copied to the clipboard, oldest first. */
+  readonly copiedImages: readonly FakeImage[];
+  /** Every saveImages call, oldest first, including those that failed. */
+  readonly imageSaves: readonly FakeImageSave[];
   /** Every notification shown, oldest first. */
   readonly notified: readonly { readonly title: string; readonly body: string }[];
   /** Every version installed through checkUpdate, oldest first. */
@@ -134,6 +157,28 @@ export interface FakePlatform extends Platform {
 export const FAKE_DOWNLOADS = 'C:\\Users\\Intern\\Downloads';
 /** Where the fake pretends photos go: one folder per listing inside it. */
 export const FAKE_PHOTOS_FOLDER = `${FAKE_DOWNLOADS}\\APG Post-It`;
+
+/** A real 1×1 white JPEG (greyscale, baseline; 332 bytes), base64. */
+const WHITE_PIXEL_JPEG =
+  '/9j/4AAQSkZJRgABAgAAAQABAAD/wAALCAABAAEBAREA/9sAQwAQCwwODAoQDg0OEhEQExgoGhgWFhgxIyUdKDozPTw5Mzg3QEhcTkBEV0U3OFBtUVdfYmdoZz5NcXlw' +
+  'ZHhcZWdj/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2Jy' +
+  'ggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJ' +
+  'ytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oACAEBAAA/APQK/9k=';
+
+/**
+ * What the fake's photoData answers for a photo: a real 1×1 white JPEG as a
+ * data: address, which an <img> or a canvas loads with no network (jsdom
+ * too), with the photo's address in a JPEG comment so each photo's differs.
+ * A test compares what it finds with this.
+ */
+export function fakePhotoData(url: string): string {
+  const jpeg = Uint8Array.from(atob(WHITE_PIXEL_JPEG), (c) => c.charCodeAt(0));
+  const note = new TextEncoder().encode(url).subarray(0, 0xfffd); // a segment holds 65,533 bytes
+  const comment = [0xff, 0xfe, (note.length + 2) >> 8, (note.length + 2) & 0xff, ...note];
+  // The comment goes straight after the start-of-image marker.
+  const bytes = [...jpeg.subarray(0, 2), ...comment, ...jpeg.subarray(2)];
+  return `data:image/jpeg;base64,${btoa(String.fromCharCode(...bytes))}`;
+}
 
 /** An HTTP failure, for a reply: core/backend.ts reads its `status`. */
 export function fakeHttpError(status: number): Error & { readonly status: number } {
@@ -168,6 +213,9 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
 
   const copied: string[] = [];
   const copiedPhotos: string[] = [];
+  const photosRead: string[] = [];
+  const copiedImages: FakeImage[] = [];
+  const imageSaves: FakeImageSave[] = [];
   const opened: string[] = [];
   const installed: string[] = [];
   const notified: { title: string; body: string }[] = [];
@@ -225,6 +273,9 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
     installed,
     copied,
     copiedPhotos,
+    photosRead,
+    copiedImages,
+    imageSaves,
     opened,
     posts,
     saves,
@@ -285,6 +336,50 @@ export function createFakePlatform(options: FakePlatformOptions = {}): FakePlatf
       if (refusal) throw new UserFacingError(`Refused to download "${name}": its address ${refusal}.`);
       if (failing.has(url) || failing.has(name)) throw new UserFacingError(`Could not download "${name}": the connection failed.`);
       copiedPhotos.push(url);
+    },
+
+    async photoData(url, name) {
+      await begin('photoData');
+      // As in Rust (images.rs): the address first, then the download.
+      const refusal = refuse(url);
+      if (refusal) throw new UserFacingError(`Refused to download "${name}": its address ${refusal}.`);
+      if (failing.has(url) || failing.has(name)) throw new UserFacingError(`Could not download "${name}": the connection failed.`);
+      photosRead.push(url);
+      return fakePhotoData(url);
+    },
+
+    async copyImage(png, name) {
+      await begin('copyImage');
+      if (!isPng(png)) throw new UserFacingError(`Could not copy "${name}": it is not a PNG image.`);
+      copiedImages.push({ name, png: png.slice() });
+    },
+
+    async saveImages(property, images) {
+      const asked = images.map(({ name, png }) => ({ name, png: png.slice() }));
+      try {
+        await begin('saveImages');
+        // As in Rust: every image is checked first, and one bad one saves none.
+        if (asked.length === 0) throw new UserFacingError('There were no images to save.');
+        const named: { name: string; stem: string }[] = [];
+        for (const { name, png } of asked) {
+          if (!isPng(png)) throw new UserFacingError(`"${name}" is not a PNG image, so nothing was saved.`);
+          const { stem } = safeFileName(name);
+          const first = named.find((n) => n.stem.toLowerCase() === stem.toLowerCase());
+          if (first) {
+            throw new UserFacingError(`"${first.name}" and "${name}" would both be saved as ${stem}.png, so nothing was saved.`);
+          }
+          named.push({ name, stem });
+        }
+        const folder = `${FAKE_PHOTOS_FOLDER}\\${safeFolderName(property)}`;
+        // Replaced, not numbered. A photo saved later under the name is numbered past it.
+        const paths = named.map(({ stem }) => `${folder}\\${stem}.png`);
+        for (const path of paths) files.add(path.toLowerCase());
+        imageSaves.push({ property, images: asked, folder, paths });
+        return folder;
+      } catch (err) {
+        imageSaves.push({ property, images: asked, folder: '', paths: [] });
+        throw err;
+      }
     },
 
     async post(url, body) {
@@ -414,6 +509,11 @@ function recordOf(body: unknown): Readonly<Record<string, unknown>> {
 function throughJson(value: unknown): unknown {
   const text = JSON.stringify(value);
   return text === undefined ? undefined : (JSON.parse(text) as unknown);
+}
+
+/** As src-tauri/src/photos.rs `sniff`: a PNG is known by its first eight bytes. */
+function isPng(bytes: Uint8Array): boolean {
+  return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((b, i) => bytes[i] === b);
 }
 
 function isInside(path: string, folder: string): boolean {

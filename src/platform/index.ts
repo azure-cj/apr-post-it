@@ -51,6 +51,33 @@ export interface Platform {
    */
   copyPhoto(url: string, name: string): Promise<void>;
 
+  /**
+   * One photo from Drive as a `data:image/jpeg;base64,…` address, to draw on
+   * a canvas that can still be saved: a canvas a Drive address is drawn on
+   * can't be read back, because Drive doesn't allow it. Fetched as copyPhoto
+   * fetches it, turned upright, scaled to 2000 px on its longest side at
+   * most, and a JPEG whatever Drive had it as. `name` ("Photo 3") is for the
+   * message when it can't be read. In a browser (development) it is the
+   * address itself: it shows, but a canvas it is drawn on can't be saved.
+   */
+  photoData(url: string, name: string): Promise<string>;
+
+  /**
+   * Put a PNG the page made (a flyer page) on the clipboard, as an image to
+   * paste into Facebook. `name` ("Flyer 1") is for the message when it can't
+   * be copied.
+   */
+  copyImage(png: Uint8Array, name: string): Promise<void>;
+
+  /**
+   * Save PNGs the page made into Downloads\APG Post-It\<property>, the folder
+   * savePhotos uses. Each is named after its `name` (made safe as a photo's
+   * is, always .png) and replaces a file of that name: a flyer made again is
+   * the newest flyer, not a copy. Returns the folder. One that isn't a PNG,
+   * or two that would get the same name, and none are saved.
+   */
+  saveImages(property: string, images: readonly { name: string; png: Uint8Array }[]): Promise<string>;
+
   /** POST JSON to the Apps Script web app, through Rust so cross-site limits don't apply. */
   post(url: string, body: unknown): Promise<unknown>;
 

@@ -384,3 +384,14 @@ newest first, from the admin sheet's own `Highlights` tab (`Property ID`, `Prope
 highlights a listing (one row per listing: again, it changes the note and who) or, with `on`
 false, takes it off; a note over 280 characters is `'too-long'`. It replies `{ highlights }`.
 A highlight lasts until an admin removes it.
+
+## v20: the brochure map's ring (server 2026-11-25.1)
+
+New: `locationRing { id }` (everyone; `id` is the folder id) replies `{ ring, center, semiMajor,
+semiMinor, tilt }`: `ring` is 129 `[lng, lat]` points (128 around the ellipse, then the first
+again), `center` is `[lng, lat]`, the half-axes are metres and `tilt` is degrees anticlockwise
+from east. The centre is the listing's pin on the APG map, worked out as APG GIS's `movePin_`
+does with the same `PIN_SECRET` (copied into Post-It's Script Properties); the exact point is
+never in the reply (server/README.md, "The brochure map's ring"). Refused as
+`{ ok: false, error, message, reason }`, `error` and `message` the same sentence, with `reason`
+`'no-secret'`, `'not-found'` or `'no-position'`.

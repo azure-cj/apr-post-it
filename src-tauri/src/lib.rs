@@ -7,6 +7,9 @@
 //! - `save_photos`: photos from Google Drive into `Downloads\APG Post-It\<listing>`,
 //!   a WebP saved as a JPG, each step sent to the window as `photos-progress`.
 //! - `copy_photo`: one of those photos onto the clipboard, to paste into Facebook.
+//! - `photo_data` / `copy_image` / `save_images`: the flyer's pictures. A photo as
+//!   JPEG bytes the page can draw on a canvas and still save, and the PNG pages it
+//!   makes onto the clipboard or into the listing's photo folder.
 //! - `read_key` / `write_key`: the person's key, kept by the OS credential store.
 //! - The plugins, each scoped in `capabilities/default.json`: the clipboard (write
 //!   only), HTTP (Google only), the file system (the app's own folders only),
@@ -16,6 +19,7 @@
 
 mod copy_photo;
 mod hosts;
+mod images;
 mod key;
 mod names;
 mod photos;
@@ -68,6 +72,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             photos::save_photos,
             copy_photo::copy_photo,
+            images::photo_data,
+            images::copy_image,
+            images::save_images,
             key::read_key,
             key::write_key,
         ])

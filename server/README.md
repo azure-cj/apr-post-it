@@ -153,6 +153,7 @@ parameters is answered the same way. The body is read as JSON whatever its conte
 | `saveSpotCheck` | Admin | `{ postLink, result }` with result `Verified`, `Not found` or `Wrong listing` → `{ check }`. The post must be on the tracker (any copy of its link); its agent, day and listing come from there. Checking a post again replaces its result. `bad-result`, `not-a-post`, `notfound`. |
 | `highlights` | everyone | `{ highlights: [{ propertyId, property, note, by, at }] }`: the listings an admin highlighted (v19), newest first, from the admin sheet's Highlights tab. |
 | `setHighlight` | Admin | `{ propertyId, property?, on, note? }`: `on` highlights the listing (again: changes its note and who), off takes it off. One row per listing. A note over 280 characters is `'too-long'`. Replies `{ highlights }`. |
+| `locationRing` | everyone | `{ id }` (the folder id) → `{ ring, center, semiMajor, semiMinor, tilt }` (since `2026-11-25.1`): the brochure map's "approximate area" ellipse (below). `ring` is 129 `[lng, lat]` points, the last the first again; `center` is `[lng, lat]`, the listing's pin on the APG map; `semiMajor` and `semiMinor` are metres, `tilt` degrees anticlockwise from east. Never the exact point. Refused with a sentence (as `error` and `message`) and a `reason`: `'no-secret'` (no `PIN_SECRET`), `'not-found'` (not in the directory) or `'no-position'` (no good row on the geocoding sheet). |
 | `refusedPosts` | Admin | `{ refused: [{ postKey, link, agent, loggedAt, property, propertyId, fbAccount, lastPosted, lastPostedBy, nextAllowed, handledBy, handledAt }] }`: every post on the admin sheet's Refused posts tab (v18), oldest first: posts sent again from an agent's outbox and refused for the cooldown. Since v19 nothing new is written there. |
 | `handleRefused` | Admin | `{ postLink }` (any copy of its link) → `{ refused }`: writes who handled the refused post and when. The tracker is not changed. `not-a-post`, `notfound`. |
 | `indexCheck` | Admin | Compares the directory with the checker's index, read fresh: `checkedAt`, `directoryCount`, `checkerCount`, `directoryOnly` and `sold` (`{ id, name }`), and `checkerOnly` (`{ id, name, path }`). `'checker-off'` or `'checker-unavailable'` when it cannot. |
@@ -272,6 +273,38 @@ It is cached for 10 minutes, like the checker's index. If the spreadsheet, the t
 columns are not there, `properties` answers exactly as before, without `lat`/`lng`; the app
 then places dots by the city in each listing's name. **The script never writes to this
 sheet.**
+
+## The brochure map's ring
+
+A brochure's location map is a satellite photo with a red ellipse on it, "the property is
+somewhere in here", and nothing that points to the spot (APG GIS's `docs/BROCHURE-MAP.md`).
+`locationRing` works the ellipse out on the server, from the geocoding sheet above, so the
+exact point never leaves it (D33).
+
+* **The centre is the listing's pin on the APG map.** APG GIS moves every public pin 80–220 m
+  (a warehouse 200–550 m) with an HMAC of the folder id and its Script Property `PIN_SECRET`,
+  then rounds it to 4 decimals. `Code.gs` has an unchanged copy of its `movePin_` and
+  `kindOf_` (`apgMovePin_`, `apgKindOf_`), so the centre is exactly the pin the APG map
+  shows, and the ring gives nothing away that the map does not.
+* **`PIN_SECRET`.** Copy it from APG GIS's project (⚙ *Project Settings* → *Script
+  Properties*) into this project's, under the same name. This script never makes one: a new
+  one would not match the APG map, and a ring moved its own way would combine with the APG
+  pin and narrow the spot down. Until it is there, `locationRing` is refused with
+  `reason: 'no-secret'`, and `SETUP` says so (never what it is). Never change it, here or in
+  APG GIS: every pin and every ring would move. To check the copy, a listing's `center` must
+  be its `lat`/`lng` on APG GIS's public feed, the other way round.
+* **The size.** The short half-axis is the furthest APG moves the pin (220 m, a warehouse
+  550 m), plus how far the lot reaches from its middle, plus 50 m, so the lot is inside
+  wherever the pin landed. A building reaches 40 m. Land (a category APG GIS has no kind for
+  that names a lot or land: `LOT`, `LOT ONLY`) and a warehouse reach as far as a circle of
+  their area, from the checker's `Size (sqm)`, never less than 40 m, and 500 m when the size
+  can't be read (or the checker can't), to err large. The long half-axis is 1.25–1.65 times
+  the short one and the tilt 0–180°, both from the same HMAC. The size never depends on where
+  the point is.
+* **The Size, read to err large.** Every number in it is added up (`150-245, 30,000` is
+  30,395 sqm); a comma between groups of three digits is a thousands comma (`787,374` is one
+  lot); a number followed by `ha` or `hectares` is 10,000 sqm a hectare; more than 1,000 ha
+  is a typo, read as unknown.
 
 ## Your existing tracker is not reformatted
 
