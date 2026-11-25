@@ -17,7 +17,18 @@ export type NoteItem = string | { readonly text: string; readonly show: ShowMe }
 export const noteText = (item: NoteItem): string => (typeof item === 'string' ? item : item.text);
 
 export const RELEASE_NOTES: readonly ReleaseNotes[] = [
-  // Not released yet: shown once the app's version is 1.1.7.
+  {
+    version: '1.1.8',
+    items: [
+      'A new app icon.',
+      'Make a flyer from a listing: three looks, your choice of photos on more pages, and an optional satellite map that rings the area, never the exact spot. Copy a page or save them all.',
+      'The next step glows: Copy, then Download photos, then Posted, so you always know what to press.',
+      'A reminder to post, once a day, while your queue has listings left.',
+      'Find shows its filters as chips you can clear one at a time.',
+      'Admins: Assign shows its filters, keeps Save on top, and says who has a queue.',
+      'Admins: Agents shows who is posting, and Records shows posts by agent as bars and copies a summary.',
+    ],
+  },
   {
     version: '1.1.7',
     items: [
@@ -27,7 +38,6 @@ export const RELEASE_NOTES: readonly ReleaseNotes[] = [
         text: 'The first time you open a listing, a tour walks you through one post: copy the caption, download the photos, post it, and log its link.',
         show: 'listing',
       },
-      'The next step glows: Copy, then Download photos, then Posted, so you always know what to press.',
       'Sign in remembers your email, and Forgot password sends you a reset link.',
       'Agents: Settings in your sidebar, for the theme and your reminders.',
       'Admins: give a queue to another admin, or to yourself. It shows as My queue in your sidebar.',
