@@ -174,7 +174,7 @@ export function TrackerScreen({
         </div>
       ) : (
         <>
-          <dl data-tour="tracker-stats" className="tracker-stats tracker__stats">
+          <dl className="tracker-stats tracker__stats">
             <Stat label={isToday ? 'Posted today' : 'Posted'} value={day.posted} />
             <Stat label="Pending" value={day.pending} />
             <Stat label="Agents behind" value={behind} of={pace.length} />
@@ -202,7 +202,7 @@ export function TrackerScreen({
               ) : null}
             </Card>
 
-            <Card data-tour="tracker-week"
+            <Card
               className="tracker__week"
               title={week === monitorWeek(today) ? 'This week' : weekLabel(week)}
               padding="tight"

@@ -290,7 +290,7 @@ export function FindScreen() {
               /
             </kbd>
           </div>
-          <div data-tour="find-sort" className="find__tools">
+          <div className="find__tools">
             <MenuButton label="Sort" text={SORT_LABEL[sort]} leading={<SortIcon />} className="find__sort">
               {(close) => (
                 <fieldset className="menu__group">
@@ -335,7 +335,7 @@ export function FindScreen() {
             </Chip>
           ))}
         </div>
-        <div data-tour="find-filters" className="find__filters" role="group" aria-label="Show only">
+        <div className="find__filters" role="group" aria-label="Show only">
           <span className="find__filters-label" aria-hidden="true">
             Show only
           </span>

@@ -551,9 +551,11 @@ Every screen now has its own short tour, pointing at the real buttons: My queue,
 Tracker, Assign, Agents, Records and Settings, as the listing page already had. Each starts
 by itself the first time the screen is opened, one at a time and never right after the
 welcome tour on the same screen; closing the welcome tour still turns them all off (1.1.7).
-Help's Tour this page starts the one for the screen the person is on. The listing tour now
-also covers whether it is ready to post, the call to action, the flyer and poster, and the
-cooldown.
+Help's Tour this page starts the one for the screen the person is on. Tours stay short:
+three steps at most a screen, and the listing tour five (six for admins), each step naming
+every button it is about. Related things share a step (the call to action with Copy, the
+flyer and poster with the photos, Pending approval with Posted); the step-by-step detail is
+in Help's guide.
 
 Help also has a guide, "How do I…": short step-by-step topics for posting, photos, flyers
 and posters, the queue and Find, the admin work, and what to do when something goes wrong.

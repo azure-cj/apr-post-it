@@ -224,7 +224,7 @@ export function InternsScreen({
         <NoInterns managedInHub={managedInHub} />
       ) : (
         <>
-          <dl data-tour="interns-stats" className="tracker-stats interns__stats">
+          <dl className="tracker-stats interns__stats">
             {live ? (
               <Stat label="Active today" value={activeToday} of={rows.length} />
             ) : (

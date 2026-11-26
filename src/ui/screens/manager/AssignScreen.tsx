@@ -1139,7 +1139,7 @@ export function AssignScreen({
       ) : null}
 
       <div className="assign__panes">
-        <Card data-tour="assign-add"
+        <Card
           className="assign__add"
           padding="tight"
           title={mode === 'library' ? 'Listings' : 'Paste a list'}
@@ -1218,7 +1218,7 @@ export function AssignScreen({
           )}
         </Card>
 
-        <Card data-tour="assign-queue"
+        <Card
           className="assign__queue"
           padding="tight"
           title="Queue"

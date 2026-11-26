@@ -46,7 +46,7 @@ export function RecordsBreakdown(props: RecordsBreakdownProps) {
   };
 
   return (
-    <section data-tour="records-breakdown" className="card card--tight breakdown" aria-label="Breakdown">
+    <section className="card card--tight breakdown" aria-label="Breakdown">
       <div className="breakdown__tabs" role="tablist" aria-label="Breakdown">
         {TABS.map((t, i) => (
           <button

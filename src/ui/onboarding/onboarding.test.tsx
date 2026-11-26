@@ -100,15 +100,17 @@ describe('the step lists', () => {
   });
 
   it('the listing tour walks one post, from caption to logged link, with Highlight for admins', () => {
-    const before = ['Ready to post?', 'Copy the caption', 'Add a call to action', 'Posted it before? Reword it', 'Download the photos', 'Make a flyer or a poster'];
-    const after = ['The cooldown', 'Post it, then log the link', 'Waiting for approval?'];
+    const before = ['Ready to post?', 'Copy the caption', 'Posted it before? Reword it', 'Photos, flyer and poster'];
+    const after = ['Post it, then log the link'];
     expect(titles(tourFor('listing', intern))).toEqual([...before, ...after]);
     expect(titles(tourFor('listing', manager))).toEqual([...before, 'Highlight it', ...after]);
   });
 
   it('every screen has its own tour, admin screens and Settings by role (1.1.8)', () => {
-    expect(titles(tourFor('find', intern))).toEqual(['Search every listing', 'Categories', 'Show only', 'Sort', 'Open a listing']);
-    expect(titles(tourFor('queue', intern))[0]).toBe('My queue');
+    expect(titles(tourFor('find', intern))).toEqual(['Search every listing', 'Narrow it down', 'Open a listing']);
+    expect(titles(tourFor('queue', intern))).toEqual(['My queue', 'Next up', 'The rest']);
+    // Short: no screen's tour is longer than three steps.
+    for (const id of ['queue', 'find', 'tracker', 'assign', 'interns', 'records', 'settings'] as const) expect(tourFor(id, manager).steps.length).toBeLessThanOrEqual(3);
     expect(titles(tourFor('settings', intern))).toEqual(['Your settings']);
     expect(titles(tourFor('settings', manager))).toEqual(['Four tabs']);
     expect(pageTourOf('/find')).toBe('find');

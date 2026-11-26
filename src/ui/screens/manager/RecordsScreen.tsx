@@ -181,7 +181,7 @@ export function RecordsScreen({
           </dl>
 
           <div className="records__overview">
-            <section data-tour="records-chart" className="card card--tight records-chart" aria-labelledby={chartTitle}>
+            <section className="card card--tight records-chart" aria-labelledby={chartTitle}>
               <div className="records-chart__head">
                 <h2 id={chartTitle} className="records-chart__title">
                   {report.buckets[0]?.unit === 'week' ? 'Posts per week' : 'Posts per day'}

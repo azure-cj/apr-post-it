@@ -390,7 +390,7 @@ function WeekHeader({ upcoming, period, today, done, posted, pending, target }: 
   const due = period.due;
   const share = (n: number) => `${target === 0 ? 0 : Math.min(100, (n / target) * 100)}%`;
   return (
-    <div data-tour="queue-week" className="queue__week">
+    <div className="queue__week">
       <div className="queue__week-row">
         <p className="queue__week-title">
           {upcoming ? 'Next queue' : 'This queue'}
