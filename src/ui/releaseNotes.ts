@@ -24,7 +24,7 @@ export const RELEASE_NOTES: readonly ReleaseNotes[] = [
       'Make a flyer from a listing: three looks, your choice of photos on more pages, and an optional satellite map that rings the area, never the exact spot. Copy a page or save them all.',
       'Or make a poster: a big headline over one photo, with your contacts, for the feed, a square or a story. Post it first, then the photos.',
       'Copy can end the post with a line asking for a viewing.',
-      'Every screen shows you around the first time you open it. Help has a guide: search how to do anything, or what to do when something goes wrong.',
+      'Every screen shows you around the first time you open it. Help has a guide: click a topic and it walks you through it, button by button, on the right screen.',
       'No text on a listing? Open it in Drive, paste the text, then Copy or Reword it. Owner lines stay out.',
       'The virtual office posts are in Find. Post one when an admin highlights it: no need to open Drive.',
       'The next step glows: Copy, then Download photos, then Posted, so you always know what to press.',

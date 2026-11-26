@@ -14,7 +14,7 @@ import './WaitingPosts.css';
 export function WaitingPosts({ waiting, onChanged }: { readonly waiting: readonly WaitingPost[]; readonly onChanged: () => void }) {
   if (waiting.length === 0) return null;
   return (
-    <Card className="waiting" title={waiting.length === 1 ? '1 post waiting for approval' : `${waiting.length} posts waiting for approval`}>
+    <Card data-tour="queue-waiting" className="waiting" title={waiting.length === 1 ? '1 post waiting for approval' : `${waiting.length} posts waiting for approval`}>
       <ol className="waiting__list">
         {waiting.map(({ post, days }) => (
           <WaitingRow key={`${post.postLink}-${post.date}-${post.title}`} post={post} days={days} onChanged={onChanged} />

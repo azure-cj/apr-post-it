@@ -285,11 +285,19 @@
   list-style: none;
 }
 
-.help__topic-head {
+.help__topic-row {
   display: flex;
   align-items: center;
+  gap: var(--space-1);
+}
+
+.help__topic-head {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
-  width: 100%;
   padding: 6px var(--space-2);
   border: 0;
   border-radius: var(--radius-sm);
@@ -300,8 +308,37 @@
   cursor: pointer;
 }
 
-.help__topic-head:hover {
+.help__topic-head:hover,
+.help__steps:hover {
   background: var(--row-hover);
+}
+
+/* Show me appears on the row the pointer or keyboard is on. */
+.help__go {
+  flex: none;
+  color: var(--gold);
+  font-size: 0.85em;
+  opacity: 0;
+}
+
+.help__topic-head:hover .help__go,
+.help__topic-head:focus-visible .help__go {
+  opacity: 1;
+}
+
+.help__steps {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
 }
 
 .help__caret {
@@ -323,7 +360,7 @@
   display: grid;
   justify-items: start;
   gap: var(--space-3);
-  padding: 0 var(--space-2) var(--space-4) calc(var(--space-2) + 6px + var(--space-3));
+  padding: 0 var(--space-2) var(--space-4);
 }
 
 .help__topic-body ol {

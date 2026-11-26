@@ -2,11 +2,13 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom';
 import { Button, Icon } from '../components';
 import { placeCard, type Box } from './place';
-import type { Tour } from './tours';
+import { ANY_LISTING, type Tour, type TourStep } from './tours';
 import './onboarding.css';
 
 /** How long a step waits for its element to appear (a screen still loading) before going on without it. */
 export const LOOK_MS = 1500;
+/** Longer after going to another screen: it has to open and load first. */
+export const ARRIVE_LOOK_MS = 6000;
 const LOOK_EVERY_MS = 100;
 /** Room between the element and the spotlight's edge. */
 const PAD = 6;
@@ -53,10 +55,13 @@ const sameBox = (a: Box | null, b: Box | null) =>
 export function TourOverlay({
   tour,
   onEnd,
+  arrive,
 }: {
   readonly tour: Tour;
   /** 'done': the last step's button; 'skipped': ✕, Skip tour or Esc. */
   readonly onEnd: (how: 'done' | 'skipped') => void;
+  /** Goes to a step's screen (its `route`), resolving once it is there or can't be. */
+  readonly arrive?: ((step: TourStep) => Promise<void>) | undefined;
 }) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -80,13 +85,16 @@ export function TourOverlay({
   const last = index === total - 1;
   const hint = tour.id === 'hint';
 
+  // Kept in a ref: onEnd changes as the app moves between screens, and a step still finding its screen must not start over.
+  const onEndRef = useRef(onEnd);
+  onEndRef.current = onEnd;
   const end = useCallback(
     (how: 'done' | 'skipped') => {
       if (ended.current) return;
       ended.current = true;
-      onEnd(how);
+      onEndRef.current(how);
     },
-    [onEnd],
+    [],
   );
 
   const go = useCallback(
@@ -95,7 +103,8 @@ export function TourOverlay({
       // The page is up, so an optional step's button that isn't on it now won't come: pass over it at once.
       const missing = (i: number) => {
         const s = tour.steps[i];
-        return s?.optional === true && s.target !== undefined && findTarget(s.target) === null;
+        // A step on another screen can't be judged from here.
+        return s?.optional === true && s.target !== undefined && s.route === undefined && findTarget(s.target) === null;
       };
       if (target) while (next >= 0 && next < total && missing(next)) next += by;
       if (next >= total) return end('done');
@@ -116,13 +125,16 @@ export function TourOverlay({
       return undefined;
     }
     const name = step.target;
+    const limit = step.route === ANY_LISTING && arrive ? ARRIVE_LOOK_MS : LOOK_MS;
     let waited = 0;
     let timer: number | undefined;
+    let live = true;
     const look = () => {
+      if (!live) return;
       const el = findTarget(name);
       if (el) return setFound({ at, el });
       waited += LOOK_EVERY_MS;
-      if (waited < LOOK_MS) {
+      if (waited < limit) {
         timer = window.setTimeout(look, LOOK_EVERY_MS);
         return;
       }
@@ -132,9 +144,13 @@ export function TourOverlay({
       if (next < 0) return setFound({ at, el: null });
       setIndex(next);
     };
-    look();
-    return () => window.clearTimeout(timer);
-  }, [step, index, direction, total, end]);
+    if (step.route && arrive) void arrive(step).catch(() => undefined).then(look);
+    else look();
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [step, index, direction, total, end, arrive]);
 
   // Keep the spotlight on the element as the page scrolls, resizes or loads.
   useLayoutEffect(() => {
@@ -224,7 +240,7 @@ export function TourOverlay({
     : null;
   const at = placeCard(padded, cardSize, view);
 
-  const primary = hint ? 'Got it' : last ? 'Done' : index === 0 && !step.target ? 'Show me around' : 'Next';
+  const primary = hint ? 'Got it' : last ? 'Done' : index === 0 && !step.target && tour.id !== 'guide' ? 'Show me around' : 'Next';
 
   return createPortal(
     <div className="tour" data-testid="tour">

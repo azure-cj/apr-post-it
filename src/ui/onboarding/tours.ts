@@ -29,12 +29,16 @@ export interface TourStep {
   readonly adminOnly?: boolean;
   /** Agents only. */
   readonly agentOnly?: boolean;
-  /** Go here first (a path), then point. */
+  /** Go here first (a path, or ANY_LISTING), then point. */
   readonly route?: string;
 }
 
+/** A step's route meaning "a listing's page": the one already open, else Next up in My queue, else the first in Find. */
+export const ANY_LISTING = 'listing';
+
 export interface Tour {
-  readonly id: TourId | 'hint';
+  /** 'hint': a Show me pointer; 'guide': a walkthrough from Help's guide. Neither is kept in the record. */
+  readonly id: TourId | 'hint' | 'guide';
   readonly steps: readonly TourStep[];
   /** The tour ends by itself when the person leaves where it is about. */
   readonly scope?: (pathname: string) => boolean;

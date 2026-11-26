@@ -15,7 +15,7 @@ import { EXEC, fakeServer, intern, manager, NOW, PROPERTIES, propertyReply, rend
 import { WhatsNew } from '../WhatsNew';
 import { placeCard } from './place';
 import { EMPTY_RECORD, NEW_RECORD, recordKey, withTask, withTour } from './record';
-import { guideFor, matchesTopic } from './guide';
+import { guideFor, matchesTopic, walkthroughOf, WALKS } from './guide';
 import { pageTourOf, tasksFor, tourFor, type ScreenTourId } from './tours';
 
 const LONG = { timeout: 4000 };
@@ -432,14 +432,40 @@ describe("Help's guide (1.1.8)", () => {
     expect(titlesFor('zzz')).toEqual([]);
   });
 
-  it('opens a topic, and Show me starts its tour', async () => {
+  it('every topic has a walkthrough, with short steps, for both roles', () => {
+    for (const admin of [false, true]) {
+      for (const topic of guideFor(admin)) {
+        const walk = walkthroughOf(topic, admin);
+        expect(walk.id).toBe('guide');
+        expect(WALKS[topic.id], topic.id).toBeTruthy();
+        expect(walk.steps.length).toBeGreaterThan(0);
+        // Its first step goes to a screen, or points at nothing: it can always start.
+        expect(walk.steps[0]?.route !== undefined || walk.steps[0]?.target === undefined, topic.id).toBe(true);
+        for (const step of walk.steps) for (const sentence of step.body.split(/(?<=[.?:]) /)) expect(sentence.split(' ').length).toBeLessThanOrEqual(25);
+      }
+    }
+  });
+
+  it('Steps shows a topic written down; clicking the topic walks through it on its screen', async () => {
     const platform = fakeServer();
     renderApp({ platform, path: '/queue' });
     await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
     const panel = await screen.findByRole('dialog', { name: 'Getting started' });
     await userEvent.type(within(panel).getByRole('searchbox', { name: 'Search help' }), 'find any');
     expect(within(panel).getByText(/Press \/ to jump to the search box/)).toBeTruthy();
-    await userEvent.click(within(panel).getByRole('button', { name: 'Show me: Find any listing' }));
-    expect(await screen.findByRole('dialog', { name: 'Search every listing' }, LONG)).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Read the steps: Find any listing' }).getAttribute('aria-expanded')).toBe('true');
+    await userEvent.click(within(panel).getByRole('button', { name: /^Find any listing/ }));
+    expect(await screen.findByRole('dialog', { name: 'Search' }, LONG)).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Getting started' })).toBeNull();
   });
+
+  it('a walkthrough about a listing opens Next up for the person', async () => {
+    const platform = fakeServer();
+    renderApp({ platform, path: '/find' });
+    await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
+    const panel = await screen.findByRole('dialog', { name: 'Getting started' });
+    await userEvent.type(within(panel).getByRole('searchbox', { name: 'Search help' }), 'call to action');
+    await userEvent.click(within(panel).getByRole('button', { name: /^End the post with a call to action/ }));
+    expect(await screen.findByRole('dialog', { name: 'Tick End with a call to action' }, { timeout: 12000 })).toBeTruthy();
+  }, 20000);
 });

@@ -11,6 +11,7 @@ import './onboarding.css';
  * Help, from the sidebar: the getting-started list with how far along the
  * person is, Show me for each thing, the tours again, the guide (how to do
  * each thing, and what to do when something goes wrong), and What's new.
+ * Clicking a guide topic starts its walkthrough; Steps shows it written down.
  * Each item ticks itself off when the person really does it. Esc, ✕ or a
  * click outside closes it.
  */
@@ -19,7 +20,6 @@ export function HelpPanel({
   done,
   listHidden,
   pageTour,
-  onListPage,
   topics,
   onShow,
   onTour,
@@ -34,13 +34,11 @@ export function HelpPanel({
   readonly listHidden: boolean;
   /** The tour of the screen the person is on, when it has one. */
   readonly pageTour: (() => void) | undefined;
-  /** On a listing's page: a topic shown on a listing offers Show me only there. */
-  readonly onListPage: boolean;
   /** The guide's topics for this person's role. */
   readonly topics: readonly GuideTopic[];
   readonly onShow: (task: Task) => void;
   readonly onTour: () => void;
-  /** A topic's Show me. */
+  /** A topic clicked: its walkthrough. */
   readonly onTopic: (topic: GuideTopic) => void;
   readonly onWhatsNew: (() => void) | undefined;
   readonly onHideList: () => void;
@@ -189,27 +187,31 @@ export function HelpPanel({
                     const bodyId = `${titleId}-${topic.id}`;
                     return (
                       <li key={topic.id} className={`help__topic${open ? ' is-open' : ''}`}>
-                        <button
-                          type="button"
-                          className="help__topic-head"
-                          aria-expanded={open}
-                          aria-controls={bodyId}
-                          onClick={() => setOpenTopic(openTopic === topic.id && open ? null : topic.id)}
-                        >
-                          <span className="help__caret" aria-hidden="true" />
-                          <span>{topic.title}</span>
-                        </button>
+                        <div className="help__topic-row">
+                          <button type="button" className="help__topic-head" onClick={() => onTopic(topic)} title="Show me, step by step">
+                            <span>{topic.title}</span>
+                            <span className="help__go" aria-hidden="true">
+                              Show me
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            className="help__steps"
+                            aria-expanded={open}
+                            aria-controls={bodyId}
+                            aria-label={`Read the steps: ${topic.title}`}
+                            onClick={() => setOpenTopic(openTopic === topic.id && open ? null : topic.id)}
+                          >
+                            Steps
+                            <span className="help__caret" aria-hidden="true" />
+                          </button>
+                        </div>
                         <div id={bodyId} className="help__topic-body" hidden={!open}>
                           <ol>
                             {topic.steps.map((step) => (
                               <li key={step}>{step}</li>
                             ))}
                           </ol>
-                          {topic.show && (!topic.onListing || onListPage) ? (
-                            <Button size="small" variant="quiet" onClick={() => onTopic(topic)} aria-label={`Show me: ${topic.title}`}>
-                              Show me
-                            </Button>
-                          ) : null}
                         </div>
                       </li>
                     );

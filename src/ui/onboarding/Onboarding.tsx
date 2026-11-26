@@ -2,11 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { canManage, type User } from '@/core/types';
 import type { Platform } from '@/platform';
 import { notesFor, SEEN_VERSION_KEY } from '../releaseNotes';
-import { guideFor } from './guide';
+import { guideFor, walkthroughOf } from './guide';
 import { HelpPanel } from './HelpPanel';
 import { NEW_RECORD, readRecord, withTask, withTour, writeRecord, type OnboardingRecord } from './record';
 import { TourOverlay } from './TourOverlay';
-import { hintTour, pageTourOf, tasksFor, tourFor, welcomeTourFor, type TaskId, type Tour, type TourId } from './tours';
+import { ANY_LISTING, hintTour, pageTourOf, tasksFor, tourFor, welcomeTourFor, type TaskId, type Tour, type TourId, type TourStep } from './tours';
 
 /**
  * Onboarding (1.1.7): the welcome tour once, opening by itself right after a
@@ -36,6 +36,30 @@ export const OnboardingContext = createContext<OnboardingApi>(NOOP);
 /** The onboarding of the app around this screen. Outside the app (a screen's own test), it does nothing. */
 export function useOnboarding(): OnboardingApi {
   return useContext(OnboardingContext);
+}
+
+const LISTING_PAGE = /^\/property\/[^/]+$/;
+
+/** True once `ok` holds, checking every 100 ms; false after `ms`. */
+function until(ok: () => boolean, ms = 5000): Promise<boolean> {
+  return new Promise((done) => {
+    const began = Date.now();
+    const check = () => {
+      if (ok()) return done(true);
+      if (Date.now() - began >= ms) return done(false);
+      window.setTimeout(check, 100);
+    };
+    check();
+  });
+}
+
+/** Once on the screen (`there`), clicks the first element matching `selector` when it appears. False when it never does. */
+async function clickWhenThere(selector: string, there: () => boolean): Promise<boolean> {
+  if (!(await until(there, 3000))) return false;
+  let el: HTMLElement | null = null;
+  if (!(await until(() => (el = document.querySelector<HTMLElement>(selector)) !== null, 4000)) || !el) return false;
+  (el as HTMLElement).click();
+  return true;
 }
 
 /** How soon after a screen appears a tour may start by itself, and how often it looks again while something is in the way. */
@@ -139,7 +163,8 @@ export function useOnboardingController({
       // Not known yet (Help, before the read lands): kept, and passed over if My queue isn't there when it comes.
       const tour = typeof id === 'string' ? tourFor(id, user, myQueue !== false) : id;
       setHelpOpen(false);
-      const route = tour.steps[0]?.route;
+      // A walkthrough from the guide goes to each step's screen itself (arrive).
+      const route = tour.id === 'guide' ? undefined : tour.steps[0]?.route;
       // Going there first: the tour isn't left behind while the screen changes.
       arriving.current = route && route !== pathname ? route : null;
       if (arriving.current) go(route!);
@@ -166,7 +191,7 @@ export function useOnboardingController({
       const tour = active;
       setActive(null);
       const current = recordRef.current;
-      if (!tour || tour.id === 'hint' || !current) return;
+      if (!tour || tour.id === 'hint' || tour.id === 'guide' || !current) return;
       if (tour.id.startsWith('welcome')) welcomedAt.current = pathname;
       save(withTour(current, tour.id, how));
     },
@@ -246,23 +271,48 @@ export function useOnboardingController({
     [user, start, complete, openHelp, helpOpen, badge, record],
   );
 
+  // Where the app is now, for a walkthrough that waits for a screen to open.
+  const where = useRef(pathname);
+  where.current = pathname;
+  // Kept in refs: going to a screen changes `go`, and the walkthrough must not start over when it does.
+  const goRef = useRef(go);
+  goRef.current = go;
+  const queueRef = useRef(myQueue);
+  queueRef.current = myQueue;
+  const arrive = useCallback(
+    async (step: TourStep) => {
+      const route = step.route;
+      if (!route) return;
+      if (route !== ANY_LISTING) {
+        if (where.current !== route) goRef.current(route);
+        return;
+      }
+      if (LISTING_PAGE.test(where.current)) return;
+      // Next up in My queue, else the first listing in Find: opened the way the person would, by its link.
+      if (queueRef.current !== false) {
+        goRef.current('/queue');
+        if (await clickWhenThere('[data-tour="queue-next"] a', () => where.current === '/queue')) return void (await until(() => LISTING_PAGE.test(where.current)));
+      }
+      goRef.current('/find');
+      if (await clickWhenThere('a.find-row__link', () => where.current === '/find')) await until(() => LISTING_PAGE.test(where.current));
+    },
+    [],
+  );
+
   const pageTour = pageTourOf(pathname);
   const ui = (
     <>
-      {active ? <TourOverlay key={`${active.id}-${active.steps[0]?.title ?? ''}`} tour={active} onEnd={end} /> : null}
+      {active ? <TourOverlay key={`${active.id}-${active.steps[0]?.title ?? ''}`} tour={active} onEnd={end} arrive={arrive} /> : null}
       {helpOpen && user && record ? (
         <HelpPanel
           tasks={tasks}
           done={(task) => record.tasks[task.id] === true}
           listHidden={record.listHidden}
           pageTour={pageTour ? () => start(pageTour) : undefined}
-          onListPage={pageTour === 'listing'}
           topics={guideFor(canManage(user))}
           onShow={(task) => start(hintTour(task.hint))}
           onTour={() => start(welcomeTourFor(user))}
-          onTopic={(topic) => {
-            if (topic.show) start(topic.show);
-          }}
+          onTopic={(topic) => start(walkthroughOf(topic, canManage(user)))}
           onWhatsNew={
             openWhatsNew
               ? () => {

@@ -81,7 +81,7 @@ export function SettingsApp({
       ) : null}
 
       {onReminderDaysChange || onPostReminderHourChange ? (
-        <Card title="Reminders" description="Windows notifications, once a day each, while Post-It is open.">
+        <Card data-tour="settings-reminders" title="Reminders" description="Windows notifications, once a day each, while Post-It is open.">
           <div className="app-reminders">
             {onPostReminderHourChange ? (
               <div className="app-reminders__one">

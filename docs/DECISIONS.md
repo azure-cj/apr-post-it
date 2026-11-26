@@ -559,6 +559,17 @@ in Help's guide.
 
 Help also has a guide, "How do I…": short step-by-step topics for posting, photos, flyers
 and posters, the queue and Find, the admin work, and what to do when something goes wrong.
-It is searchable, shows admins the admin topics only, and a topic with a tour has Show me.
+It is searchable, and shows admins the admin topics only. Each topic is a walkthrough (D39).
 The Flyer has no tour of its own: it opens as a dialog, which sits above any tour, so the
 listing tour and the guide explain it instead.
+
+### D39. Each guide topic is a walkthrough (Nov 26, 2026)
+
+Clicking a topic in Help's guide starts its walkthrough: it goes to the screen the topic
+happens on and lights up each button in turn, the way a tour does. The written steps stay
+behind Steps, beside the topic. A topic about a listing opens one for the person: the
+listing already open, else Next up in My queue, else the first listing in Find, by
+clicking its link as they would. It only points: nothing is copied, posted or saved, and
+walkthroughs are not kept in the person's tour record. A step whose button is not on the
+screen (a listing with no photos, a desktop-only button) is passed over, and a closing
+step says where to find it.

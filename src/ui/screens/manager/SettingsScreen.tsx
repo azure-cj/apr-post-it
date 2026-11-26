@@ -65,7 +65,7 @@ export function SettingsScreen({ tab, onTabChange, team, listings, rules, app }:
             Settings
           </h1>
           {tab === 'team' && team.onAddPerson ? (
-            <Button variant="primary" onClick={() => setAdding(true)}>
+            <Button variant="primary" data-tour="settings-add" onClick={() => setAdding(true)}>
               Add person
             </Button>
           ) : null}
