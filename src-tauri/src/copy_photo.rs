@@ -100,7 +100,10 @@ pub(crate) fn upright(bytes: &[u8], max_side: u32) -> Result<DynamicImage, Strin
         .map_err(|e| e.to_string())?;
     let mut decoder = reader.into_decoder().map_err(|e| e.to_string())?;
     let orientation = decoder.orientation().map_err(|e| e.to_string())?;
-    let mut photo = DynamicImage::from_decoder(decoder).map_err(|e| e.to_string())?;
+    let mut photo = match jpeg_pixels(bytes) {
+        Some(photo) => photo,
+        None => DynamicImage::from_decoder(decoder).map_err(|e| e.to_string())?,
+    };
     photo.apply_orientation(orientation);
     if photo.width() > max_side || photo.height() > max_side {
         // Keeps the shape: the longer side becomes max_side.
@@ -109,10 +112,55 @@ pub(crate) fn upright(bytes: &[u8], max_side: u32) -> Result<DynamicImage, Strin
     Ok(photo)
 }
 
+/**
+ * A JPEG's pixels, by jpeg-decoder; `None` for anything else, or a JPEG it
+ * can't read, which image's own decoder then tries. image's decoder
+ * (zune-jpeg 0.5.15) turns some listing photos into green stripes.
+ */
+fn jpeg_pixels(bytes: &[u8]) -> Option<DynamicImage> {
+    if !bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return None;
+    }
+    let mut decoder = jpeg_decoder::Decoder::new(Cursor::new(bytes));
+    let pixels = decoder.decode().ok()?;
+    let info = decoder.info()?;
+    let (w, h) = (u32::from(info.width), u32::from(info.height));
+    match info.pixel_format {
+        jpeg_decoder::PixelFormat::RGB24 => image::RgbImage::from_raw(w, h, pixels).map(DynamicImage::ImageRgb8),
+        jpeg_decoder::PixelFormat::L8 => image::GrayImage::from_raw(w, h, pixels).map(DynamicImage::ImageLuma8),
+        jpeg_decoder::PixelFormat::L16 => {
+            let wide = pixels.chunks_exact(2).map(|b| u16::from_be_bytes([b[0], b[1]])).collect();
+            image::ImageBuffer::from_raw(w, h, wide).map(DynamicImage::ImageLuma16)
+        }
+        jpeg_decoder::PixelFormat::CMYK32 => {
+            // As image did before 0.25: each ink taken off white.
+            let rgb = pixels
+                .chunks_exact(4)
+                .flat_map(|p| {
+                    let k = 255 - u32::from(p[3]);
+                    [0, 1, 2].map(|i| ((255 - u32::from(p[i])) * k / 255) as u8)
+                })
+                .collect();
+            image::RgbImage::from_raw(w, h, rgb).map(DynamicImage::ImageRgb8)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use image::{ImageFormat, Rgba, RgbaImage};
+
+    #[test]
+    fn reads_a_jpeg_with_jpeg_decoder_and_leaves_other_formats_to_image() {
+        let jpeg = encoded(48, 32, ImageFormat::Jpeg);
+        let photo = jpeg_pixels(&jpeg).expect("a JPEG").into_rgb8();
+        assert_eq!((photo.width(), photo.height()), (48, 32));
+        let px = photo.get_pixel(24, 16).0;
+        assert!(px[0] > 170 && px[1] < 70 && px[2] < 70, "red, not green: {px:?}");
+        assert!(jpeg_pixels(&encoded(4, 4, ImageFormat::Png)).is_none());
+        assert_eq!(upright(&jpeg, 2000).unwrap().width(), 48);
+    }
 
     fn encoded(width: u32, height: u32, format: ImageFormat) -> Vec<u8> {
         let photo = DynamicImage::ImageRgba8(RgbaImage::from_pixel(width, height, Rgba([200, 30, 30, 255])));

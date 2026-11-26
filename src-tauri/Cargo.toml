@@ -39,6 +39,9 @@ tauri-plugin-clipboard-manager = "=2.5.0"
 # clipboard plugin already brings this version in; these are the formats Drive
 # serves listing photos in.
 image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+# JPEGs are decoded with this rather than image's own decoder (zune-jpeg 0.5.15),
+# which turns some listing photos into green stripes. image fell back on it before 0.25.
+jpeg-decoder = { version = "=0.3.2", default-features = false }
 tauri-plugin-dialog = "=2.8.3"
 tauri-plugin-fs = "=2.7.1"
 # The defaults minus `cookies`: the web app needs none, and the jar would be
