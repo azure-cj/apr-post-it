@@ -1,6 +1,7 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Button, Icon } from '../components';
+import { Button, Icon, SearchBox } from '../components';
+import { GUIDE_GROUPS, matchesTopic, type GuideTopic } from './guide';
 import { placeCard } from './place';
 import { findTarget } from './TourOverlay';
 import type { Task } from './tours';
@@ -8,18 +9,21 @@ import './onboarding.css';
 
 /**
  * Help, from the sidebar: the getting-started list with how far along the
- * person is, Show me for each thing, the tours again, and What's new. Each
- * item ticks itself off when the person really does it. Esc, ✕ or a click
- * outside closes it.
+ * person is, Show me for each thing, the tours again, the guide (how to do
+ * each thing, and what to do when something goes wrong), and What's new.
+ * Each item ticks itself off when the person really does it. Esc, ✕ or a
+ * click outside closes it.
  */
 export function HelpPanel({
   tasks,
   done,
   listHidden,
+  pageTour,
   onListPage,
+  topics,
   onShow,
   onTour,
-  onListingTour,
+  onTopic,
   onWhatsNew,
   onHideList,
   onShowList,
@@ -28,11 +32,16 @@ export function HelpPanel({
   readonly tasks: readonly Task[];
   readonly done: (task: Task) => boolean;
   readonly listHidden: boolean;
-  /** On a listing's page: its tour is offered. */
+  /** The tour of the screen the person is on, when it has one. */
+  readonly pageTour: (() => void) | undefined;
+  /** On a listing's page: a topic shown on a listing offers Show me only there. */
   readonly onListPage: boolean;
+  /** The guide's topics for this person's role. */
+  readonly topics: readonly GuideTopic[];
   readonly onShow: (task: Task) => void;
   readonly onTour: () => void;
-  readonly onListingTour: () => void;
+  /** A topic's Show me. */
+  readonly onTopic: (topic: GuideTopic) => void;
   readonly onWhatsNew: (() => void) | undefined;
   readonly onHideList: () => void;
   readonly onShowList: () => void;
@@ -44,6 +53,10 @@ export function HelpPanel({
   const [at, setAt] = useState({ top: 0, left: 0 });
   const count = tasks.filter(done).length;
   const allDone = count === tasks.length;
+  const [query, setQuery] = useState('');
+  const [openTopic, setOpenTopic] = useState<string | null>(null);
+  const found = useMemo(() => topics.filter((t) => matchesTopic(t, query)), [topics, query]);
+  const searching = query.trim() !== '';
 
   // Beside the Help button, inside the window.
   useLayoutEffect(() => {
@@ -145,8 +158,8 @@ export function HelpPanel({
         <Button ref={firstRef} size="small" onClick={onTour}>
           Take the tour
         </Button>
-        {onListPage ? (
-          <Button size="small" onClick={onListingTour}>
+        {pageTour ? (
+          <Button size="small" onClick={pageTour}>
             Tour this page
           </Button>
         ) : null}
@@ -156,6 +169,58 @@ export function HelpPanel({
           </Button>
         ) : null}
       </div>
+      <section className="help__guide" aria-labelledby={`${titleId}-guide`}>
+        <h3 id={`${titleId}-guide`} className="help__sub">
+          How do I…
+        </h3>
+        <SearchBox label="Search help" placeholder="Search help" value={query} onValueChange={setQuery} />
+        {found.length === 0 ? (
+          <p className="help__none meta">Nothing matches. Try another word, like photos, link or flyer.</p>
+        ) : (
+          GUIDE_GROUPS.map((group) => {
+            const inGroup = found.filter((t) => t.group === group);
+            if (inGroup.length === 0) return null;
+            return (
+              <div key={group} className="help__group">
+                <h4 className="help__group-title meta">{group}</h4>
+                <ul className="help__topics">
+                  {inGroup.map((topic) => {
+                    const open = searching ? found.length <= 3 || openTopic === topic.id : openTopic === topic.id;
+                    const bodyId = `${titleId}-${topic.id}`;
+                    return (
+                      <li key={topic.id} className={`help__topic${open ? ' is-open' : ''}`}>
+                        <button
+                          type="button"
+                          className="help__topic-head"
+                          aria-expanded={open}
+                          aria-controls={bodyId}
+                          onClick={() => setOpenTopic(openTopic === topic.id && open ? null : topic.id)}
+                        >
+                          <span className="help__caret" aria-hidden="true" />
+                          <span>{topic.title}</span>
+                        </button>
+                        <div id={bodyId} className="help__topic-body" hidden={!open}>
+                          <ol>
+                            {topic.steps.map((step) => (
+                              <li key={step}>{step}</li>
+                            ))}
+                          </ol>
+                          {topic.show && (!topic.onListing || onListPage) ? (
+                            <Button size="small" variant="quiet" onClick={() => onTopic(topic)} aria-label={`Show me: ${topic.title}`}>
+                              Show me
+                            </Button>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })
+        )}
+      </section>
+
       <div className="help__foot">
         {listHidden ? (
           <Button size="small" variant="link" onClick={onShowList}>

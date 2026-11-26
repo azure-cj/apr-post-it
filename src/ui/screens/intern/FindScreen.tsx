@@ -275,7 +275,7 @@ export function FindScreen() {
           />
         </div>
         <div className="find__find">
-          <div className="find__search">
+          <div data-tour="find-search" className="find__search">
             <SearchBox
               ref={searchRef}
               label="Search listings"
@@ -290,7 +290,7 @@ export function FindScreen() {
               /
             </kbd>
           </div>
-          <div className="find__tools">
+          <div data-tour="find-sort" className="find__tools">
             <MenuButton label="Sort" text={SORT_LABEL[sort]} leading={<SortIcon />} className="find__sort">
               {(close) => (
                 <fieldset className="menu__group">
@@ -318,7 +318,7 @@ export function FindScreen() {
       </header>
 
       <div className="find__bar">
-        <div className="find__chips" role="group" aria-label="Category">
+        <div data-tour="find-chips" className="find__chips" role="group" aria-label="Category">
           <Chip selected={find.category === ''} count={list ? results.all : undefined} onSelectedChange={() => change({ category: '' })}>
             All
           </Chip>
@@ -335,7 +335,7 @@ export function FindScreen() {
             </Chip>
           ))}
         </div>
-        <div className="find__filters" role="group" aria-label="Show only">
+        <div data-tour="find-filters" className="find__filters" role="group" aria-label="Show only">
           <span className="find__filters-label" aria-hidden="true">
             Show only
           </span>
@@ -362,7 +362,7 @@ export function FindScreen() {
         {announcement}
       </p>
 
-      <section className="find__results" id={resultsId} aria-label="Results">
+      <section data-tour="find-results" className="find__results" id={resultsId} aria-label="Results">
         {list === null ? (
           status.error && !status.refreshing ? (
             <Notice

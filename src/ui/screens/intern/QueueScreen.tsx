@@ -91,7 +91,7 @@ export function QueueScreen() {
 
   return (
     <div className="page queue">
-      <header className="page-header">
+      <header data-tour="queue-head" className="page-header">
         <div className="page-header__row queue__title-row">
           <h1 className="page-header__title" tabIndex={-1}>
             My queue
@@ -181,7 +181,7 @@ export function QueueScreen() {
           ) : null}
 
           {rest.length > 0 ? (
-            <ol
+            <ol data-tour="queue-list"
               className="queue__list"
               aria-label={next ? 'The rest of the queue' : 'This queue'}
               ref={paged.topRef}
@@ -390,7 +390,7 @@ function WeekHeader({ upcoming, period, today, done, posted, pending, target }: 
   const due = period.due;
   const share = (n: number) => `${target === 0 ? 0 : Math.min(100, (n / target) * 100)}%`;
   return (
-    <div className="queue__week">
+    <div data-tour="queue-week" className="queue__week">
       <div className="queue__week-row">
         <p className="queue__week-title">
           {upcoming ? 'Next queue' : 'This queue'}

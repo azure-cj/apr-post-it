@@ -1,18 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { User } from '@/core/types';
+import { canManage, type User } from '@/core/types';
 import type { Platform } from '@/platform';
 import { notesFor, SEEN_VERSION_KEY } from '../releaseNotes';
+import { guideFor } from './guide';
 import { HelpPanel } from './HelpPanel';
 import { NEW_RECORD, readRecord, withTask, withTour, writeRecord, type OnboardingRecord } from './record';
 import { TourOverlay } from './TourOverlay';
-import { hintTour, tasksFor, tourFor, welcomeTourFor, type TaskId, type Tour, type TourId } from './tours';
+import { hintTour, pageTourOf, tasksFor, tourFor, welcomeTourFor, type TaskId, type Tour, type TourId } from './tours';
 
 /**
  * Onboarding (1.1.7): the welcome tour once, opening by itself right after a
  * person's first sign-in on this PC (and on the next sign-in if it never got
- * to show), the listing tour the first time they open a listing, and Help in
- * the sidebar, with the getting-started list and every tour again. The
- * screens tick the list off with `useOnboarding().complete(...)`.
+ * to show), the listing tour the first time they open a listing, each
+ * screen's own tour the first time they open it (1.1.8), and Help in the
+ * sidebar, with the getting-started list, every tour again, and the guide.
+ * The screens tick the list off with `useOnboarding().complete(...)`.
  */
 export interface OnboardingApi {
   /** Starts a tour now, whatever was seen before. 'welcome': the one for this person's role. */
@@ -78,6 +80,10 @@ export function useOnboardingController({
   const [active, setActive] = useState<Tour | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const recordRef = useRef<OnboardingRecord | null>(null);
+  // Where the welcome tour just ended: that screen's own tour waits for the next visit, so two tours don't run back to back.
+  const welcomedAt = useRef<string | null>(null);
+  // The screen a tour was started for, while the app goes there.
+  const arriving = useRef<string | null>(null);
   const pending = useRef<TaskId[]>([]);
   const name = user?.name ?? null;
 
@@ -134,7 +140,9 @@ export function useOnboardingController({
       const tour = typeof id === 'string' ? tourFor(id, user, myQueue !== false) : id;
       setHelpOpen(false);
       const route = tour.steps[0]?.route;
-      if (route && route !== pathname) go(route);
+      // Going there first: the tour isn't left behind while the screen changes.
+      arriving.current = route && route !== pathname ? route : null;
+      if (arriving.current) go(route!);
       setActive(tour);
     },
     [user, myQueue, pathname, go],
@@ -159,19 +167,31 @@ export function useOnboardingController({
       setActive(null);
       const current = recordRef.current;
       if (!tour || tour.id === 'hint' || !current) return;
+      if (tour.id.startsWith('welcome')) welcomedAt.current = pathname;
       save(withTour(current, tour.id, how));
     },
-    [active, save],
+    [active, save, pathname],
   );
 
   // A tour about a page ends when the person leaves it.
   useEffect(() => {
-    if (active?.scope && !active.scope(pathname)) end('skipped');
+    if (!active?.scope) return;
+    if (arriving.current !== null) {
+      if (pathname === arriving.current) arriving.current = null;
+      return;
+    }
+    if (!active.scope(pathname)) end('skipped');
   }, [active, pathname, end]);
 
+  // Leaving the screen where the welcome tour ended: its own tour may start next time.
+  useEffect(() => {
+    if (welcomedAt.current !== null && welcomedAt.current !== pathname) welcomedAt.current = null;
+  }, [pathname]);
+
   // Tours that start by themselves: the welcome tour on the home screen while
-  // it is due, then the listing tour on the first listing opened. Each waits
-  // until nothing else is on top: the startup screen, What's new, a question.
+  // it is due, then each screen's own tour the first time it is opened (the
+  // listing tour on the first listing). Each waits until nothing else is on
+  // top: the startup screen, What's new, a question.
   const want: TourId | null = useMemo(() => {
     if (!user || !record || active || updateLaunch === null) return null;
     if (record.welcomeDue) {
@@ -180,8 +200,9 @@ export function useOnboardingController({
       // An admin's waits for their own queue to be read: it decides whether My queue is a step.
       return pathname === home && myQueue !== null ? welcomeTourFor(user) : null;
     }
-    if (!record.autoOff && !record.tours.listing && pathname.startsWith('/property/')) return 'listing';
-    return null;
+    const page = pageTourOf(pathname);
+    if (record.autoOff || page === null || record.tours[page] !== undefined || welcomedAt.current === pathname) return null;
+    return page;
   }, [user, record, active, updateLaunch, fresh, pathname, home, myQueue]);
 
   useEffect(() => {
@@ -225,6 +246,7 @@ export function useOnboardingController({
     [user, start, complete, openHelp, helpOpen, badge, record],
   );
 
+  const pageTour = pageTourOf(pathname);
   const ui = (
     <>
       {active ? <TourOverlay key={`${active.id}-${active.steps[0]?.title ?? ''}`} tour={active} onEnd={end} /> : null}
@@ -233,10 +255,14 @@ export function useOnboardingController({
           tasks={tasks}
           done={(task) => record.tasks[task.id] === true}
           listHidden={record.listHidden}
-          onListPage={pathname.startsWith('/property/')}
+          pageTour={pageTour ? () => start(pageTour) : undefined}
+          onListPage={pageTour === 'listing'}
+          topics={guideFor(canManage(user))}
           onShow={(task) => start(hintTour(task.hint))}
           onTour={() => start(welcomeTourFor(user))}
-          onListingTour={() => start('listing')}
+          onTopic={(topic) => {
+            if (topic.show) start(topic.show);
+          }}
           onWhatsNew={
             openWhatsNew
               ? () => {

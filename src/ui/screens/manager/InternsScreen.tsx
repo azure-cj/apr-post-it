@@ -185,7 +185,7 @@ export function InternsScreen({
         <h1 className="page-header__title" tabIndex={-1}>
           Agents
         </h1>
-        <div className="interns__controls">
+        <div data-tour="interns-controls" className="interns__controls">
           <WeekPicker week={week} today={today} onChange={onWeekChange} />
           {onRefresh ? (
             <Button size="small" busy={refreshing} onClick={onRefresh}>
@@ -224,7 +224,7 @@ export function InternsScreen({
         <NoInterns managedInHub={managedInHub} />
       ) : (
         <>
-          <dl className="tracker-stats interns__stats">
+          <dl data-tour="interns-stats" className="tracker-stats interns__stats">
             {live ? (
               <Stat label="Active today" value={activeToday} of={rows.length} />
             ) : (
@@ -253,7 +253,7 @@ export function InternsScreen({
           <WhoPosted posts={posts} today={today} onOpenLink={onOpenLink} />
 
           <div className={`interns__body${openRow ? ' interns__body--panel' : ''}`}>
-            <Card className="interns__list" padding="tight">
+            <Card data-tour="interns-list" className="interns__list" padding="tight">
               {rows.length === 0 ? (
                 <p className="interns__quiet">No active agents.</p>
               ) : (

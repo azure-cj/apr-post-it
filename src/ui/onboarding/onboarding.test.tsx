@@ -15,7 +15,8 @@ import { EXEC, fakeServer, intern, manager, NOW, PROPERTIES, propertyReply, rend
 import { WhatsNew } from '../WhatsNew';
 import { placeCard } from './place';
 import { EMPTY_RECORD, NEW_RECORD, recordKey, withTask, withTour } from './record';
-import { tasksFor, tourFor } from './tours';
+import { guideFor, matchesTopic } from './guide';
+import { pageTourOf, tasksFor, tourFor, type ScreenTourId } from './tours';
 
 const LONG = { timeout: 4000 };
 const fresh = (replies = {}) => fakeServer(replies, 'test-key', { onboarding: true });
@@ -99,13 +100,32 @@ describe('the step lists', () => {
   });
 
   it('the listing tour walks one post, from caption to logged link, with Highlight for admins', () => {
-    const agent = ['Copy the caption', 'Posted it before? Reword it', 'Download the photos', 'Post it, then log the link', 'Waiting for approval?'];
-    expect(titles(tourFor('listing', intern))).toEqual(agent);
-    expect(titles(tourFor('listing', manager))).toEqual([...agent.slice(0, 3), 'Highlight it', ...agent.slice(3)]);
+    const before = ['Ready to post?', 'Copy the caption', 'Add a call to action', 'Posted it before? Reword it', 'Download the photos', 'Make a flyer or a poster'];
+    const after = ['The cooldown', 'Post it, then log the link', 'Waiting for approval?'];
+    expect(titles(tourFor('listing', intern))).toEqual([...before, ...after]);
+    expect(titles(tourFor('listing', manager))).toEqual([...before, 'Highlight it', ...after]);
+  });
+
+  it('every screen has its own tour, admin screens and Settings by role (1.1.8)', () => {
+    expect(titles(tourFor('find', intern))).toEqual(['Search every listing', 'Categories', 'Show only', 'Sort', 'Open a listing']);
+    expect(titles(tourFor('queue', intern))[0]).toBe('My queue');
+    expect(titles(tourFor('settings', intern))).toEqual(['Your settings']);
+    expect(titles(tourFor('settings', manager))).toEqual(['Four tabs']);
+    expect(pageTourOf('/find')).toBe('find');
+    expect(pageTourOf('/property/abc')).toBe('listing');
+    expect(pageTourOf('/property/abc/log')).toBeNull();
+    expect(pageTourOf('/constructor')).toBeNull();
   });
 
   it('every step is short sentences, with its count filled in', () => {
-    for (const tour of [tourFor('welcome-agent', intern), tourFor('welcome-admin', manager), tourFor('listing', manager), tourFor('paste', intern)]) {
+    const screens: ScreenTourId[] = ['queue', 'find', 'tracker', 'assign', 'interns', 'records', 'settings'];
+    for (const tour of [
+      tourFor('welcome-agent', intern),
+      tourFor('welcome-admin', manager),
+      tourFor('listing', manager),
+      tourFor('paste', intern),
+      ...screens.map((id) => tourFor(id, manager)),
+    ]) {
       for (const step of tour.steps) {
         expect(step.body).not.toContain('{steps}');
         for (const sentence of step.body.split(/(?<=[.?]) /)) expect(sentence.split(' ').length).toBeLessThanOrEqual(25);
@@ -285,7 +305,7 @@ describe('the listing tour', () => {
     await platform.writeLocal(recordKey(intern.name), JSON.stringify({ ...EMPTY_RECORD, tours: { 'welcome-agent': 'done' } }));
     renderApp({ platform, path: '/property/1VerdantHillsLot12' });
 
-    const card = await screen.findByRole('dialog', { name: 'Copy the caption' }, LONG);
+    const card = await screen.findByRole('dialog', { name: 'Ready to post?' }, LONG);
     await userEvent.click(within(card).getByRole('button', { name: 'Close the tour' }));
     await waitFor(async () => expect((await recordOf(platform, intern.name))?.tours.listing).toBe('skipped'));
   });
@@ -368,5 +388,56 @@ describe("What's new: Show me", () => {
     await userEvent.click(within(dialog).getAllByRole('button', { name: 'Show me' })[0]!);
     expect(shown).toEqual(['welcome']);
     expect(await platform.readLocal(SEEN_VERSION_KEY)).toBe('1.1.7');
+  });
+});
+
+describe("each screen's tour (1.1.8)", () => {
+  it('starts the first time Find is opened, and not again', async () => {
+    const platform = fakeServer({}, 'test-key', { onboarding: true });
+    await platform.writeLocal(recordKey(intern.name), JSON.stringify({ ...EMPTY_RECORD, tours: { 'welcome-agent': 'done' } }));
+    renderApp({ platform, path: '/find' });
+
+    const card = await screen.findByRole('dialog', { name: 'Search every listing' }, LONG);
+    await userEvent.click(within(card).getByRole('button', { name: 'Close the tour' }));
+    await waitFor(async () => expect((await recordOf(platform, intern.name))?.tours.find).toBe('skipped'));
+  });
+
+  it('starts from Help with Tour this page', async () => {
+    const platform = fakeServer();
+    renderApp({ platform, path: '/find' });
+    await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Getting started' })).getByRole('button', { name: 'Tour this page' }));
+    expect(await screen.findByRole('dialog', { name: 'Search every listing' }, LONG)).toBeTruthy();
+  });
+});
+
+describe("Help's guide (1.1.8)", () => {
+  it('admins see the admin topics, agents do not, and every step is short', () => {
+    const agent = guideFor(false);
+    const admin = guideFor(true);
+    expect(agent.some((t) => t.adminOnly)).toBe(false);
+    expect(admin.length).toBeGreaterThan(agent.length);
+    expect(new Set(admin.map((t) => t.id)).size).toBe(admin.length);
+    for (const topic of admin) {
+      for (const step of topic.steps) for (const sentence of step.split(/(?<=[.?:]) /)) expect(sentence.split(' ').length).toBeLessThanOrEqual(25);
+    }
+  });
+
+  it('search finds a topic by any of its words', () => {
+    const titlesFor = (q: string) => guideFor(true).filter((t) => matchesTopic(t, q)).map((t) => t.title);
+    expect(titlesFor('poster')).toContain('Make a poster');
+    expect(titlesFor('cooldown')).toContain("Why can't I post this one yet? (cooldown)");
+    expect(titlesFor('zzz')).toEqual([]);
+  });
+
+  it('opens a topic, and Show me starts its tour', async () => {
+    const platform = fakeServer();
+    renderApp({ platform, path: '/queue' });
+    await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
+    const panel = await screen.findByRole('dialog', { name: 'Getting started' });
+    await userEvent.type(within(panel).getByRole('searchbox', { name: 'Search help' }), 'find any');
+    expect(within(panel).getByText(/Press \/ to jump to the search box/)).toBeTruthy();
+    await userEvent.click(within(panel).getByRole('button', { name: 'Show me: Find any listing' }));
+    expect(await screen.findByRole('dialog', { name: 'Search every listing' }, LONG)).toBeTruthy();
   });
 });

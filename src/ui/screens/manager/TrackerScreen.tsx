@@ -140,7 +140,7 @@ export function TrackerScreen({
         <h1 className="page-header__title" tabIndex={-1}>
           Tracker
         </h1>
-        <div className="tracker__day">
+        <div data-tour="tracker-day" className="tracker__day">
           <DayPicker date={date} today={today} onChange={onDateChange} label="Day shown" quick={['today']} />
           {onRefresh ? (
             <Button size="small" busy={refreshing} onClick={onRefresh} title={updatedAt ? `Updated ${updatedAt}` : undefined}>
@@ -174,7 +174,7 @@ export function TrackerScreen({
         </div>
       ) : (
         <>
-          <dl className="tracker-stats tracker__stats">
+          <dl data-tour="tracker-stats" className="tracker-stats tracker__stats">
             <Stat label={isToday ? 'Posted today' : 'Posted'} value={day.posted} />
             <Stat label="Pending" value={day.pending} />
             <Stat label="Agents behind" value={behind} of={pace.length} />
@@ -191,7 +191,7 @@ export function TrackerScreen({
           </dl>
 
           <div className="tracker__grid">
-            <Card className="tracker__posts" title={isToday ? "Today's posts" : `Posts on ${shortDate(date)}`} padding="tight">
+            <Card data-tour="tracker-posts" className="tracker__posts" title={isToday ? "Today's posts" : `Posts on ${shortDate(date)}`} padding="tight">
               <DayPosts posts={day.posts} isToday={isToday} onOpenLink={onOpenLink} />
               {day.posts.length > POSTS_LIMIT && recordsHref ? (
                 <div className="tracker__more">
@@ -202,7 +202,7 @@ export function TrackerScreen({
               ) : null}
             </Card>
 
-            <Card
+            <Card data-tour="tracker-week"
               className="tracker__week"
               title={week === monitorWeek(today) ? 'This week' : weekLabel(week)}
               padding="tight"
@@ -241,7 +241,7 @@ export function TrackerScreen({
               )}
             </Card>
 
-            <Card id={docsId} className="tracker__docs" title="Documents" padding="tight" tabIndex={-1}>
+            <Card data-tour="tracker-docs" id={docsId} className="tracker__docs" title="Documents" padding="tight" tabIndex={-1}>
               {toFix === 0 ? (
                 <p className="docs__clean">
                   <Icon name="pass" size={18} className="docs__clean-icon" />

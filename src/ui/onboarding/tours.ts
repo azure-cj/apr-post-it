@@ -9,10 +9,13 @@ import { canManage } from '@/core/types';
  *
  * The welcome tour, right after a first sign-in, shows where things are. The
  * listing tour, the first time a listing is opened, walks through one post:
- * caption, photos, Facebook, and the logged link.
+ * caption, photos, Facebook, and the logged link. Every other screen has its
+ * own tour too (1.1.8), the first time it is opened, and from Help.
  */
 
-export type TourId = 'welcome-agent' | 'welcome-admin' | 'listing' | 'paste';
+/** A screen with a tour of its own: it starts the first time the screen is opened. */
+export type ScreenTourId = 'queue' | 'find' | 'tracker' | 'assign' | 'interns' | 'records' | 'settings';
+export type TourId = 'welcome-agent' | 'welcome-admin' | 'listing' | 'paste' | ScreenTourId;
 
 export interface TourStep {
   /** The `data-tour` name of the element to point at. None: the step sits in the middle. */
@@ -24,6 +27,8 @@ export interface TourStep {
   readonly optional?: boolean;
   /** Admins only. */
   readonly adminOnly?: boolean;
+  /** Agents only. */
+  readonly agentOnly?: boolean;
   /** Go here first (a path), then point. */
   readonly route?: string;
 }
@@ -38,7 +43,7 @@ export interface Tour {
 const HELP_STEP: TourStep = {
   target: 'help',
   title: 'Help',
-  body: 'Press Help any time to take this tour again, or to see a short list of first things to do.',
+  body: 'Press Help any time for the tours, the first things to do, and how to do everything. Each screen also shows you around the first time.',
 };
 
 const DUE = 'Post each one by its due date, or it goes to someone else.';
@@ -107,9 +112,21 @@ const LISTING: Tour = {
   scope: (pathname) => pathname.startsWith('/property/'),
   steps: [
     {
+      target: 'listing-verdict',
+      title: 'Ready to post?',
+      body: 'This says if the listing can be posted now: Ready to post, Posted recently, Check before posting, or why not.',
+      optional: true,
+    },
+    {
       target: 'listing-text',
       title: 'Copy the caption',
       body: "This is the text to post. The owner's details and the commission are already left out. Press Copy, then paste it into a new Facebook post.",
+    },
+    {
+      target: 'listing-cta',
+      title: 'Add a call to action',
+      body: 'Tick this and Copy adds one line asking for a viewing. It is words only: no new number or name goes into the post.',
+      optional: true,
     },
     {
       target: 'listing-reword',
@@ -124,11 +141,23 @@ const LISTING: Tour = {
       optional: true,
     },
     {
+      target: 'listing-flyer',
+      title: 'Make a flyer or a poster',
+      body: 'Press Make a flyer for a picture of the listing: Framed, Big photo, Light, or Poster. Post it first, then the photos.',
+      optional: true,
+    },
+    {
       target: 'listing-highlight',
       title: 'Highlight it',
       body: "Want this listing posted first? Press Highlight. It tops every agent's queue until you take it off.",
       optional: true,
       adminOnly: true,
+    },
+    {
+      target: 'listing-cooldown',
+      title: 'The cooldown',
+      body: 'A listing waits some days between posts. This shows when it was last posted, and by which account.',
+      optional: true,
     },
     {
       target: 'listing-log',
@@ -177,6 +206,258 @@ const PASTE: Tour = {
   ],
 };
 
+const QUEUE: Tour = {
+  id: 'queue',
+  scope: (pathname) => pathname === '/queue',
+  steps: [
+    {
+      route: '/queue',
+      target: 'queue-head',
+      title: 'My queue',
+      body: "Your listings to post, in your admin's order. Press Refresh if your admin just changed it.",
+    },
+    {
+      target: 'queue-week',
+      title: 'This queue',
+      body: 'How far along you are, and when it is due. Posted, Pending and Not shared add up to your queue.',
+      optional: true,
+    },
+    {
+      target: 'queue-next',
+      title: 'Next up',
+      body: 'The listing to post now. Press Open to see its caption and photos.',
+      optional: true,
+    },
+    {
+      target: 'queue-list',
+      title: 'The rest of the queue',
+      body: 'Each listing shows Not shared, Pending or Posted. Once the group approves a pending post, press Mark posted, or paste its Post link.',
+      optional: true,
+    },
+    {
+      title: 'Highlighted and waiting posts',
+      body: 'Highlighted listings show at the top: post those first. Posts waiting for approval show here too. Press Approved once the group accepts one.',
+    },
+  ],
+};
+
+const FIND: Tour = {
+  id: 'find',
+  scope: (pathname) => pathname === '/find',
+  steps: [
+    {
+      route: '/find',
+      target: 'find-search',
+      title: 'Search every listing',
+      body: 'Type a name, a city or a building. Press / to jump here.',
+    },
+    {
+      target: 'find-chips',
+      title: 'Categories',
+      body: 'Press a category to see only those. Virtual office posts come first: post one only when an admin highlights it.',
+    },
+    {
+      target: 'find-filters',
+      title: 'Show only',
+      body: 'Narrow the list: For sale, For lease, Ready to post, Never posted or Has photos. Clear turns them all off.',
+    },
+    {
+      target: 'find-sort',
+      title: 'Sort',
+      body: 'Best match, Name, Newest, or Last posted.',
+    },
+    {
+      target: 'find-results',
+      title: 'Open a listing',
+      body: "Click a row to open it. Its pill says if it's Ready, in its cooldown, Sold, or missing its document.",
+    },
+  ],
+};
+
+const TRACKER: Tour = {
+  id: 'tracker',
+  scope: (pathname) => pathname === '/tracker',
+  steps: [
+    {
+      route: '/tracker',
+      target: 'tracker-day',
+      title: 'One day at a time',
+      body: 'Tracker shows one day. Pick another day, or press Today to come back. Refresh reads it again.',
+    },
+    {
+      target: 'tracker-stats',
+      title: 'The day at a glance',
+      body: 'Posted, Pending, Agents behind, and Docs to fix. Press Docs to fix to jump to the documents.',
+      optional: true,
+    },
+    {
+      target: 'tracker-posts',
+      title: "The day's posts",
+      body: 'Every post logged that day, and who posted it. Press Open to see it on Facebook. See all in Records shows more.',
+      optional: true,
+    },
+    {
+      target: 'tracker-week',
+      title: 'This week',
+      body: "Each agent's progress and pace. See all opens Agents.",
+      optional: true,
+    },
+    {
+      target: 'tracker-docs',
+      title: 'Documents to fix',
+      body: 'Listings whose document needs work: no separator, no document, no photos. Fix it in Drive, then run Rebuild in Settings.',
+      optional: true,
+    },
+  ],
+};
+
+const ASSIGN: Tour = {
+  id: 'assign',
+  scope: (pathname) => pathname === '/assign',
+  steps: [
+    {
+      route: '/assign',
+      target: 'assign-fill',
+      title: 'Fill queues',
+      body: 'Give every agent a week of listings at once. Choose the week and the deadline, press Preview, check it, then press Save all.',
+    },
+    {
+      target: 'assign-people',
+      title: 'Everyone',
+      body: "Each person's queue for the week: On track, Behind, Missed or No queue. Click a person to change their queue.",
+      optional: true,
+    },
+    {
+      target: 'assign-add',
+      title: 'Add listings',
+      body: 'Search the library and press Add. To add many at once, press ⋯ then Paste a list.',
+      optional: true,
+    },
+    {
+      target: 'assign-queue',
+      title: 'The posting order',
+      body: 'The queue is posted top to bottom. Drag a listing to move it.',
+      optional: true,
+    },
+    {
+      target: 'assign-save',
+      title: 'Save queue',
+      body: 'Nothing changes for the agent until you press Save queue.',
+      optional: true,
+    },
+    {
+      title: 'Highlights and the virtual office',
+      body: 'Highlighted listings go out first in every queue. A virtual office post is given out only while it is highlighted.',
+    },
+  ],
+};
+
+const INTERNS: Tour = {
+  id: 'interns',
+  scope: (pathname) => pathname === '/interns',
+  steps: [
+    {
+      route: '/interns',
+      target: 'interns-controls',
+      title: "The agents' week",
+      body: 'Pick a week. Refresh reads it again.',
+    },
+    {
+      target: 'interns-stats',
+      title: 'At a glance',
+      body: 'Who was active today, how many posts, and how many agents are behind.',
+      optional: true,
+    },
+    {
+      target: 'interns-who',
+      title: 'Who posted?',
+      body: 'Paste a listing name or a Facebook link to see who posted it, and when.',
+      optional: true,
+    },
+    {
+      target: 'interns-list',
+      title: 'Each agent',
+      body: 'Click an agent to see their queue, their waiting posts and their last weeks. Spot check their posts there.',
+      optional: true,
+    },
+    {
+      target: 'interns-spot',
+      title: 'Spot check',
+      body: 'Open each post on Facebook, then press Verified, Not found or Wrong listing.',
+      optional: true,
+    },
+  ],
+};
+
+const RECORDS: Tour = {
+  id: 'records',
+  scope: (pathname) => pathname === '/records',
+  steps: [
+    {
+      route: '/records',
+      target: 'records-period',
+      title: 'Pick a period',
+      body: 'This week, Last week, This month, Last 30 days, or Custom dates. Copy summary copies the totals to paste anywhere.',
+    },
+    {
+      target: 'records-tiles',
+      title: 'The totals',
+      body: 'Posts, Pending, Missed, Active agents and the busiest day, each compared with the period before.',
+      optional: true,
+    },
+    {
+      target: 'records-chart',
+      title: 'Posts over time',
+      body: 'Posts per day, or per week for a long period. Point at a bar for its numbers.',
+      optional: true,
+    },
+    {
+      target: 'records-breakdown',
+      title: 'By agent, by category',
+      body: "Each agent's posts, pending and missed, or the posts in each category.",
+      optional: true,
+    },
+  ],
+};
+
+const SETTINGS: Tour = {
+  id: 'settings',
+  scope: (pathname) => pathname === '/settings',
+  steps: [
+    {
+      route: '/settings',
+      target: 'settings-tabs',
+      title: 'Four tabs',
+      body: 'Team: people and their keys. Listings: rebuild the directory. Rules: the cooldown and listings a week. App: theme and reminders.',
+      adminOnly: true,
+    },
+    {
+      route: '/settings',
+      target: 'settings-panel',
+      title: 'Your settings',
+      body: 'Pick a theme, and when Post-It reminds you to post. About shows the version you have.',
+      agentOnly: true,
+    },
+  ],
+};
+
+const SCREEN_TOURS: Readonly<Record<ScreenTourId, Tour>> = {
+  queue: QUEUE,
+  find: FIND,
+  tracker: TRACKER,
+  assign: ASSIGN,
+  interns: INTERNS,
+  records: RECORDS,
+  settings: SETTINGS,
+};
+
+/** The tour of the screen at this path: a listing's page, or a screen of its own. None for anywhere else. */
+export function pageTourOf(pathname: string): TourId | null {
+  if (/^\/property\/[^/]+$/.test(pathname)) return 'listing';
+  const key = pathname.replace(/^\//, '');
+  return Object.prototype.hasOwnProperty.call(SCREEN_TOURS, key) ? (key as ScreenTourId) : null;
+}
+
 export function welcomeTourFor(user: User): TourId {
   return canManage(user) ? 'welcome-admin' : 'welcome-agent';
 }
@@ -187,9 +468,18 @@ export function welcomeTourFor(user: User): TourId {
  * or a post waiting for approval (D31). The welcome counts these.
  */
 export function tourFor(id: TourId, user: User, myQueue = true): Tour {
-  const tour = id === 'listing' ? LISTING : id === 'paste' ? PASTE : id === 'welcome-admin' ? WELCOME_ADMIN : WELCOME_AGENT;
+  const tour =
+    id === 'listing'
+      ? LISTING
+      : id === 'paste'
+        ? PASTE
+        : id === 'welcome-admin'
+          ? WELCOME_ADMIN
+          : id === 'welcome-agent'
+            ? WELCOME_AGENT
+            : SCREEN_TOURS[id];
   const admin = canManage(user);
-  const steps = tour.steps.filter((s) => (admin || !s.adminOnly) && (myQueue || s.target !== 'nav-queue'));
+  const steps = tour.steps.filter((s) => (admin || !s.adminOnly) && (!admin || !s.agentOnly) && (myQueue || s.target !== 'nav-queue'));
   return { ...tour, steps: steps.map((s) => ({ ...s, body: s.body.replace('{steps}', String(steps.length)) })) };
 }
 

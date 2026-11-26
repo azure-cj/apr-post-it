@@ -544,3 +544,19 @@ are the document's own. It is one picture: no photo pages and no map page. Saved
 a site viewing today: message us here, or call the numbers above." It is fixed words only,
 never a number or a name, so nothing that was not already in the post goes out. It points at
 the numbers only when the post has some, and is not added twice.
+
+### D38. A tour for every screen, and a guide in Help (Nov 26, 2026)
+
+Every screen now has its own short tour, pointing at the real buttons: My queue, Find,
+Tracker, Assign, Agents, Records and Settings, as the listing page already had. Each starts
+by itself the first time the screen is opened, one at a time and never right after the
+welcome tour on the same screen; closing the welcome tour still turns them all off (1.1.7).
+Help's Tour this page starts the one for the screen the person is on. The listing tour now
+also covers whether it is ready to post, the call to action, the flyer and poster, and the
+cooldown.
+
+Help also has a guide, "How do I…": short step-by-step topics for posting, photos, flyers
+and posters, the queue and Find, the admin work, and what to do when something goes wrong.
+It is searchable, shows admins the admin topics only, and a topic with a tour has Show me.
+The Flyer has no tour of its own: it opens as a dialog, which sits above any tour, so the
+listing tour and the guide explain it instead.

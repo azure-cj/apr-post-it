@@ -95,7 +95,7 @@ export function AssignPicker({ interns, admins = NONE, me, managedInHub = false,
   );
 
   return (
-    <section className="assign-pick" aria-label={grouped ? 'Agents and admins this week' : 'Agents this week'}>
+    <section data-tour="assign-people" className="assign-pick" aria-label={grouped ? 'Agents and admins this week' : 'Agents this week'}>
       {agentRows.length + adminRows.length >= SEARCH_FROM ? (
         <SearchBox
           label={grouped ? 'Search people' : 'Search agents'}

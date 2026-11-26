@@ -1139,7 +1139,7 @@ export function AssignScreen({
       ) : null}
 
       <div className="assign__panes">
-        <Card
+        <Card data-tour="assign-add"
           className="assign__add"
           padding="tight"
           title={mode === 'library' ? 'Listings' : 'Paste a list'}
@@ -1218,13 +1218,13 @@ export function AssignScreen({
           )}
         </Card>
 
-        <Card
+        <Card data-tour="assign-queue"
           className="assign__queue"
           padding="tight"
           title="Queue"
           actions={<Badge count={entries.length} label={plural(entries.length, 'listing', 'listings')} />}
         >
-          <div className="assign-savebar">
+          <div data-tour="assign-save" className="assign-savebar">
             <p className="assign-savebar__state" role="status">
               {saving ? (
                 'Saving…'

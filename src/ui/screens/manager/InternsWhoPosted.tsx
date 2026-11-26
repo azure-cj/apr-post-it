@@ -40,7 +40,7 @@ export function WhoPosted({ posts, today, onOpenLink }: WhoPostedProps) {
   };
 
   return (
-    <section className="who-posted" aria-label="Who posted?">
+    <section data-tour="interns-who" className="who-posted" aria-label="Who posted?">
       <SearchBox
         ref={inputRef}
         className="who-posted__search"

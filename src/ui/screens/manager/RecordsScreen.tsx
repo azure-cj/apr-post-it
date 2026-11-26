@@ -155,7 +155,7 @@ export function RecordsScreen({
         </div>
       ) : (
         <>
-          <dl className="records-tiles">
+          <dl data-tour="records-tiles" className="records-tiles">
             <Tile label="Posts" value={now.posts} change={prev ? compareToPrevious(now.posts, prev.posts) : null} versus={versus} />
             <Tile label="Pending" value={now.pending} change={prev ? compareToPrevious(now.pending, prev.pending) : null} versus={versus} goodWhen="neither" />
             {missed.weeksOver > 0 ? (
@@ -181,7 +181,7 @@ export function RecordsScreen({
           </dl>
 
           <div className="records__overview">
-            <section className="card card--tight records-chart" aria-labelledby={chartTitle}>
+            <section data-tour="records-chart" className="card card--tight records-chart" aria-labelledby={chartTitle}>
               <div className="records-chart__head">
                 <h2 id={chartTitle} className="records-chart__title">
                   {report.buckets[0]?.unit === 'week' ? 'Posts per week' : 'Posts per day'}

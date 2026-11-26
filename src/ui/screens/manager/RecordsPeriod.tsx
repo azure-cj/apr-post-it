@@ -44,7 +44,7 @@ export function RecordsPeriod({ period, today, onChange }: RecordsPeriodProps) {
   };
 
   return (
-    <div className="records-period" role="group" aria-label="Period">
+    <div data-tour="records-period" className="records-period" role="group" aria-label="Period">
       <div className="day-picker__stepper">
         <Button
           size="small"

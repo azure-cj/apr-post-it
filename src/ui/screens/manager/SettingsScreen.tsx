@@ -70,7 +70,7 @@ export function SettingsScreen({ tab, onTabChange, team, listings, rules, app }:
             </Button>
           ) : null}
         </div>
-        <div className="settings__tabs" role="tablist" aria-label="Settings" onKeyDown={onKeyDown}>
+        <div data-tour="settings-tabs" className="settings__tabs" role="tablist" aria-label="Settings" onKeyDown={onKeyDown}>
           {SETTINGS_TABS.map((t) => {
             const on = t.key === tab;
             return (
@@ -96,7 +96,7 @@ export function SettingsScreen({ tab, onTabChange, team, listings, rules, app }:
         </div>
       </header>
 
-      <div className="settings__panel" role="tabpanel" id={panelId(tab)} aria-labelledby={tabId(tab)}>
+      <div data-tour="settings-panel" className="settings__panel" role="tabpanel" id={panelId(tab)} aria-labelledby={tabId(tab)}>
         {tab === 'team' ? (
           <SettingsTeam {...team} adding={adding} onAddingChange={setAdding} />
         ) : tab === 'listings' ? (
@@ -125,7 +125,7 @@ export function AgentSettingsScreen({ app }: { readonly app: SettingsAppProps })
           </h1>
         </div>
       </header>
-      <div className="settings__panel">
+      <div data-tour="settings-panel" className="settings__panel">
         <SettingsApp {...app} />
       </div>
     </div>

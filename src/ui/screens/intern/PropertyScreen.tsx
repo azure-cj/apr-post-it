@@ -510,7 +510,7 @@ function PropertyPage({ id }: { readonly id: string }) {
             ) : null}
 
             {detail && !withheld && copyText.trim() !== '' ? (
-              <label className="post-text__cta meta">
+              <label data-tour="listing-cta" className="post-text__cta meta">
                 <input type="checkbox" checked={withCta} onChange={(e) => setWithCta(e.target.checked)} />
                 <span>
                   End with a call to action <small>“{callToAction(chosenText)}”</small>
@@ -711,7 +711,7 @@ function PropertyPage({ id }: { readonly id: string }) {
               </ul>
             )}
             {mayFlyer ? (
-              <div className="flyer-offer">
+              <div data-tour="listing-flyer" className="flyer-offer">
                 <p>
                   <b>Flyer</b> <span className="flyer-offer__new">New</span>
                   <span className="meta">The main facts and your choice of photos as pictures to post, with a map if you like. Optional.</span>
@@ -736,7 +736,7 @@ function PropertyPage({ id }: { readonly id: string }) {
             )}
           </Card>
 
-          <Card title="Cooldown" headingLevel={2} padding="tight">
+          <Card data-tour="listing-cooldown" title="Cooldown" headingLevel={2} padding="tight">
             <CooldownLines
               posts={posts.data}
               loading={posts.loading}
@@ -1171,7 +1171,7 @@ function Verdict({
     }
   })();
   return (
-    <div className={`verdict verdict--${tone}`}>
+    <div data-tour="listing-verdict" className={`verdict verdict--${tone}`}>
       <p className="verdict__word">{word}</p>
       <p className="verdict__line">{line}</p>
     </div>
