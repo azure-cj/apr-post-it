@@ -51,11 +51,12 @@
   font-size: var(--text-title);
 }
 
-/* The app's icon, as on the taskbar, beside its name; alone on the collapsed rail. */
+/* The app's icon, as on the taskbar, beside its name; alone on the collapsed rail.
+   32px: the size every APG system shows its own icon at, the smallest at which its detail stays clear. */
 .sidebar__brand-icon {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-chip);
 }
 
