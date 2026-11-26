@@ -4,7 +4,8 @@ import { BackendError } from '@/core/backend';
 import { runChecks } from '@/core/checks';
 import { cooldown, lastPostedOn } from '@/core/cooldown';
 import { normalize } from '@/core/matcher';
-import { copyTextFor, cutPasted, flaggedLinesOf, linesOf, STANDARD_SEPARATOR } from '@/core/posting-text';
+import { copyTextFor, cutPasted, flaggedLinesOf, wholePasted, withoutDriveLinks, linesOf, STANDARD_SEPARATOR } from '@/core/posting-text';
+import { callToAction, withCallToAction } from '@/core/flyer';
 import { rewordProblem } from '@/core/reword';
 import {
   canManage,
@@ -233,6 +234,8 @@ function PropertyPage({ id }: { readonly id: string }) {
   // ---- actions ---------------------------------------------------------------
 
   const [copying, setCopying] = useState(false);
+  // An optional last line asking for a viewing: words only, so nothing new goes into the post.
+  const [withCta, setWithCta] = useState(false);
   const [copiedAt, setCopiedAt] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const copyRef = useRef<HTMLButtonElement>(null);
@@ -243,7 +246,7 @@ function PropertyPage({ id }: { readonly id: string }) {
     setCopyError(null);
     try {
       // The public text, or its checked reword, and nothing else: never the internal section, never a flagged line.
-      await app.platform.copyText(chosenText);
+      await app.platform.copyText(withCta ? withCallToAction(chosenText) : chosenText);
       setCopiedAt(manilaTime(app.now()));
       complete('copy-text');
       notify(usingReword ? 'Copied the reword. Paste it into Facebook.' : 'Copied. Paste it into Facebook.');
@@ -506,6 +509,15 @@ function PropertyPage({ id }: { readonly id: string }) {
               </Notice>
             ) : null}
 
+            {detail && !withheld && copyText.trim() !== '' ? (
+              <label className="post-text__cta meta">
+                <input type="checkbox" checked={withCta} onChange={(e) => setWithCta(e.target.checked)} />
+                <span>
+                  End with a call to action <small>“{callToAction(chosenText)}”</small>
+                </span>
+              </label>
+            ) : null}
+
             {pasteable && pasted !== null ? (
               <p className="post-text__pasted meta">
                 <span>Pasted by you. Not saved.</span>
@@ -639,7 +651,7 @@ function PropertyPage({ id }: { readonly id: string }) {
         <aside className="two-pane__side" aria-label="Before you post">
           <Verdict gate={gate} cool={cool} manager={manager} />
 
-          {id && name ? <HighlightControl propertyId={id} property={name} manager={manager} /> : null}
+          {id && name ? <HighlightControl propertyId={id} property={name} manager={manager} onRequest={Boolean(detail?.onRequest ?? summary?.onRequest)} /> : null}
 
           {/* ---- photos ---- */}
           <section className="photos" aria-labelledby={photosTitleId} data-tour="listing-photos">
@@ -885,10 +897,11 @@ function isUnseparated(detail: PropertyDetail, manager: boolean): boolean {
  */
 function fromPasted(detail: PropertyDetail, raw: string): PropertyDetail {
   const { internalText: _internal, ...rest } = detail;
-  const cut = cutPasted(raw);
+  // A virtual office post is all for posting (D35): kept whole, nothing cut or flagged.
+  const cut = detail.onRequest ? { publicText: wholePasted(raw), separated: true } : cutPasted(raw);
   return {
     ...rest,
-    publicText: cut.publicText,
+    publicText: withoutDriveLinks(cut.publicText).text,
     hasInternal: cut.separated,
     unseparated: !cut.separated,
     withheld: false,

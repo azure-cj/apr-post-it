@@ -49,6 +49,22 @@ describe('the flyer', () => {
     expect(await within(dialog).findByText('Page 1 copied. Paste it into Facebook with Ctrl+V.')).toBeTruthy();
   });
 
+  it('makes the poster in the size chosen, saved to go up before the photos', async () => {
+    const platform = fakeServer();
+    renderApp({ platform, user: manager, path: PATH });
+    const dialog = await openFlyer();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /Poster$/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Story' }));
+    expect(within(dialog).getByText('Made at 1080 × 1920, for a story.')).toBeTruthy();
+    expect(within(dialog).queryByRole('checkbox', { name: /Add a satellite map page/ })).toBeNull();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save the poster' }));
+    await waitFor(() => expect(platform.imageSaves).toHaveLength(1), { timeout: 5000 });
+    expect(platform.imageSaves[0]!.images.map((i) => i.name)).toEqual(['00 Poster.png']);
+    expect(await within(dialog).findByText('Poster saved first in the photos folder. Post it first, then the photos.')).toBeTruthy();
+  });
+
   it("says why there's no map when the server can't make one", async () => {
     const sentence = "The location map isn't set up yet. Ask your admin.";
     const platform = fakeServer({ locationRing: { ok: false, error: sentence, message: sentence, reason: 'no-secret' } });

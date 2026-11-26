@@ -141,3 +141,31 @@
 .fl .mapbox .scale i { display: block; height: 5px; margin-top: 2px; border: 1.5px solid #fff; border-top: 0; box-shadow: 0 1px 2px rgba(0,0,0,.6); }
 .fl .mapbox .wait { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; color: #e9e3d6; font-size: 13px; font-weight: 600; text-align: center; }
 .fl .fine { position: absolute; font-size: 10px; font-weight: 600; letter-spacing: .2px; }
+
+/* ---- D · Poster: a big headline over one photo that fades up into it, the contacts in a strip. 540 wide; the height is the shape's. ---- */
+.fl.fp { background: #0b0906; color: #fff; }
+.fl.fp .hero { left: 0; width: 540px; background: #0b0906; }
+.fl.fp .glow { position: absolute; left: 0; top: 0; width: 540px; background: radial-gradient(80% 70% at 0% 0%, rgba(224,184,74,.14), transparent 70%); pointer-events: none; }
+.fl.fp .brand { position: absolute; left: 24px; display: flex; align-items: center; gap: 10px; }
+.fl.fp .brand b { font-size: 13px; font-weight: 800; letter-spacing: .3px; color: #e9e3d6; }
+.fl.fp--story .brand b { font-size: 17px; }
+.fl.fp .deal { position: absolute; left: 24px; right: 24px; display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 2.4px; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+.fl.fp .deal span { flex: none; color: #e0b84a; }
+.fl.fp .deal span::before { content: ""; display: inline-block; vertical-align: middle; width: 24px; height: 2px; margin: -2px 10px 0 0; background: #e0b84a; }
+.fl.fp .deal em { min-width: 0; font-style: normal; font-weight: 700; letter-spacing: .4px; text-transform: none; color: #e9e3d6; overflow: hidden; text-overflow: ellipsis; }
+.fl.fp .deal em::before { content: "·"; margin-right: 10px; color: #e0b84a; }
+.fl.fp h2 { position: absolute; left: 22px; right: 22px; margin: 0; font-weight: 900; line-height: 1; letter-spacing: -1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 18px rgba(0,0,0,.45); }
+.fl.fp .chip { position: absolute; left: 22px; padding: 7px 13px; border-radius: 99px; background: rgba(11,9,6,.78); box-shadow: 0 0 0 1px rgba(224,184,74,.55); color: #e9e3d6; font-weight: 600; white-space: nowrap; }
+.fl.fp .chip b { font-weight: 800; color: #f2d377; }
+.fl.fp .price { position: absolute; right: 22px; padding: 10px 16px; border-radius: 10px; background: linear-gradient(135deg, #f8e3a0 0%, #e0b84a 50%, #b98a26 100%); color: #1a1408; text-align: right; transform: rotate(-3deg); box-shadow: 0 12px 26px rgba(0,0,0,.5); white-space: nowrap; }
+.fl.fp .price b { font-size: 28px; font-weight: 900; line-height: 1; letter-spacing: -.6px; }
+.fl.fp .price span { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; opacity: .75; }
+.fl.fp .price div + div { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(26,20,8,.25); }
+.fl.fp--story .price b { font-size: 36px; }
+.fl.fp .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 22px; background: #070604; border-top: 2px solid #e0b84a; display: flex; align-items: center; gap: 16px; }
+.fl.fp .reach { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.fl.fp .reach small { font-size: .74em; font-weight: 800; letter-spacing: 1.8px; text-transform: uppercase; color: #e0b84a; }
+.fl.fp .reach .row { display: flex; align-items: center; gap: 8px; font-weight: 700; color: #f3eee4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fl.fp .reach .row svg { flex: none; width: 1em; height: 1em; }
+.fl.fp .logo { flex: none; width: auto; display: block; }
+.fl.fp .reach .row.tel { white-space: normal; }

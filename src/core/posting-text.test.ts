@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { flaggedLines_ } from '@server/Separators.gs';
-import { copyTextFor, flaggedLinesOf, linesOf, parsePostingText } from './posting-text';
+import { copyTextFor, flaggedLinesOf, linesOf, parsePostingText, withoutDriveLinks } from './posting-text';
 
 // TestApp.StandardDoc in the C# tests.
 const STANDARD_DOC =
@@ -312,5 +312,27 @@ describe('flaggedLines_ (Separators.gs)', () => {
     ['a blank line', '   '],
   ])('leaves %s alone', (_name, line) => {
     expect(flaggedLines_(`FOR SALE\n${line}`)).toEqual([]);
+  });
+});
+
+describe('withoutDriveLinks: where the files are kept, never posted', () => {
+  it('drops a line that is only a Drive link, or a link and its label, and moves the flagged lines to match', () => {
+    const text = [
+      'Warehouse for lease', // 0
+      'https://drive.google.com/drive/folders/1MlZHT4EHY7oomiWZLr0x62Afs3XOJK-j', // 1: goes
+      'Call 0927 555 5803', // 2: flagged
+      'Photos: docs.google.com/document/d/abc/edit', // 3: goes with its label
+      'P120,000 a month', // 4
+    ].join('\n');
+    expect(withoutDriveLinks(text, [2])).toEqual({ text: 'Warehouse for lease\nCall 0927 555 5803\nP120,000 a month', flagged: [1] });
+  });
+
+  it('takes a link out of a line that says something else, and keeps the line', () => {
+    expect(withoutDriveLinks('Near SM Fairview, see https://drive.google.com/file/d/x/view for more').text).toBe('Near SM Fairview, see  for more');
+  });
+
+  it('leaves text with no Drive link exactly as it was, other links included', () => {
+    const text = 'Ready for move-in\nhttps://www.facebook.com/alphapremier\n';
+    expect(withoutDriveLinks(text, [1])).toEqual({ text, flagged: [1] });
   });
 });

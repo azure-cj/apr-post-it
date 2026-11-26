@@ -496,3 +496,51 @@ server, gone when the listing is closed. The document itself is still the admin'
 
 **Show me how.** A walkthrough of the box (the `paste` tour). It never starts by itself; its
 button glows, as the one next step, until the person has taken or closed it once.
+
+### D35. The virtual office's posts, in the app, when an admin asks (Nov 26, 2026)
+
+**The problem.** Now and then an admin asks for the virtual office to be advertised. Its
+ready-made posts sit in Drive, in APR LISTING → "Virtual Office for posting", one folder per
+version ("2026 NEW VIRTUAL OFFICE", "2026 V2.0 …"), so an agent had to open Drive to post one.
+
+**What the app does now.** The server reads that folder (`CONFIG.VIRTUAL_OFFICE_FOLDER_ID`)
+and adds each folder inside it to the list, after the listings, as category "Virtual Office
+for posting" with `onRequest: true`. The folder stays out of the directory and out of the
+checker's world (D11): nothing is written to the Directory tab. Find shows them under their own
+"Virtual office" chip. One opens like a listing, read from Drive now. Its first document is
+written for posting, every line, so it goes out whole: no separator is looked for and no
+line is flagged (not D13 or D15), and text pasted for one is kept whole too. Every photo in
+the folder and the folders inside it can be downloaded. The category is the one the owner's tracker already
+writes in Property type, so a post logged here matches the rows already there.
+
+**Only when asked.** Posting one is optional. An admin asks by highlighting it, which already
+puts it at the top of every agent's My queue (1.1.6). Until then an agent's page says "Post
+this only when an admin highlights it", and Fill queues and Add leave it out; once
+highlighted, they give it out first like any highlighted listing.
+
+**Read only.** A Word file is not converted (converting writes a copy into Drive): its text is
+withheld, and the agent can paste it (D34). Videos in the folder are not offered yet.
+
+### D36. Drive links are never posted (Nov 26, 2026)
+
+Some documents end with a link to the listing's Drive folder or a Doc: where the files are
+kept, not something for Facebook. The app takes Google Drive, Docs and Photos links out of
+the text it shows and copies, and out of text pasted by hand. A line that held only a link, or
+a link and its label ("Photos: …"), goes; a link inside a sentence is taken out of it. The
+document is never changed. Flagged line numbers are moved to match, so the right lines stay
+marked. In Find, the Virtual office chip comes first after All, in its own hue (D35).
+
+### D37. The poster, and a call to action in Copy (Nov 26, 2026)
+
+A fourth look in the Flyer, Poster: a big headline (what it is, in capitals) with the deal and
+the place above it, over one photo that fades up into it, and a strip at the bottom with the
+numbers, the email and the Facebook page the post names, beside the logo. Feed (1080 x 1350),
+Square (1080 x 1080) or Story (1080 x 1920). A price badge is optional and off at first. Like
+the flyer, it is made only from the text Copy takes (nothing below the line), so the contacts
+are the document's own. It is one picture: no photo pages and no map page. Saved, it is named
+"00 Poster.png" so it sorts before the photos in the folder and goes up first.
+
+**Call to action.** Copy can end the post with one line asking for a viewing, when ticked: "Schedule
+a site viewing today: message us here, or call the numbers above." It is fixed words only,
+never a number or a name, so nothing that was not already in the post goes out. It points at
+the numbers only when the post has some, and is not added twice.

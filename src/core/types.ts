@@ -81,6 +81,11 @@ export interface Property {
   readonly lat?: number;
   /** Longitude, degrees east. */
   readonly lng?: number;
+  /**
+   * Not a listing: one of the virtual office's ready-made posts (v20, D35),
+   * posted only when an admin asks. Fill queues leaves it out unless highlighted.
+   */
+  readonly onRequest?: boolean;
 }
 
 /** A listing's Status in the checker's index. Blank: unknown. */

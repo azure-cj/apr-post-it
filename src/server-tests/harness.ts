@@ -639,6 +639,14 @@ export class FakeDrive {
     return this;
   }
 
+  readonly #folders = new Map<string, { readonly name: string; readonly files: readonly string[]; readonly folders: readonly string[] }>();
+
+  /** A folder holding these files (added with addDoc or addFile) and these folders, by id. */
+  addFolder(id: string, name: string, inside: { readonly files?: readonly string[]; readonly folders?: readonly string[] } = {}): this {
+    this.#folders.set(id, { name, files: inside.files ?? [], folders: inside.folders ?? [] });
+    return this;
+  }
+
   readonly documentApp = Object.freeze({
     ElementType: ELEMENT_TYPE,
     GlyphType: GLYPH_TYPE,
@@ -663,17 +671,35 @@ export class FakeDrive {
   });
 
   readonly driveApp = Object.freeze({
-    getFileById: (id: unknown): object => {
-      const file = this.#files.get(String(id));
-      if (!file) throw new Error(NO_FILE);
-      return {
-        getId: () => String(id),
-        getName: () => file.name,
-        getMimeType: () => file.mimeType,
-        getBlob: () => ({ getDataAsString: () => file.text }),
-      };
-    },
+    getFileById: (id: unknown): object => this.#file(String(id)),
+    getFolderById: (id: unknown): object => this.#folder(String(id)),
   });
+
+  #file(id: string): object {
+    const file = this.#files.get(id);
+    if (!file) throw new Error(NO_FILE);
+    return {
+      getId: () => id,
+      getName: () => file.name,
+      getMimeType: () => file.mimeType,
+      getBlob: () => ({ getDataAsString: () => file.text }),
+    };
+  }
+
+  #folder(id: string): object {
+    const folder = this.#folders.get(id);
+    if (!folder) throw new Error(NO_FILE);
+    const iterate = (ids: readonly string[], open: (id: string) => object) => {
+      let i = 0;
+      return { hasNext: () => i < ids.length, next: () => open(ids[i++]!) };
+    };
+    return {
+      getId: () => id,
+      getName: () => folder.name,
+      getFiles: () => iterate(folder.files, (f) => this.#file(f)),
+      getFolders: () => iterate(folder.folders, (f) => this.#folder(f)),
+    };
+  }
 }
 
 // ------------------------------------------------------------------ UrlFetchApp

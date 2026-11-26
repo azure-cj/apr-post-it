@@ -5,7 +5,7 @@
  */
 
 import { useId, type CSSProperties, type ReactNode } from 'react';
-import { rects, type FlyerDeal, type FlyerLook, type FlyerPrice, type Rect } from '@/core/flyer';
+import { POSTER_SIZES, rects, type FlyerDeal, type FlyerLook, type FlyerPrice, type PosterSize, type Rect } from '@/core/flyer';
 import logo from '@/assets/realty-on-dark.webp';
 import { IMAGERY_CREDIT, scaleBar, type MapShot } from './locationMap';
 import './Flyer.pages.css';
@@ -28,7 +28,14 @@ export interface FlyerModel {
   readonly highlights: readonly string[];
   readonly numbers: readonly string[];
   readonly email: string | null;
+  /** The poster's: its Facebook page, its shape, and whether the price goes on it as a badge. */
+  readonly facebook?: string | null;
+  readonly posterSize?: PosterSize;
+  readonly priceBadge?: boolean;
 }
+
+/** How tall a page of this model is, laid out (540 wide). */
+export const pageHeight = (m: Pick<FlyerModel, 'look' | 'posterSize'>): number => (m.look === 'poster' ? POSTER_SIZES[m.posterSize ?? 'feed'].h : PAGE_H);
 
 export type FlyerPageKind =
   | { readonly type: 'cover'; readonly photos: readonly string[] }
@@ -45,9 +52,12 @@ export const MAP_BOX: Readonly<Record<FlyerLook, Rect>> = {
   framed: { x: 30, y: 128, w: 480, h: 463 },
   big: { x: 0, y: 0, w: 540, h: 613 },
   light: { x: 35, y: 129, w: 470, h: 449 },
+  // The poster has no map page; this is never drawn.
+  poster: { x: 0, y: 0, w: 540, h: 540 },
 };
 
 export function FlyerPage({ model, page }: { readonly model: FlyerModel; readonly page: FlyerPageKind }) {
+  if (model.look === 'poster') return <Poster m={model} photo={page.type === 'map' ? undefined : page.photos[0]} />;
   if (model.look === 'framed') {
     if (page.type === 'cover') return <FramedCover m={model} photos={page.photos} />;
     return (
@@ -457,6 +467,103 @@ function LightMore({ m, no, total, map, children }: { readonly m: FlyerModel; re
       </div>
       <div className="pgbox">
         {no}/{total}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- D · Poster
+
+/** Where things go on each shape: the brand, the deal line, the headline and its size, where the photo is whole, and the contact strip. */
+const POSTER_LAYOUT: Readonly<Record<PosterSize, { brand: number; deal: number; head: number; font: number; photo: number; foot: number; text: number }>> = {
+  feed: { brand: 22, deal: 74, head: 92, font: 60, photo: 168, foot: 108, text: 13 },
+  square: { brand: 18, deal: 62, head: 78, font: 52, photo: 140, foot: 96, text: 12.5 },
+  story: { brand: 46, deal: 140, head: 164, font: 72, photo: 280, foot: 156, text: 16 },
+};
+
+/** The headline as big as fits on one line, 492 wide: Montserrat Black in capitals is up to about 0.82 of its size a letter (W, M and O are wide). */
+const headlineSize = (text: string, most: number) => Math.max(28, Math.min(most, Math.floor(492 / (Math.max(text.length, 1) * 0.84))));
+
+const PhoneIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1Z" fill="#e0b84a" />
+  </svg>
+);
+const MailIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm9 7.2L4.2 7H4v.6l8 5.3 8-5.3V7h-.2L12 12.2Z" fill="#e0b84a" />
+  </svg>
+);
+const FbIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z" fill="#e0b84a" />
+  </svg>
+);
+
+function Poster({ m, photo }: { readonly m: FlyerModel; readonly photo: string | undefined }) {
+  const size = m.posterSize ?? 'feed';
+  const h = POSTER_SIZES[size].h;
+  const L = POSTER_LAYOUT[size];
+  const headline = m.kind.toUpperCase();
+  // The whole place when it fits beside the deal, else the town and province.
+  const where = m.place && m.place.length <= (size === 'story' ? 26 : 34) ? m.place : m.shortPlace;
+  const money = m.priceBadge ? prices(m) : [];
+  // The photo starts under the headline and fades in from there, so the words sit on the dark and the photo rises out of it.
+  const fade = Math.round(L.font * 1.1);
+  const photoTop = L.photo - fade;
+  const mask = `linear-gradient(180deg, transparent 0, #000 ${fade}px)`;
+  const rows = [
+    m.numbers.length > 0 ? { key: 'tel', icon: <PhoneIcon />, text: m.numbers.join('  ·  ') } : null,
+    m.email ? { key: 'mail', icon: <MailIcon />, text: m.email } : null,
+    m.facebook ? { key: 'fb', icon: <FbIcon />, text: m.facebook } : null,
+  ].filter((r) => r !== null);
+  return (
+    <div className={`fl fp fp--${size}`} style={{ height: h }}>
+      {photo ? (
+        <div className="ph hero" style={{ top: photoTop, height: h - L.foot - photoTop, WebkitMaskImage: mask, maskImage: mask }}>
+          <img src={photo} alt="" />
+        </div>
+      ) : null}
+      <div className="glow" style={{ height: L.photo + 40 }} />
+      <div className="brand" style={{ top: L.brand }}>
+        <Roof h={size === 'story' ? 34 : 26} />
+        <b>Alpha Premier Realty</b>
+      </div>
+      <div className="deal" style={{ top: L.deal, fontSize: L.text }}>
+        <span>{m.deal}</span>
+        {where ? <em>{where}</em> : null}
+      </div>
+      <h2 style={{ top: L.head, fontSize: headlineSize(headline, L.font) }}>{headline}</h2>
+      {m.size ? (
+        <div className="chip" style={{ bottom: L.foot + 18, fontSize: L.text }}>
+          <b>{m.size} sqm</b> {m.sizeLabel.toLowerCase()}
+        </div>
+      ) : null}
+      {money.length > 0 ? (
+        <div className="price" style={{ bottom: L.foot + 16 }}>
+          {money.map((p) => (
+            <div key={p.key}>
+              <b>{p.amount}</b>
+              {p.unit ? <span>{p.unit}</span> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="foot" style={{ height: L.foot, fontSize: L.text }}>
+        <div className="reach">
+          <small>{m.numbers.length > 0 ? 'Call or message for a viewing' : 'Message us for a viewing'}</small>
+          {rows.length > 0 ? (
+            rows.map((r) => (
+              <span key={r.key} className={`row ${r.key}`}>
+                {r.icon}
+                {r.text}
+              </span>
+            ))
+          ) : (
+            <span className="row">Alpha Premier Realty</span>
+          )}
+        </div>
+        <img className="logo" src={logo} alt="" style={{ height: L.foot - (size === 'story' ? 52 : 36) }} />
       </div>
     </div>
   );

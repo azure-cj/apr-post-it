@@ -51,7 +51,7 @@ import './FindScreen.css';
 const FROM_FIND: FromList = { section: 'find' };
 
 /** The categories in the order Assign shows them, most listings first; anything unsorted last, as "Other". */
-const KIND_ORDER: readonly CategoryKind[] = ['warehouse', 'commercial', 'office', 'condo', 'unsorted'];
+const KIND_ORDER: readonly CategoryKind[] = ['warehouse', 'commercial', 'office', 'condo', 'virtual', 'unsorted'];
 
 const FILTERS: readonly { readonly key: keyof FindFilters; readonly label: string }[] = [
   { key: 'sale', label: 'For sale' },
@@ -109,6 +109,9 @@ export function FindScreen() {
       if (!labels.has(f.kind)) labels.set(f.kind, f.kind === 'unsorted' ? 'Other' : categoryLabel(f.property.category));
     }
     const order = KIND_ORDER.filter((k) => all.has(k)).sort((a, b) => {
+      // The virtual office first, set apart: the posts an admin asks for (D35).
+      if (a === 'virtual') return -1;
+      if (b === 'virtual') return 1;
       if (a === 'unsorted') return 1;
       if (b === 'unsorted') return -1;
       return (all.get(b) ?? 0) - (all.get(a) ?? 0);
@@ -322,6 +325,7 @@ export function FindScreen() {
           {kinds.map(({ kind, label }) => (
             <Chip
               key={kind}
+              className={kind === 'virtual' ? 'find__chip--featured' : undefined}
               selected={find.category === kind}
               leading={<CategoryDot kind={kind} />}
               count={results.counts.get(kind) ?? 0}

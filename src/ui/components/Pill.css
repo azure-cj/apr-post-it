@@ -131,3 +131,7 @@
 .category-dot--warehouse {
   background: var(--type-warehouse);
 }
+
+.category-dot--virtual {
+  background: var(--type-virtual);
+}

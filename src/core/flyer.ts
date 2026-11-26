@@ -47,6 +47,8 @@ export interface FlyerContent {
   readonly highlights: readonly string[];
   readonly email: string | null;
   readonly numbers: readonly string[];
+  /** The Facebook page the post names, for the poster: "fb.com/AlphaPremierRealty" or "Alpha Premier Realty". */
+  readonly facebook: string | null;
 }
 
 const BULLET = /^\s*(?:[•●▪◦‣∙·*✓✔✅➤►▶→-]|\d+[.)])\s*/u;
@@ -152,7 +154,39 @@ export function flyerContent(
     highlights: [...new Set([...fromHighlights, ...fromDetails])],
     email,
     numbers: numbers.slice(0, 3),
+    facebook: facebookOf(lines),
   };
+}
+
+/** "facebook.com/AlphaPremierRealty" → "fb.com/AlphaPremierRealty"; a "FB page: Alpha Premier Realty" line → its name. */
+function facebookOf(lines: readonly string[]): string | null {
+  for (const line of lines) {
+    const link = /(?:https?:\/\/)?(?:www\.|m\.)?(?:facebook|fb)\.com\/([\w.-]+)/i.exec(line);
+    if (link && !/^(?:share|groups|profile\.php|photo|watch|events)$/i.test(link[1]!)) return `fb.com/${link[1]}`;
+    const named = /^(?:like us on\s+)?(?:fb|facebook)(?:\s+page)?\s*[:\-–]\s*(.{3,60})$/i.exec(line.replace(BULLET, ''));
+    if (named) return named[1]!.trim();
+  }
+  return null;
+}
+
+/**
+ * The line the Copy can end with, when asked (1.1.8): only words, never a
+ * number or a name, so nothing new goes into the post. It points at the
+ * numbers only when the post already has some.
+ */
+export function callToAction(text: string): string {
+  const hasNumbers = (text.match(PHONE) ?? []).length > 0;
+  return hasNumbers
+    ? 'Schedule a site viewing today: message us here, or call the numbers above.'
+    : 'Schedule a site viewing today: message us here.';
+}
+
+/** The post with the call to action at its end, once: a post that ends with it already is left as it is. */
+export function withCallToAction(text: string): string {
+  const body = text.replace(/\s+$/, '');
+  if (body === '') return text;
+  const line = callToAction(body);
+  return body.endsWith(line) ? body : `${body}\n\n${line}`;
 }
 
 /** "COMMERCIAL SPACE" → "Commercial space"; "WAREHOUSE" → "Warehouse". */
@@ -256,8 +290,21 @@ export const LOOKS = {
   framed: { name: 'Framed', photos: 3, highlights: 4 },
   big: { name: 'Big photo', photos: 1, highlights: 4 },
   light: { name: 'Light', photos: 2, highlights: 0 },
+  poster: { name: 'Poster', photos: 1, highlights: 0 },
 } as const;
 export type FlyerLook = keyof typeof LOOKS;
+
+/**
+ * The poster's shapes (1.1.8), each laid out 540 wide and made at twice that.
+ * The poster is one picture, posted first, with the photos after it as they are.
+ */
+export const POSTER_SIZES = {
+  feed: { name: 'Feed', h: 675, made: '1080 × 1350, the shape the feed shows whole' },
+  square: { name: 'Square', h: 540, made: '1080 × 1080, square' },
+  story: { name: 'Story', h: 960, made: '1080 × 1920, for a story' },
+} as const;
+export type PosterSize = keyof typeof POSTER_SIZES;
+export const POSTER_SIZE_ORDER: readonly PosterSize[] = ['feed', 'square', 'story'];
 
 /** On each later page. */
 export const PER_PAGE_CHOICES = [2, 3, 4, 6] as const;
@@ -265,6 +312,8 @@ export type PerPage = (typeof PER_PAGE_CHOICES)[number];
 
 /** The photos after the flyer's own, spread evenly over as few pages as hold them at `per` a page. */
 export function laterPages<T>(picked: readonly T[], look: FlyerLook, per: number): T[][] {
+  // The poster is one picture: the photos after it are posted as they are, not on pages.
+  if (look === 'poster') return [];
   const rest = picked.slice(Math.min(LOOKS[look].photos, picked.length));
   const n = Math.ceil(rest.length / per);
   const pages: T[][] = [];

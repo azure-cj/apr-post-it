@@ -41,6 +41,18 @@ describe('Copy', () => {
     expect(await screen.findByText('Copied. Paste it into Facebook.')).toBeTruthy();
   });
 
+  it('ends the copy with a call to action when asked, words only', async () => {
+    const platform = fakeServer();
+    renderApp({ platform, user: manager, path: PATH });
+    await settled();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /End with a call to action/ }));
+    await userEvent.click(copyButton());
+    await waitFor(() => expect(platform.copied).toHaveLength(1));
+    expect(platform.copied[0]!.startsWith(CLEAN.publicText)).toBe(true);
+    expect(platform.copied[0]).toMatch(/\n\nSchedule a site viewing today: message us here/);
+  });
+
   it('stays enabled for a warning: a missing price asks for a second look, it does not block', async () => {
     const platform = fakeServer({
       property: propertyReply({ publicText: 'FOR SALE: 320 sqm lot\nPrice upon request.\nContact: 0917 555 0142' }),
@@ -653,6 +665,22 @@ describe('highlights (1.1.6)', () => {
     expect(await screen.findByText('Owner wants it out this week')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Highlight' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+  });
+
+  it('tells an agent a virtual office post is only for when an admin asks, until it is highlighted (D35)', async () => {
+    const vo = { category: 'Virtual Office for posting', onRequest: true };
+    const quiet = fakeServer({ properties: listWith(vo), property: propertyReply(vo), highlights: { ok: true, highlights: [] } });
+    const { unmount } = renderApp({ platform: quiet, path: PATH });
+    await settled();
+    expect(await screen.findByText('Post this only when an admin highlights it.')).toBeTruthy();
+    expect(screen.getByText('Virtual office')).toBeTruthy();
+    unmount();
+
+    const asked = fakeServer({ properties: listWith(vo), property: propertyReply(vo), highlights: { ok: true, highlights: [HIGHLIGHT] } });
+    renderApp({ platform: asked, path: PATH });
+    await settled();
+    expect(await screen.findByText('Owner wants it out this week')).toBeTruthy();
+    expect(screen.queryByText('Post this only when an admin highlights it.')).toBeNull();
   });
 
   it('lets an admin highlight a listing with a note, then remove it', async () => {

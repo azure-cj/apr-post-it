@@ -477,6 +477,16 @@ describe('highlighted listings (1.1.6)', () => {
     expect(all).not.toContain('S1');
   });
 
+  it('leaves a virtual office post out unless it is highlighted (D35)', () => {
+    const withVo = [...properties, prop('VO1', { onRequest: true }), prop('VO2', { onRequest: true })];
+    const quiet = plan({ properties: withVo, perIntern: 20 });
+    expect(ids(quiet.queues.get('Jan'))).not.toContain('VO1');
+    expect(quiet.skipped).toEqual([]);
+    const asked = plan({ properties: withVo, perIntern: 20, highlighted: new Set(['VO1']) });
+    expect(ids(asked.queues.get('Jan'))[0]).toBe('VO1');
+    expect(ids(asked.queues.get('Jan'))).not.toContain('VO2');
+  });
+
   it('puts them first in Add for one intern', () => {
     const items = planForIntern({
       properties,

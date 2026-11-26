@@ -380,3 +380,16 @@
   }
 
 }
+
+/* The Virtual office chip, set apart in its own hue (D35). Gold is for selected, so not gold. */
+.find__chip--featured:not(.chip--selected) {
+  border-color: color-mix(in srgb, var(--type-virtual) 70%, transparent);
+  background: color-mix(in srgb, var(--type-virtual) 14%, transparent);
+  color: var(--text);
+}
+
+@media (forced-colors: active) {
+  .find__chip--featured:not(.chip--selected) {
+    border-color: CanvasText;
+  }
+}

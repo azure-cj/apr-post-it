@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-25.1';
+const SERVER_VERSION = '2026-11-26.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -71,6 +71,11 @@ const CONFIG = {
   // Alpha Listing Hub's listPeople (its People screen), asked with an admin's
   // sign-in for who is on the team (v13). Admin and owner only, on its side.
   LIST_PEOPLE_URL: 'https://asia-southeast1-apr-listing-live.cloudfunctions.net/listPeople',
+
+  // The "Virtual Office for posting" folder (v20, D35). Kept out of the
+  // directory (D11); each folder inside it is offered in the app as a post to
+  // make only when an admin asks (highlights it). Only ever READ. '' turns it off.
+  VIRTUAL_OFFICE_FOLDER_ID: '1VvLX072fCFX2SQ9lxlUj6B2ljwm8pAVC',
 };
 
 // The sign-in token of the call being answered, when it came with one: then
@@ -887,7 +892,139 @@ function listProperties_(includeDocId) {
     joinChecker_(out, checker, r.id);
     joinGeo_(out, geo, r.id);
     return out;
+  }).concat(virtualOfficeList_());
+}
+
+// ---------------------------------------------------------------- virtual office (v20)
+//
+// The Virtual Office for posting folder holds a few ready-made posts, one per
+// folder inside it ("2026 NEW VIRTUAL OFFICE", "2026 V2.0 …"). They are not
+// listings: the directory leaves the folder out (D11), and the app offers
+// them only to post when an admin asks, by highlighting one (D35). This only
+// ever READS the folder: a Word file is not converted, because converting
+// writes a copy into Drive.
+
+// As the owner's tracker already writes it in Property type, so a post logged here matches.
+const VIRTUAL_OFFICE_CATEGORY = 'Virtual Office for posting';
+
+/**
+ * Each post in the folder, cached for ten minutes: { id, name, docId, docMime,
+ * photos: [{ id, name }], issues }. Empty when the folder is turned off or
+ * can't be opened, and then not cached, so the next call tries again.
+ */
+function virtualOfficeRows_() {
+  if (!CONFIG.VIRTUAL_OFFICE_FOLDER_ID) return [];
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('vo');
+  if (hit) return JSON.parse(hit);
+  var out = [];
+  try {
+    var folders = DriveApp.getFolderById(CONFIG.VIRTUAL_OFFICE_FOLDER_ID).getFolders();
+    while (folders.hasNext()) out.push(virtualOfficeRow_(folders.next()));
+  } catch (e) {
+    return [];
+  }
+  out.sort(function (a, b) { return a.name.localeCompare(b.name, 'en', { numeric: true }); });
+  try { cache.put('vo', JSON.stringify(out), 600); } catch (e) { /* too big to cache */ }
+  return out;
+}
+
+/** One post: the first document and every photo in its folder and the folders inside it. */
+function virtualOfficeRow_(folder) {
+  var photos = [], doc = null;
+  var walk = function (f, depth) {
+    var files = f.getFiles();
+    while (files.hasNext()) {
+      var file = files.next();
+      var mime = file.getMimeType();
+      if (PHOTO_MIME.test(mime)) photos.push({ id: file.getId(), name: file.getName() });
+      else if (!doc && (mime === DOC_MIME || mime === 'text/plain' || DOC_NAME.test(file.getName()))) {
+        doc = { id: file.getId(), mime: mime, name: file.getName() };
+      }
+    }
+    if (depth >= 2) return;
+    var inside = f.getFolders();
+    while (inside.hasNext()) walk(inside.next(), depth + 1);
+  };
+  walk(folder, 1);
+  photos.sort(function (a, b) { return a.name.localeCompare(b.name, 'en', { numeric: true }); });
+
+  var issues = [];
+  if (!doc) issues.push('No document');
+  else if (doc.mime !== DOC_MIME && doc.mime !== 'text/plain' && !/\.(txt|md)$/i.test(doc.name)) {
+    issues.push('Word file — save it as a Google Doc');
+  }
+  if (!photos.length) issues.push('No photos');
+  return {
+    id: folder.getId(),
+    name: String(folder.getName()).trim(),
+    docId: doc ? doc.id : '',
+    docMime: doc ? doc.mime : '',
+    photos: photos,
+    issues: issues.join(' · '),
+  };
+}
+
+/** The posts as rows of the list. `onRequest` keeps them out of Fill queues unless highlighted. */
+function virtualOfficeList_() {
+  return virtualOfficeRows_().map(function (v) {
+    return {
+      id: v.id,
+      name: v.name,
+      category: VIRTUAL_OFFICE_CATEGORY,
+      listingType: '',
+      subCategory: '',
+      photoCount: v.photos.length,
+      hasIssues: v.issues !== '',
+      issues: v.issues,
+      onRequest: true,
+    };
   });
+}
+
+/** One post's detail, as getProperty_ sends a listing's, read from its folder now. */
+function virtualOfficeProperty_(id) {
+  var v = virtualOfficeRows_().filter(function (r) { return r.id === id; })[0];
+  if (!v) throw new Error('property not found: ' + id);
+  var text = '', live = false;
+  if (v.docId) {
+    try {
+      text = readLiveDoc_(v.docId, v.docMime);
+      live = true;
+    } catch (e) {
+      // A Word file, or a document since removed: nothing to show; the app offers pasting it.
+    }
+  }
+  var out = {
+    id: v.id,
+    name: v.name,
+    category: VIRTUAL_OFFICE_CATEGORY,
+    listingType: '',
+    subCategory: '',
+    folder: 'https://drive.google.com/drive/folders/' + v.id,
+    issues: v.issues,
+    live: live,
+    onRequest: true,
+    photos: v.photos.map(function (p, i) {
+      return {
+        id: p.id,
+        name: 'photo ' + (i + 1),
+        url: 'https://drive.google.com/uc?export=download&id=' + p.id,
+        thumb: 'https://drive.google.com/thumbnail?id=' + p.id + '&sz=w640',
+      };
+    }),
+  };
+  // Its documents are written for posting, every line (D35): no separator is looked for and
+  // no line is flagged, so the text goes out whole, as a separated document's public part does.
+  // With no text there is nothing to show, and the app offers pasting it (D34).
+  var whole = text.trim();
+  out.publicText = whole;
+  out.hasInternal = whole !== '';
+  out.withheld = whole === '';
+  out.cutAt = '';
+  var last = latestPost_(v.id, v.name);
+  if (last) out.lastPosted = { date: last.day, by: last.postedBy };
+  return out;
 }
 
 /** Adds `lat` and `lng` for folder `id` when the geocoding sheet has them; nothing otherwise. */
@@ -1351,7 +1488,8 @@ function getProperty_(id, includeInternal) {
   requireSeparators_();
 
   var row = directoryRows_().filter(function (r) { return r.id === id; })[0];
-  if (!row) throw new Error('property not found: ' + id);
+  // Not a listing: one of the virtual office's posts, or nothing (D35).
+  if (!row) return virtualOfficeProperty_(id);
 
   // The sheet's copy was already cut by BuildDirectory.gs; it is the fallback.
   var publicText = String(row.postingText || '');
@@ -1375,18 +1513,6 @@ function getProperty_(id, includeInternal) {
     }
   }
 
-  // Nobody has separated this document, so none of it is confirmed safe. Since
-  // v7 an intern is sent it anyway, with a warning, because the owner wants
-  // these listings posted (D15): the lines that may hold the owner's or the
-  // broker's details are flagged, and the app marks them and leaves them out of
-  // what Copy copies. A folder with no document, or a document with no text,
-  // has nothing to show, and stays withheld as before (D13).
-  var unseparated = !separated && !!row.docId && publicText.trim() !== '';
-  var withheld = !separated && !includeInternal && !unseparated;
-  if (withheld) {
-    publicText = '';
-  }
-
   var photos = String(row.photoLinks || '')
     .split(/[\n,]/)
     .map(function (u) { return u.trim(); })
@@ -1408,32 +1534,48 @@ function getProperty_(id, includeInternal) {
     listingType: row.listingType,
     subCategory: row.subCategory,
     folder: row.folder,
-    publicText: publicText,
-    hasInternal: separated,
-    // True when the text was withheld (no document, or nothing in it), so the
-    // screen can say why it is empty rather than look broken.
-    withheld: withheld,
-    // A heading's label quotes the heading ("heading: Commission: 3%"), which
-    // is the internal section's first line. An intern is told the kind only.
-    cutAt: includeInternal ? cutAt : cutAt.split(':')[0],
     issues: row.issues,
     live: live,
     photos: photos,
   };
-  // Since v9 an intern is sent a separated document's internal section too, to
-  // read behind a toggle. The app never copies it and never saves it (D1).
-  if (includeInternal || separated) out.internalText = internalText;
-  // An Admin's reply is as it was: the whole document, to fix it.
-  if (!includeInternal && unseparated) {
-    out.unseparated = true;
-    out.flaggedLines = flaggedLines_(publicText);
-  }
+  withText_(out, { publicText: publicText, internalText: internalText, separated: separated, cutAt: cutAt, hasDoc: !!row.docId }, includeInternal);
   // The same join as the list's, so the screen can rely on the detail alone.
   joinChecker_(out, checkerIndex_(false), row.id);
   // v19: when anyone last posted it, for the "Posted recently" warning.
   var last = latestPost_(row.id, row.name);
   if (last) out.lastPosted = { date: last.day, by: last.postedBy };
   return out;
+}
+
+/**
+ * Puts a property's text on its reply `out`, from `t` { publicText,
+ * internalText, separated, cutAt, hasDoc }, as an intern or an admin may see it.
+ */
+function withText_(out, t, includeInternal) {
+  // Nobody has separated this document, so none of it is confirmed safe. Since
+  // v7 an intern is sent it anyway, with a warning, because the owner wants
+  // these listings posted (D15): the lines that may hold the owner's or the
+  // broker's details are flagged, and the app marks them and leaves them out of
+  // what Copy copies. A folder with no document, or a document with no text,
+  // has nothing to show, and stays withheld as before (D13).
+  var unseparated = !t.separated && t.hasDoc && t.publicText.trim() !== '';
+  var withheld = !t.separated && !includeInternal && !unseparated;
+  out.publicText = withheld ? '' : t.publicText;
+  out.hasInternal = t.separated;
+  // True when the text was withheld (no document, or nothing in it), so the
+  // screen can say why it is empty rather than look broken.
+  out.withheld = withheld;
+  // A heading's label quotes the heading ("heading: Commission: 3%"), which
+  // is the internal section's first line. An intern is told the kind only.
+  out.cutAt = includeInternal ? t.cutAt : t.cutAt.split(':')[0];
+  // Since v9 an intern is sent a separated document's internal section too, to
+  // read behind a toggle. The app never copies it and never saves it (D1).
+  if (includeInternal || t.separated) out.internalText = t.internalText;
+  // An Admin's reply is as it was: the whole document, to fix it.
+  if (!includeInternal && unseparated) {
+    out.unseparated = true;
+    out.flaggedLines = flaggedLines_(t.publicText);
+  }
 }
 
 /** Separators.gs must be in this project: it is where the postable text ends (D13). */

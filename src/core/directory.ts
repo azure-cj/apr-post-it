@@ -20,6 +20,7 @@
  */
 
 import { asList, asRecord, asText, unreadableReply, type Backend } from './backend';
+import { withoutDriveLinks } from './posting-text';
 import { UserFacingError, type Availability, type Photo, type Property, type PropertyDetail } from './types';
 
 /** Somewhere to keep the list between launches. Platform's readLocal / writeLocal fit. */
@@ -265,6 +266,7 @@ function readProperty(raw: unknown): Property | null {
     ...optionalAvailability(row['availability']),
     ...(typeof row['inChecker'] === 'boolean' ? { inChecker: row['inChecker'] } : {}),
     ...optionalPosition(row['lat'], row['lng']),
+    ...(row['onRequest'] === true ? { onRequest: true } : {}),
   };
 }
 
@@ -318,6 +320,8 @@ function readDetail(raw: unknown): PropertyDetail | null {
 
   const photos = readPhotos(row['photos']);
   const issues = asText(row['issues']);
+  const flagged = readFlaggedLines(row['flaggedLines']);
+  const postable = withoutDriveLinks(asText(row['publicText']), flagged.flaggedLines);
   const detail: PropertyDetail = {
     id,
     name,
@@ -333,7 +337,9 @@ function readDetail(raw: unknown): PropertyDetail | null {
     ...optionalText('dealType', row['dealType']),
     ...optionalAvailability(row['availability']),
     ...(typeof row['inChecker'] === 'boolean' ? { inChecker: row['inChecker'] } : {}),
-    publicText: asText(row['publicText']),
+    ...(row['onRequest'] === true ? { onRequest: true } : {}),
+    // Drive links are where the files are kept, never posted: out of what is shown and copied.
+    publicText: postable.text,
     hasInternal: row['hasInternal'] === true,
     cutAt: asText(row['cutAt']),
     issues,
@@ -343,7 +349,7 @@ function readDetail(raw: unknown): PropertyDetail | null {
     ...(typeof row['withheld'] === 'boolean' ? { withheld: row['withheld'] } : {}),
     // v7 (D15): a document nobody has separated, sent whole, with its risky lines.
     ...(row['unseparated'] === true ? { unseparated: true } : {}),
-    ...readFlaggedLines(row['flaggedLines']),
+    ...(flagged.flaggedLines ? { flaggedLines: postable.flagged } : {}),
     ...readLastPosted(row['lastPosted']),
   };
   // Absent for an intern: the server never sent it (D1). Not hidden here — not here at all.

@@ -253,6 +253,8 @@ function candidatesOf(
       seenIds.add(row.id);
     }
     const id = row.id.trim();
+    // The virtual office's posts go out only when an admin asks, by highlighting one (D35).
+    if (row.onRequest && !(id !== '' && (input.highlighted?.has(id) ?? false))) continue;
     if (row.availability === 'Sold') {
       skip('sold');
       continue;

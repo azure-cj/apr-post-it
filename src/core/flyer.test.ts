@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flyerContent, laterPages, priceOf, rects } from './flyer';
+import { callToAction, flyerContent, laterPages, priceOf, rects, withCallToAction } from './flyer';
 
 const POST = `COMMERCIAL-INDUSTRIAL WAREHOUSE FOR SALE / LEASE – LIIP, MAMPLASAN, BIÑAN, LAGUNA
 
@@ -110,5 +110,28 @@ describe('a plain post, no bullets', () => {
     expect(c.title).toBe('320 sqm lot in Verdant Hills');
     expect(c.numbers).toEqual(['0917 555 0142']);
     expect(flyerContent('x', { category: 'CONDO / HOUSE AND LOT', listingType: '' }).kind).toBe('Condo / house and lot');
+  });
+});
+
+describe('the poster and the call to action', () => {
+  it('finds the Facebook page the post names, as a link or a line', () => {
+    expect(flyerContent('OFFICE FOR LEASE\nVisit https://www.facebook.com/AlphaPremierRealty for more', LISTING).facebook).toBe('fb.com/AlphaPremierRealty');
+    expect(flyerContent('OFFICE FOR LEASE\n• FB Page: Alpha Premier Realty', LISTING).facebook).toBe('Alpha Premier Realty');
+    expect(flyerContent('OFFICE FOR LEASE\nfacebook.com/share/abc', LISTING).facebook).toBeNull();
+    expect(flyerContent(POST, LISTING).facebook).toBeNull();
+  });
+
+  it('puts no photo pages after the poster: the photos go up as they are', () => {
+    expect(laterPages(['a', 'b', 'c'], 'poster', 4)).toEqual([]);
+  });
+
+  it('asks for a viewing in words only, pointing at the numbers only when the post has some', () => {
+    expect(callToAction(POST)).toContain('call the numbers above');
+    expect(callToAction('OFFICE FOR LEASE')).toBe('Schedule a site viewing today: message us here.');
+    expect(callToAction(POST)).not.toMatch(/\d/);
+    const once = withCallToAction('OFFICE FOR LEASE\n');
+    expect(once).toBe('OFFICE FOR LEASE\n\nSchedule a site viewing today: message us here.');
+    expect(withCallToAction(once)).toBe(once);
+    expect(withCallToAction('')).toBe('');
   });
 });

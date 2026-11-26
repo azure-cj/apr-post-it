@@ -16,7 +16,8 @@ describe('categoryKind', () => {
   });
 
   it('matches whole names only, like the exclusion list (D11)', () => {
-    expect(categoryKind('Virtual Office for posting')).toBe('unsorted');
+    // Its own kind (D35), never an office space.
+    expect(categoryKind('Virtual Office for posting')).toBe('virtual');
     expect(categoryKind('WAREHOUSE FOR LEASE')).toBe('unsorted');
     expect(categoryKind('')).toBe('unsorted');
   });
@@ -30,7 +31,7 @@ describe('categoryLabel', () => {
 
   it('turns other shouting into sentence case, and leaves the rest alone', () => {
     expect(categoryLabel('LOTS FOR SALE')).toBe('Lots for sale');
-    expect(categoryLabel('Virtual Office for posting')).toBe('Virtual Office for posting');
+    expect(categoryLabel('Virtual Office for posting')).toBe('Virtual office');
     expect(categoryLabel('BGC')).toBe('BGC');
     expect(categoryLabel(' ')).toBe('Unsorted');
   });

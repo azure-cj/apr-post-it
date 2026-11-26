@@ -136,8 +136,8 @@
 
 .flyer__looks {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
 }
 
 .flyer__look {
@@ -358,6 +358,16 @@
 .flyer__facts label:hover,
 .flyer__check:hover {
   background: var(--row-hover);
+}
+
+.flyer__check--inline {
+  grid-template-columns: 18px auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.flyer__check--inline input {
+  margin: 0;
 }
 
 .flyer__facts input[type="checkbox"],

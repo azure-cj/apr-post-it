@@ -697,3 +697,24 @@
   color: var(--info-text);
   font: 700 11px/18px var(--heading-font);
 }
+
+.post-text__cta {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+  cursor: pointer;
+}
+
+.post-text__cta input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  flex: none;
+  accent-color: var(--gold);
+}
+
+.post-text__cta small {
+  display: block;
+  color: var(--text-muted);
+}

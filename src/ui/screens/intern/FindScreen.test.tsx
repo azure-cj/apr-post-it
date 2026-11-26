@@ -230,6 +230,17 @@ describe('Find, each row', () => {
   });
 });
 
+describe('Find, the virtual office (D35)', () => {
+  it('puts the Virtual office chip first after All, set apart from the rest', async () => {
+    const vo = { id: 'vo1', name: '2026 NEW VIRTUAL OFFICE', category: 'Virtual Office for posting', listingType: '', subCategory: '', photoCount: 3, hasIssues: false, onRequest: true };
+    renderApp({ platform: fakeServer({ properties: { ok: true, properties: [{ id: CLEAN.id, name: CLEAN.name, category: CLEAN.category, listingType: '', subCategory: '', photoCount: 1, hasIssues: false }, vo] } }), path: '/find' });
+    await screen.findByText('2026 NEW VIRTUAL OFFICE');
+    const chips = within(screen.getByRole('group', { name: 'Category' })).getAllByRole('button');
+    expect(chips.map((b) => b.textContent?.replace(/\d+$/, ''))).toEqual(['All', 'Virtual office', 'Condo / house and lot']);
+    expect(chips[1]!.classList.contains('find__chip--featured')).toBe(true);
+  });
+});
+
 describe('Find, narrowing and ordering', () => {
   it('narrows by category, counting what each would show with the search', async () => {
     await openFind();

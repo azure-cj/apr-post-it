@@ -44,13 +44,14 @@ export function Badge({ count, label, tone = 'neutral', className, ...rest }: Ba
 // ---- categories --------------------------------------------------------
 
 /** The token families in tokens.css ("listing types"), one hue each. */
-export type CategoryKind = 'commercial' | 'condo' | 'office' | 'warehouse' | 'unsorted';
+export type CategoryKind = 'commercial' | 'condo' | 'office' | 'warehouse' | 'virtual' | 'unsorted';
 
 const knownLabels: Record<Exclude<CategoryKind, 'unsorted'>, string> = {
   commercial: 'Commercial space',
   condo: 'Condo / house and lot',
   office: 'Office space',
   warehouse: 'Warehouse',
+  virtual: 'Virtual office',
 };
 
 /** Capitals, "&" as "and", punctuation and runs of spaces as one space. */
@@ -66,11 +67,13 @@ const knownFolders: Readonly<Record<string, Exclude<CategoryKind, 'unsorted'>>> 
   'CONDO HOUSE AND LOT': 'condo',
   'OFFICE SPACE': 'office',
   WAREHOUSE: 'warehouse',
+  // Not a listing folder: the virtual office's ready-made posts, posted when an admin asks (D35).
+  'VIRTUAL OFFICE FOR POSTING': 'virtual',
 };
 
 /**
- * Which of the four categories a Drive category folder is. Matched as whole
- * names, like the exclusion list (D11): "Virtual Office for posting" is not
+ * Which category a Drive category folder is. Matched as whole names, like
+ * the exclusion list (D11): "Virtual Office for posting" is its own kind, not
  * an office space. Anything else is unsorted.
  */
 export function categoryKind(category: string): CategoryKind {

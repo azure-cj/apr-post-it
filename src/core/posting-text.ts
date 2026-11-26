@@ -145,3 +145,39 @@ function trimEnd(line: string): string {
   while (end > 0 && SPACE.test(line.charAt(end - 1))) end--;
   return line.slice(0, end);
 }
+
+/** Pasted text kept whole: a virtual office post is all for posting (D35). Tidied as cutPasted tidies it. */
+export function wholePasted(raw: string): string {
+  return linesOf(raw.replace(/^\uFEFF/, '')).join('\n').trim();
+}
+
+/**
+ * Links to Google Drive, Docs or Photos: where the listing's files are kept,
+ * never something to post. With or without "https://".
+ */
+const DRIVE_LINK = /(?:https?:\/\/)?(?:[\w-]+\.)*(?:drive|docs|photos)\.google\.com\/\S*|(?:https?:\/\/)?(?:photos\.app\.goo\.gl|goo\.gl\/photos)\/\S*/gi;
+
+/** What may be left on a line once its link is gone: a label for the link, which goes with it. */
+const LINK_LABEL = /^[\s\p{P}\p{S}]*(?:(?:the\s+)?(?:links?|photos?|pics?|pictures?|images?|videos?|folder|drive|files?|more|here|see|view|click|google drive)[\s:\-\u2013\u2014.>]*)*$/iu;
+
+/**
+ * The text with its Drive links taken out, shown and copied that way; the
+ * document itself is never changed. A line that held only a link (or a link
+ * and its label, "Photos: …") goes; `flagged` line numbers are moved to match.
+ */
+export function withoutDriveLinks(text: string, flagged: readonly number[] = []): { readonly text: string; readonly flagged: readonly number[] } {
+  if (!/(?:google\.com|goo\.gl)\//i.test(text)) return { text, flagged };
+  const kept: string[] = [];
+  const moved = new Map<number, number>();
+  linesOf(text).forEach((line, i) => {
+    const bare = line.replace(DRIVE_LINK, '');
+    if (bare !== line && LINK_LABEL.test(bare)) return;
+    moved.set(i, kept.length);
+    kept.push(bare === line ? line : bare.replace(/[ \t]+$/, ''));
+  });
+  return {
+    // Trimmed at the end only, so every line before keeps its number.
+    text: kept.join('\n').replace(/\s+$/, ''),
+    flagged: flagged.flatMap((i) => (moved.has(i) ? [moved.get(i)!] : [])),
+  };
+}

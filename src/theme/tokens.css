@@ -101,6 +101,7 @@
   --type-office: #199e70;
   --type-warehouse: #c98500;
   --type-unsorted: #888888;
+  --type-virtual: #9a7ce0;
 
   /* Selected text: gold's third job. Solid, so the text on it holds AA. */
   --selection-bg: #e0b84a;
@@ -198,6 +199,7 @@
   --type-office: #158a62;
   --type-warehouse: #a87000;
   --type-unsorted: #858585;
+  --type-virtual: #7656c4;
 
   --selection-bg: rgba(224, 184, 74, 0.45);
   --selection-text: #121212;

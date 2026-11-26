@@ -7,12 +7,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toBlob } from 'html-to-image';
-import { flyerContent, FLYER_DEALS, laterPages, LOOKS, PER_PAGE_CHOICES, type FlyerDeal, type FlyerLook, type PerPage } from '@/core/flyer';
+import { flyerContent, FLYER_DEALS, laterPages, LOOKS, PER_PAGE_CHOICES, POSTER_SIZE_ORDER, POSTER_SIZES, type FlyerDeal, type FlyerLook, type PerPage, type PosterSize } from '@/core/flyer';
 import { UserFacingError, type Photo, type PropertyDetail } from '@/core/types';
 import { Button } from '../../../components';
 import { sentenceOf, useApp } from '../../../state';
 import { Dialog } from '../../manager/Dialog';
-import { FlyerPage, MAP_BOX, PAGE_H, PAGE_W, type FlyerModel, type FlyerPageKind, type MapState } from './FlyerPages';
+import { FlyerPage, MAP_BOX, PAGE_H, PAGE_W, pageHeight, type FlyerModel, type FlyerPageKind, type MapState } from './FlyerPages';
 import { drawLocationMap } from './locationMap';
 import './Flyer.css';
 
@@ -24,7 +24,7 @@ export interface FlyerDialogProps {
 }
 
 type Status = { readonly tone: 'ok' | 'fail' | 'busy'; readonly text: string; readonly folder?: string } | null;
-const LOOK_ORDER: readonly FlyerLook[] = ['framed', 'big', 'light'];
+const LOOK_ORDER: readonly FlyerLook[] = ['framed', 'big', 'light', 'poster'];
 
 export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
   const app = useApp();
@@ -42,6 +42,11 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
   const [on, setOn] = useState({ size: content.size !== null, lease: content.lease !== null, sale: content.sale !== null, place: content.place !== null });
   const [highlightsOn, setHighlightsOn] = useState<readonly boolean[]>(() => content.highlights.map((_, i) => i < 4));
   const [withMap, setWithMap] = useState(false);
+  const [posterSize, setPosterSize] = useState<PosterSize>('feed');
+  const [priceBadge, setPriceBadge] = useState(false);
+  const poster = look === 'poster';
+  // The poster is one picture: no map page with it.
+  const mapOn = withMap && !poster;
   const [maps, setMaps] = useState<Partial<Record<FlyerLook, MapState>>>({});
   const [status, setStatus] = useState<Status>(null);
   const [working, setWorking] = useState<'copy' | 'save' | null>(null);
@@ -83,7 +88,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
   // ---- the location map: the ring once, then a picture per look (each look's box is its own shape) ----
   const ring = useRef<Promise<readonly (readonly [number, number])[]> | null>(null);
   useEffect(() => {
-    if (!withMap || maps[look]) return;
+    if (!withMap || look === 'poster' || maps[look]) return;
     setMaps((before) => ({ ...before, [look]: { status: 'loading' } }));
     ring.current ??= app.tracker.locationRing(detail.id).then((r) => r.ring);
     const box = MAP_BOX[look];
@@ -115,16 +120,21 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
     highlights: content.highlights.filter((_, i) => highlightsOn[i]).slice(0, max),
     numbers: content.numbers,
     email: content.email,
+    facebook: content.facebook,
+    posterSize,
+    priceBadge,
   };
+  const pageH = pageHeight(model);
 
   const pagesFor = (srcs: (id: string) => string, forLook: FlyerLook = look): FlyerPageKind[] => {
     const coverCount = Math.min(LOOKS[forLook].photos, picked.length);
     const later = laterPages(picked, forLook, per);
-    const total = 1 + later.length + (withMap ? 1 : 0);
+    const map = withMap && forLook !== 'poster';
+    const total = 1 + later.length + (map ? 1 : 0);
     return [
       { type: 'cover', photos: picked.slice(0, coverCount).map(srcs) },
       ...later.map((ids, i) => ({ type: 'photos' as const, photos: ids.map(srcs), no: i + 2, total })),
-      ...(withMap ? [{ type: 'map' as const, map: mapState, no: total, total }] : []),
+      ...(map ? [{ type: 'map' as const, map: mapState, no: total, total }] : []),
     ];
   };
   const pages = pagesFor(srcOf);
@@ -135,10 +145,10 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
   const exportRoot = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
-  /** Every page as a PNG, 1080 x 1350, made from the full photos. */
+  /** Every page as a PNG, 1080 wide (1350 tall, or the poster's shape), made from the full photos. */
   const render = async (only?: number): Promise<Uint8Array[]> => {
-    if (picked.length === 0) throw new UserFacingError('Pick at least one photo for the flyer.');
-    if (withMap && mapState.status !== 'ready') {
+    if (picked.length === 0) throw new UserFacingError(poster ? 'Pick a photo for the poster.' : 'Pick at least one photo for the flyer.');
+    if (mapOn && mapState.status !== 'ready') {
       throw new UserFacingError(mapState.status === 'loading' ? 'The map is still loading. Try again in a moment.' : 'The map page has no map. Turn it off, or try again.');
     }
     const ids = only === undefined ? picked : idsOnPage(only);
@@ -160,7 +170,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
       await Promise.all(chosen.flatMap((n) => [...n.querySelectorAll('img')].map((img) => (typeof img.decode === 'function' ? img.decode().catch(() => undefined) : undefined))));
       const out: Uint8Array[] = [];
       for (const node of chosen) {
-        const blob = await toBlob(node, { width: PAGE_W, height: PAGE_H, pixelRatio: 2, cacheBust: false });
+        const blob = await toBlob(node, { width: PAGE_W, height: pageH, pixelRatio: 2, cacheBust: false });
         if (!blob) throw new UserFacingError('The flyer could not be made. Try again.');
         out.push(new Uint8Array(await blob.arrayBuffer()));
       }
@@ -182,7 +192,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
     try {
       const [png] = await render(shown);
       await app.platform.copyImage(png!, `Page ${shown + 1}`);
-      setStatus({ tone: 'ok', text: `Page ${shown + 1} copied. Paste it into Facebook with Ctrl+V.` });
+      setStatus({ tone: 'ok', text: poster ? 'Poster copied. Paste it into Facebook with Ctrl+V, then add the photos.' : `Page ${shown + 1} copied. Paste it into Facebook with Ctrl+V.` });
     } catch (err) {
       setStatus({ tone: 'fail', text: sentenceOf(err) });
     } finally {
@@ -193,14 +203,19 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
   const save = async () => {
     if (busy) return;
     setWorking('save');
-    setStatus({ tone: 'busy', text: pages.length > 1 ? `Making ${pages.length} pages…` : 'Making the flyer…' });
+    setStatus({ tone: 'busy', text: poster ? 'Making the poster…' : pages.length > 1 ? `Making ${pages.length} pages…` : 'Making the flyer…' });
     try {
       const pngs = await render();
+      // "00 Poster" sorts before every photo in the folder, so it goes up first.
       const folder = await app.platform.saveImages(
         detail.name,
-        pngs.map((png, i) => ({ name: pngs.length > 1 ? `Flyer ${i + 1}.png` : 'Flyer.png', png })),
+        pngs.map((png, i) => ({ name: poster ? '00 Poster.png' : pngs.length > 1 ? `Flyer ${i + 1}.png` : 'Flyer.png', png })),
       );
-      setStatus({ tone: 'ok', text: pngs.length > 1 ? `${pngs.length} pages saved with the photos.` : 'Flyer saved with the photos.', folder });
+      setStatus({
+        tone: 'ok',
+        text: poster ? 'Poster saved first in the photos folder. Post it first, then the photos.' : pngs.length > 1 ? `${pngs.length} pages saved with the photos.` : 'Flyer saved with the photos.',
+        folder,
+      });
     } catch (err) {
       setStatus({ tone: 'fail', text: sentenceOf(err) });
     } finally {
@@ -210,13 +225,22 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
 
   // ---- choosing photos ----
   const toggle = (id: string) => {
+    // The poster takes one photo: a click makes it the one, and keeps the others' order for the other looks.
+    if (poster) {
+      makeBig(id);
+      setStatus(null);
+      return;
+    }
     setPicked((before) => (before.includes(id) ? before.filter((x) => x !== id) : [...before, id]));
     setStatus(null);
   };
   const makeBig = (id: string) => setPicked((before) => [id, ...before.filter((x) => x !== id)]);
   const later = laterPages(picked, look, per);
-  const plan =
-    picked.length === 0
+  const plan = poster
+    ? picked.length === 0
+      ? 'Pick the photo for the poster.'
+      : 'The poster uses the Big photo. Click another to use it instead.'
+    : picked.length === 0
       ? 'Pick at least one photo.'
       : later.length === 0
         ? `The flyer, with ${count(coverCount, 'photo')}.`
@@ -238,7 +262,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
             Close
           </Button>
           <Button onClick={() => void save()} busy={working === 'save'} disabled={picked.length === 0 || working === 'copy'}>
-            {pages.length > 1 ? `Save all ${pages.length} pages` : 'Save the flyer'}
+            {poster ? 'Save the poster' : pages.length > 1 ? `Save all ${pages.length} pages` : 'Save the flyer'}
           </Button>
           <Button ref={copyRef} variant="primary" nudge onClick={() => void copy()} busy={working === 'copy'} disabled={picked.length === 0 || working === 'save'}>
             {pages.length > 1 ? `Copy page ${shown + 1}` : 'Copy image'}
@@ -248,9 +272,9 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
     >
       <div className="flyer__body">
         <div className="flyer__stage">
-          <p className="flyer__note meta">Made at 1080 × 1350, the shape Facebook's feed shows whole.</p>
+          <p className="flyer__note meta">{poster ? `Made at ${POSTER_SIZES[posterSize].made}.` : "Made at 1080 × 1350, the shape Facebook's feed shows whole."}</p>
           <div className="flyer__paper">
-            <Scaled width={PAGE_W * 0.8}>
+            <Scaled width={PAGE_W * (pageH > PAGE_H ? 0.6 : 0.8)} height={pageH}>
               <FlyerPage model={model} page={pages[shown]!} />
             </Scaled>
           </div>
@@ -264,7 +288,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
                 aria-label={i === 0 ? 'Page 1, the flyer' : p.type === 'map' ? `Page ${i + 1}, the map` : `Page ${i + 1}, photos`}
                 onClick={() => setPage(i)}
               >
-                <Scaled width={48}>
+                <Scaled width={48} height={pageH}>
                   <FlyerPage model={model} page={p} />
                 </Scaled>
                 <span>{i + 1}</span>
@@ -292,14 +316,34 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
               {LOOK_ORDER.map((l) => (
                 <button key={l} type="button" className="flyer__look" aria-pressed={look === l} onClick={() => setLook(l)}>
                   <span className="flyer__mini">
-                    <Scaled width={96}>
-                      <FlyerPage model={{ ...model, look: l, highlights: content.highlights.filter((_, i) => highlightsOn[i]).slice(0, LOOKS[l].highlights) }} page={pagesFor(srcOf, l)[0]!} />
+                    <Scaled width={80}>
+                      <FlyerPage model={{ ...model, look: l, posterSize: 'feed', highlights: content.highlights.filter((_, i) => highlightsOn[i]).slice(0, LOOKS[l].highlights) }} page={pagesFor(srcOf, l)[0]!} />
                     </Scaled>
                   </span>
                   {LOOKS[l].name}
                 </button>
               ))}
             </div>
+            {poster ? (
+              <div className="flyer__row">
+                <span className="flyer__per">
+                  Size
+                  <span className="flyer__seg" role="group" aria-label="Poster size">
+                    {POSTER_SIZE_ORDER.map((s) => (
+                      <button key={s} type="button" aria-pressed={posterSize === s} onClick={() => setPosterSize(s)}>
+                        {POSTER_SIZES[s].name}
+                      </button>
+                    ))}
+                  </span>
+                </span>
+                {model.lease || model.sale ? (
+                  <label className="flyer__check flyer__check--inline">
+                    <input type="checkbox" checked={priceBadge} onChange={(e) => setPriceBadge(e.target.checked)} />
+                    <span>Price badge</span>
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
           </section>
 
           <section className="flyer__grp" aria-labelledby="flyer-photos">
@@ -307,13 +351,17 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
               Photos to post <small>{picked.length} of {photos.length}</small>
             </h3>
             <div className="flyer__row">
-              <Button size="small" onClick={() => setPicked(photos.map((p) => p.id))}>
-                All {photos.length}
-              </Button>
-              <Button size="small" onClick={() => setPicked((before) => before.slice(0, LOOKS[look].photos))}>
-                Flyer only
-              </Button>
-              <span className="flyer__per">
+              {poster ? null : (
+                <>
+                  <Button size="small" onClick={() => setPicked(photos.map((p) => p.id))}>
+                    All {photos.length}
+                  </Button>
+                  <Button size="small" onClick={() => setPicked((before) => before.slice(0, LOOKS[look].photos))}>
+                    Flyer only
+                  </Button>
+                </>
+              )}
+              {poster ? null : <span className="flyer__per">
                 Later pages
                 <span className="flyer__seg" role="group" aria-label="Photos on each later page">
                   {PER_PAGE_CHOICES.map((n) => (
@@ -322,7 +370,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
                     </button>
                   ))}
                 </span>
-              </span>
+              </span>}
             </div>
             <p className="flyer__plan">{plan}</p>
             <div className="flyer__picks">
@@ -345,7 +393,9 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
                 );
               })}
             </div>
-            <p className="flyer__hint meta">Click a photo to add it or take it out. The numbers are the order they're posted in.</p>
+            <p className="flyer__hint meta">
+              {poster ? 'Post the poster first, then the photos.' : "Click a photo to add it or take it out. The numbers are the order they're posted in."}
+            </p>
           </section>
 
           <section className="flyer__grp" aria-labelledby="flyer-heading">
@@ -363,7 +413,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
 
           <section className="flyer__grp" aria-labelledby="flyer-facts">
             <h3 id="flyer-facts">
-              From the post <small>{max === 0 ? 'Light shows no highlights' : `${Math.min(highlightCount, max)} of ${max} highlights fit`}</small>
+              From the post <small>{max === 0 ? `${LOOKS[look].name} shows no highlights` : `${Math.min(highlightCount, max)} of ${max} highlights fit`}</small>
             </h3>
             <ul className="flyer__facts">
               {content.size ? <Fact label={content.sizeLabel} value={`${content.size} sqm`} checked={on.size} onChange={(v) => setOn({ ...on, size: v })} /> : null}
@@ -398,7 +448,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
             </ul>
           </section>
 
-          <section className="flyer__grp" aria-labelledby="flyer-map">
+          {poster ? null : <section className="flyer__grp" aria-labelledby="flyer-map">
             <h3 id="flyer-map">Location map</h3>
             <label className="flyer__check">
               <input type="checkbox" checked={withMap} onChange={(e) => setWithMap(e.target.checked)} />
@@ -421,7 +471,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
                 </Button>
               </p>
             ) : null}
-          </section>
+          </section>}
         </div>
       </div>
 
@@ -453,10 +503,10 @@ function Fact({ label, value, checked, off, onChange }: { readonly label?: strin
 }
 
 /** A page, scaled down to `width`. */
-function Scaled({ width, children }: { readonly width: number; readonly children: ReactNode }) {
+function Scaled({ width, height = PAGE_H, children }: { readonly width: number; readonly height?: number; readonly children: ReactNode }) {
   const s = width / PAGE_W;
   return (
-    <span className="flyer__scaled" style={{ width, height: PAGE_H * s }}>
+    <span className="flyer__scaled" style={{ width, height: height * s }}>
       <span style={{ transform: `scale(${s})` }}>{children}</span>
     </span>
   );

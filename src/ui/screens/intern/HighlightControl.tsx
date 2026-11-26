@@ -9,6 +9,8 @@ export interface HighlightControlProps {
   readonly property: string;
   /** An admin: may highlight it, change the note, or remove it. */
   readonly manager: boolean;
+  /** A virtual office post (D35): an agent posts it only once an admin highlights it. */
+  readonly onRequest?: boolean;
 }
 
 /**
@@ -16,7 +18,7 @@ export interface HighlightControlProps {
  * the admin's note. An admin highlights it, changes the note, or removes it:
  * a highlighted listing tops every agent's My queue and is given out first.
  */
-export function HighlightControl({ propertyId, property, manager }: HighlightControlProps) {
+export function HighlightControl({ propertyId, property, manager, onRequest = false }: HighlightControlProps) {
   const app = useApp();
   const notify = useNotify();
   const { complete } = useOnboarding();
@@ -28,7 +30,15 @@ export function HighlightControl({ propertyId, property, manager }: HighlightCon
   const [error, setError] = useState<string | null>(null);
 
   if (!manager) {
-    if (!current) return null;
+    if (!current) {
+      // Nothing to say until the list is read: "not asked" then would be a guess.
+      if (!onRequest || highlights.data === null) return null;
+      return (
+        <Notice tone="info" title="Only when asked" className="highlight-control">
+          Post this only when an admin highlights it.
+        </Notice>
+      );
+    }
     return (
       <Notice tone="info" title="Highlighted" className="highlight-control">
         {current.note || 'Advertise this one first.'}
