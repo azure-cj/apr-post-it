@@ -614,3 +614,15 @@ than being lost. It has no size and no map. The contact strip asks them to inqui
 Copy's call to action asks them to set one up. Everything else is the listing flyer as it was:
 the four looks, the photos from its folder, the highlights and the contacts. A price "a year"
 is now read as such, for listings too.
+
+### D43. A Word file's text comes from the Directory's copy (Nov 27, 2026)
+
+Once D41 sent the virtual office's own post, a post whose document is a Word file opened
+empty, with Copy blocked: the server reads a Word file only by converting a copy, which
+writes into Drive, so it never does (D35). The Directory's stale row had its text all along,
+because BuildDirectory.gs does convert a temporary copy when the owner rebuilds. So when the
+document can't be read live, the server now sends that row's Posting text, whole, as the
+post's text (`live: false`), and "Word file" is dropped from its issues, in the list and on
+the page, since there is text to post. A rebuild that leaves the folder out (D11) takes that
+copy away again: the lasting fix is to save each virtual office document as a Google Doc.
+Server version `2026-11-27.2`.

@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-27.1';
+const SERVER_VERSION = '2026-11-27.2';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -875,8 +875,11 @@ function listProperties_(includeDocId) {
   var geo = geoIndex_();
   var office = virtualOfficeList_();
   var officeIds = idSet_(office);
+  var saved = {};   // posts whose text the Directory has a copy of (D43)
   return directoryRows_().filter(function (r) {
-    return !isVirtualOfficeRow_(r, officeIds);
+    if (!isVirtualOfficeRow_(r, officeIds)) return true;
+    if (textOf_(r.postingText).trim()) saved[textOf_(r.id).trim()] = true;
+    return false;
   }).map(function (r) {
     var out = {
       id: r.id,
@@ -896,7 +899,11 @@ function listProperties_(includeDocId) {
     joinChecker_(out, checker, r.id);
     joinGeo_(out, geo, r.id);
     return out;
-  }).concat(office);
+  }).concat(office.map(function (o) {
+    if (!saved[o.id]) return o;
+    var issues = issuesWithText_(o.issues);
+    return Object.assign({}, o, { issues: issues, hasIssues: issues !== '' });
+  }));
 }
 
 // ---------------------------------------------------------------- virtual office (v20)
@@ -990,6 +997,16 @@ function isVirtualOfficeRow_(row, officeIds) {
     textOf_(row.category).trim().toLowerCase() === VIRTUAL_OFFICE_CATEGORY.toLowerCase();
 }
 
+/**
+ * A post's issues once its text is in hand (D43): a Word file the server
+ * can't read is no longer a problem when the Directory has its text.
+ */
+function issuesWithText_(issues) {
+  return String(issues || '').split(' · ').filter(function (part) {
+    return part && !/^Word file/.test(part);
+  }).join(' · ');
+}
+
 /** The posts as rows of the list. `onRequest` keeps them out of Fill queues unless highlighted. */
 function virtualOfficeList_() {
   return virtualOfficeRows_().map(function (v) {
@@ -1007,8 +1024,13 @@ function virtualOfficeList_() {
   });
 }
 
-/** One post's detail, as getProperty_ sends a listing's, read from its folder now. */
-function virtualOfficeProperty_(id) {
+/**
+ * One post's detail, as getProperty_ sends a listing's, read from its folder
+ * now. `saved` is the Directory's copy of its text, when a stale row has one
+ * (D43): BuildDirectory.gs reads a Word file through a converted copy, which
+ * this never makes, so for a Word file that copy is the only text there is.
+ */
+function virtualOfficeProperty_(id, saved) {
   var v = virtualOfficeRows_().filter(function (r) { return r.id === id; })[0];
   if (!v) throw new Error('property not found: ' + id);
   var text = '', live = false;
@@ -1017,8 +1039,13 @@ function virtualOfficeProperty_(id) {
       text = readLiveDoc_(v.docId, v.docMime);
       live = true;
     } catch (e) {
-      // A Word file, or a document since removed: nothing to show; the app offers pasting it.
+      // A Word file, or a document since removed: the Directory's copy if there is one, else
+      // nothing to show, and the app offers pasting it.
     }
+  }
+  if (!String(text).trim() && textOf_(saved).trim()) {
+    text = textOf_(saved);
+    live = false;
   }
   var out = {
     id: v.id,
@@ -1042,7 +1069,8 @@ function virtualOfficeProperty_(id) {
   // Its documents are written for posting, every line (D35): no separator is looked for and
   // no line is flagged, so the text goes out whole, as a separated document's public part does.
   // With no text there is nothing to show, and the app offers pasting it (D34).
-  var whole = text.trim();
+  var whole = String(text).trim();
+  if (whole) out.issues = issuesWithText_(out.issues);
   out.publicText = whole;
   out.hasInternal = whole !== '';
   out.withheld = whole === '';
@@ -1514,8 +1542,10 @@ function getProperty_(id, includeInternal) {
 
   var row = directoryRows_().filter(function (r) { return r.id === id; })[0];
   // Not a listing: one of the virtual office's posts, or nothing (D35), even
-  // when a stale Directory row says otherwise (D41).
-  if (!row || isVirtualOfficeRow_(row, idSet_(virtualOfficeRows_()))) return virtualOfficeProperty_(id);
+  // when a stale Directory row says otherwise (D41); that row's text is kept
+  // for when the document can't be read live (D43).
+  if (!row) return virtualOfficeProperty_(id, '');
+  if (isVirtualOfficeRow_(row, idSet_(virtualOfficeRows_()))) return virtualOfficeProperty_(id, row.postingText);
 
   // The sheet's copy was already cut by BuildDirectory.gs; it is the fallback.
   var publicText = String(row.postingText || '');

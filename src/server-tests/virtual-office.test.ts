@@ -90,6 +90,12 @@ const STALE: readonly Listing[] = [
     id: 'vo-old', name: '2025 VIRTUAL OFFICE', docId: 'vo-old-doc', category: 'VIRTUAL OFFICE FOR POSTING', listingType: '',
     doc: ['VIRTUAL OFFICE IN ORTIGAS'], photos: [],
   },
+  // A Word file: BuildDirectory.gs read it through a converted copy, so the
+  // Directory has its text, though the server cannot read it live (D43).
+  {
+    id: 'vo2', name: '2026 V2.0 NEW VIRTUAL OFFICE', docId: 'vo2-doc', category: 'Virtual Office for posting', listingType: '',
+    doc: ['VIRTUAL OFFICE V2.0', 'P3,000 a month'], photos: [],
+  },
 ];
 
 describe('a Directory that still lists the virtual office (D41)', () => {
@@ -117,6 +123,26 @@ describe('a Directory that still lists the virtual office (D41)', () => {
     });
     expect(p).not.toHaveProperty('flaggedLines');
     expect(p).not.toHaveProperty('unseparated');
+  });
+
+  it("falls back to the Directory's copy of a Word file's text, sent whole, so Copy is not blocked (D43)", () => {
+    const w = world();
+    const p = w.call('jan', 'property', { id: 'vo2' })['property'] as Record<string, unknown>;
+    expect(p).toMatchObject({
+      id: 'vo2',
+      publicText: 'VIRTUAL OFFICE V2.0\nP3,000 a month',
+      hasInternal: true,
+      withheld: false,
+      cutAt: '',
+      live: false,
+      onRequest: true,
+      issues: 'No photos',
+    });
+    expect(p).not.toHaveProperty('flaggedLines');
+    const list = w.call('jan', 'properties')['properties'] as Record<string, unknown>[];
+    expect(list.filter((x) => x['id'] === 'vo2')).toEqual([
+      expect.objectContaining({ onRequest: true, hasIssues: true, issues: 'No photos' }),
+    ]);
   });
 
   it('leaves a stale row out even when the folder cannot be opened, rather than offer it as a listing', () => {
