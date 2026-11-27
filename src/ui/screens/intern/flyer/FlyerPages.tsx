@@ -32,6 +32,8 @@ export interface FlyerModel {
   readonly facebook?: string | null;
   readonly posterSize?: PosterSize;
   readonly priceBadge?: boolean;
+  /** A virtual office post (D42): there is no site to view, so the contact strip asks them to inquire. */
+  readonly virtualOffice?: boolean;
 }
 
 /** How tall a page of this model is, laid out (540 wide). */
@@ -188,6 +190,8 @@ function Arc() {
 
 const sizeIsLong = (size: string) => size.length > 5;
 const contactLine = (m: FlyerModel) => (m.numbers.length > 0 ? m.numbers.join(' · ') : (m.email ?? 'Alpha Premier Realty'));
+/** What the contact strip asks for: a viewing, or for a virtual office, which has no site to view, an inquiry. */
+const forWhat = (m: FlyerModel) => (m.virtualOffice ? 'to inquire' : 'for a viewing');
 const prices = (m: FlyerModel) => [m.lease && { ...m.lease, key: 'lease' }, m.sale && { ...m.sale, key: 'sale' }].filter((p): p is FlyerPrice & { key: string } => Boolean(p));
 
 // ---------------------------------------------------------------- A · Framed
@@ -196,7 +200,7 @@ function FramedFoot({ m, slim, no }: { readonly m: FlyerModel; readonly slim?: b
   return (
     <div className={`foot${slim ? ' slim' : ''}`}>
       <div>
-        <small>{m.numbers.length > 0 ? 'Call or text for a viewing' : 'Message us for a viewing'}</small>
+        <small>{m.numbers.length > 0 ? `Call or text ${forWhat(m)}` : `Message us ${forWhat(m)}`}</small>
         <b>{contactLine(m)}</b>
         {!slim && m.email && m.numbers.length > 0 ? <span className="mail">{m.email}</span> : null}
       </div>
@@ -315,9 +319,9 @@ function BigCover({ m, photos }: { readonly m: FlyerModel; readonly photos: read
       <div key="lease" className="stat money">
         <b>
           {m.lease.amount}
-          {m.lease.unit === 'per sqm' ? <small>/sqm</small> : m.lease.unit === 'a month' ? <small>/mo</small> : null}
+          {m.lease.unit === 'per sqm' ? <small>/sqm</small> : m.lease.unit === 'a month' ? <small>/mo</small> : m.lease.unit === 'a year' ? <small>/yr</small> : null}
         </b>
-        <span>For lease</span>
+        <span>{m.virtualOffice ? 'Price' : 'For lease'}</span>
       </div>
     ) : null,
     m.sale ? (
@@ -354,7 +358,7 @@ function BigCover({ m, photos }: { readonly m: FlyerModel; readonly photos: read
       ) : null}
       <div className="foot">
         <div>
-          <small>For a viewing, call or text</small>
+          <small>{m.virtualOffice ? 'To inquire, call or text' : 'For a viewing, call or text'}</small>
           <b>Alpha Premier Realty</b>
         </div>
         <div className="nums">
@@ -551,7 +555,7 @@ function Poster({ m, photo }: { readonly m: FlyerModel; readonly photo: string |
       ) : null}
       <div className="foot" style={{ height: L.foot, fontSize: L.text }}>
         <div className="reach">
-          <small>{m.numbers.length > 0 ? 'Call or message for a viewing' : 'Message us for a viewing'}</small>
+          <small>{m.numbers.length > 0 ? `Call or message ${forWhat(m)}` : `Message us ${forWhat(m)}`}</small>
           {rows.length > 0 ? (
             rows.map((r) => (
               <span key={r.key} className={`row ${r.key}`}>

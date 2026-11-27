@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { callToAction, flyerContent, laterPages, priceOf, rects, withCallToAction } from './flyer';
+import { callToAction, flyerContent, laterPages, OFFICE_DEALS, priceOf, rects, withCallToAction } from './flyer';
 
 const POST = `COMMERCIAL-INDUSTRIAL WAREHOUSE FOR SALE / LEASE – LIIP, MAMPLASAN, BIÑAN, LAGUNA
 
@@ -133,5 +133,55 @@ describe('the poster and the call to action', () => {
     expect(once).toBe('OFFICE FOR LEASE\n\nSchedule a site viewing today: message us here.');
     expect(withCallToAction(once)).toBe(once);
     expect(withCallToAction('')).toBe('');
+  });
+});
+
+describe('a virtual office post (D42)', () => {
+  const VO_POST = `2026 NEW VIRTUAL OFFICE – MAKATI CITY
+• Business address in Makati
+• Mail and package handling
+• Rate: ₱2,500/month
+• Annual plan: ₱27,000 a year
+
+Contact Alpha Premier Realty:
+0927 555 5803`;
+  const VO = { category: 'Virtual Office for posting', listingType: '', onRequest: true };
+
+  it('is headed Virtual office, its first price the plan, and the deal said by that price', () => {
+    const c = flyerContent(VO_POST, VO);
+    expect(c.virtualOffice).toBe(true);
+    expect(c.kind).toBe('Virtual office');
+    expect(c.deal).toBe('Monthly plan');
+    expect(c.lease).toEqual({ amount: '₱2,500', unit: 'a month' });
+    expect(c.sale).toBeNull();
+    // Another plan's price is kept, as a highlight, rather than lost.
+    expect(c.highlights).toEqual(['Business address in Makati', 'Mail and package handling', 'Annual plan: ₱27,000 a year']);
+    expect(c.numbers).toEqual(['0927 555 5803']);
+  });
+
+  it('reads a plain Price as the plan, never as a price to buy, and says a year when the post does', () => {
+    const plain = flyerContent('VIRTUAL OFFICE\nPrice: ₱3,000', VO);
+    expect(plain.sale).toBeNull();
+    expect(plain.lease).toEqual({ amount: '₱3,000', unit: '' });
+    expect(plain.deal).toBe('Now available');
+    const yearly = flyerContent('VIRTUAL OFFICE\nRate: ₱27,000 a year', VO);
+    expect(yearly.lease).toEqual({ amount: '₱27K', unit: 'a year' });
+    expect(yearly.deal).toBe('Yearly plan');
+    expect(OFFICE_DEALS).toEqual(['Now available', 'Monthly plan', 'Yearly plan']);
+  });
+
+  it('asks them to set one up, not to view a site, still in words only', () => {
+    const line = 'Set up your virtual office today: message us here, or call the numbers above.';
+    expect(callToAction(VO_POST, true)).toBe(line);
+    expect(callToAction('VIRTUAL OFFICE', true)).toBe('Set up your virtual office today: message us here.');
+    expect(withCallToAction(VO_POST, true)).toBe(`${VO_POST}\n\n${line}`);
+  });
+
+  it('leaves a listing as it was', () => {
+    const c = flyerContent(POST, LISTING);
+    expect(c.virtualOffice).toBe(false);
+    expect(c.kind).toBe('Warehouse');
+    expect(flyerContent(POST, { ...LISTING, onRequest: false }).deal).toBe('Sale or lease');
+    expect(callToAction(POST)).toBe('Schedule a site viewing today: message us here, or call the numbers above.');
   });
 });

@@ -65,6 +65,31 @@ describe('the flyer', () => {
     expect(await within(dialog).findByText('Poster saved first in the photos folder. Post it first, then the photos.')).toBeTruthy();
   });
 
+  it('fits a virtual office post: its own heading and deals, no sale or lease, no map, asked to inquire (D42)', async () => {
+    const platform = fakeServer({
+      property: propertyReply({
+        category: 'Virtual Office for posting',
+        listingType: '',
+        subCategory: '',
+        cutAt: '',
+        onRequest: true,
+        publicText: '2026 NEW VIRTUAL OFFICE\n• Business address in Makati\n• Rate: ₱2,500/month\nCall 0927 555 5803',
+      }),
+    });
+    renderApp({ platform, user: manager, path: PATH });
+    expect(await screen.findByText(/Set up your virtual office today: message us here, or call the numbers above\./, {}, { timeout: 5000 })).toBeTruthy();
+    const dialog = await openFlyer();
+
+    expect((within(dialog).getByRole('textbox', { name: 'What it is' }) as HTMLInputElement).value).toBe('Virtual office');
+    const deals = within(dialog).getByRole('group', { name: 'Deal' });
+    expect(within(deals).getAllByRole('button').map((b) => b.textContent)).toEqual(['Now available', 'Monthly plan', 'Yearly plan']);
+    expect(within(deals).getByRole('button', { name: 'Monthly plan' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(dialog).queryByRole('group', { name: 'Sale or lease' })).toBeNull();
+    expect(within(dialog).queryByRole('checkbox', { name: /Add a satellite map page/ })).toBeNull();
+    expect(dialog.textContent).toContain('₱2,500 a month');
+    expect(dialog.textContent).not.toMatch(/For lease|For sale|viewing/);
+  });
+
   it("says why there's no map when the server can't make one", async () => {
     const sentence = "The location map isn't set up yet. Ask your admin.";
     const platform = fakeServer({ locationRing: { ok: false, error: sentence, message: sentence, reason: 'no-secret' } });

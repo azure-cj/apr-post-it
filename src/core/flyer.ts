@@ -19,8 +19,11 @@
 
 import type { Property } from './types';
 
-export type FlyerDeal = 'Sale or lease' | 'For lease' | 'For sale';
+export type FlyerDeal = 'Sale or lease' | 'For lease' | 'For sale' | 'Now available' | 'Monthly plan' | 'Yearly plan';
+/** A listing's deals. */
 export const FLYER_DEALS: readonly FlyerDeal[] = ['Sale or lease', 'For lease', 'For sale'];
+/** A virtual office post's (D42): a plan, never sold or leased. */
+export const OFFICE_DEALS: readonly FlyerDeal[] = ['Now available', 'Monthly plan', 'Yearly plan'];
 
 /** A price, shortened for a picture: "₱120M" "to buy", "₱250" "per sqm". */
 export interface FlyerPrice {
@@ -49,6 +52,12 @@ export interface FlyerContent {
   readonly numbers: readonly string[];
   /** The Facebook page the post names, for the poster: "fb.com/AlphaPremierRealty" or "Alpha Premier Realty". */
   readonly facebook: string | null;
+  /**
+   * One of the virtual office's posts (D35): a plan, not a property (D42). Its
+   * heading is "Virtual office", its first price is the plan's, it has no size
+   * and no map, and it asks people to set one up rather than view a site.
+   */
+  readonly virtualOffice: boolean;
 }
 
 const BULLET = /^\s*(?:[•●▪◦‣∙·*✓✔✅➤►▶→-]|\d+[.)])\s*/u;
@@ -58,10 +67,11 @@ const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
 /** Everything the flyer needs from the text Copy takes, and the listing's own facts where the text says nothing. */
 export function flyerContent(
   text: string,
-  property: Pick<Property, 'category' | 'listingType' | 'city' | 'size' | 'dealType'> & { readonly subCategory?: string | undefined },
+  property: Pick<Property, 'category' | 'listingType' | 'city' | 'size' | 'dealType' | 'onRequest'> & { readonly subCategory?: string | undefined },
 ): FlyerContent {
   const lines = text.split(/\r?\n/).map((l) => l.trim());
   const first = lines.find((l) => l !== '') ?? '';
+  const office = property.onRequest === true;
 
   // Bullets before any heading count as details; a heading like "Contact us:" ends them.
   let section: 'details' | 'highlights' | 'other' = 'details';
@@ -78,6 +88,13 @@ export function flyerContent(
     if (!pair) return false;
     const key = pair[1]!.toLowerCase();
     const value = pair[2]!.trim();
+    if (office) {
+      // What the plans cost: the first price is the plan's, and another plan's stays a highlight.
+      // No size: "Building: One Corporate Centre" is a highlight, not floor area.
+      if (lease !== null || !/sale|selling|price|rate|fee|plan|package|lease|rent|month|year|annual/.test(key)) return false;
+      lease = priceOf(value, 'lease');
+      return lease !== null;
+    }
     if (/lot|land/.test(key) && /area|size/.test(key)) {
       if (size === null) {
         size = sqmOf(value);
@@ -124,15 +141,15 @@ export function flyerContent(
     (section === 'highlights' ? fromHighlights : fromDetails).push(sentence(body));
   }
 
-  // "320 sqm lot in Verdant Hills": a size the heading says in passing.
-  if (size === null) {
+  // "320 sqm lot in Verdant Hills": a size the heading says in passing. A virtual office has none.
+  if (size === null && !office) {
     const m = /([\d,]+(?:\.\d+)?)\s*(?:sqm|sq\.?\s*m\b|m2|m²|square met)/i.exec(first);
     if (m) {
       size = sqmOf(`${m[1]} sqm`);
       sizeLabel = /\blot\b|\bland\b/i.test(first) ? 'Lot area' : 'Floor area';
     }
   }
-  if (size === null && property.size) {
+  if (size === null && !office && property.size) {
     const n = Number(property.size.replace(/,/g, ''));
     if (Number.isFinite(n) && n > 0) size = n.toLocaleString('en-US', { maximumFractionDigits: 1 });
   }
@@ -142,8 +159,8 @@ export function flyerContent(
   const numbers = [...new Set((text.match(PHONE) ?? []).map((n) => n.replace(/\s+|-/g, '').replace(/^(\+63|0)(9\d{2})(\d{3})(\d{4})$/, '$1$2 $3 $4')))];
 
   return {
-    kind: kindOf(property.subCategory?.trim() ? property.subCategory : property.category),
-    deal: dealOf(`${first} ${property.listingType ?? ''} ${property.dealType ?? ''}`, sale !== null, lease !== null),
+    kind: office ? 'Virtual office' : kindOf(property.subCategory?.trim() ? property.subCategory : property.category),
+    deal: office ? officeDeal(lease) : dealOf(`${first} ${property.listingType ?? ''} ${property.dealType ?? ''}`, sale !== null, lease !== null),
     title: titleOf(first),
     size,
     sizeLabel,
@@ -155,7 +172,15 @@ export function flyerContent(
     email,
     numbers: numbers.slice(0, 3),
     facebook: facebookOf(lines),
+    virtualOffice: office,
   };
+}
+
+/** A virtual office's deal, as its price says it: a month, a year, or no term given (D42). */
+function officeDeal(price: FlyerPrice | null): FlyerDeal {
+  if (price?.unit === 'a month') return 'Monthly plan';
+  if (price?.unit === 'a year') return 'Yearly plan';
+  return 'Now available';
 }
 
 /** "facebook.com/AlphaPremierRealty" → "fb.com/AlphaPremierRealty"; a "FB page: Alpha Premier Realty" line → its name. */
@@ -174,18 +199,18 @@ function facebookOf(lines: readonly string[]): string | null {
  * number or a name, so nothing new goes into the post. It points at the
  * numbers only when the post already has some.
  */
-export function callToAction(text: string): string {
+export function callToAction(text: string, virtualOffice = false): string {
   const hasNumbers = (text.match(PHONE) ?? []).length > 0;
-  return hasNumbers
-    ? 'Schedule a site viewing today: message us here, or call the numbers above.'
-    : 'Schedule a site viewing today: message us here.';
+  // A virtual office has no site to view: it asks them to set one up (D42).
+  const ask = virtualOffice ? 'Set up your virtual office today' : 'Schedule a site viewing today';
+  return hasNumbers ? `${ask}: message us here, or call the numbers above.` : `${ask}: message us here.`;
 }
 
 /** The post with the call to action at its end, once: a post that ends with it already is left as it is. */
-export function withCallToAction(text: string): string {
+export function withCallToAction(text: string, virtualOffice = false): string {
   const body = text.replace(/\s+$/, '');
   if (body === '') return text;
-  const line = callToAction(body);
+  const line = callToAction(body, virtualOffice);
   return body.endsWith(line) ? body : `${body}\n\n${line}`;
 }
 
@@ -270,9 +295,11 @@ export function priceOf(value: string, deal: 'sale' | 'lease'): FlyerPrice | nul
     ? 'per sqm'
     : /\/\s*mo|per\s*mo|month/.test(lower)
       ? 'a month'
-      : deal === 'sale'
-        ? 'to buy'
-        : '';
+      : /\/\s*y(?:ea)?r|per\s*y(?:ea)?r|\byear|annual/.test(lower)
+        ? 'a year'
+        : deal === 'sale'
+          ? 'to buy'
+          : '';
   return { amount: `₱${short(n)}`, unit };
 }
 

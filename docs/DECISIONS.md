@@ -601,3 +601,16 @@ the list, and opening its id opens the virtual office's post. Each post is sent 
 virtual office has it. A row under that category is left out even when the folder can't be
 opened: it is never offered as a listing. Nothing is written to the Directory tab; a
 rebuild with the current BuildDirectory.gs drops those rows anyway.
+
+### D42. The flyer fits a virtual office post (Nov 27, 2026)
+
+A virtual office post (D35) is a plan, not a property, so the flyer made for listings said the
+wrong things about it: "Virtual office for posting" as the heading, For sale or For lease, a
+plain "Price" read as a price to buy, a map it has no position for, and a site viewing to ask
+for. For one of its posts the flyer is now headed "Virtual office" (still editable). Its deal
+is Now available, Monthly plan or Yearly plan, chosen from what its price says and changeable.
+Its first price is the plan's, under "Price"; another plan's price stays a highlight rather
+than being lost. It has no size and no map. The contact strip asks them to inquire, and
+Copy's call to action asks them to set one up. Everything else is the listing flyer as it was:
+the four looks, the photos from its folder, the highlights and the contacts. A price "a year"
+is now read as such, for listings too.

@@ -246,7 +246,7 @@ function PropertyPage({ id }: { readonly id: string }) {
     setCopyError(null);
     try {
       // The public text, or its checked reword, and nothing else: never the internal section, never a flagged line.
-      await app.platform.copyText(withCta ? withCallToAction(chosenText) : chosenText);
+      await app.platform.copyText(withCta ? withCallToAction(chosenText, detail.onRequest === true) : chosenText);
       setCopiedAt(manilaTime(app.now()));
       complete('copy-text');
       notify(usingReword ? 'Copied the reword. Paste it into Facebook.' : 'Copied. Paste it into Facebook.');
@@ -513,7 +513,7 @@ function PropertyPage({ id }: { readonly id: string }) {
               <label data-tour="listing-cta" className="post-text__cta meta">
                 <input type="checkbox" checked={withCta} onChange={(e) => setWithCta(e.target.checked)} />
                 <span>
-                  End with a call to action <small>“{callToAction(chosenText)}”</small>
+                  End with a call to action <small>“{callToAction(chosenText, detail.onRequest === true)}”</small>
                 </span>
               </label>
             ) : null}

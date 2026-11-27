@@ -27,7 +27,7 @@ export const RELEASE_NOTES: readonly ReleaseNotes[] = [
       'Every screen shows you around the first time you open it.',
       'Help is now a page: search it, take any tour again, or pick a topic. Show me on screen walks you through it, button by button.',
       'No text on a listing? Open it in Drive, paste the text, then Copy or Reword it. Owner lines stay out.',
-      'The virtual office posts are in Find. Post one when an admin highlights it: no need to open Drive.',
+      'The virtual office posts are in Find, with their photos and a flyer of their own. Post one when an admin highlights it: no need to open Drive.',
       'The next step glows: Copy, then Download photos, then Posted, so you always know what to press.',
       'A reminder to post, once a day, while your queue has listings left.',
       'Find shows its filters as chips you can clear one at a time.',

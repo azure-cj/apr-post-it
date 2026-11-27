@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toBlob } from 'html-to-image';
-import { flyerContent, FLYER_DEALS, laterPages, LOOKS, PER_PAGE_CHOICES, POSTER_SIZE_ORDER, POSTER_SIZES, type FlyerDeal, type FlyerLook, type PerPage, type PosterSize } from '@/core/flyer';
+import { flyerContent, FLYER_DEALS, laterPages, LOOKS, OFFICE_DEALS, PER_PAGE_CHOICES, POSTER_SIZE_ORDER, POSTER_SIZES, type FlyerDeal, type FlyerLook, type PerPage, type PosterSize } from '@/core/flyer';
 import { UserFacingError, type Photo, type PropertyDetail } from '@/core/types';
 import { Button } from '../../../components';
 import { sentenceOf, useApp } from '../../../state';
@@ -29,6 +29,8 @@ const LOOK_ORDER: readonly FlyerLook[] = ['framed', 'big', 'light', 'poster'];
 export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
   const app = useApp();
   const content = useMemo(() => flyerContent(text, detail), [text, detail]);
+  // A virtual office post is a plan, not a property: its own deals, and no map, since it has no position (D42).
+  const office = content.virtualOffice;
   const photos = detail.photos;
 
   const [look, setLook] = useState<FlyerLook>('framed');
@@ -123,6 +125,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
     facebook: content.facebook,
     posterSize,
     priceBadge,
+    virtualOffice: office,
   };
   const pageH = pageHeight(model);
 
@@ -401,8 +404,8 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
           <section className="flyer__grp" aria-labelledby="flyer-heading">
             <h3 id="flyer-heading">Heading</h3>
             <input className="flyer__in" aria-label="What it is" value={kind} onChange={(e) => setKind(e.target.value)} />
-            <span className="flyer__seg flyer__seg--full" role="group" aria-label="Sale or lease">
-              {FLYER_DEALS.map((d) => (
+            <span className="flyer__seg flyer__seg--full" role="group" aria-label={office ? 'Deal' : 'Sale or lease'}>
+              {(office ? OFFICE_DEALS : FLYER_DEALS).map((d) => (
                 <button key={d} type="button" aria-pressed={deal === d} onClick={() => setDeal(d)}>
                   {d}
                 </button>
@@ -418,7 +421,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
             <ul className="flyer__facts">
               {content.size ? <Fact label={content.sizeLabel} value={`${content.size} sqm`} checked={on.size} onChange={(v) => setOn({ ...on, size: v })} /> : null}
               {content.lease ? (
-                <Fact label="For lease" value={`${content.lease.amount} ${content.lease.unit}`} checked={on.lease} off={deal === 'For sale'} onChange={(v) => setOn({ ...on, lease: v })} />
+                <Fact label={office ? 'Price' : 'For lease'} value={`${content.lease.amount} ${content.lease.unit}`.trim()} checked={on.lease} off={deal === 'For sale'} onChange={(v) => setOn({ ...on, lease: v })} />
               ) : null}
               {content.sale ? (
                 <Fact label="For sale" value={`${content.sale.amount} ${content.sale.unit}`} checked={on.sale} off={deal === 'For lease'} onChange={(v) => setOn({ ...on, sale: v })} />
@@ -448,7 +451,7 @@ export function FlyerDialog({ detail, text, onClose }: FlyerDialogProps) {
             </ul>
           </section>
 
-          {poster ? null : <section className="flyer__grp" aria-labelledby="flyer-map">
+          {poster || office ? null : <section className="flyer__grp" aria-labelledby="flyer-map">
             <h3 id="flyer-map">Location map</h3>
             <label className="flyer__check">
               <input type="checkbox" checked={withMap} onChange={(e) => setWithMap(e.target.checked)} />
