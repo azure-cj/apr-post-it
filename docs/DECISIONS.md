@@ -584,3 +584,20 @@ left, and the open topic on the right with its steps and Show me on screen, whic
 its walkthrough (D39). The open topic is kept in the address (?topic=), so Back returns
 to it. Searching hides the list and the tours, so the results come first. Tour this page
 is gone: each screen's tour is listed on the page instead.
+
+### D41. A Directory row never stands in for a virtual office post (Nov 27, 2026)
+
+**The problem.** On the live sheet, Find showed the three virtual office posts with "No
+separator", which only the Directory's Issues text says. So the Directory still has a row
+for each of their folders, though BuildDirectory.gs leaves the folder out (D11): the sheet
+was built before it did, or by an older copy. The app keeps the first row of an id: the
+Directory's. So the post opened as a listing, its text cut and its lines flagged (not D35),
+and without `onRequest` Fill queues treated it as a listing with no separator and skipped it,
+even when an admin had highlighted it.
+
+**What the server does now** (`2026-11-27.1`). A Directory row whose folder is one of the
+virtual office's posts, or whose category is "Virtual Office for posting", is left out of
+the list, and opening its id opens the virtual office's post. Each post is sent once, as the
+virtual office has it. A row under that category is left out even when the folder can't be
+opened: it is never offered as a listing. Nothing is written to the Directory tab; a
+rebuild with the current BuildDirectory.gs drops those rows anyway.

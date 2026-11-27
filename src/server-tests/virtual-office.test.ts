@@ -6,13 +6,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createWorld } from './world';
+import { createWorld, LISTINGS, type Listing, type WorldOptions } from './world';
 
 const VO = 'vo-root';
 
 /** The folder as Drive has it: two posts, one with a Google Doc and photos in a folder inside, one with a Word file. */
-function withVirtualOffice() {
-  const w = createWorld();
+function withVirtualOffice(options: WorldOptions = {}) {
+  const w = createWorld(options);
   w.project.configure({ VIRTUAL_OFFICE_FOLDER_ID: VO });
   w.project.drive
     .addDocText('vo1-doc', 'VIRTUAL OFFICE IN MAKATI\nP2,500 a month\n---\nOwner: Lim, 0918 555 0135')
@@ -72,5 +72,58 @@ describe('the virtual office', () => {
     const list = w.call('jan', 'properties')['properties'] as Record<string, unknown>[];
     expect(list.some((p) => p['onRequest'])).toBe(false);
     expect(w.call('jan', 'property', { id: 'nothing' })).toMatchObject({ ok: false });
+  });
+});
+
+/**
+ * The Directory as the live sheet had it on Nov 27 (D41): rows for the
+ * virtual office's folders, from before BuildDirectory.gs left the folder out
+ * (D11). Each says "No separator", because its document is all for posting.
+ * One is a post still in the folder, one a post since taken out of it.
+ */
+const STALE: readonly Listing[] = [
+  {
+    id: 'vo1', name: '2026 NEW VIRTUAL OFFICE', docId: 'vo1-doc', category: 'Virtual Office for posting', listingType: '',
+    doc: ['VIRTUAL OFFICE IN MAKATI', 'P2,500 a month'], photos: ['vo1-a', 'vo1-b'],
+  },
+  {
+    id: 'vo-old', name: '2025 VIRTUAL OFFICE', docId: 'vo-old-doc', category: 'VIRTUAL OFFICE FOR POSTING', listingType: '',
+    doc: ['VIRTUAL OFFICE IN ORTIGAS'], photos: [],
+  },
+];
+
+describe('a Directory that still lists the virtual office (D41)', () => {
+  const world = () => withVirtualOffice({ listings: [...LISTINGS, ...STALE] });
+
+  it('lists each post once, as the virtual office has it, and the listings as before', () => {
+    for (const person of ['jan', 'maria'] as const) {
+      const list = world().call(person, 'properties')['properties'] as Record<string, unknown>[];
+      expect(list.filter((p) => p['id'] === 'vo1')).toEqual([
+        expect.objectContaining({ category: 'Virtual Office for posting', onRequest: true, hasIssues: false, issues: '' }),
+      ]);
+      expect(list.some((p) => p['id'] === 'vo-old')).toBe(false);
+      expect(list.filter((p) => !p['onRequest']).map((p) => p['id'])).toEqual(LISTINGS.map((l) => l.id));
+    }
+  });
+
+  it('opens a post as the virtual office has it: its text whole, nothing flagged, posted only when asked', () => {
+    const p = world().call('jan', 'property', { id: 'vo1' })['property'] as Record<string, unknown>;
+    expect(p).toMatchObject({
+      id: 'vo1',
+      publicText: 'VIRTUAL OFFICE IN MAKATI\nP2,500 a month\n---\nOwner: Lim, 0918 555 0135',
+      cutAt: '',
+      issues: '',
+      onRequest: true,
+    });
+    expect(p).not.toHaveProperty('flaggedLines');
+    expect(p).not.toHaveProperty('unseparated');
+  });
+
+  it('leaves a stale row out even when the folder cannot be opened, rather than offer it as a listing', () => {
+    const w = world();
+    w.project.configure({ VIRTUAL_OFFICE_FOLDER_ID: 'gone' });
+    const list = w.call('jan', 'properties')['properties'] as Record<string, unknown>[];
+    expect(list.map((p) => p['id'])).toEqual(LISTINGS.map((l) => l.id));
+    expect(w.call('jan', 'property', { id: 'vo1' })).toMatchObject({ ok: false });
   });
 });

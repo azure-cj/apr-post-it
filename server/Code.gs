@@ -18,7 +18,7 @@
 // This file's version. ping sends it, and the app compares it with its own
 // EXPECTED_SERVER_VERSION (src/config.ts) to say when the deployment is behind.
 // Change both together, whenever an action or a reply changes: yyyy-MM-dd.n.
-const SERVER_VERSION = '2026-11-26.1';
+const SERVER_VERSION = '2026-11-27.1';
 
 const CONFIG = {
   // The directory spreadsheet built by BuildDirectory.gs. This script does not
@@ -873,7 +873,11 @@ function idOf_(propertyName) {
 function listProperties_(includeDocId) {
   var checker = checkerIndex_(false);
   var geo = geoIndex_();
-  return directoryRows_().map(function (r) {
+  var office = virtualOfficeList_();
+  var officeIds = idSet_(office);
+  return directoryRows_().filter(function (r) {
+    return !isVirtualOfficeRow_(r, officeIds);
+  }).map(function (r) {
     var out = {
       id: r.id,
       name: r.name,
@@ -892,7 +896,7 @@ function listProperties_(includeDocId) {
     joinChecker_(out, checker, r.id);
     joinGeo_(out, geo, r.id);
     return out;
-  }).concat(virtualOfficeList_());
+  }).concat(office);
 }
 
 // ---------------------------------------------------------------- virtual office (v20)
@@ -963,6 +967,27 @@ function virtualOfficeRow_(folder) {
     photos: photos,
     issues: issues.join(' · '),
   };
+}
+
+/** The ids of these rows, for a quick "is it one of them". */
+function idSet_(rows) {
+  var ids = {};
+  rows.forEach(function (r) { ids[r.id] = true; });
+  return ids;
+}
+
+/**
+ * Whether a Directory row is really one of the virtual office's posts (D41):
+ * one of its folders, or any row under its category. The Directory should
+ * leave that folder out (D11), but a sheet built before it did still lists
+ * them, each with "No separator", and the app keeps the first row of an id,
+ * so the Directory's row would win: its text cut and flagged, and given out
+ * like any listing instead of only when an admin highlights it (D35). Such a
+ * row is never a listing; the virtual office's own row is the one sent.
+ */
+function isVirtualOfficeRow_(row, officeIds) {
+  return officeIds[textOf_(row.id).trim()] === true ||
+    textOf_(row.category).trim().toLowerCase() === VIRTUAL_OFFICE_CATEGORY.toLowerCase();
 }
 
 /** The posts as rows of the list. `onRequest` keeps them out of Fill queues unless highlighted. */
@@ -1488,8 +1513,9 @@ function getProperty_(id, includeInternal) {
   requireSeparators_();
 
   var row = directoryRows_().filter(function (r) { return r.id === id; })[0];
-  // Not a listing: one of the virtual office's posts, or nothing (D35).
-  if (!row) return virtualOfficeProperty_(id);
+  // Not a listing: one of the virtual office's posts, or nothing (D35), even
+  // when a stale Directory row says otherwise (D41).
+  if (!row || isVirtualOfficeRow_(row, idSet_(virtualOfficeRows_()))) return virtualOfficeProperty_(id);
 
   // The sheet's copy was already cut by BuildDirectory.gs; it is the fallback.
   var publicText = String(row.postingText || '');
