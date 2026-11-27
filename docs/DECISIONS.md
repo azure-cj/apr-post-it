@@ -573,3 +573,14 @@ clicking its link as they would. It only points: nothing is copied, posted or sa
 walkthroughs are not kept in the person's tour record. A step whose button is not on the
 screen (a listing with no photos, a desktop-only button) is passed over, and a closing
 step says where to find it.
+
+### D40. Help is a page (Nov 26, 2026)
+
+Help in the sidebar now opens a Help page, like any other screen, in place of the small
+popup: there was too much in it to find things easily. At the top, a search box. Then the
+getting-started list and every tour the person has (the welcome tour, and each screen's
+own tour for their role), each started from there. Then the guide: topics grouped on the
+left, and the open topic on the right with its steps and Show me on screen, which starts
+its walkthrough (D39). The open topic is kept in the address (?topic=), so Back returns
+to it. Searching hides the list and the tours, so the results come first. Tour this page
+is gone: each screen's tour is listed on the page instead.

@@ -2,34 +2,79 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { canManage, type User } from '@/core/types';
 import type { Platform } from '@/platform';
 import { notesFor, SEEN_VERSION_KEY } from '../releaseNotes';
-import { guideFor, walkthroughOf } from './guide';
-import { HelpPanel } from './HelpPanel';
+import { guideFor, walkthroughOf, type GuideTopic } from './guide';
 import { NEW_RECORD, readRecord, withTask, withTour, writeRecord, type OnboardingRecord } from './record';
 import { TourOverlay } from './TourOverlay';
-import { ANY_LISTING, hintTour, pageTourOf, tasksFor, tourFor, welcomeTourFor, type TaskId, type Tour, type TourId, type TourStep } from './tours';
+import { ANY_LISTING, hintTour, pageTourOf, tasksFor, tourFor, welcomeTourFor, type Task, type TaskId, type Tour, type TourId, type TourStep } from './tours';
 
 /**
  * Onboarding (1.1.7): the welcome tour once, opening by itself right after a
  * person's first sign-in on this PC (and on the next sign-in if it never got
  * to show), the listing tour the first time they open a listing, each
- * screen's own tour the first time they open it (1.1.8), and Help in the
- * sidebar, with the getting-started list, every tour again, and the guide.
+ * screen's own tour the first time they open it (1.1.8), and the Help page,
+ * with the getting-started list, every tour again, and the guide (1.1.8).
  * The screens tick the list off with `useOnboarding().complete(...)`.
  */
+
+/** A tour the Help page offers. */
+export interface HelpTour {
+  readonly id: TourId;
+  readonly label: string;
+  readonly about: string;
+}
+
+/** What the Help page shows and does, for the person signed in. */
+export interface HelpApi {
+  readonly tasks: readonly Task[];
+  readonly done: (task: Task) => boolean;
+  readonly listHidden: boolean;
+  readonly setListHidden: (hidden: boolean) => void;
+  /** Show me for a getting-started item. */
+  readonly showTask: (task: Task) => void;
+  readonly tours: readonly HelpTour[];
+  readonly takeTour: (id: TourId) => void;
+  /** The guide's topics for this person's role. */
+  readonly topics: readonly GuideTopic[];
+  /** A topic's walkthrough, on the screens it is about. */
+  readonly showTopic: (topic: GuideTopic) => void;
+  readonly whatsNew: (() => void) | undefined;
+}
+
+/** The tours, in the order the Help page lists them. */
+const HELP_TOURS: readonly (HelpTour & { readonly admin?: boolean; readonly agent?: boolean; readonly queue?: boolean })[] = [
+  { id: 'queue', label: 'My queue', about: 'Your listings, Next up, and what is due.', queue: true },
+  { id: 'listing', label: "A listing's page", about: 'Copy, Reword, photos, then log the post.' },
+  { id: 'find', label: 'Find', about: 'Search and narrow down every listing.' },
+  { id: 'tracker', label: 'Tracker', about: "The day's posts, and documents to fix.", admin: true },
+  { id: 'assign', label: 'Assign', about: "Fill queues, or change one person's queue.", admin: true },
+  { id: 'interns', label: 'Agents', about: 'The week, Who posted?, and spot checks.', admin: true },
+  { id: 'records', label: 'Records', about: 'Totals for any period.', admin: true },
+  { id: 'settings', label: 'Settings', about: 'The team, the rules, reminders and the theme.', admin: true },
+  { id: 'settings', label: 'Settings', about: 'Reminders and the theme.', agent: true },
+];
+
+/** The tours for this person: admin screens for admins, My queue for an admin only when they have one. */
+function toursFor(admin: boolean, myQueue: boolean): readonly HelpTour[] {
+  return HELP_TOURS.filter((t) => (admin || !t.admin) && (!admin || !t.agent) && (!t.queue || !admin || myQueue)).map(({ id, label, about }) => ({ id, label, about }));
+}
 export interface OnboardingApi {
   /** Starts a tour now, whatever was seen before. 'welcome': the one for this person's role. */
   readonly start: (id: TourId | 'welcome') => void;
   /** The person did this: ticked off the getting-started list. */
   readonly complete: (task: TaskId) => void;
+  /** Goes to the Help page. */
   readonly openHelp: () => void;
+  /** On the Help page. */
   readonly helpOpen: boolean;
+  /** The Help page's content; null until the person's record is read. */
+  readonly help: HelpApi | null;
   /** "2/4" for the Help button, or null once the list is done or put away. */
   readonly badge: string | null;
   /** The person has taken this tour, or closed it. True until their record is read, so nothing glows and then stops. */
   readonly seen: (id: TourId) => boolean;
 }
 
-const NOOP: OnboardingApi = { start: () => {}, complete: () => {}, openHelp: () => {}, helpOpen: false, badge: null, seen: () => true };
+const NOOP: OnboardingApi = { start: () => {}, complete: () => {}, openHelp: () => {}, helpOpen: false, help: null, badge: null, seen: () => true };
 
 export const OnboardingContext = createContext<OnboardingApi>(NOOP);
 
@@ -39,6 +84,8 @@ export function useOnboarding(): OnboardingApi {
 }
 
 const LISTING_PAGE = /^\/property\/[^/]+$/;
+/** The Help page. */
+export const HELP_PATH = '/help';
 
 /** True once `ok` holds, checking every 100 ms; false after `ms`. */
 function until(ok: () => boolean, ms = 5000): Promise<boolean> {
@@ -102,7 +149,7 @@ export function useOnboardingController({
   // No record until now: this person's first sign-in here since tours came.
   const [fresh, setFresh] = useState(false);
   const [active, setActive] = useState<Tour | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const helpOpen = pathname === HELP_PATH;
   const recordRef = useRef<OnboardingRecord | null>(null);
   // Where the welcome tour just ended: that screen's own tour waits for the next visit, so two tours don't run back to back.
   const welcomedAt = useRef<string | null>(null);
@@ -140,7 +187,6 @@ export function useOnboardingController({
     setRecord(null);
     setFresh(false);
     setActive(null);
-    setHelpOpen(false);
     if (!name) return undefined;
     let live = true;
     void readRecord(platform, name).then((found) => {
@@ -162,7 +208,6 @@ export function useOnboardingController({
       if (!user) return;
       // Not known yet (Help, before the read lands): kept, and passed over if My queue isn't there when it comes.
       const tour = typeof id === 'string' ? tourFor(id, user, myQueue !== false) : id;
-      setHelpOpen(false);
       // A walkthrough from the guide goes to each step's screen itself (arrive).
       const route = tour.id === 'guide' ? undefined : tour.steps[0]?.route;
       // Going there first: the tour isn't left behind while the screen changes.
@@ -254,8 +299,30 @@ export function useOnboardingController({
 
   const openHelp = useCallback(() => {
     setActive(null);
-    setHelpOpen((open) => !open);
-  }, []);
+    go(HELP_PATH);
+  }, [go]);
+
+  const help = useMemo<HelpApi | null>(() => {
+    if (!user || !record) return null;
+    const admin = canManage(user);
+    return {
+      tasks,
+      done: (task) => record.tasks[task.id] === true,
+      listHidden: record.listHidden,
+      setListHidden: (hidden) => save({ ...record, listHidden: hidden }),
+      showTask: (task) => start(hintTour(task.hint)),
+      tours: [{ id: welcomeTourFor(user), label: 'The welcome tour', about: 'Where to start, in a few steps.' }, ...toursFor(admin, myQueue !== false)],
+      takeTour: (id) => {
+        if (id !== 'listing') return start(id);
+        // A listing's tour from Help opens a listing first, as a walkthrough does.
+        const steps = tourFor('listing', user, myQueue !== false).steps;
+        start({ id: 'guide', steps: steps.map((s, i) => (i === 0 ? { ...s, route: ANY_LISTING } : s)) });
+      },
+      topics: guideFor(admin),
+      showTopic: (topic) => start(walkthroughOf(topic, admin)),
+      whatsNew: openWhatsNew,
+    };
+  }, [user, record, tasks, save, start, myQueue, openWhatsNew]);
 
   const api = useMemo<OnboardingApi>(
     () => ({
@@ -265,10 +332,11 @@ export function useOnboardingController({
       complete,
       openHelp,
       helpOpen,
+      help,
       badge,
       seen: (id) => (record ? record.tours[id] !== undefined : true),
     }),
-    [user, start, complete, openHelp, helpOpen, badge, record],
+    [user, start, complete, openHelp, helpOpen, help, badge, record],
   );
 
   // Where the app is now, for a walkthrough that waits for a screen to open.
@@ -299,35 +367,7 @@ export function useOnboardingController({
     [],
   );
 
-  const pageTour = pageTourOf(pathname);
-  const ui = (
-    <>
-      {active ? <TourOverlay key={`${active.id}-${active.steps[0]?.title ?? ''}`} tour={active} onEnd={end} arrive={arrive} /> : null}
-      {helpOpen && user && record ? (
-        <HelpPanel
-          tasks={tasks}
-          done={(task) => record.tasks[task.id] === true}
-          listHidden={record.listHidden}
-          pageTour={pageTour ? () => start(pageTour) : undefined}
-          topics={guideFor(canManage(user))}
-          onShow={(task) => start(hintTour(task.hint))}
-          onTour={() => start(welcomeTourFor(user))}
-          onTopic={(topic) => start(walkthroughOf(topic, canManage(user)))}
-          onWhatsNew={
-            openWhatsNew
-              ? () => {
-                  setHelpOpen(false);
-                  openWhatsNew();
-                }
-              : undefined
-          }
-          onHideList={() => save({ ...record, listHidden: true })}
-          onShowList={() => save({ ...record, listHidden: false })}
-          onClose={() => setHelpOpen(false)}
-        />
-      ) : null}
-    </>
-  );
+  const ui = active ? <TourOverlay key={`${active.id}-${active.steps[0]?.title ?? ''}`} tour={active} onEnd={end} arrive={arrive} /> : null;
 
   return { api, ui };
 }

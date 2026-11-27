@@ -1,4 +1,4 @@
-/* Tours and Help (1.1.7). Above the app, below a question (a <dialog> is in
+/* Tours (1.1.7), and the Help page's getting-started list. Above the app, below a question (a <dialog> is in
    the top layer). The dimming never takes clicks: the app stays usable. */
 
 .tour {
@@ -29,8 +29,7 @@
     height var(--dur-move) var(--ease-out);
 }
 
-.tour__card,
-.help {
+.tour__card {
   position: fixed;
   z-index: 901;
   box-sizing: border-box;
@@ -51,8 +50,7 @@
     left var(--dur-move) var(--ease-out);
 }
 
-.tour__head,
-.help__head {
+.tour__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -117,8 +115,7 @@
   outline-offset: 2px;
 }
 
-.tour__title,
-.help__title {
+.tour__title {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 600;
@@ -143,19 +140,7 @@
   gap: var(--space-4);
 }
 
-/* ---- Help ---- */
-
-.help {
-  width: min(380px, 100vw - var(--space-12));
-  max-height: calc(100vh - var(--space-12));
-  overflow-y: auto;
-}
-
-.help__progress {
-  display: grid;
-  gap: var(--space-3);
-  margin-bottom: var(--space-6);
-}
+/* ---- Help: getting started (on the Help page) ---- */
 
 .help__bar {
   display: block;
@@ -218,16 +203,6 @@
   text-decoration-color: var(--border-strong);
 }
 
-.help__more {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
-.help__foot {
-  margin-top: var(--space-6);
-}
-
 @keyframes tour-in {
   from {
     opacity: 0;
@@ -236,150 +211,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tour__veil,
-  .tour__card,
-  .help {
+  .tour__card {
     animation: none;
   }
-}
-
-/* ---- Help: the guide (how to do each thing, and fixes) ---- */
-
-.help {
-  width: min(420px, 100vw - var(--space-12));
-}
-
-.help__guide {
-  display: grid;
-  gap: var(--space-4);
-  margin-top: var(--space-8);
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--border-soft);
-}
-
-.help__sub {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.help__none {
-  margin: 0;
-}
-
-.help__group {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.help__group-title {
-  margin: var(--space-2) 0 0;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.help__topics {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.help__topic-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.help__topic-head {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 6px var(--space-2);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.help__topic-head:hover,
-.help__steps:hover {
-  background: var(--row-hover);
-}
-
-/* Show me appears on the row the pointer or keyboard is on. */
-.help__go {
-  flex: none;
-  color: var(--gold);
-  font-size: 0.85em;
-  opacity: 0;
-}
-
-.help__topic-head:hover .help__go,
-.help__topic-head:focus-visible .help__go {
-  opacity: 1;
-}
-
-.help__steps {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 6px var(--space-2);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 0.85em;
-  cursor: pointer;
-}
-
-.help__caret {
-  flex: none;
-  width: 0;
-  height: 0;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 6px solid var(--text-muted);
-  transition: transform var(--dur-move) var(--ease-out);
-}
-
-.help__topic.is-open .help__caret {
-  transform: rotate(90deg);
-  border-left-color: var(--gold);
-}
-
-.help__topic-body {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-3);
-  padding: 0 var(--space-2) var(--space-4);
-}
-
-.help__topic-body ol {
-  margin: 0;
-  padding-left: 1.2em;
-  color: var(--text-label);
-  line-height: 1.5;
-}
-
-.help__topic-body li + li {
-  margin-top: var(--space-2);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .help__caret {
-    transition: none;
-  }
-}
-
-.help__topic-body[hidden] {
-  display: none;
 }

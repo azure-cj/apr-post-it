@@ -54,7 +54,8 @@ export interface SidebarProps {
   /** Opens Help (1.1.7): the getting-started list and the tours. Without it, no button. */
   readonly onHelp?: (() => void) | undefined;
   /** Help is open. */
-  readonly helpOpen?: boolean | undefined;
+  /** On the Help page. */
+  readonly helpCurrent?: boolean | undefined;
   /** How far along the getting-started list is, "2/4"; none once it is done. */
   readonly helpBadge?: string | null | undefined;
 }
@@ -92,7 +93,7 @@ export function Sidebar({
   checkingUpdates = false,
   onWhatsNew,
   onHelp,
-  helpOpen = false,
+  helpCurrent = false,
   helpBadge,
 }: SidebarProps) {
   const asideRef = useRef<HTMLElement>(null);
@@ -194,8 +195,7 @@ export function Sidebar({
             type="button"
             className="sidebar__item sidebar__action"
             data-tour="help"
-            aria-expanded={helpOpen}
-            aria-haspopup="dialog"
+            aria-current={helpCurrent ? 'page' : undefined}
             onClick={onHelp}
             {...tipFor(helpBadge ? `Help · getting started ${helpBadge}` : 'Help and tours')}
           >

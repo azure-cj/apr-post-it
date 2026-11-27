@@ -342,7 +342,13 @@ describe('the paste walkthrough (1.1.8)', () => {
   });
 });
 
-describe('Help', () => {
+/** Help in the sidebar, and the Help page it opens. */
+async function openHelp(): Promise<void> {
+  await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
+  await screen.findByRole('heading', { level: 1, name: 'Help' });
+}
+
+describe('the Help page', () => {
   it('shows how far along the getting-started list is, and ticks off what was done', async () => {
     const platform = fresh();
     await platform.writeLocal(recordKey(intern.name), JSON.stringify({ ...EMPTY_RECORD, autoOff: true, tasks: { tour: true, 'open-listing': true } }));
@@ -351,33 +357,41 @@ describe('Help', () => {
     const help = await screen.findByRole('button', { name: /^Help/ });
     // The tour, done, no longer counts: it isn't on the list.
     expect(help.textContent).toContain('1/3');
-    await userEvent.click(help);
-    const panel = await screen.findByRole('dialog', { name: 'Getting started' });
-    expect(within(panel).getByText('1 of 3 done')).toBeTruthy();
-    expect(within(panel).getByRole('progressbar', { name: 'Getting started' }).getAttribute('aria-valuenow')).toBe('1');
-    expect(within(panel).getByText(': done')).toBeTruthy();
+    await openHelp();
+    expect(help.getAttribute('aria-current')).toBe('page');
+    const list = screen.getByRole('region', { name: 'Getting started' });
+    expect(within(list).getByText('1 of 3 done')).toBeTruthy();
+    expect(within(list).getByRole('progressbar', { name: 'Getting started' }).getAttribute('aria-valuenow')).toBe('1');
+    expect(within(list).getByText(': done')).toBeTruthy();
   });
 
   it('Show me points at where a thing starts', async () => {
     renderApp({ platform: fakeServer(), path: '/find' });
-    await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
-    const panel = await screen.findByRole('dialog', { name: 'Getting started' });
-    await userEvent.click(within(panel).getByRole('button', { name: 'Show me: Open a listing' }));
+    await openHelp();
+    await userEvent.click(screen.getByRole('button', { name: 'Show me: Open a listing' }));
     const hint = await screen.findByRole('dialog', { name: 'Open a listing' }, LONG);
     await userEvent.click(within(hint).getByRole('button', { name: 'Got it' }));
     await waitFor(() => expect(screen.queryByTestId('tour')).toBeNull());
   });
 
-  it('takes the tour again, and the list can be put away', async () => {
-    const platform = fakeServer();
-    renderApp({ platform, path: '/find' });
-    await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
-    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Getting started' })).getByRole('button', { name: 'Hide this list' }));
-    expect(await screen.findByRole('dialog', { name: 'Help' })).toBeTruthy();
+  it('puts the list away, and takes the welcome tour again', async () => {
+    renderApp({ platform: fakeServer(), path: '/find' });
+    await openHelp();
+    await userEvent.click(screen.getByRole('button', { name: 'Hide this list' }));
+    expect(await screen.findByRole('button', { name: 'Show the getting-started list' })).toBeTruthy();
     expect((await screen.findByRole('button', { name: /^Help/ })).textContent).not.toContain('/3');
 
-    await userEvent.click(within(screen.getByRole('dialog', { name: 'Help' })).getByRole('button', { name: 'Take the tour' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Take the tour: The welcome tour' }));
     expect(await screen.findByRole('dialog', { name: 'Welcome to Post-It' }, LONG)).toBeTruthy();
+  });
+
+  it("lists each screen's tour for the person's role, and takes them there", async () => {
+    renderApp({ platform: fakeServer(), path: '/queue' });
+    await openHelp();
+    const tours = within(screen.getByRole('region', { name: 'Tours' }));
+    expect(tours.queryByRole('button', { name: 'Take the tour: Assign' })).toBeNull();
+    await userEvent.click(tours.getByRole('button', { name: 'Take the tour: Find' }));
+    expect(await screen.findByRole('dialog', { name: 'Search every listing' }, LONG)).toBeTruthy();
   });
 });
 
@@ -402,14 +416,6 @@ describe("each screen's tour (1.1.8)", () => {
     const card = await screen.findByRole('dialog', { name: 'Search every listing' }, LONG);
     await userEvent.click(within(card).getByRole('button', { name: 'Close the tour' }));
     await waitFor(async () => expect((await recordOf(platform, intern.name))?.tours.find).toBe('skipped'));
-  });
-
-  it('starts from Help with Tour this page', async () => {
-    const platform = fakeServer();
-    renderApp({ platform, path: '/find' });
-    await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
-    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Getting started' })).getByRole('button', { name: 'Tour this page' }));
-    expect(await screen.findByRole('dialog', { name: 'Search every listing' }, LONG)).toBeTruthy();
   });
 });
 
@@ -446,26 +452,24 @@ describe("Help's guide (1.1.8)", () => {
     }
   });
 
-  it('Steps shows a topic written down; clicking the topic walks through it on its screen', async () => {
-    const platform = fakeServer();
-    renderApp({ platform, path: '/queue' });
-    await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
-    const panel = await screen.findByRole('dialog', { name: 'Getting started' });
-    await userEvent.type(within(panel).getByRole('searchbox', { name: 'Search help' }), 'find any');
-    expect(within(panel).getByText(/Press \/ to jump to the search box/)).toBeTruthy();
-    expect(within(panel).getByRole('button', { name: 'Read the steps: Find any listing' }).getAttribute('aria-expanded')).toBe('true');
-    await userEvent.click(within(panel).getByRole('button', { name: /^Find any listing/ }));
+  it('a topic shows its steps; Show me on screen walks through it there', async () => {
+    renderApp({ platform: fakeServer(), path: '/queue' });
+    await openHelp();
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search help' }), 'find any');
+    // Searching puts the results first.
+    expect(screen.queryByRole('region', { name: 'Getting started' })).toBeNull();
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Topics' })).getByRole('button', { name: 'Find any listing' }));
+    expect(screen.getByText(/Press \/ to jump to the search box/)).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Show me on screen: Find any listing' }));
     expect(await screen.findByRole('dialog', { name: 'Search' }, LONG)).toBeTruthy();
-    expect(screen.queryByRole('dialog', { name: 'Getting started' })).toBeNull();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Help' })).toBeNull();
   });
 
   it('a walkthrough about a listing opens Next up for the person', async () => {
-    const platform = fakeServer();
-    renderApp({ platform, path: '/find' });
-    await userEvent.click(await screen.findByRole('button', { name: /^Help/ }));
-    const panel = await screen.findByRole('dialog', { name: 'Getting started' });
-    await userEvent.type(within(panel).getByRole('searchbox', { name: 'Search help' }), 'call to action');
-    await userEvent.click(within(panel).getByRole('button', { name: /^End the post with a call to action/ }));
+    renderApp({ platform: fakeServer(), path: '/find' });
+    await openHelp();
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search help' }), 'call to action');
+    await userEvent.click(screen.getByRole('button', { name: 'Show me on screen: End the post with a call to action' }));
     expect(await screen.findByRole('dialog', { name: 'Tick End with a call to action' }, { timeout: 12000 })).toBeTruthy();
   }, 20000);
 });

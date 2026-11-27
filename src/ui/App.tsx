@@ -36,7 +36,7 @@ import { OutboxBanner } from './OutboxBanner';
 import { PendingNotifier } from './PendingNotifier';
 import { PostReminder } from './PostReminder';
 import { WhatsNew } from './WhatsNew';
-import { OnboardingContext, useOnboarding, useOnboardingController } from './onboarding';
+import { HelpScreen, OnboardingContext, useOnboarding, useOnboardingController } from './onboarding';
 import { UpdateBanner, type CheckResult } from './UpdateBanner';
 import { version as APP_VERSION } from '../../package.json';
 import { useSignInRole } from './screens/SignInScreen.role';
@@ -142,6 +142,7 @@ function titleFor(pathname: string): string | null {
     '/interns': 'Agents',
     '/records': 'Records',
     '/settings': 'Settings',
+    '/help': 'Help',
     '/kit': 'UI kit',
   };
   return titles[pathname] ?? 'APG Post-It';
@@ -450,7 +451,7 @@ export function AppShell({ signInNote }: AppProps) {
             checkingUpdates={checkingUpdates}
             onWhatsNew={() => setWhatsNewOpen(true)}
             onHelp={onboarding.api.openHelp}
-            helpOpen={onboarding.api.helpOpen}
+            helpCurrent={onboarding.api.helpOpen}
             helpBadge={onboarding.api.badge}
           />
         ) : null}
@@ -519,6 +520,7 @@ export function AppShell({ signInNote }: AppProps) {
                 <Route path={paths.interns} element={guard(<InternsRoute />, canManage)} />
                 <Route path={paths.records} element={guard(<RecordsRoute />, canManage)} />
                 <Route path={paths.settings} element={guard(<SettingsRoute />)} />
+                <Route path={paths.help} element={guard(<HelpScreen />)} />
                 {KitScreen ? (
                   <Route
                     path="/kit"

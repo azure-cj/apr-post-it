@@ -14,6 +14,7 @@ export const paths = {
   interns: '/interns',
   records: '/records',
   settings: '/settings',
+  help: '/help',
 } as const;
 
 /** The nav's destinations. */

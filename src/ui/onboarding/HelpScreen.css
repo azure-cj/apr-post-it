@@ -1,0 +1,201 @@
+/* The Help page (1.1.8): search, getting started and the tours, then the
+   guide as a list of topics beside the open one. */
+
+.help-page .page-header {
+  margin-bottom: var(--space-8);
+}
+
+.help-page__search {
+  max-width: 560px;
+  margin-bottom: var(--space-10);
+}
+
+.help-page__heading {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ---- getting started and the tours ---- */
+
+.help-page__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-8);
+  margin-bottom: var(--space-12);
+}
+
+.help-page__card {
+  display: grid;
+  align-content: start;
+  justify-items: stretch;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-10);
+  border: var(--border-width, 1px) solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.help-page__card > .button,
+.help-page__card > button {
+  justify-self: start;
+}
+
+.help-page__card--quiet {
+  padding: var(--space-6) var(--space-10);
+}
+
+.help-page__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.help-page__card .help__tasks {
+  margin: 0;
+}
+
+.help-page__tours {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-page__tour {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.help-page__tour:hover {
+  background: var(--row-hover);
+}
+
+.help-page__tour-name::after {
+  content: ' ›';
+  color: var(--gold);
+}
+
+/* ---- the guide ---- */
+
+.help-page__guide {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.help-page__split {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-10);
+}
+
+.help-page__topics {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.help-page__topics ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-page__group-title {
+  margin: 0 0 var(--space-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.help-page__topic {
+  width: 100%;
+  padding: 7px var(--space-4);
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: none;
+  color: var(--text-label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.help-page__topic:hover {
+  background: var(--row-hover);
+  color: var(--text);
+}
+
+.help-page__topic[aria-current='true'] {
+  border-left-color: var(--gold);
+  background: var(--row-hover);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.help-page__detail {
+  position: sticky;
+  top: var(--space-8);
+  display: grid;
+  justify-items: start;
+  gap: var(--space-6);
+  padding: var(--space-10);
+  border: var(--border-width, 1px) solid var(--gold-edge);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  scroll-margin-top: var(--space-8);
+}
+
+.help-page__detail .help-page__group-title {
+  margin: 0;
+}
+
+.help-page__topic-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.help-page__steps {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding-left: 1.3em;
+  color: var(--text-label);
+  line-height: 1.55;
+}
+
+.help-page__steps li::marker {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.help-page__note {
+  margin: 0;
+}
+
+@container shell (width < 900px) {
+  .help-page__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .help-page__detail {
+    position: static;
+  }
+}
