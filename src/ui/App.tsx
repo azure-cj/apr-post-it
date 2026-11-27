@@ -41,6 +41,7 @@ import { UpdateBanner, type CheckResult } from './UpdateBanner';
 import { version as APP_VERSION } from '../../package.json';
 import { useSignInRole } from './screens/SignInScreen.role';
 import { FindScreen, LogPostScreen, PropertyScreen, QueueScreen } from './screens/intern';
+import { VirtualOfficeScreen } from './screens/office';
 import {
   AgentSettingsScreen,
   AssignScreen,
@@ -109,12 +110,14 @@ export function navFor(user: User, ownQueue = false): readonly NavDef[] {
       { key: 'records', label: 'Records', path: paths.records, icon: 'records' },
       ...(ownQueue ? [{ key: 'queue', label: 'My queue', path: paths.queue, icon: 'inbox' } as const] : []),
       { key: 'find', label: 'Find', path: paths.find, icon: 'search' },
+      { key: 'virtual-office', label: 'Virtual office', path: paths.virtualOffice, icon: 'office' },
       { key: 'settings', label: 'Settings', path: paths.settings, icon: 'settings' },
     ];
   }
   return [
     { key: 'queue', label: 'My queue', path: paths.queue, icon: 'inbox' },
     { key: 'find', label: 'Find', path: paths.find, icon: 'search' },
+    { key: 'virtual-office', label: 'Virtual office', path: paths.virtualOffice, icon: 'office' },
     { key: 'settings', label: 'Settings', path: paths.settings, icon: 'settings' },
   ];
 }
@@ -141,6 +144,7 @@ function titleFor(pathname: string): string | null {
     '/tracker': 'Tracker',
     '/interns': 'Agents',
     '/records': 'Records',
+    '/virtual-office': 'Virtual office',
     '/settings': 'Settings',
     '/help': 'Help',
     '/kit': 'UI kit',
@@ -519,6 +523,7 @@ export function AppShell({ signInNote }: AppProps) {
                 <Route path={paths.tracker} element={guard(<TrackerRoute />, canManage)} />
                 <Route path={paths.interns} element={guard(<InternsRoute />, canManage)} />
                 <Route path={paths.records} element={guard(<RecordsRoute />, canManage)} />
+                <Route path={paths.virtualOffice} element={guard(<VirtualOfficeScreen />)} />
                 <Route path={paths.settings} element={guard(<SettingsRoute />)} />
                 <Route path={paths.help} element={guard(<HelpScreen />)} />
                 {KitScreen ? (

@@ -1,0 +1,128 @@
+/* The Virtual office page's layout, on Post-It's own tokens. The designs' own CSS is designs.css. */
+
+.page.vo { max-width: none; padding-bottom: 0; }
+.vo__header { margin-bottom: var(--space-8); }
+
+/* One screen: the editor left, the designs right. JS sets the height to fill the window. */
+.vo__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-10);
+  min-height: 0;
+}
+/* The editor takes a column only while it's open. */
+.vo__body--editing { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); }
+@media (max-width: 959px) {
+  .vo__body, .vo__body--editing { grid-template-columns: 1fr; }
+  .vo__stage { height: 60vh; }
+}
+
+/* ---- the editor: tabs, one section at a time */
+.vo__editor { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.vo__tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4) 0;
+  border-bottom: var(--border-width) solid var(--border-soft);
+}
+.vo__tab {
+  position: relative;
+  flex: 1;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-chip) var(--radius-chip) 0 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--heading-font);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-label);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.vo__tab:hover { background: var(--row-hover); color: var(--text-label); }
+.vo__tab:focus-visible { outline: var(--focus-ring); outline-offset: -2px; }
+.vo__tab--on, .vo__tab--on:hover { color: var(--gold); }
+.vo__tab--on::after {
+  content: '';
+  position: absolute;
+  inset-inline: var(--space-3);
+  bottom: -1px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+}
+.vo__panel { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-8); }
+
+.vo__fields { display: grid; gap: var(--space-7); }
+.vo__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6); align-items: end; }
+.vo-area { display: grid; gap: var(--space-3); }
+.vo-area textarea.field__input { height: auto; padding: var(--space-5) var(--space-7); resize: vertical; line-height: 1.5; }
+.vo__muted, .vo-area .field__hint { margin: 0; color: var(--text-muted); font-size: var(--text-caption); line-height: var(--lh-caption); }
+
+.vo__choice { margin: 0; padding: 0; border: 0; display: grid; gap: var(--space-4); min-width: 0; }
+.vo__chips { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.vo__swatches { display: flex; gap: var(--space-5); }
+.vo__swatch {
+  width: 34px; height: 34px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+.vo__swatch[aria-pressed='true'] { border-color: var(--gold); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--gold-edge); }
+.vo__check { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; color: var(--text); font-size: var(--text-meta); }
+.vo__check input, .vo__row input[type='range'] { accent-color: var(--gold); }
+.vo__row input[type='range'] { width: 100%; }
+
+/* photos */
+.vo__slots { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+.vo__slot {
+  display: grid; gap: var(--space-3); justify-items: start; padding: var(--space-4);
+  border: var(--border-width) solid var(--border); border-radius: var(--radius-row);
+  background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--text-caption); cursor: pointer; text-align: left;
+}
+.vo__slot[aria-pressed='true'] { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
+.vo__slot-pic { width: 100%; height: 56px; border-radius: var(--radius-chip); background: center / cover no-repeat; }
+.vo__lib { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); }
+.vo__lib li { position: relative; }
+.vo__pic {
+  display: block; width: 100%; aspect-ratio: 4 / 3; padding: 0; cursor: pointer; position: relative;
+  border: 2px solid transparent; border-radius: var(--radius-chip); background: var(--input-bg) center / cover no-repeat;
+}
+.vo__pic:hover { border-color: var(--gold-edge); }
+.vo__pic--used { border-color: var(--gold); }
+.vo__tags { position: absolute; left: 2px; top: 2px; display: flex; gap: 2px; }
+.vo__tags i { font-style: normal; font-size: 9px; font-weight: 700; padding: 0 3px; border-radius: var(--radius-sm); background: var(--gold); color: var(--on-gold); }
+.vo__up { position: absolute; left: 2px; bottom: 2px; font-size: 9px; padding: 0 3px; border-radius: var(--radius-sm); background: rgba(0, 0, 0, 0.75); color: #fff; }
+.vo__rm {
+  position: absolute; right: 2px; top: 2px; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.8); color: #fff; font-size: 13px; line-height: 20px; cursor: pointer;
+}
+
+/* ---- the designs: thumbnails, then the chosen one as big as fits */
+.vo__preview { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; min-height: 0; }
+.vo__strip { display: flex; gap: var(--space-4); overflow-x: auto; padding: var(--space-2) var(--space-2) var(--space-4); flex: none; }
+.vo__strip figure {
+  flex: none; margin: 0; padding: var(--space-2); border-radius: var(--radius-chip); cursor: pointer;
+  border: 2px solid transparent; background: var(--surface);
+}
+.vo__strip figure:hover { border-color: var(--gold-edge); }
+.vo__strip figure[aria-pressed='true'] { border-color: var(--gold); }
+.vo__strip figure:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
+.vo__strip .frame { overflow: hidden; border-radius: var(--radius-sm); background: #000; }
+.vo__strip .frame > .art { transform-origin: 0 0; pointer-events: none; }
+.vo__strip figcaption { margin-top: var(--space-2); max-width: 100%; color: var(--text-muted); font-size: 11px; line-height: 14px; text-align: center; white-space: nowrap; }
+.vo__strip figure[aria-pressed='true'] figcaption { color: var(--gold); }
+
+.vo__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); flex: none; }
+.vo__bar p { margin: 0; font-size: var(--text-meta); }
+.vo__bar b { font-weight: 600; }
+.vo__actions { display: flex; gap: var(--space-4); }
+
+.vo__stage { flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; padding-bottom: var(--space-8); }
+.vo__stage-art { overflow: hidden; border-radius: var(--radius-chip); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+.vo__stage-art > .art { transform-origin: 0 0; }
+
+/* the designs: keep Post-It's base headings and text wrapping out of them */
+.vo-designs .art { line-height: normal; letter-spacing: normal; font-size: 16px; }
+.vo-designs :where(.art h2, .art h3) { font-family: inherit; font-weight: 700; color: inherit; text-wrap: wrap; }
+.vo-designs :where(.art p) { text-wrap: wrap; }
+.vo-designs :where(.art img, .art svg) { max-width: none; }

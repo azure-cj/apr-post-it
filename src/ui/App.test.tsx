@@ -58,7 +58,7 @@ describe('signing in', () => {
     await signIn('9b2c-41fe');
 
     expect(await screen.findByRole('heading', { level: 1, name: 'My queue' })).toBeTruthy();
-    expect(navNames()).toEqual(['My queue', 'Find', 'Settings']);
+    expect(navNames()).toEqual(['My queue', 'Find', 'Virtual office', 'Settings']);
     expect(screen.getByText('Jan Dela Cruz')).toBeTruthy();
     expect(platform.posts[0]!.body).toMatchObject({ action: 'ping', key: '9b2c-41fe' });
     expect(await platform.readKey()).toBe('9b2c-41fe');
@@ -205,7 +205,7 @@ describe('the shell', () => {
     for (const user of [manager, admin]) {
       const { unmount } = renderApp({ platform: fakeServer(), user });
       expect(heading()).toBe('Tracker');
-      expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'Find', 'Settings']);
+      expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'Find', 'Virtual office', 'Settings']);
       unmount();
     }
   });

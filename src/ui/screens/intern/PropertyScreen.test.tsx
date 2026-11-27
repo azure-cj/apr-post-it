@@ -673,7 +673,7 @@ describe('highlights (1.1.6)', () => {
     const { unmount } = renderApp({ platform: quiet, path: PATH });
     await settled();
     expect(await screen.findByText('Post this only when an admin highlights it.')).toBeTruthy();
-    expect(screen.getByText('Virtual office')).toBeTruthy();
+    expect(within(screen.getByRole('main')).getByText('Virtual office')).toBeTruthy();
     unmount();
 
     const asked = fakeServer({ properties: listWith(vo), property: propertyReply(vo), highlights: { ok: true, highlights: [HIGHLIGHT] } });

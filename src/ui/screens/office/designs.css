@@ -1,0 +1,239 @@
+/* The 12 virtual office designs, scoped to .vo-designs. Their own type (Playfair Display, Poppins) ships with the app; each weight's files carry the ₱ sign too. */
+@import "@fontsource/playfair-display/600.css";
+@import "@fontsource/playfair-display/700.css";
+@import "@fontsource/playfair-display/600-italic.css";
+@import "@fontsource/poppins/400.css";
+@import "@fontsource/poppins/500.css";
+@import "@fontsource/poppins/600.css";
+@import "@fontsource/poppins/700.css";
+@import "@fontsource/poppins/800.css";
+.vo-designs {
+  --gold-1: #f6e7a9; --gold-2: #d9b25a; --gold-3: #a8822f;
+  --ink: #0e0e0e; --ink-2: #171717; --warm: #2a2214;
+  --paper: #f7f3ea; --paper-2: #efe7d6;
+  --soft: rgba(255, 255, 255, 0.78);
+  --vo-gold: linear-gradient(135deg, var(--gold-1) 0%, var(--gold-2) 45%, var(--gold-3) 100%);
+}
+.vo-designs[data-theme='navy'] { --ink: #0a1424; --ink-2: #111f36; --warm: #1b2a44; }
+.vo-designs[data-theme='emerald'] { --ink: #0a1712; --ink-2: #10241b; --warm: #1c3326; }
+.vo-designs[data-theme='wine'] { --ink: #170b0e; --ink-2: #241216; --warm: #3a1a20; }
+.vo-designs[data-tone='champagne'] { --gold-1: #fbf1d3; --gold-2: #e6cf98; --gold-3: #b9995a; }
+.vo-designs[data-tone='bronze'] { --gold-1: #f3d3a1; --gold-2: #c98f4a; --gold-3: #8a5a24; }
+.vo-designs[data-tone='rose'] { --gold-1: #f8dcd0; --gold-2: #d9a38f; --gold-3: #9c6452; }
+.vo-designs .art {position: relative; overflow: hidden; color: #fff; background: var(--ink); font-family: 'Poppins', sans-serif; }
+.vo-designs .feed {width: 1200px; height: 1000px; }
+.vo-designs .square {width: 1080px; height: 1080px; }
+.vo-designs .story {width: 1080px; height: 1920px; }
+.vo-designs .ad45 {width: 1080px; height: 1350px; }
+.vo-designs .a4 {width: 1240px; height: 1754px; }
+.vo-designs .tri {width: 1650px; height: 1275px; }
+.vo-designs .photo {position: absolute; inset: 0; background-repeat: no-repeat; background-size: cover; background-position: center; }
+.vo-designs .ph-a {background-image: var(--photo-a, url('../../../assets/vo/alpha-office-a.jpg')); }
+.vo-designs .ph-b {background-image: var(--photo-b, url('../../../assets/vo/prestige-boardroom.jpg')); }
+.vo-designs .ph-a {background-position: var(--a-x, 50%) var(--a-y, 50%); }
+.vo-designs .ph-b {background-position: var(--b-x, 50%) var(--b-y, 50%); }
+.vo-designs .swoosh {position: absolute; top: -10px; right: 0; width: 380px; height: 140px; pointer-events: none; }
+.vo-designs .badge {position: absolute; top: 14px; right: 40px; width: 104px; height: 104px; border-radius: 50%;
+    background: #0b0b0b; border: 3px solid var(--gold-2); display: grid; place-items: center;
+    box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+.vo-designs .badge img {width: 76%; }
+.vo-designs .phones {position: absolute; left: 0; right: 0; bottom: 0; height: 74px; padding: 0 26px;
+    display: flex; align-items: center; justify-content: flex-end; color: #fff;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 93%, transparent) 0%, color-mix(in srgb, var(--ink) 93%, transparent) 62%, var(--gold-3) 100%);
+    font-size: 40px; font-weight: 500; letter-spacing: .4px; white-space: nowrap; }
+.vo-designs .square .phones, .vo-designs .story .phones, .vo-designs .ad45 .phones {font-size: 34px; justify-content: center; }
+.vo-designs .a4 .swoosh {width: 520px; height: 190px; }
+.vo-designs .a4 .badge {width: 150px; height: 150px; top: 26px; right: 60px; border-width: 4px; }
+.vo-designs .a4 .phones {height: 120px; font-size: 42px; justify-content: center; }
+.vo-designs .kicker {display: inline-flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 600; letter-spacing: 5px; text-transform: uppercase; color: var(--gold-1); }
+.vo-designs .kicker::before {content: ''; width: 44px; height: 3px; background: var(--vo-gold); }
+.vo-designs .kicker.center::after {content: ''; width: 44px; height: 3px; background: var(--vo-gold); }
+.vo-designs .gold-text {background: var(--vo-gold); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.vo-designs .light .gold-text, .vo-designs .paperish .gold-text {background: none; color: var(--gold-3); -webkit-text-fill-color: var(--gold-3); }
+.vo-designs .btn {display: inline-flex; align-items: center; gap: 14px; padding: 18px 34px; border-radius: 999px; background: var(--vo-gold); color: #1a1205; font-size: 26px; font-weight: 700; }
+.vo-designs .btn svg {width: 1em; height: 1em; }
+.vo-designs .checks {list-style: none; margin: 0; padding: 0; display: grid; }
+.vo-designs .checks li {display: flex; align-items: center; gap: 20px; }
+.vo-designs .tick {flex: none; width: 46px; height: 46px; border-radius: 50%; background: var(--vo-gold); display: grid; place-items: center; }
+.vo-designs .tick svg {width: 52%; height: 52%; }
+.vo-designs .serif {font-family: 'Playfair Display', Georgia, serif; }
+.vo-designs .folds .fold {display: block; }
+.vo-designs .fold {display: none; position: absolute; top: 0; bottom: 0; width: 0; border-left: 3px dashed rgba(255, 0, 90, .7); z-index: 5; }
+.vo-designs .hero .shade {position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 97%, transparent) 0%, color-mix(in srgb, var(--ink) 88%, transparent) 42%, color-mix(in srgb, var(--ink) 35%, transparent) 75%, color-mix(in srgb, var(--ink) 12%, transparent) 100%); }
+.vo-designs .hero .copy {position: absolute; left: 80px; top: 150px; width: 660px; }
+.vo-designs .hero h2 {margin: 24px 0 20px; font-size: 74px; line-height: 1.04; font-weight: 800; letter-spacing: -1px; }
+.vo-designs .hero .sub {font-size: 27px; line-height: 1.45; color: var(--soft); margin: 0 0 36px; }
+.vo-designs .price-line {display: flex; align-items: baseline; gap: 14px; }
+.vo-designs .hero .price-line {margin-bottom: 40px; }
+.vo-designs .price-line small {font-size: 24px; color: var(--soft); font-weight: 500; }
+.vo-designs .price-line strong {font-size: 76px; font-weight: 800; line-height: 1; }
+.vo-designs .price-line span {font-size: 30px; color: var(--soft); }
+.vo-designs .incl {background: radial-gradient(120% 90% at 100% 0%, var(--warm) 0%, var(--ink) 55%); }
+.vo-designs .incl .left {position: absolute; left: 80px; top: 150px; width: 600px; }
+.vo-designs .incl h2 {margin: 24px 0 44px; font-size: 60px; line-height: 1.08; font-weight: 800; }
+.vo-designs .incl .checks {gap: 24px; }
+.vo-designs .incl .checks li {font-size: 29px; font-weight: 500; }
+.vo-designs .incl .pic {position: absolute; right: 70px; top: 170px; width: 430px; height: 660px; border-radius: 220px 220px 24px 24px; overflow: hidden; border: 4px solid var(--gold-2); }
+.vo-designs .incl .tag {position: absolute; right: 120px; top: 760px; padding: 18px 28px; border-radius: 18px; background: #0b0b0b; border: 2px solid var(--gold-2); font-size: 22px; color: var(--soft); }
+.vo-designs .incl .tag b {display: block; font-size: 44px; color: #fff; font-weight: 800; }
+.vo-designs .plans {background: var(--paper); color: #1a1a1a; }
+.vo-designs .plans .head {position: absolute; left: 80px; top: 120px; right: 220px; }
+.vo-designs .plans .kicker, .vo-designs .light .kicker {color: var(--gold-3); }
+.vo-designs .plans h2 {margin: 18px 0 0; font-size: 70px; font-weight: 800; line-height: 1.05; }
+.vo-designs .plans .cards {position: absolute; left: 70px; right: 70px; top: 320px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; align-items: start; }
+.vo-designs .card {position: relative; padding: 38px 30px 34px; border-radius: 26px; background: #fff; color: #1a1a1a; box-shadow: 0 18px 40px rgba(60,45,10,.12); }
+.vo-designs .card h3 {margin: 0 0 18px; font-size: 29px; font-weight: 700; line-height: 1.15; }
+.vo-designs .card .amt {font-size: 58px; font-weight: 800; line-height: 1; letter-spacing: -1px; white-space: nowrap; }
+.vo-designs .card .amt small {display: block; margin-top: 8px; font-size: 22px; font-weight: 600; color: #6b6253; letter-spacing: 0; }
+.vo-designs .card ul {list-style: none; margin: 24px 0 0; padding: 22px 0 0; border-top: 2px solid #eee4cf; display: grid; gap: 10px; font-size: 19px; line-height: 1.3; color: #3c372d; }
+.vo-designs .card ul li {padding-left: 26px; text-indent: -26px; }
+.vo-designs .card ul li::before {content: '✓  '; color: var(--gold-3); font-weight: 700; }
+.vo-designs .card .more {margin-top: 10px; font-size: 18px; color: #8a7f68; }
+.vo-designs .card.best .more {color: var(--soft); }
+.vo-designs .plans .custom-line {position: absolute; left: 70px; right: 70px; bottom: 112px; text-align: center; font-size: 24px; font-weight: 600; color: #4b4436; }
+.vo-designs .plans .custom-line::before {content: '✦  '; color: var(--gold-3); }
+.vo-designs .card.best {background: var(--ink); color: #fff; box-shadow: 0 22px 50px rgba(0,0,0,.28); outline: 4px solid var(--gold-2); }
+.vo-designs .card.best .per, .vo-designs .card.best .amt small {color: var(--soft); }
+.vo-designs .card.best .gold-text {background: var(--vo-gold); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
+.vo-designs .card.best ul {border-top-color: rgba(255,255,255,.14); color: var(--soft); }
+.vo-designs .card.best ul li::before {color: var(--gold-1); }
+.vo-designs .ribbon {position: absolute; top: -22px; right: 36px; padding: 10px 22px; border-radius: 999px; background: var(--vo-gold); color: #1a1205; font-size: 20px; font-weight: 700; white-space: nowrap; }
+.vo-designs .ribbon[hidden] {display: none; }
+.vo-designs .promo .photo {filter: blur(4px) brightness(.45) saturate(.6); }
+.vo-designs .promo .ring {position: absolute; left: 50%; top: 52%; width: 760px; height: 760px; transform: translate(-50%, -50%); border-radius: 50%; border: 2px solid color-mix(in srgb, var(--gold-2) 55%, transparent); }
+.vo-designs .promo .ring.two {width: 640px; height: 640px; border-color: color-mix(in srgb, var(--gold-2) 25%, transparent); }
+.vo-designs .promo div.center {position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding-bottom: 40px; }
+.vo-designs .promo .center .kicker {justify-content: center; }
+.vo-designs .promo .from {margin-top: 34px; font-size: 30px; color: var(--soft); }
+.vo-designs .promo .big {font-size: 170px; font-weight: 800; line-height: .95; letter-spacing: -3px; }
+.vo-designs .promo .mo {font-size: 38px; font-weight: 600; color: var(--soft); margin-top: 10px; }
+.vo-designs .promo .where {margin: 40px auto 0; font-size: 30px; font-weight: 600; }
+.vo-designs .split .half {position: absolute; top: 0; bottom: 74px; width: 600px; overflow: hidden; }
+.vo-designs .split .half.l {left: 0; }
+.vo-designs .split .half.r {right: 0; }
+.vo-designs .split .half::after {content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.05) 40%, rgba(0,0,0,.45)); }
+.vo-designs .split .divider {position: absolute; left: 598px; top: 0; bottom: 74px; width: 4px; background: var(--vo-gold); }
+.vo-designs .split .medal {position: absolute; left: 50%; top: 455px; width: 420px; height: 420px; transform: translate(-50%, -50%);
+    border-radius: 50%; display: grid; place-content: center; text-align: center;
+    background: radial-gradient(circle at 50% 35%, var(--ink-2) 0%, var(--ink) 70%);
+    border: 6px solid var(--gold-2); box-shadow: 0 0 0 14px color-mix(in srgb, var(--ink) 55%, transparent), 0 30px 60px rgba(0,0,0,.55); }
+.vo-designs .split .medal .k {font-size: 20px; font-weight: 600; letter-spacing: 5px; color: var(--gold-1); text-transform: uppercase; }
+.vo-designs .split .medal .v {font-size: 92px; font-weight: 800; line-height: 1; margin: 14px 0 4px; letter-spacing: -2px; }
+.vo-designs .split .medal .m {font-size: 26px; color: var(--soft); }
+.vo-designs .split .medal .c {margin-top: 16px; font-size: 22px; font-weight: 600; padding: 0 40px; }
+.vo-designs .pill {position: absolute; left: 40px; top: 40px; padding: 12px 26px; border-radius: 999px; background: var(--vo-gold); color: #1a1205; font-size: 22px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; }
+.vo-designs .grid4 {background: radial-gradient(110% 80% at 0% 0%, var(--warm) 0%, var(--ink) 60%); }
+.vo-designs .grid4 .head {position: absolute; left: 80px; top: 120px; right: 200px; }
+.vo-designs .grid4 h2 {margin: 20px 0 0; font-size: 66px; line-height: 1.05; font-weight: 800; }
+.vo-designs .grid4 .tiles {position: absolute; left: 80px; right: 80px; top: 360px; display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+.vo-designs .tile {height: 228px; padding: 30px; border-radius: 26px; background: color-mix(in srgb, #fff 6%, transparent); border: 1px solid color-mix(in srgb, var(--gold-2) 40%, transparent); display: grid; align-content: space-between; }
+.vo-designs .tile .ic {width: 64px; height: 64px; border-radius: 18px; background: var(--vo-gold); display: grid; place-items: center; }
+.vo-designs .tile .ic svg {width: 34px; height: 34px; }
+.vo-designs .tile p {margin: 0; font-size: 28px; font-weight: 600; line-height: 1.25; }
+.vo-designs .grid4 .foot {position: absolute; left: 80px; right: 80px; bottom: 112px; display: flex; justify-content: space-between; align-items: baseline; }
+.vo-designs .grid4 .foot .price-line strong {font-size: 60px; }
+.vo-designs .storyart .top {position: absolute; left: 0; right: 0; top: 0; height: 900px; }
+.vo-designs .storyart .top::after {content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.1) 0%, rgba(0,0,0,.2) 55%, var(--ink) 100%); }
+.vo-designs .storyart .body {position: absolute; left: 80px; right: 80px; top: 780px; }
+.vo-designs .storyart h2 {margin: 24px 0 18px; font-size: 96px; line-height: 1.02; font-weight: 800; letter-spacing: -1px; }
+.vo-designs .storyart .price {font-size: 40px; color: var(--soft); margin-bottom: 54px; }
+.vo-designs .storyart .price strong {font-size: 66px; color: #fff; font-weight: 800; }
+.vo-designs .storyart .checks {gap: 28px; margin-bottom: 64px; }
+.vo-designs .storyart .checks li {font-size: 36px; font-weight: 500; }
+.vo-designs .storyart .btn {font-size: 32px; padding: 24px 44px; }
+.vo-designs .storyart .phones {height: 96px; bottom: 60px; left: 60px; right: 60px; border-radius: 18px; }
+.vo-designs .steps .top {position: absolute; left: 0; right: 0; top: 0; height: 620px; }
+.vo-designs .steps .top::after {content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.15), var(--ink) 98%); }
+.vo-designs .steps .body {position: absolute; left: 80px; right: 80px; top: 470px; }
+.vo-designs .steps h2 {margin: 20px 0 46px; font-size: 76px; line-height: 1.04; font-weight: 800; }
+.vo-designs .steps ol {list-style: none; margin: 0 0 60px; padding: 0; display: grid; gap: 38px; counter-reset: s; }
+.vo-designs .steps li {display: grid; grid-template-columns: 76px 1fr; gap: 26px; align-items: center; counter-increment: s; }
+.vo-designs .steps li::before {content: counter(s); width: 76px; height: 76px; border-radius: 50%; background: var(--vo-gold); color: #1a1205; display: grid; place-items: center; font-size: 36px; font-weight: 800; }
+.vo-designs .steps li b {display: block; font-size: 34px; font-weight: 700; }
+.vo-designs .steps li span {font-size: 25px; color: var(--soft); }
+.vo-designs .pdark {background: radial-gradient(90% 60% at 100% 0%, var(--warm) 0%, var(--ink) 60%); }
+.vo-designs .pdark .head {position: absolute; left: 90px; top: 150px; right: 260px; }
+.vo-designs .pdark .kicker {font-size: 26px; }
+.vo-designs .pdark h2 {margin: 30px 0 0; font-size: 124px; line-height: .98; font-weight: 800; letter-spacing: -3px; }
+.vo-designs .pdark .pic {position: absolute; right: 90px; top: 660px; width: 470px; height: 800px; border-radius: 235px 235px 30px 30px; overflow: hidden; border: 4px solid var(--gold-2); }
+.vo-designs .pdark .pic::after {content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, rgba(0,0,0,.45)); }
+.vo-designs .stamp {position: absolute; width: 330px; height: 330px; border-radius: 50%; display: grid; place-content: center; text-align: center;
+    background: var(--vo-gold); color: #1a1205; transform: rotate(-8deg); box-shadow: 0 24px 50px rgba(0,0,0,.5); }
+.vo-designs .stamp::before {content: ''; position: absolute; inset: 12px; border-radius: 50%; border: 2px dashed rgba(26,18,5,.45); }
+.vo-designs .stamp small {font-size: 26px; font-weight: 600; }
+.vo-designs .stamp b {font-size: 76px; font-weight: 800; line-height: 1; letter-spacing: -2px; }
+.vo-designs .pdark .stamp {right: 40px; top: 1270px; width: 300px; height: 300px; }
+.vo-designs .pdark .stamp b {font-size: 68px; }
+.vo-designs .pdark .list {position: absolute; left: 90px; width: 560px; top: 680px; }
+.vo-designs .pdark .list .sub {margin: 0 0 44px; font-size: 30px; line-height: 1.5; color: var(--soft); }
+.vo-designs .pdark .checks {gap: 40px; }
+.vo-designs .pdark .checks li {font-size: 30px; font-weight: 500; line-height: 1.3; }
+.vo-designs .pdark .btn {position: absolute; left: 90px; bottom: 190px; font-size: 32px; padding: 22px 42px; }
+.vo-designs .pivory {background: var(--paper); color: #1d1a14; }
+.vo-designs .pivory .frame-line {position: absolute; inset: 40px 40px 160px; border: 2px solid var(--gold-2); }
+.vo-designs .pivory .frame-line::after {content: ''; position: absolute; inset: 12px; border: 1px solid color-mix(in srgb, var(--gold-2) 60%, transparent); }
+.vo-designs .pivory .badge {left: 50%; right: auto; top: 90px; transform: translateX(-50%); width: 160px; height: 160px; }
+.vo-designs .pivory .content {position: absolute; left: 110px; right: 110px; top: 300px; text-align: center; }
+.vo-designs .pivory .kicker {justify-content: center; color: var(--gold-3); font-size: 24px; }
+.vo-designs .pivory h2 {margin: 26px 0 22px; font-size: 98px; line-height: 1.04; font-weight: 700; }
+.vo-designs .pivory .sub {margin: 0 auto; max-width: 820px; font-size: 30px; line-height: 1.5; color: #5b5444; }
+.vo-designs .pivory .pic {position: relative; margin: 52px auto 0; height: 470px; border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 10px #fff, 0 0 0 12px var(--gold-2), 0 30px 50px rgba(60,45,10,.18); }
+.vo-designs .pivory .duo {margin-top: 60px; display: grid; grid-template-columns: 1fr 2px 1fr 2px 1fr; align-items: center; }
+.vo-designs .pivory .duo i {height: 120px; background: var(--gold-2); }
+.vo-designs .pivory .duo div {display: grid; gap: 6px; }
+.vo-designs .pivory .duo small {font-size: 20px; letter-spacing: 2px; text-transform: uppercase; color: #7b715c; }
+.vo-designs .pivory .duo b {font-size: 62px; font-weight: 800; line-height: 1; font-family: 'Poppins', sans-serif; }
+.vo-designs .pivory .duo span {font-size: 24px; color: #7b715c; }
+.vo-designs .pivory .incl-line {margin: 46px auto 0; max-width: 960px; font-size: 25px; line-height: 1.8; color: #3d382e; }
+.vo-designs .pivory .incl-line span + span::before {content: '  ✦  '; color: var(--gold-3); }
+.vo-designs .tri .pane {position: absolute; top: 0; bottom: 0; width: 550px; overflow: hidden; padding: 90px 60px; }
+.vo-designs .tri .p1 {left: 0; }
+.vo-designs .tri .p2 {left: 550px; }
+.vo-designs .tri .p3 {left: 1100px; }
+.vo-designs .tri .light {background: var(--paper); color: #1d1a14; }
+.vo-designs .tri .warm {background: radial-gradient(120% 70% at 100% 0%, var(--warm), var(--ink) 70%); }
+.vo-designs .tri h3 {margin: 20px 0 26px; font-size: 50px; line-height: 1.08; font-weight: 800; }
+.vo-designs .tri p {margin: 0 0 22px; font-size: 24px; line-height: 1.6; color: var(--soft); }
+.vo-designs .tri .light p {color: #5b5444; }
+.vo-designs .tri .kicker {font-size: 19px; letter-spacing: 4px; }
+.vo-designs .tri .checks {gap: 22px; }
+.vo-designs .tri .checks li {font-size: 25px; font-weight: 500; gap: 16px; line-height: 1.3; }
+.vo-designs .tri .tick {width: 38px; height: 38px; }
+.vo-designs .tri .light .checks li {color: #2b271f; }
+.vo-designs .tri .cover .photo::after {content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,.1) 30%, var(--ink) 92%); }
+.vo-designs .tri .cover .logo {position: absolute; left: 50%; top: 70px; width: 250px; transform: translateX(-50%); }
+.vo-designs .tri .cover .bottom {position: absolute; left: 60px; right: 60px; bottom: 90px; }
+.vo-designs .tri .cover h3 {font-size: 58px; margin: 18px 0 18px; }
+.vo-designs .tri .cover .price {font-size: 26px; color: var(--soft); }
+.vo-designs .tri .cover .price strong {font-size: 44px; color: #fff; font-weight: 800; }
+.vo-designs .tri .back {text-align: center; display: grid; align-content: center; justify-items: center; gap: 10px; }
+.vo-designs .tri .back .badge {position: static; width: 170px; height: 170px; margin-bottom: 26px; }
+.vo-designs .tri .back .kicker {justify-content: center; }
+.vo-designs .tri .back h3 {margin: 10px 0 18px; }
+.vo-designs .tri .back .lines {font-size: 36px; font-weight: 600; line-height: 1.6; }
+.vo-designs .tri .back .addr {margin-top: 26px; padding-top: 26px; border-top: 1px solid color-mix(in srgb, var(--gold-2) 40%, transparent); font-size: 22px; color: var(--soft); }
+.vo-designs .tri .mini {position: absolute; left: 60px; right: 60px; bottom: 90px; height: 330px; border-radius: 22px; overflow: hidden; border: 3px solid var(--gold-2); }
+.vo-designs .tri .mini.tall {height: 420px; }
+.vo-designs .tri .p2 .checks {gap: 36px; }
+.vo-designs .tri .p2 .checks li {font-size: 27px; }
+.vo-designs .tri .note {position: absolute; left: 60px; right: 60px; bottom: 90px; padding-top: 30px; border-top: 1px solid color-mix(in srgb, var(--gold-2) 45%, transparent); font-size: 24px; line-height: 1.55; color: var(--soft); }
+.vo-designs .tri .note b {display: block; font-size: 34px; color: #fff; margin-bottom: 6px; }
+.vo-designs .tri .p3 .plan {padding: 26px 30px; margin-bottom: 24px; }
+.vo-designs .tri .p3 .plan b {font-size: 54px; }
+.vo-designs .tri .p3 .plan b small {font-size: 22px; font-weight: 600; color: #7b715c; margin-left: 8px; }
+.vo-designs .tri .p3 .plan.best b small {color: var(--soft); }
+.vo-designs .tri .p3 .custom {margin-top: 14px; font-size: 22px; color: #5b5444; }
+.vo-designs .tri .back .mail {font-size: 24px; color: var(--soft); }
+.vo-designs .tri .p3 .btn {position: absolute; left: 60px; bottom: 90px; }
+.vo-designs .tri .plan {position: relative; padding: 26px 30px; border-radius: 22px; background: #fff; box-shadow: 0 14px 30px rgba(60,45,10,.12); margin-bottom: 22px; }
+.vo-designs .tri .plan.best {background: var(--ink); color: #fff; outline: 3px solid var(--gold-2); }
+.vo-designs .tri .plan.best .gold-text {background: var(--vo-gold); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
+.vo-designs .tri .plan small {font-size: 20px; color: #7b715c; letter-spacing: 2px; text-transform: uppercase; }
+.vo-designs .tri .plan b small {letter-spacing: 0; text-transform: none; }
+.vo-designs .tri .plan.best small {color: var(--soft); }
+.vo-designs .tri .plan b {display: block; font-size: 52px; font-weight: 800; line-height: 1.1; }
+.vo-designs .tri .plan .ribbon {top: -18px; right: 24px; font-size: 17px; padding: 8px 18px; }
+.vo-designs .tri .how {margin: 28px 0 30px; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 14px; }
+.vo-designs .tri .how li {counter-increment: s; display: flex; gap: 14px; align-items: center; font-size: 22px; color: #2b271f; }
+.vo-designs .tri .how li::before {content: counter(s); flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--vo-gold); color: #1a1205; display: grid; place-items: center; font-weight: 800; font-size: 20px; }
+.vo-designs .tri .btn {font-size: 22px; padding: 16px 28px; }

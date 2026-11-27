@@ -44,7 +44,7 @@ describe('the sidebar', () => {
 
   it('gives an admin Tracker, Assign, Interns, Records, Find and Settings, and no list of people', async () => {
     renderApp({ platform: server(), user: admin, path: '/tracker' });
-    expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'Find', 'Settings']);
+    expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'Find', 'Virtual office', 'Settings']);
     const interns = screen.getByRole('link', { name: 'Agents' });
     expect(interns.getAttribute('href')).toBe('#/interns');
     expect(interns.querySelector('svg')).not.toBeNull();
@@ -67,7 +67,7 @@ describe('the sidebar', () => {
     const platform = server();
     renderApp({ platform, user: intern, path: '/queue' });
     await screen.findByRole('heading', { level: 1, name: 'My queue' });
-    expect(navNames()).toEqual(['My queue', 'Find', 'Settings']);
+    expect(navNames()).toEqual(['My queue', 'Find', 'Virtual office', 'Settings']);
     expect(screen.queryByRole('link', { name: 'Agents' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeTruthy();
     expect(platform.posts.map((p) => p.action)).not.toContain('team');
@@ -83,7 +83,7 @@ describe('the sidebar', () => {
       ],
     };
     renderApp({ platform: server({ assignments: theirs }), user: admin, path: '/tracker' });
-    await waitFor(() => expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'My queue', 'Find', 'Settings']));
+    await waitFor(() => expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'My queue', 'Find', 'Virtual office', 'Settings']));
     const link = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: /My queue/ });
     expect(link.textContent).toContain('1 left in your queue this week');
 
@@ -117,7 +117,7 @@ describe('the sidebar', () => {
       },
     });
     renderApp({ platform, user: admin, path: '/tracker' });
-    await waitFor(() => expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'My queue', 'Find', 'Settings']));
+    await waitFor(() => expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'My queue', 'Find', 'Virtual office', 'Settings']));
     const link = within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: /My queue/ });
     expect(link.textContent).not.toContain('left in your queue');
 
@@ -130,7 +130,7 @@ describe('the sidebar', () => {
     expect(navNames()).toContain('My queue');
     expect(screen.getByRole('link', { name: /My queue/ }).getAttribute('aria-current')).toBe('page');
     await userEvent.click(screen.getByRole('link', { name: 'Find' }));
-    await waitFor(() => expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'Find', 'Settings']));
+    await waitFor(() => expect(navNames()).toEqual(['Tracker', 'Assign', 'Agents', 'Records', 'Find', 'Virtual office', 'Settings']));
   });
 
   it("feeds the team's admins to Assign's picker too, after the agents, and marks yours (D31)", async () => {

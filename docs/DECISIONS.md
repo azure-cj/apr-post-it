@@ -626,3 +626,15 @@ post's text (`live: false`), and "Word file" is dropped from its issues, in the 
 the page, since there is text to post. A rebuild that leaves the folder out (D11) takes that
 copy away again: the lasting fix is to save each virtual office document as a Google Doc.
 Server version `2026-11-27.2`.
+
+### D44. A Virtual office page for its own designs (Nov 27, 2026)
+
+The virtual office's ready-made posts (D35) are fixed pictures in Drive. Virtual office, in
+every sidebar after Find, makes twelve designs from one offer: six feed posts, two stories,
+two A4 posters and a brochure's two sides, in the posters' black and gold. The offer starts
+as the "2026 V3.0 NEW VIRTUAL OFFICE" document has it (Ortigas, the three plans and their
+prices, the numbers and the email) and is edited once, behind Edit, so the designs fill the
+page until then. Its photos are the office's own, from the posters, built in; a person can
+add their own, which stay on that PC. Copy image puts the chosen design on the clipboard to
+paste into a post; Save PNG puts it in Downloads\APG Post-It\Virtual office. Nothing is sent
+to the server or written to Drive, and posting stays as D35 has it: when an admin asks.

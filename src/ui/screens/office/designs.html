@@ -1,0 +1,226 @@
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="sw1" x1="0" x2="1">
+      <stop offset="0" style="stop-color: var(--gold-1); stop-opacity: 0"/>
+      <stop offset=".35" style="stop-color: var(--gold-1)"/>
+      <stop offset="1" style="stop-color: var(--gold-3)"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<!-- pieces the designs share, copied in by the script -->
+<template id="t-swoosh"><svg class="swoosh" viewBox="0 0 380 140" aria-hidden="true"><path d="M10 20 C 120 110, 260 120, 380 70" stroke="url(#sw1)" stroke-width="9" fill="none" stroke-linecap="round"/><path d="M60 8 C 160 80, 280 90, 380 40" stroke="url(#sw1)" stroke-width="3" fill="none" opacity=".7"/></svg></template>
+<template id="t-badge"><div class="badge"><img src="{{logo}}" alt=""></div></template>
+<template id="t-phones"><div class="phones" data-k="phones"></div></template>
+<template id="t-tick"><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="#1a1205" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span></template>
+<template id="t-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></template>
+
+      <!-- 1 -->
+      <figure data-group="social" data-name="lead-post">
+        <div class="frame"><div class="art feed hero" data-deco="swoosh badge phones">
+          <div class="photo ph-a crop-wide"></div><div class="shade"></div>
+          <div class="copy">
+            <span class="kicker">Virtual office · <span data-k="city"></span></span>
+            <h2 data-k="headline"></h2>
+            <p class="sub" data-k="sub"></p>
+            <div class="price-line"><small>From</small><strong class="gold-text" data-k="from"></strong><span>/ month</span></div>
+            <span class="btn"><span data-k="cta"></span><i data-arrow></i></span>
+          </div>
+        </div></div>
+        <figcaption><p><b>Lead post</b> · 1200 × 1000, the current posts' size</p></figcaption>
+      </figure>
+
+      <!-- 2 -->
+      <figure data-group="social" data-name="split">
+        <div class="frame"><div class="art feed split" data-deco="swoosh badge phones">
+          <div class="half l"><div class="photo ph-a crop-tall"></div></div>
+          <div class="half r"><div class="photo ph-b crop-floor"></div></div>
+          <div class="divider"></div>
+          <span class="pill">Now available</span>
+          <div class="medal">
+            <span class="k">Virtual office</span>
+            <span class="v gold-text" data-k="from"></span>
+            <span class="m">a month</span>
+            <span class="c" data-k="city-address"></span>
+          </div>
+        </div></div>
+        <figcaption><p><b>Split</b> · 1200 × 1000. Two photos side by side, like the posts today, with the price in a medal</p></figcaption>
+      </figure>
+
+      <!-- 3 -->
+      <figure data-group="social" data-name="whats-included">
+        <div class="frame"><div class="art feed incl" data-deco="swoosh badge phones">
+          <div class="left">
+            <span class="kicker">What you get</span>
+            <h2>Everything a <span class="gold-text">real office</span> gives you</h2>
+            <ul class="checks" data-list="feature" data-max="6"></ul>
+          </div>
+          <div class="pic"><div class="photo ph-b crop-floor"></div></div>
+          <div class="tag"><span data-k="feature-name"></span><b data-k="feature-price"></b></div>
+        </div></div>
+        <figcaption><p><b>What's included</b> · 1200 × 1000. The checklist beside an arched photo</p></figcaption>
+      </figure>
+
+      <!-- 4 -->
+      <figure data-group="social" data-name="plans">
+        <div class="frame"><div class="art feed plans light" data-deco="swoosh badge phones">
+          <div class="head"><span class="kicker">Virtual office plans</span><h2>Choose your plan</h2></div>
+          <div class="cards" data-plans="cards"></div>
+          <div class="custom-line" data-k="custom" data-show="custom"></div>
+        </div></div>
+        <figcaption><p><b>Plans</b> · 1200 × 1000. The three plans side by side, the featured one in black</p></figcaption>
+      </figure>
+
+      <!-- 5 -->
+      <figure data-group="social" data-name="price-square">
+        <div class="frame"><div class="art square promo" data-deco="swoosh badge phones">
+          <div class="photo ph-a"></div>
+          <div class="ring"></div><div class="ring two"></div>
+          <div class="center">
+            <span class="kicker center">Virtual office</span>
+            <div class="from">Starts at</div>
+            <div class="big gold-text" data-k="from"></div>
+            <div class="mo">a month</div>
+            <div class="where" data-k="city-address"></div>
+          </div>
+        </div></div>
+        <figcaption><p><b>The price</b> · 1080 × 1080. One big number, for groups that crop to a square</p></figcaption>
+      </figure>
+
+      <!-- 6 -->
+      <figure data-group="social" data-name="benefits-square">
+        <div class="frame"><div class="art square grid4" data-deco="swoosh badge phones">
+          <div class="head"><span class="kicker">Virtual office · <span data-k="city"></span></span><h2>Why a <span class="gold-text">virtual office?</span></h2></div>
+          <div class="tiles" data-tiles></div>
+          <div class="foot"><div class="price-line"><small>From</small><strong class="gold-text" data-k="from"></strong><span>/ month</span></div></div>
+        </div></div>
+        <figcaption><p><b>Benefits</b> · 1080 × 1080. The first four inclusions as tiles</p></figcaption>
+      </figure>
+
+      <!-- 7 -->
+      <figure data-group="story" data-name="story">
+        <div class="frame"><div class="art story storyart" data-deco="swoosh badge phones">
+          <div class="top"><div class="photo ph-a crop-tall"></div></div>
+          <div class="body">
+            <span class="kicker">Virtual office · <span data-k="city"></span></span>
+            <h2 data-k="headline"></h2>
+            <div class="price">From <strong data-k="from"></strong> a month</div>
+            <ul class="checks" data-list="incl" data-max="3"></ul>
+            <span class="btn"><span data-k="cta"></span><i data-arrow></i></span>
+          </div>
+        </div></div>
+        <figcaption><p><b>Story</b> · 1080 × 1920, for Facebook and Messenger stories</p></figcaption>
+      </figure>
+
+      <!-- 8 -->
+      <figure data-group="story" data-name="three-steps">
+        <div class="frame"><div class="art ad45 steps" data-deco="swoosh badge phones">
+          <div class="top"><div class="photo ph-b crop-floor-wide"></div></div>
+          <div class="body">
+            <span class="kicker">Virtual office · <span data-k="city"></span></span>
+            <h2>Your new address in <span class="gold-text">3 easy steps</span></h2>
+            <ol>
+              <li><div><b>Message us</b><span>Tell us your business name.</span></div></li>
+              <li><div><b>Pick your plan</b><span>Three plans from <span data-k="from"></span> a month, or a custom one.</span></div></li>
+              <li><div><b>Start using it</b><span data-k="city-address-use"></span></div></li>
+            </ol>
+            <span class="btn"><span data-k="cta"></span><i data-arrow></i></span>
+          </div>
+        </div></div>
+        <figcaption><p><b>3 steps</b> · 1080 × 1350, the 4:5 size that fills the feed</p></figcaption>
+      </figure>
+
+      <!-- 9 -->
+      <figure data-group="print" class="print" data-name="poster-dark-a4" data-ratio="2">
+        <div class="frame"><div class="art a4 pdark" data-deco="swoosh badge phones">
+          <div class="head"><span class="kicker">Virtual office · <span data-k="city"></span></span><h2 data-k="tagline"></h2></div>
+          <div class="pic"><div class="photo ph-a crop-arch"></div></div>
+          <div class="list"><p class="sub" data-k="sub"></p><ul class="checks" data-list="incl" data-max="5"></ul></div>
+          <div class="stamp"><small>From</small><b data-k="from"></b><small>a month</small></div>
+          <span class="btn"><span data-k="cta"></span><i data-arrow></i></span>
+        </div></div>
+        <figcaption><p><b>Poster, dark</b> · A4 portrait. Downloads at 300 dpi (2480 × 3508)</p></figcaption>
+      </figure>
+
+      <!-- 10 -->
+      <figure data-group="print" class="print" data-name="poster-ivory-a4" data-ratio="2">
+        <div class="frame"><div class="art a4 pivory paperish" data-deco="badge phones">
+          <div class="frame-line"></div>
+          <div class="content">
+            <span class="kicker center">Virtual office · <span data-k="city"></span></span>
+            <h2 class="serif" data-k="headline"></h2>
+            <p class="sub" data-k="sub"></p>
+            <div class="pic"><div class="photo ph-b crop-floor-wide"></div></div>
+            <div class="duo" data-plans="duo"></div>
+            <div class="incl-line" data-inline="incl" data-max="4"></div>
+          </div>
+        </div></div>
+        <figcaption><p><b>Poster, ivory</b> · A4 portrait. A quieter, framed look for lobbies and print</p></figcaption>
+      </figure>
+
+      <!-- 11 -->
+      <figure data-group="brochure" class="print" data-name="brochure-outside" data-ratio="2">
+        <div class="frame"><div class="art tri">
+          <div class="pane p1 light">
+            <span class="kicker">Who it's for</span>
+            <h3>Need an address, <span class="gold-text">not a desk?</span></h3>
+            <ul class="checks">
+              <li><i data-tick></i>Entrepreneurs and startups</li>
+              <li><i data-tick></i>Freelancers and professionals</li>
+              <li><i data-tick></i>Remote businesses</li>
+              <li><i data-tick></i>Anyone who wants a strong business presence</li>
+            </ul>
+            <p style="margin-top:34px">Without the high overhead of a full office.</p>
+            <div class="mini"><div class="photo ph-b crop-floor"></div></div>
+          </div>
+          <div class="pane p2 warm back">
+            <div class="badge"><img src="{{logo}}" alt=""></div>
+            <span class="kicker center">Talk to us</span>
+            <h3 data-k="cta"></h3>
+            <div class="lines" data-k="phone-lines"></div>
+            <div class="mail" data-k="email"></div>
+            <div class="addr">AlphaPremier Realty<br>and Construction Services</div>
+          </div>
+          <div class="pane p3 cover" style="padding:0">
+            <div class="photo ph-a crop-taller"></div>
+            <img class="logo" src="{{logo}}" alt="">
+            <div class="bottom">
+              <span class="kicker">Virtual office · <span data-k="city"></span></span>
+              <h3 data-k="headline"></h3>
+              <div class="price">From <strong data-k="from"></strong> a month</div>
+            </div>
+          </div>
+          <span class="fold" style="left:550px"></span><span class="fold" style="left:1100px"></span>
+        </div></div>
+        <figcaption><p><b>Brochure, outside</b> · tri-fold, letter landscape. Inside flap, back, cover</p></figcaption>
+      </figure>
+
+      <!-- 12 -->
+      <figure data-group="brochure" class="print" data-name="brochure-inside" data-ratio="2">
+        <div class="frame"><div class="art tri">
+          <div class="pane p1">
+            <span class="kicker">What is it?</span>
+            <h3>An office address, <span class="gold-text">without the rent</span></h3>
+            <p data-k="explain"></p>
+            <div class="mini tall"><div class="photo ph-a crop-tall"></div></div>
+          </div>
+          <div class="pane p2 warm">
+            <span class="kicker">What's included</span>
+            <h3>Everything your business needs</h3>
+            <ul class="checks" data-list="incl" data-max="6"></ul>
+            <div class="note"><b data-k="city-address"></b>Meet clients at a real office whenever you need to.</div>
+          </div>
+          <div class="pane p3 light">
+            <span class="kicker">Plans</span>
+            <h3>Choose your plan</h3>
+            <div data-plans="tri"></div>
+            <p class="custom" data-k="custom" data-show="custom"></p>
+            <span class="btn"><span data-k="cta"></span><i data-arrow></i></span>
+          </div>
+          <span class="fold" style="left:550px"></span><span class="fold" style="left:1100px"></span>
+        </div></div>
+        <figcaption><p><b>Brochure, inside</b> · tri-fold, letter landscape. What it is, what's included, the plans</p></figcaption>
+      </figure>
+
+    </div>
+  </main>

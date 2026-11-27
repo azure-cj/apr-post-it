@@ -71,6 +71,7 @@ const backLabels: Record<NavKey, string> = {
   assign: 'Assign',
   interns: 'Agents',
   records: 'Records',
+  'virtual-office': 'Virtual office',
   settings: 'Settings',
 };
 
@@ -81,6 +82,7 @@ const backPaths: Record<NavKey, string> = {
   assign: paths.assign,
   interns: paths.interns,
   records: paths.records,
+  'virtual-office': paths.virtualOffice,
   settings: paths.settings,
 };
 

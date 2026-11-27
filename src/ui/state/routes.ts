@@ -15,12 +15,13 @@ export const paths = {
   records: '/records',
   settings: '/settings',
   help: '/help',
+  virtualOffice: '/virtual-office',
 } as const;
 
 /** The nav's destinations. */
-export type NavKey = 'queue' | 'find' | 'tracker' | 'assign' | 'interns' | 'records' | 'settings';
+export type NavKey = 'queue' | 'find' | 'tracker' | 'assign' | 'interns' | 'records' | 'virtual-office' | 'settings';
 
-export const navKeys: readonly NavKey[] = ['queue', 'find', 'tracker', 'assign', 'interns', 'records', 'settings'];
+export const navKeys: readonly NavKey[] = ['queue', 'find', 'tracker', 'assign', 'interns', 'records', 'virtual-office', 'settings'];
 
 /**
  * What a property and its log page are told about how they were reached, as

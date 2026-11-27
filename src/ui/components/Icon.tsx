@@ -24,6 +24,7 @@ export type IconName =
   | 'sidebar'
   | 'refresh'
   | 'records'
+  | 'office'
   | 'help';
 
 const paths: Record<IconName, ReactElement> = {
@@ -128,6 +129,14 @@ const paths: Record<IconName, ReactElement> = {
       <path d="M8 8h8" />
       <path d="M8 12h8" />
       <path d="M8 16h5" />
+    </>
+  ),
+  office: (
+    <>
+      <path d="M4.5 20.5h15" />
+      <path d="M6.5 20.5v-15a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v15" />
+      <path d="M10 7.5h1M13 7.5h1M10 11h1M13 11h1M10 14.5h1M13 14.5h1" />
+      <path d="M11 20.5v-2.5h2v2.5" />
     </>
   ),
   refresh: (
